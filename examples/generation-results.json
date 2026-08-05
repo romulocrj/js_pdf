@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T22:29:31.636Z",
+  "generatedAt": "2026-08-05T22:38:17.385Z",
   "results": [
     {
       "name": "hello-world",
@@ -14,7 +14,7 @@
     {
       "name": "certificate",
       "status": "generated",
-      "bytes": 126786
+      "bytes": 126806
     },
     {
       "name": "document",

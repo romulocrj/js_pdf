@@ -5593,6 +5593,10 @@ class PdfCanvas {
     this.imageNames = new Map;
     this.currentTransform = identityMatrix;
     this.transformStack = [];
+    this.currentLetterSpacing = 0;
+    this.currentWordSpacing = 0;
+    this.textSpacingStack = [];
+    this.textSpacingDirty = false;
     this.pageHeight = pageHeight;
   }
   push(command) {
@@ -5632,14 +5636,20 @@ class PdfCanvas {
   saveContext() {
     this.push("q");
     this.transformStack.push(this.currentTransform);
+    this.textSpacingStack.push([ this.currentLetterSpacing, this.currentWordSpacing ]);
   }
   restoreContext() {
     const restored = this.transformStack.pop();
+    const spacing = this.textSpacingStack.pop();
     if (restored === undefined) {
       return;
     }
     this.push("Q");
     this.currentTransform = restored;
+    if (spacing !== undefined) {
+      this.currentLetterSpacing = spacing[0];
+      this.currentWordSpacing = spacing[1];
+    }
   }
   save() {
     this.saveContext();
@@ -5930,7 +5940,26 @@ class PdfCanvas {
     const font = style.font ?? defaultPdfFont;
     const letterSpacing = style.letterSpacing ?? 0;
     const wordSpacing = style.wordSpacing ?? 0;
-    const command = [ "BT", this.addFont(font), formatNumber(fontSize), "Tf", colorOperator(style.color), ...letterSpacing !== 0 ? [ formatNumber(letterSpacing), "Tc" ] : [], ...wordSpacing !== 0 ? [ formatNumber(wordSpacing), "Tw" ] : [], "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", font.encodeText(text), "Tj", "ET" ].join(" ");
+    const spacingOperators = [];
+    if (letterSpacing === 0 && wordSpacing === 0 && this.textSpacingDirty) {
+      spacingOperators.push("0", "Tc", "0", "Tw");
+      this.currentLetterSpacing = 0;
+      this.currentWordSpacing = 0;
+      this.textSpacingDirty = false;
+    } else {
+      if (letterSpacing !== this.currentLetterSpacing) {
+        spacingOperators.push(formatNumber(letterSpacing), "Tc");
+        this.currentLetterSpacing = letterSpacing;
+      }
+      if (wordSpacing !== this.currentWordSpacing) {
+        spacingOperators.push(formatNumber(wordSpacing), "Tw");
+        this.currentWordSpacing = wordSpacing;
+      }
+      if (letterSpacing !== 0 || wordSpacing !== 0) {
+        this.textSpacingDirty = true;
+      }
+    }
+    const command = [ "BT", this.addFont(font), formatNumber(fontSize), "Tf", colorOperator(style.color), ...spacingOperators, "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", font.encodeText(text), "Tj", "ET" ].join(" ");
     this.push(command);
   }
   line(x1, top1, x2, top2, color = "#000000", lineWidth = 1) {

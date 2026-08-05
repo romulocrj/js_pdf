@@ -85,6 +85,10 @@ export declare class PdfCanvas {
      */
     private currentTransform;
     private readonly transformStack;
+    private currentLetterSpacing;
+    private currentWordSpacing;
+    private readonly textSpacingStack;
+    private textSpacingDirty;
     constructor(pageHeight: number);
     push(command: string): void;
     /** Widget-space (top-left, y-down) to PDF user space. */

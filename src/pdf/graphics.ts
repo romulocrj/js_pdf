@@ -157,6 +157,10 @@ export class PdfCanvas {
    */
   private currentTransform: PdfMatrix = identityMatrix;
   private readonly transformStack: PdfMatrix[] = [];
+  private currentLetterSpacing = 0;
+  private currentWordSpacing = 0;
+  private readonly textSpacingStack: Array<readonly [number, number]> = [];
+  private textSpacingDirty = false;
 
   constructor(pageHeight: number) {
     this.pageHeight = pageHeight;
@@ -231,16 +235,22 @@ export class PdfCanvas {
   saveContext(): void {
     this.push('q');
     this.transformStack.push(this.currentTransform);
+    this.textSpacingStack.push([this.currentLetterSpacing, this.currentWordSpacing]);
   }
 
   /** `Q`, restoring the CTM this canvas last saved. A no-op if nothing was saved. */
   restoreContext(): void {
     const restored = this.transformStack.pop();
+    const spacing = this.textSpacingStack.pop();
     if (restored === undefined) {
       return;
     }
     this.push('Q');
     this.currentTransform = restored;
+    if (spacing !== undefined) {
+      this.currentLetterSpacing = spacing[0];
+      this.currentWordSpacing = spacing[1];
+    }
   }
 
   save(): void {
@@ -658,15 +668,31 @@ export class PdfCanvas {
     const letterSpacing = style.letterSpacing ?? 0;
     const wordSpacing = style.wordSpacing ?? 0;
 
+    const spacingOperators: string[] = [];
+    if (letterSpacing === 0 && wordSpacing === 0 && this.textSpacingDirty) {
+      spacingOperators.push('0', 'Tc', '0', 'Tw');
+      this.currentLetterSpacing = 0;
+      this.currentWordSpacing = 0;
+      this.textSpacingDirty = false;
+    } else {
+      if (letterSpacing !== this.currentLetterSpacing) {
+        spacingOperators.push(formatNumber(letterSpacing), 'Tc');
+        this.currentLetterSpacing = letterSpacing;
+      }
+      if (wordSpacing !== this.currentWordSpacing) {
+        spacingOperators.push(formatNumber(wordSpacing), 'Tw');
+        this.currentWordSpacing = wordSpacing;
+      }
+      if (letterSpacing !== 0 || wordSpacing !== 0) {
+        this.textSpacingDirty = true;
+      }
+    }
+
     const command = [
       'BT',
       this.addFont(font), formatNumber(fontSize), 'Tf',
       colorOperator(style.color),
-      // Only written when asked for: the spacing operators are sticky within a
-      // text object, and emitting `0 Tc` on every run would move every byte of
-      // every document that never sets them.
-      ...(letterSpacing !== 0 ? [formatNumber(letterSpacing), 'Tc'] : []),
-      ...(wordSpacing !== 0 ? [formatNumber(wordSpacing), 'Tw'] : []),
+      ...spacingOperators,
       '1 0 0 1', formatNumber(x), formatNumber(baseline), 'Tm',
       font.encodeText(text), 'Tj',
       'ET'

@@ -227,6 +227,18 @@ test('a graphic state reaches the page /Resources as an inline dictionary', () =
   assert.equal(dict.has('/BM'), true);
 });
 
+test('text spacing operators reset when later runs use defaults', () => {
+  const canvas = new PdfCanvas(842);
+  canvas.text('A', 10, 20, { fontSize: 12, color: '#000000', letterSpacing: 2, wordSpacing: 3 });
+  canvas.text('B', 10, 40, { fontSize: 12, color: '#000000' });
+  canvas.text('C', 10, 60, { fontSize: 12, color: '#000000' });
+
+  const lines = canvas.output().trim().split('\n');
+  assert.match(lines[0] ?? '', / 2 Tc 3 Tw /);
+  assert.match(lines[1] ?? '', / 0 Tc 0 Tw /);
+  assert.doesNotMatch(lines[2] ?? '', / Tc|Tw/);
+});
+
 test('matrix composition matches applying the transforms in order', () => {
   const move = translationMatrix(10, 0);
   const grow = scaleMatrix(2, 2);
