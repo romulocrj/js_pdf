@@ -48,6 +48,12 @@ neither. `Padding`, `Align`, `Center`, `SizedBox` and `Divider`, plus
 result — every one of the seven calls `Font.ttf`, so phase 1 remains on all their
 critical paths — but the missing-API total across them fell from 147 to 124.
 
+**Phase 2.1 — graphics path operators — landed 2026-08-05.** The canvas grew
+the whole path surface — segments, ellipses, rounded rectangles, elliptical arcs,
+both fill rules, clipping, the CTM, cap/join/miter/dash and `/ExtGState` — plus
+`src/pdf/matrix.ts` and `src/pdf/rect.ts`. No example advances directly, but the
+four widgets phase 3.3 left open and all of phase 2 were waiting on it.
+
 **Phase 1 — TTF fonts — landed 2026-08-05.** 1.1 reads a font, 1.2 subsets it,
 1.3 embeds it, 1.4 selects it. Portuguese, Japanese and Arabic *characters* all
 draw from an embedded font with the font's own advance widths, and the
@@ -58,16 +64,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 2.1 — graphics path operators.** Port the path and transform sections
-> of `pdf/lib/src/pdf/graphics.dart` into `src/pdf/graphics.ts`:
-> `moveTo`/`lineTo`/`curveTo`/`close`, the fill rules (`f`/`f*`/`B`/`B*`), the
-> CTM (`cm`), line join/cap/dash, and clipping (`W`/`W*`/`n`).
+> **Phase 2.2 — SVG path data parser.** Port `pdf/lib/src/svg/path.dart` into
+> `src/svg/path.ts`: the full `d` grammar, driving the phase-2.1 path operators
+> through a proxy so `PdfCanvas.drawShape` becomes possible.
 
-Everything else in phase 2 depends on it, and so do four items left open in
-phase 3.3 (`Transform`, `FittedBox`, `Opacity`, the clipping widgets) and
-`PageTheme`'s `mustRotate`, which currently swaps the paper's dimensions instead
-of rotating the content. **Test:** assert on the emitted operator sequence for a
-known path.
+Phase 2.1 landed, so the canvas can now draw an arbitrary path; what it cannot
+do is read one. Everything else in phase 2 needs the grammar.
 
 ---
 
@@ -406,14 +408,49 @@ does. Phase 1 is complete, so nothing here is waiting on fonts.
 examples. `report` is the exception, which makes it the useful probe while this
 phase is in flight.
 
-### 2.1 Graphics path operators
+### 2.1 Graphics path operators ✅ *(landed 2026-08-05)*
 
-- **Ports:** `pdf/lib/src/pdf/graphics.dart` (path and transform sections)
-- **Into:** `src/pdf/graphics.ts`
+- **Ports:** `pdf/lib/src/pdf/graphics.dart` (path and transform sections),
+  `pdf/lib/src/pdf/graphic_state.dart`, `pdf/lib/src/pdf/rect.dart`,
+  `pdf/lib/src/pdf/point.dart`
+- **Into:** `src/pdf/graphics.ts`, `src/pdf/graphic_state.ts`,
+  `src/pdf/matrix.ts`, `src/pdf/rect.ts`
 - `moveTo`/`lineTo`/`curveTo`/`close`, fill rules (`f`/`f*`/`B`/`B*`), the CTM
   (`cm`), line join/cap/dash, and clipping (`W`/`W*`/`n`). Prerequisite for
   every remaining item in this phase.
 - **Test:** assert on the emitted operator sequence for a known path.
+
+Landed with `drawRect`/`drawRRect`/`drawEllipse`, the SVG-compatible
+`bezierArc`, `setMiterLimit`, `setLineDashPattern`, `setFillColor`/
+`setStrokeColor`, and `setGraphicState`. 23 tests assert on operator sequences.
+
+Divergences, each noted in the file that makes it:
+
+- **Two coordinate systems now live in `graphics.ts`.** The path API is a
+  literal port and takes PDF user space (y up); the older shape helpers
+  (`fillRect`, `line`, `circle`, `text`) take the widget layer's y-down
+  coordinates and flip them. `toPdfY` and `flipMatrix` are the bridge, and
+  `flipMatrix` is what a widget setting a `cm` has to conjugate with — a
+  transform written in y-down coordinates rotates and translates the wrong way
+  otherwise.
+- **No `Matrix4`.** Upstream takes one from the `vector_math` package and throws
+  away ten of its sixteen cells at the point it writes `cm`. `src/pdf/matrix.ts`
+  carries the six PDF stores. Nothing the port transforms is three-dimensional.
+- **`PdfLineCap`, `PdfLineJoin` and `PdfBlendMode` are string unions**, not
+  `enum`s — `src/` has to stay erasable TypeScript — with the operand looked up
+  in a frozen table.
+- **`/ExtGState` entries are inline dictionaries registered per page**, keyed by
+  value so a page drawing fifty half-transparent boxes writes one dictionary.
+  Upstream keeps a single `PdfGraphicStates` indirect object for the whole
+  document; the port cannot, for the same reason `/F1` is page-local — a canvas
+  is rendered to operators before any document exists.
+- `restoreContext` with nothing saved writes no `Q`, where upstream's is also a
+  no-op but leaves the buffer's indent counter shifted.
+- Dart's `%` on doubles returns a non-negative remainder and JavaScript's does
+  not, so `bezierArc` normalizes the sweep angle's sign before correcting it.
+  Missing this draws the complement of the requested arc.
+- `setMiterLimit` throws below 1, where upstream asserts — which a Dart release
+  build compiles out.
 
 ### 2.2 Path data parser
 
@@ -522,8 +559,9 @@ seven examples fell 147 → 124; none generates, since all seven need phase 1.
 
 **Still open, and why** — reopen this sub-phase when the blockers clear:
 
-- `Transform` needs the `cm` operator (**2.1**); `FittedBox` needs `Transform`;
-  `Opacity` needs real `/ExtGState` graphic states. None is a small omission.
+- `Transform`, `FittedBox` and `Opacity` are unblocked as of **2.1** — the `cm`
+  operator and `/ExtGState` both exist now. They are the next thing to land
+  here.
 - `ConstrainedBox` needs a `BoxConstraints` value type with minimums. The port's
   `Constraints` carries maxima only, which was enough for everything above —
   `SizedBox` states its size outright instead of tightening a constraint. **3.4**

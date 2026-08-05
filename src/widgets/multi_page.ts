@@ -163,7 +163,8 @@ export class MultiPage implements Section {
     return canvases.map(canvas => ({
       format: this.format,
       content: canvas.output(),
-      fonts: canvas.fonts
+      fonts: canvas.fonts,
+      graphicStates: canvas.graphicStates
     }));
   }
 }

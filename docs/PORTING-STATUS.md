@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 48 `.ts` files, ~6,590 lines (TypeScript)
+**Ported:** 51 `.ts` files, ~7,300 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -72,10 +72,11 @@ each one.
 | `page_format.dart` | 171 | `src/pdf/page_format.ts` | partial — A4 and Letter only |
 | `color.dart` | 725 | `src/pdf/color.ts` | partial — RGB / DeviceRGB only |
 | `colors.dart` | 406 | — | — named color constants |
-| `graphics.dart` | 1415 | `src/pdf/graphics.ts` | partial — fill/stroke rect, line, circle, text with `Tc`/`Tw`, per-page font registration; no paths, transforms, clipping, alpha, shading |
-| `graphic_state.dart` | 194 | folded into `src/pdf/graphics.ts` | stub — `q`/`Q` only; no ExtGState objects |
+| `graphics.dart` | 1415 | `src/pdf/graphics.ts` | partial — full path API (`m`/`l`/`c`/`h`/`re`, ellipses, rounded rects, elliptical arcs), fill rules, clipping, CTM, cap/join/miter/dash, colors, `gs`; no `drawImage` (**4**), no `drawShape` (**2.2**), no shading or patterns (**2.8**) |
+| `graphic_state.dart` | 194 | `src/pdf/graphic_state.ts` | partial — `/ca`, `/CA`, `/BM`, deduplicated per page; no `PdfGraphicStates` document object, no `/SMask`, no `/TR` |
+| *(no upstream file — `vector_math`)* | — | `src/pdf/matrix.ts` | done — the 2×3 affine `cm` operand, composition, inversion and the y-down conjugation |
 | `document.dart` | 289 | `src/pdf/document.ts` | partial — `PdfDocument` object registry; one font object per distinct font, created on first use |
-| `point.dart`, `rect.dart` | 159 | folded into `src/widgets/geometry.ts` | partial |
+| `point.dart`, `rect.dart` | 159 | `src/pdf/rect.ts` | done — `PdfPoint`, `PdfRect` as interfaces plus factory objects |
 | `options.dart` | 8 | — | — |
 | `document_parser.dart` | 40 | — | — reading existing PDFs is out of scope |
 | `exif.dart` | 785 | — | — |
@@ -101,7 +102,7 @@ on: an object registers itself with the document, hands out references through
 | `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; `resourceDict(registry)` returns a `PdfDict` and may create the objects it references |
 | `obj/font_descriptor.dart` | 139 | `src/pdf/obj/font_descriptor.ts` | partial — bbox, flags, ascent/descent, `/FontFile2`; `/ItalicAngle`, `/CapHeight` and `/StemV` are upstream's constants |
 | `obj/ttffont.dart`, `unicode_cmap.dart` | 278 | `src/pdf/obj/ttf_font.ts`, `src/pdf/obj/unicode_cmap.ts` | partial — Type0/CIDFontType2, `/Identity-H`, `/ToUnicode`; no simple `/TrueType` branch, no Arabic or bidi coupling |
-| `obj/graphic_stream.dart` | 156 | `src/pdf/obj/graphic_stream.ts` | partial — `/Font`, `/XObject`, `/ExtGState`; base class rather than a mixin, no `/ProcSet`, `/Shading` or `/Pattern` |
+| `obj/graphic_stream.dart` | 156 | `src/pdf/obj/graphic_stream.ts` | partial — `/Font`, `/XObject`, `/ExtGState` (inline dictionaries, per page); base class rather than a mixin, no `/ProcSet`, `/Shading` or `/Pattern` |
 | `obj/xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 206 | — | — form XObjects, **phase 4** |
 | `obj/image.dart`, `smask.dart` | 347 | — | — **phase 4.1–4.2** |
 | `obj/shading.dart`, `pattern.dart`, `function.dart` | 349 | — | — SVG gradients, **phase 2.8** |
@@ -132,7 +133,7 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 | `svg/parser.dart` | 219 | — **phase 2.7** |
 | `svg/path.dart` | 320 | — **phase 2.2** |
 | `svg/painter.dart`, `operation.dart` | 251 | — **phase 2.5** |
-| `svg/transform.dart` | 124 | — **phase 2.4** |
+| `svg/transform.dart` | 124 | — **phase 2.4** — the matrix itself landed in 2.1 as `src/pdf/matrix.ts` |
 | `svg/group.dart`, `use.dart`, `symbol.dart` | 287 | — **phase 2.5** |
 | `svg/brush.dart`, `color.dart`, `colors.dart` | 609 | — **phase 2.5** |
 | `svg/clip_path.dart`, `mask_path.dart` | 148 | — **phase 2.6** |
@@ -176,7 +177,7 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 | Subsystem | Upstream lines | State |
 |---|---:|---|
 | Object syntax / serialization | ~1,700 | self-serializing value types; no filters, no xref streams |
-| Graphics | ~1,600 | ~15% of the operator surface |
+| Graphics | ~1,600 | paths, transforms, clipping and graphic states done; images, shading and patterns not |
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
 | SVG | ~2,800 | not started |

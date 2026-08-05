@@ -58,7 +58,14 @@ export class PdfGraphicStream extends PdfObject<PdfDict> {
    */
   readonly fonts = new Map<string, PdfResource>();
   readonly xObjects = new Map<string, PdfResource>();
-  readonly graphicStates = new Map<string, PdfResource>();
+
+  /**
+   * `/ExtGState` holds dictionaries, not references — the one place a resource
+   * sub-dictionary maps a name to a value rather than an object. Upstream points
+   * every stream at a single document-wide `PdfGraphicStates` object; the port
+   * writes each page's states inline, for the same reason names are page-local.
+   */
+  readonly graphicStates = new Map<string, PdfDict>();
 
   /** Register a font under the name the content stream used. First one wins. */
   addFont(name: string, font: PdfResource): void {
@@ -73,7 +80,7 @@ export class PdfGraphicStream extends PdfObject<PdfDict> {
     }
   }
 
-  addGraphicState(name: string, state: PdfResource): void {
+  addGraphicState(name: string, state: PdfDict): void {
     if (!this.graphicStates.has(name)) {
       this.graphicStates.set(name, state);
     }
@@ -97,7 +104,7 @@ export class PdfGraphicStream extends PdfObject<PdfDict> {
     }
 
     if (this.graphicStates.size > 0) {
-      resources.set('/ExtGState', PdfDict.fromObjectMap(this.graphicStates));
+      resources.set('/ExtGState', new PdfDict(this.graphicStates));
     }
 
     return resources.isEmpty ? null : resources;

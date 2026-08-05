@@ -51,6 +51,9 @@ export interface SerializedPage {
    * `PdfCanvas` chose the names; this is what turns them into `/Resources`.
    */
   readonly fonts: ReadonlyMap<PdfFont, string>;
+
+  /** The `/ExtGState` dictionaries `content` selected, by the name it wrote. */
+  readonly graphicStates?: ReadonlyMap<string, PdfDict>;
 }
 
 /**
@@ -128,7 +131,8 @@ export class PdfDocument {
   addPage(
     format: PageSize,
     content: string,
-    fonts: ReadonlyMap<PdfFont, string> = new Map()
+    fonts: ReadonlyMap<PdfFont, string> = new Map(),
+    graphicStates: ReadonlyMap<string, PdfDict> = new Map()
   ): PdfPage {
     const resources: [string, PdfObject<PdfDict>][] = [];
     for (const [font, name] of fonts) {
@@ -140,6 +144,10 @@ export class PdfDocument {
 
     for (const [name, object] of resources) {
       page.addFont(name, object);
+    }
+
+    for (const [name, state] of graphicStates) {
+      page.addGraphicState(name, state);
     }
 
     page.contents.push(stream);
@@ -168,7 +176,7 @@ export function serializePdf(
   const document = new PdfDocument(metadata);
 
   for (const page of pages) {
-    document.addPage(page.format, page.content, page.fonts);
+    document.addPage(page.format, page.content, page.fonts, page.graphicStates);
   }
 
   return document.save();

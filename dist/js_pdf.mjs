@@ -1883,7 +1883,7 @@ class PdfGraphicStream extends PdfObject {
       resources.set("/XObject", PdfDict.fromObjectMap(this.xObjects));
     }
     if (this.graphicStates.size > 0) {
-      resources.set("/ExtGState", PdfDict.fromObjectMap(this.graphicStates));
+      resources.set("/ExtGState", new PdfDict(this.graphicStates));
     }
     return resources.isEmpty ? null : resources;
   }
@@ -1954,7 +1954,7 @@ class PdfDocument {
     this.fontObjects.set(font, object);
     return object;
   }
-  addPage(format, content, fonts = new Map) {
+  addPage(format, content, fonts = new Map, graphicStates = new Map) {
     const resources = [];
     for (const [font, name] of fonts) {
       resources.push([ name, this.fontObject(font) ]);
@@ -1963,6 +1963,9 @@ class PdfDocument {
     const page = new PdfPage(this, this.pageList, format);
     for (const [name, object] of resources) {
       page.addFont(name, object);
+    }
+    for (const [name, state] of graphicStates) {
+      page.addGraphicState(name, state);
     }
     page.contents.push(stream);
     return page;
@@ -1982,7 +1985,7 @@ class PdfDocument {
 function serializePdf(pages, metadata) {
   const document = new PdfDocument(metadata);
   for (const page of pages) {
-    document.addPage(page.format, page.content, page.fonts);
+    document.addPage(page.format, page.content, page.fonts, page.graphicStates);
   }
   return document.save();
 }
@@ -2074,14 +2077,95 @@ class Font {
   }
 }
 
+const identityMatrix = Object.freeze([ 1, 0, 0, 1, 0, 0 ]);
+
+function multiplyMatrix(first, second) {
+  const [a1, b1, c1, d1, e1, f1] = first;
+  const [a2, b2, c2, d2, e2, f2] = second;
+  return [ a1 * a2 + c1 * b2, b1 * a2 + d1 * b2, a1 * c2 + c1 * d2, b1 * c2 + d1 * d2, a1 * e2 + c1 * f2 + e1, b1 * e2 + d1 * f2 + f1 ];
+}
+
+function composeMatrices(matrices) {
+  let result = identityMatrix;
+  for (const matrix of matrices) {
+    result = multiplyMatrix(result, matrix);
+  }
+  return result;
+}
+
+function translationMatrix(tx, ty) {
+  return [ 1, 0, 0, 1, tx, ty ];
+}
+
+function scaleMatrix(sx, sy = sx) {
+  return [ sx, 0, 0, sy, 0, 0 ];
+}
+
+function rotationMatrix(radians) {
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return [ cos, sin, -sin, cos, 0, 0 ];
+}
+
+function skewMatrix(alpha, beta) {
+  return [ 1, Math.tan(beta), Math.tan(alpha), 1, 0, 0 ];
+}
+
+function transformPoint(matrix, x, y) {
+  const [a, b, c, d, e, f] = matrix;
+  return {
+    x: a * x + c * y + e,
+    y: b * x + d * y + f
+  };
+}
+
+function invertMatrix(matrix) {
+  const [a, b, c, d, e, f] = matrix;
+  const determinant = a * d - b * c;
+  if (determinant === 0 || !Number.isFinite(determinant)) {
+    return null;
+  }
+  return [ d / determinant, -b / determinant, -c / determinant, a / determinant, (c * f - d * e) / determinant, (b * e - a * f) / determinant ];
+}
+
+function flipMatrix(matrix, height) {
+  const flip = [ 1, 0, 0, -1, 0, height ];
+  return multiplyMatrix(flip, multiplyMatrix(matrix, flip));
+}
+
+const LINE_CAP_OPERAND = Object.freeze({
+  butt: 0,
+  round: 1,
+  square: 2
+});
+
+const LINE_JOIN_OPERAND = Object.freeze({
+  miter: 0,
+  round: 1,
+  bevel: 2
+});
+
+const M4 = .551784;
+
+function operands(values) {
+  return values.map(formatNumber).join(" ");
+}
+
 class PdfCanvas {
   constructor(pageHeight) {
     this.commands = [];
     this.fontNames = new Map;
+    this.stateNames = new Map;
+    this.stateDicts = new Map;
+    this.currentTransform = identityMatrix;
+    this.transformStack = [];
     this.pageHeight = pageHeight;
   }
   push(command) {
     this.commands.push(command);
+  }
+  toPdfY(top) {
+    return this.pageHeight - top;
   }
   addFont(font) {
     const existing = this.fontNames.get(font);
@@ -2095,11 +2179,233 @@ class PdfCanvas {
   get fonts() {
     return this.fontNames;
   }
-  save() {
+  get graphicStates() {
+    return this.stateDicts;
+  }
+  saveContext() {
     this.push("q");
+    this.transformStack.push(this.currentTransform);
+  }
+  restoreContext() {
+    const restored = this.transformStack.pop();
+    if (restored === undefined) {
+      return;
+    }
+    this.push("Q");
+    this.currentTransform = restored;
+  }
+  save() {
+    this.saveContext();
   }
   restore() {
-    this.push("Q");
+    this.restoreContext();
+  }
+  setTransform(matrix) {
+    this.push(`${operands(matrix)} cm`);
+    this.currentTransform = multiplyMatrix(this.currentTransform, matrix);
+  }
+  getTransform() {
+    return this.currentTransform;
+  }
+  setGraphicState(state) {
+    if (state.isEmpty) {
+      return null;
+    }
+    const existing = this.stateNames.get(state.key);
+    if (existing !== undefined) {
+      this.push(`${existing} gs`);
+      return existing;
+    }
+    const name = `/g${this.stateDicts.size + 1}`;
+    this.stateNames.set(state.key, name);
+    this.stateDicts.set(name, state.output());
+    this.push(`${name} gs`);
+    return name;
+  }
+  moveTo(x, y) {
+    this.push(`${operands([ x, y ])} m`);
+  }
+  lineTo(x, y) {
+    this.push(`${operands([ x, y ])} l`);
+  }
+  curveTo(x1, y1, x2, y2, x3, y3) {
+    this.push(`${operands([ x1, y1, x2, y2, x3, y3 ])} c`);
+  }
+  closePath() {
+    this.push("h");
+  }
+  drawLine(x1, y1, x2, y2) {
+    this.moveTo(x1, y1);
+    this.lineTo(x2, y2);
+  }
+  drawRect(x, y, width, height) {
+    this.push(`${operands([ x, y, width, height ])} re`);
+  }
+  drawBox(box) {
+    this.drawRect(box.x, box.y, box.width, box.height);
+  }
+  drawRRect(x, y, width, height, rv, rh) {
+    this.moveTo(x, y + rv);
+    this.curveTo(x, y - M4 * rv + rv, x - M4 * rh + rh, y, x + rh, y);
+    this.lineTo(x + width - rh, y);
+    this.curveTo(x + M4 * rh + width - rh, y, x + width, y - M4 * rv + rv, x + width, y + rv);
+    this.lineTo(x + width, y + height - rv);
+    this.curveTo(x + width, y + M4 * rv + height - rv, x + M4 * rh + width - rh, y + height, x + width - rh, y + height);
+    this.lineTo(x + rh, y + height);
+    this.curveTo(x - M4 * rh + rh, y + height, x, y + M4 * rv + height - rv, x, y + height - rv);
+    this.lineTo(x, y + rv);
+  }
+  drawEllipse(x, y, r1, r2, clockwise = true) {
+    this.moveTo(x, y - r2);
+    if (clockwise) {
+      this.curveTo(x + M4 * r1, y - r2, x + r1, y - M4 * r2, x + r1, y);
+      this.curveTo(x + r1, y + M4 * r2, x + M4 * r1, y + r2, x, y + r2);
+      this.curveTo(x - M4 * r1, y + r2, x - r1, y + M4 * r2, x - r1, y);
+      this.curveTo(x - r1, y - M4 * r2, x - M4 * r1, y - r2, x, y - r2);
+    } else {
+      this.curveTo(x - M4 * r1, y - r2, x - r1, y - M4 * r2, x - r1, y);
+      this.curveTo(x - r1, y + M4 * r2, x - M4 * r1, y + r2, x, y + r2);
+      this.curveTo(x + M4 * r1, y + r2, x + r1, y + M4 * r2, x + r1, y);
+      this.curveTo(x + r1, y - M4 * r2, x + M4 * r1, y - r2, x, y - r2);
+    }
+  }
+  bezierArc(x1, y1, rx, ry, x2, y2, {large = false, sweep = false, phi = 0} = {}) {
+    if (x1 === x2 && y1 === y2) {
+      return;
+    }
+    if (Math.abs(rx) <= 1e-10 || Math.abs(ry) <= 1e-10) {
+      this.lineTo(x2, y2);
+      return;
+    }
+    if (phi !== 0) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const cos = Math.cos(-phi);
+      const sin = Math.sin(-phi);
+      this.endToCenterParameters(0, 0, cos * dx - sin * dy, sin * dx + cos * dy, large, sweep, rx, ry);
+    } else {
+      this.endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry);
+    }
+  }
+  vectorAngle(ux, uy, vx, vy) {
+    const d = Math.sqrt(ux * ux + uy * uy) * Math.sqrt(vx * vx + vy * vy);
+    if (d === 0) {
+      return 0;
+    }
+    let c = (ux * vx + uy * vy) / d;
+    if (c < -1) c = -1; else if (c > 1) c = 1;
+    const s = ux * vy - uy * vx;
+    c = Math.acos(c);
+    return Math.sign(c) === Math.sign(s) ? c : -c;
+  }
+  endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry) {
+    rx = Math.abs(rx);
+    ry = Math.abs(ry);
+    const x1d = .5 * (x1 - x2);
+    const y1d = .5 * (y1 - y2);
+    let r = x1d * x1d / (rx * rx) + y1d * y1d / (ry * ry);
+    if (r > 1) {
+      const rr = Math.sqrt(r);
+      rx *= rr;
+      ry *= rr;
+      r = x1d * x1d / (rx * rx) + y1d * y1d / (ry * ry);
+    } else if (r !== 0) {
+      r = 1 / r - 1;
+    }
+    if (r > -1e-10 && r < 0) {
+      r = 0;
+    }
+    r = Math.sqrt(r);
+    if (large === sweep) {
+      r = -r;
+    }
+    const cxd = r * rx * y1d / ry;
+    const cyd = -(r * ry * x1d) / rx;
+    const cx = cxd + .5 * (x1 + x2);
+    const cy = cyd + .5 * (y1 + y2);
+    const theta = this.vectorAngle(1, 0, (x1d - cxd) / rx, (y1d - cyd) / ry);
+    const tau = Math.PI * 2;
+    let dTheta = this.vectorAngle((x1d - cxd) / rx, (y1d - cyd) / ry, (-x1d - cxd) / rx, (-y1d - cyd) / ry) % tau;
+    if (dTheta < 0) {
+      dTheta += tau;
+    }
+    if (!sweep && dTheta > 0) {
+      dTheta -= tau;
+    } else if (sweep && dTheta < 0) {
+      dTheta += tau;
+    }
+    this.bezierArcFromCentre(cx, cy, rx, ry, -theta, -dTheta);
+  }
+  bezierArcFromCentre(cx, cy, rx, ry, startAngle, extent) {
+    let fragmentsCount;
+    let fragmentsAngle;
+    if (Math.abs(extent) <= Math.PI / 2) {
+      fragmentsCount = 1;
+      fragmentsAngle = extent;
+    } else {
+      fragmentsCount = Math.ceil(Math.abs(extent) / (Math.PI / 2));
+      fragmentsAngle = extent / fragmentsCount;
+    }
+    if (fragmentsAngle === 0) {
+      return;
+    }
+    const halfFragment = fragmentsAngle * .5;
+    let kappa = Math.abs(4 / 3 * (1 - Math.cos(halfFragment)) / Math.sin(halfFragment));
+    if (fragmentsAngle < 0) {
+      kappa = -kappa;
+    }
+    let theta = startAngle;
+    const startFragment = theta + fragmentsAngle;
+    let c1 = Math.cos(theta);
+    let s1 = Math.sin(theta);
+    for (let i = 0; i < fragmentsCount; i++) {
+      const c0 = c1;
+      const s0 = s1;
+      theta = startFragment + i * fragmentsAngle;
+      c1 = Math.cos(theta);
+      s1 = Math.sin(theta);
+      this.curveTo(cx + rx * (c0 - kappa * s0), cy - ry * (s0 + kappa * c0), cx + rx * (c1 + kappa * s1), cy - ry * (s1 - kappa * c1), cx + rx * c1, cy - ry * s1);
+    }
+  }
+  fillPath({evenOdd = false} = {}) {
+    this.push(evenOdd ? "f*" : "f");
+  }
+  strokePath({close = false} = {}) {
+    this.push(close ? "s" : "S");
+  }
+  fillAndStrokePath({evenOdd = false, close = false} = {}) {
+    this.push(`${close ? "b" : "B"}${evenOdd ? "*" : ""}`);
+  }
+  clipPath({evenOdd = false, end = true} = {}) {
+    this.push(`W${evenOdd ? "*" : ""}${end ? " n" : ""}`);
+  }
+  setLineWidth(width) {
+    this.push(`${formatNumber(width)} w`);
+  }
+  setLineCap(cap) {
+    this.push(`${LINE_CAP_OPERAND[cap]} J`);
+  }
+  setLineJoin(join) {
+    this.push(`${LINE_JOIN_OPERAND[join]} j`);
+  }
+  setMiterLimit(limit) {
+    if (limit < 1) {
+      throw new RangeError("miter limit must be at least 1");
+    }
+    this.push(`${formatNumber(limit)} M`);
+  }
+  setLineDashPattern(array = [], phase = 0) {
+    this.push(`[${operands(array)}] ${formatNumber(phase)} d`);
+  }
+  setFillColor(color) {
+    this.push(colorOperator(color));
+  }
+  setStrokeColor(color) {
+    this.push(colorOperator(color, true));
+  }
+  setColor(color) {
+    this.setFillColor(color);
+    this.setStrokeColor(color);
   }
   fillRect(x, top, width, height, color) {
     const bottom = this.pageHeight - top - height;
@@ -2238,7 +2544,8 @@ class MultiPage {
     return canvases.map(canvas => ({
       format: this.format,
       content: canvas.output(),
-      fonts: canvas.fonts
+      fonts: canvas.fonts,
+      graphicStates: canvas.graphicStates
     }));
   }
 }
@@ -2334,7 +2641,8 @@ class Page {
     return [ {
       format,
       content: canvas.output(),
-      fonts: canvas.fonts
+      fonts: canvas.fonts,
+      graphicStates: canvas.graphicStates
     } ];
   }
   paintLayer(build, context, format) {
@@ -2949,6 +3257,119 @@ class Text extends Widget {
   }
 }
 
+const BLEND_MODE_NAMES = Object.freeze({
+  normal: "/Normal",
+  multiply: "/Multiply",
+  screen: "/Screen",
+  overlay: "/Overlay",
+  darken: "/Darken",
+  lighten: "/Lighten",
+  colorDodge: "/ColorDodge",
+  colorBurn: "/ColorBurn",
+  hardLight: "/HardLight",
+  softLight: "/SoftLight",
+  difference: "/Difference",
+  exclusion: "/Exclusion",
+  hue: "/Hue",
+  saturation: "/Saturation",
+  color: "/Color",
+  luminosity: "/Luminosity"
+});
+
+class PdfGraphicState {
+  constructor({opacity = null, fillOpacity = null, strokeOpacity = null, blendMode = null} = {}) {
+    this.fillOpacity = fillOpacity ?? opacity;
+    this.strokeOpacity = strokeOpacity ?? opacity;
+    this.blendMode = blendMode;
+  }
+  get isEmpty() {
+    return this.fillOpacity === null && this.strokeOpacity === null && this.blendMode === null;
+  }
+  get key() {
+    return `${this.fillOpacity}|${this.strokeOpacity}|${this.blendMode}`;
+  }
+  output() {
+    const params = new PdfDict;
+    if (this.strokeOpacity !== null) {
+      params.set("/CA", new PdfNum(this.strokeOpacity));
+    }
+    if (this.fillOpacity !== null) {
+      params.set("/ca", new PdfNum(this.fillOpacity));
+    }
+    if (this.blendMode !== null) {
+      params.set("/BM", new PdfName(BLEND_MODE_NAMES[this.blendMode]));
+    }
+    return params;
+  }
+}
+
+const PdfPoint = Object.freeze({
+  zero: Object.freeze({
+    x: 0,
+    y: 0
+  }),
+  translate(point, dx, dy) {
+    return {
+      x: point.x + dx,
+      y: point.y + dy
+    };
+  }
+});
+
+const PdfRect = Object.freeze({
+  zero: Object.freeze({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0
+  }),
+  fromLTRB(left, bottom, right, top) {
+    return {
+      x: left,
+      y: bottom,
+      width: right - left,
+      height: top - bottom
+    };
+  },
+  left(rect) {
+    return rect.x;
+  },
+  bottom(rect) {
+    return rect.y;
+  },
+  right(rect) {
+    return rect.x + rect.width;
+  },
+  top(rect) {
+    return rect.y + rect.height;
+  },
+  horizontalCenter(rect) {
+    return rect.x + rect.width / 2;
+  },
+  verticalCenter(rect) {
+    return rect.y + rect.height / 2;
+  },
+  inflate(rect, delta) {
+    return {
+      x: rect.x - delta,
+      y: rect.y - delta,
+      width: rect.width + delta * 2,
+      height: rect.height + delta * 2
+    };
+  },
+  deflate(rect, delta) {
+    return PdfRect.inflate(rect, -delta);
+  },
+  scale(rect, factor) {
+    return {
+      x: rect.x * factor,
+      y: rect.y * factor,
+      width: rect.width * factor,
+      height: rect.height * factor
+    };
+  }
+});
+
 const publicApi = Object.freeze({
   Document,
   Page,
@@ -2995,4 +3416,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Center, Column, Container, DefaultTextStyle, Divider, Document, EdgeInsets, Font, MultiPage, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, StatelessWidget, Text, TextStyle, Theme, ThemeData, Vector, Widget, createPdf, js_pdf };
+export { Align, Alignment, Center, Column, Container, DefaultTextStyle, Divider, Document, EdgeInsets, Font, MultiPage, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, StatelessWidget, Text, TextStyle, Theme, ThemeData, Vector, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

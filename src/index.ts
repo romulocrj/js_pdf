@@ -72,6 +72,31 @@ export {
 };
 
 export type { ColorInput, Rgb } from './pdf/color.ts';
+export { PdfGraphicState } from './pdf/graphic_state.ts';
+export type { PdfBlendMode, PdfGraphicStateOptions } from './pdf/graphic_state.ts';
+export { PdfPoint, PdfRect } from './pdf/rect.ts';
+export {
+  composeMatrices,
+  flipMatrix,
+  identityMatrix,
+  invertMatrix,
+  multiplyMatrix,
+  rotationMatrix,
+  scaleMatrix,
+  skewMatrix,
+  transformPoint,
+  translationMatrix
+} from './pdf/matrix.ts';
+export type { PdfMatrix } from './pdf/matrix.ts';
+export type {
+  BezierArcOptions,
+  ClipOptions,
+  FillAndStrokeOptions,
+  FillOptions,
+  PdfLineCap,
+  PdfLineJoin,
+  StrokeOptions
+} from './pdf/graphics.ts';
 export type { PdfFont } from './pdf/font/font.ts';
 export type { PdfFontMetricsOptions } from './pdf/font/font_metrics.ts';
 export { PdfFontMetrics } from './pdf/font/font_metrics.ts';

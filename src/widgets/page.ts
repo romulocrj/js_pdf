@@ -115,7 +115,12 @@ export class Page implements Section {
 
     this.paintLayer(this.pageTheme.buildForeground, context, format);
 
-    return [{ format, content: canvas.output(), fonts: canvas.fonts }];
+    return [{
+      format,
+      content: canvas.output(),
+      fonts: canvas.fonts,
+      graphicStates: canvas.graphicStates
+    }];
   }
 
   private paintLayer(

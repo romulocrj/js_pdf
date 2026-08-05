@@ -20,6 +20,8 @@ export interface SerializedPage {
      * `PdfCanvas` chose the names; this is what turns them into `/Resources`.
      */
     readonly fonts: ReadonlyMap<PdfFont, string>;
+    /** The `/ExtGState` dictionaries `content` selected, by the name it wrote. */
+    readonly graphicStates?: ReadonlyMap<string, PdfDict>;
 }
 /**
  * Owns the objects that make up a file, and writes them.
@@ -65,7 +67,7 @@ export declare class PdfDocument {
      * wrote for that font — see `PdfCanvas.addFont`. A page that drew no text
      * passes nothing and gets no `/Resources` at all, as upstream does.
      */
-    addPage(format: PageSize, content: string, fonts?: ReadonlyMap<PdfFont, string>): PdfPage;
+    addPage(format: PageSize, content: string, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>): PdfPage;
     save(): Uint8Array;
 }
 /** Build a document from already-rendered pages and write it. */

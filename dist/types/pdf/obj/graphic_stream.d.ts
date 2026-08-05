@@ -17,11 +17,17 @@ export declare class PdfGraphicStream extends PdfObject<PdfDict> {
      */
     readonly fonts: Map<string, PdfResource>;
     readonly xObjects: Map<string, PdfResource>;
-    readonly graphicStates: Map<string, PdfResource>;
+    /**
+     * `/ExtGState` holds dictionaries, not references — the one place a resource
+     * sub-dictionary maps a name to a value rather than an object. Upstream points
+     * every stream at a single document-wide `PdfGraphicStates` object; the port
+     * writes each page's states inline, for the same reason names are page-local.
+     */
+    readonly graphicStates: Map<string, PdfDict>;
     /** Register a font under the name the content stream used. First one wins. */
     addFont(name: string, font: PdfResource): void;
     addXObject(name: string, xObject: PdfResource): void;
-    addGraphicState(name: string, state: PdfResource): void;
+    addGraphicState(name: string, state: PdfDict): void;
     /**
      * The `/Resources` value, or null when this stream referred to nothing.
      *

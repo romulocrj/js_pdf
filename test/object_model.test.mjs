@@ -321,17 +321,21 @@ test('PdfGraphicStream collects /Font, /XObject and /ExtGState', () => {
 
   const font = new PdfObjectBase(11, new PdfDict());
   const image = new PdfObjectBase(12, new PdfDict());
-  const state = new PdfObjectBase(13, new PdfDict());
+
+  // /Font and /XObject name indirect objects; /ExtGState holds the state
+  // dictionary inline, since phase 2.1 registers states per page rather than in
+  // one document-wide object as upstream does.
+  const state = new PdfDict([['/ca', new PdfNum(0.5)]]);
 
   stream.addFont('/F1', font);
   stream.addFont('/F1', new PdfObjectBase(99, new PdfDict()));
   stream.addXObject('/X1', image);
-  stream.addGraphicState('/a0', state);
+  stream.addGraphicState('/g1', state);
   stream.prepare();
 
   assert.equal(
     write(stream.params),
     '<< /Resources << /Font << /F1 11 0 R >> /XObject << /X1 12 0 R >>'
-      + ' /ExtGState << /a0 13 0 R >> >> >>'
+      + ' /ExtGState << /g1 << /ca 0.5 >> >> >> >>'
   );
 });
