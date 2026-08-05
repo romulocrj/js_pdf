@@ -36,6 +36,17 @@ import type { Section } from './widgets/page.ts';
 import { PageTheme } from './widgets/page_theme.ts';
 import { Vector } from './widgets/shape.ts';
 import { SvgImage } from './widgets/svg.ts';
+import {
+  FixedColumnWidth,
+  FlexColumnWidth,
+  FractionColumnWidth,
+  IntrinsicColumnWidth,
+  Table,
+  TableBorder,
+  TableColumnWidth,
+  TableRow
+} from './widgets/table.ts';
+import { TableHelper } from './widgets/table_helper.ts';
 import { Text } from './widgets/text.ts';
 import { TextStyle } from './widgets/text_style.ts';
 import { DefaultTextStyle, Theme, ThemeData } from './widgets/theme.ts';
@@ -52,7 +63,11 @@ export {
   Divider,
   Document,
   EdgeInsets,
+  FixedColumnWidth,
+  FlexColumnWidth,
   Font,
+  FractionColumnWidth,
+  IntrinsicColumnWidth,
   MultiPage,
   Padding,
   Page,
@@ -65,6 +80,11 @@ export {
   Spacer,
   StatelessWidget,
   SvgImage,
+  Table,
+  TableBorder,
+  TableColumnWidth,
+  TableHelper,
+  TableRow,
   Text,
   TextStyle,
   Theme,
@@ -148,6 +168,32 @@ export type {
 } from './widgets/basic.ts';
 export type { ColumnOptions, RowOptions } from './widgets/flex.ts';
 export type { ContainerOptions } from './widgets/container.ts';
+export type {
+  ColumnLayout,
+  TableBorderInput,
+  TableBorderOptions,
+  TableBorderSide,
+  TableBorderSideInput,
+  TableBorderSideOptions,
+  TableCellLayout,
+  TableCellVerticalAlignment,
+  TableColumnWidthMap,
+  TableDecorationInput,
+  TableLayoutData,
+  TableOptions,
+  TableRowLayout,
+  TableRowOptions,
+  TableWidth
+} from './widgets/table.ts';
+export type {
+  OnCell,
+  OnCellDecoration,
+  OnCellFormat,
+  OnCellTextStyle,
+  TableAlignmentInput,
+  TableAlignmentName,
+  TableTextArrayOptions
+} from './widgets/table_helper.ts';
 export type { TextAlign, TextOptions, TextOverflow } from './widgets/text.ts';
 export type { VectorApi, VectorOptions } from './widgets/shape.ts';
 export type {
@@ -179,6 +225,15 @@ export interface PublicApi {
   readonly SizedBox: typeof SizedBox;
   readonly Divider: typeof Divider;
   readonly SvgImage: typeof SvgImage;
+  readonly Table: typeof Table;
+  readonly TableRow: typeof TableRow;
+  readonly TableBorder: typeof TableBorder;
+  readonly TableColumnWidth: typeof TableColumnWidth;
+  readonly IntrinsicColumnWidth: typeof IntrinsicColumnWidth;
+  readonly FixedColumnWidth: typeof FixedColumnWidth;
+  readonly FlexColumnWidth: typeof FlexColumnWidth;
+  readonly FractionColumnWidth: typeof FractionColumnWidth;
+  readonly TableHelper: typeof TableHelper;
   readonly Alignment: typeof Alignment;
   readonly EdgeInsets: typeof EdgeInsets;
   readonly PageFormat: typeof PageFormat;
@@ -208,6 +263,15 @@ const publicApi: PublicApi = Object.freeze({
   SizedBox,
   Divider,
   SvgImage,
+  Table,
+  TableRow,
+  TableBorder,
+  TableColumnWidth,
+  IntrinsicColumnWidth,
+  FixedColumnWidth,
+  FlexColumnWidth,
+  FractionColumnWidth,
+  TableHelper,
   Alignment,
   EdgeInsets,
   PageFormat,

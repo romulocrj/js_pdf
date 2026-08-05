@@ -5848,6 +5848,329 @@ class SvgImage extends Widget {
   }
 }
 
+function side(input) {
+  if (input === null || input === undefined) {
+    return null;
+  }
+  const width = Math.max(0, assertFiniteNumber(Number(input.width ?? 1), "border width"));
+  if (width === 0) {
+    return null;
+  }
+  return {
+    color: normalizeColor(input.color ?? "#000000"),
+    width
+  };
+}
+
+class TableBorder {
+  constructor({left = null, top = null, right = null, bottom = null, horizontalInside = null, verticalInside = null} = {}) {
+    this.left = side(left);
+    this.top = side(top);
+    this.right = side(right);
+    this.bottom = side(bottom);
+    this.horizontalInside = side(horizontalInside);
+    this.verticalInside = side(verticalInside);
+  }
+  static all({color = "#000000", width = 1} = {}) {
+    const value = {
+      color,
+      width
+    };
+    return new TableBorder({
+      left: value,
+      top: value,
+      right: value,
+      bottom: value,
+      horizontalInside: value,
+      verticalInside: value
+    });
+  }
+  static symmetric({inside = null, outside = null} = {}) {
+    return new TableBorder({
+      left: outside,
+      top: outside,
+      right: outside,
+      bottom: outside,
+      horizontalInside: inside,
+      verticalInside: inside
+    });
+  }
+  paint(context, x, y, width, height, columnWidths = [], rowHeights = []) {
+    const {canvas} = context;
+    const draw = (value, x1, y1, x2, y2) => {
+      if (value !== null) {
+        canvas.line(x1, y1, x2, y2, value.color, value.width);
+      }
+    };
+    draw(this.top, x, y, x + width, y);
+    draw(this.right, x + width, y, x + width, y + height);
+    draw(this.bottom, x, y + height, x + width, y + height);
+    draw(this.left, x, y, x, y + height);
+    let offset = x;
+    for (let index = 0; index < columnWidths.length - 1; index++) {
+      offset += columnWidths[index];
+      draw(this.verticalInside, offset, y, offset, y + height);
+    }
+    offset = y;
+    for (let index = 0; index < rowHeights.length - 1; index++) {
+      offset += rowHeights[index];
+      draw(this.horizontalInside, x, offset, x + width, offset);
+    }
+  }
+}
+
+function normalizeTableBorder(input) {
+  if (input === null || input === undefined) {
+    return null;
+  }
+  return input instanceof TableBorder ? input : new TableBorder(input);
+}
+
+function paintTableDecorationBackground(context, decoration, x, y, width, height) {
+  if (decoration?.color !== null && decoration?.color !== undefined) {
+    context.canvas.fillRect(x, y, width, height, decoration.color);
+  }
+}
+
+function paintTableDecorationBorder(context, decoration, x, y, width, height) {
+  normalizeTableBorder(decoration?.border)?.paint(context, x, y, width, height);
+}
+
+class TableRow {
+  constructor({children, repeat = false, verticalAlignment = null, decoration = null}) {
+    this.children = children;
+    this.repeat = Boolean(repeat);
+    this.verticalAlignment = verticalAlignment;
+    this.decoration = decoration;
+  }
+}
+
+class TableColumnWidth {}
+
+class IntrinsicColumnWidth extends TableColumnWidth {
+  constructor({flex = null} = {}) {
+    super();
+    this.flex = flex === null ? null : Math.max(0, assertFiniteNumber(Number(flex), "intrinsic column flex"));
+  }
+  layout(child, context, constraints) {
+    if (this.flex !== null) {
+      return {
+        width: 0,
+        flex: this.flex
+      };
+    }
+    const box = child.layout(context, constraints);
+    return {
+      width: Number.isFinite(box.width) ? Math.max(0, box.width) : 0,
+      flex: Number.isFinite(box.width) ? 0 : 1
+    };
+  }
+}
+
+class FixedColumnWidth extends TableColumnWidth {
+  constructor(width) {
+    super();
+    this.width = Math.max(0, assertFiniteNumber(Number(width), "fixed column width"));
+  }
+  layout() {
+    return {
+      width: this.width,
+      flex: 0
+    };
+  }
+}
+
+class FlexColumnWidth extends TableColumnWidth {
+  constructor(flex = 1) {
+    super();
+    this.flex = Math.max(0, assertFiniteNumber(Number(flex), "column flex"));
+  }
+  layout() {
+    return {
+      width: 0,
+      flex: this.flex
+    };
+  }
+}
+
+class FractionColumnWidth extends TableColumnWidth {
+  constructor(value) {
+    super();
+    this.value = Math.max(0, assertFiniteNumber(Number(value), "column fraction"));
+  }
+  layout(_child, _context, constraints) {
+    return {
+      width: constraints.maxWidth * this.value,
+      flex: 0
+    };
+  }
+}
+
+function mappedWidth(map, index) {
+  if (map === null) return undefined;
+  if (map instanceof Map) return map.get(index);
+  return map[index];
+}
+
+class Table extends Widget {
+  constructor({children = [], border = null, defaultVerticalAlignment = "top", columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max"} = {}) {
+    super();
+    if (![ "bottom", "middle", "top", "full" ].includes(defaultVerticalAlignment)) {
+      throw new TypeError(`Unknown table vertical alignment: ${defaultVerticalAlignment}`);
+    }
+    if (tableWidth !== "min" && tableWidth !== "max") {
+      throw new TypeError(`Unknown table width: ${tableWidth}`);
+    }
+    this.children = children;
+    this.border = normalizeTableBorder(border);
+    this.defaultVerticalAlignment = defaultVerticalAlignment;
+    this.columnWidths = columnWidths;
+    this.defaultColumnWidth = defaultColumnWidth;
+    this.tableWidth = tableWidth;
+  }
+  resolveWidths(context, constraints) {
+    const count = this.children.reduce((maximum, row) => Math.max(maximum, row.children.length), 0);
+    const widths = Array.from({
+      length: count
+    }, () => 0);
+    const flex = Array.from({
+      length: count
+    }, () => 0);
+    for (const row of this.children) {
+      for (let index = 0; index < row.children.length; index++) {
+        const child = row.children[index];
+        const columnWidth = mappedWidth(this.columnWidths, index) ?? this.defaultColumnWidth;
+        const measured = columnWidth.layout(child, context, constraints);
+        widths[index] = Math.max(widths[index], measured.width);
+        flex[index] = Math.max(flex[index], measured.flex);
+      }
+    }
+    if (count === 0 || !Number.isFinite(constraints.maxWidth)) {
+      return widths;
+    }
+    const maximum = Math.max(0, constraints.maxWidth);
+    const totalFlex = flex.reduce((sum, value) => sum + value, 0);
+    const intrinsicTotal = widths.reduce((sum, value) => sum + value, 0);
+    if (totalFlex > 0) {
+      let fixedSpace = widths.reduce((sum, value, index) => sum + (flex[index] === 0 ? value : 0), 0);
+      if (fixedSpace > maximum && fixedSpace > 0) {
+        const scale = maximum / fixedSpace;
+        for (let index = 0; index < count; index++) {
+          if (flex[index] === 0) widths[index] = widths[index] * scale;
+        }
+        fixedSpace = maximum;
+      }
+      const remaining = Math.max(0, maximum - fixedSpace);
+      for (let index = 0; index < count; index++) {
+        if (flex[index] > 0) widths[index] = remaining * flex[index] / totalFlex;
+      }
+      return widths;
+    }
+    if (this.tableWidth === "max") {
+      if (intrinsicTotal === 0) {
+        return widths.map(() => count === 0 ? 0 : maximum / count);
+      }
+      const scale = maximum / intrinsicTotal;
+      return widths.map(value => value * scale);
+    }
+    if (intrinsicTotal > maximum && intrinsicTotal > 0) {
+      const scale = maximum / intrinsicTotal;
+      return widths.map(value => value * scale);
+    }
+    return widths;
+  }
+  layout(context, constraints) {
+    const columnWidths = this.resolveWidths(context, constraints);
+    if (columnWidths.length === 0) {
+      return {
+        widget: this,
+        width: 0,
+        height: 0,
+        data: {
+          columnWidths,
+          rowHeights: [],
+          rows: []
+        }
+      };
+    }
+    const rows = [];
+    const rowHeights = [];
+    let rowY = 0;
+    for (const row of this.children) {
+      const measured = [];
+      let x = 0;
+      let rowHeight = 0;
+      for (let column = 0; column < row.children.length; column++) {
+        const child = row.children[column];
+        const width = columnWidths[column] ?? 0;
+        const box = child.layout(context, {
+          maxWidth: width,
+          maxHeight: constraints.maxHeight
+        });
+        measured.push({
+          box,
+          column,
+          x
+        });
+        rowHeight = Math.max(rowHeight, box.height);
+        x += width;
+      }
+      const alignment = row.verticalAlignment ?? this.defaultVerticalAlignment;
+      const cells = measured.map(cell => {
+        const height = alignment === "full" ? rowHeight : cell.box.height;
+        const dy = alignment === "bottom" ? rowHeight - cell.box.height : alignment === "middle" ? (rowHeight - cell.box.height) / 2 : 0;
+        return {
+          ...cell,
+          y: rowY + dy,
+          width: columnWidths[cell.column] ?? 0,
+          height
+        };
+      });
+      rows.push({
+        row,
+        cells,
+        y: rowY,
+        height: rowHeight
+      });
+      rowHeights.push(rowHeight);
+      rowY += rowHeight;
+    }
+    return {
+      widget: this,
+      width: columnWidths.reduce((sum, value) => sum + value, 0),
+      height: rowY,
+      data: {
+        columnWidths,
+        rowHeights,
+        rows
+      }
+    };
+  }
+  paint(context, box) {
+    const {canvas} = context;
+    for (const row of box.data.rows) {
+      paintTableDecorationBackground(context, row.row.decoration, box.x, box.y + row.y, box.width, row.height);
+      for (const cell of row.cells) {
+        canvas.saveContext();
+        canvas.drawRect(box.x + cell.x, canvas.pageHeight - box.y - cell.y - cell.height, cell.width, cell.height);
+        canvas.clipPath();
+        cell.box.widget.paint(context, {
+          ...cell.box,
+          x: box.x + cell.x,
+          y: box.y + cell.y,
+          width: cell.width,
+          height: cell.height
+        });
+        canvas.restoreContext();
+      }
+    }
+    for (const row of box.data.rows) {
+      paintTableDecorationBorder(context, row.row.decoration, box.x, box.y + row.y, box.width, row.height);
+    }
+    this.border?.paint(context, box.x, box.y, box.width, box.height, box.data.columnWidths, box.data.rowHeights);
+  }
+}
+
 function textWidth(font, text, fontSize, letterSpacing = 0) {
   return font.stringMetrics(text, fontSize, letterSpacing).advanceWidth;
 }
@@ -5965,6 +6288,188 @@ class Text extends Widget {
   }
 }
 
+function indexed(values, index) {
+  if (values === null) return undefined;
+  if (values instanceof Map) return values.get(index);
+  return values[index];
+}
+
+function alignment(value) {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const resolved = Alignment[value];
+  if (resolved === undefined) {
+    throw new TypeError(`Unknown table alignment: ${value}`);
+  }
+  return resolved;
+}
+
+function textAlign(value) {
+  if (value.x === 0) return "center";
+  return value.x < 0 ? "left" : "right";
+}
+
+class TableText extends Widget {
+  constructor(value, header, style, align) {
+    super();
+    this.value = value;
+    this.header = header;
+    this.style = style;
+    this.align = align;
+  }
+  layout(context, constraints) {
+    const child = new Text(this.value, {
+      style: this.style ?? (this.header ? context.theme.tableHeader : context.theme.tableCell),
+      align: this.align
+    });
+    const childBox = child.layout(context, constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y,
+      width: box.width
+    });
+  }
+}
+
+class HelperCell extends Widget {
+  constructor({child, padding, minimumHeight, alignment: cellAlignment, decoration, expandChildWidth}) {
+    super();
+    this.child = child;
+    this.padding = normalizeInsets(padding);
+    this.minimumHeight = Math.max(0, assertFiniteNumber(Number(minimumHeight), "table cell height"));
+    this.alignment = cellAlignment;
+    this.decoration = decoration;
+    this.expandChildWidth = expandChildWidth;
+  }
+  layout(context, constraints) {
+    const horizontal = insetsHorizontal(this.padding);
+    const vertical = insetsVertical(this.padding);
+    const childBox = this.child.layout(context, {
+      maxWidth: Math.max(0, constraints.maxWidth - horizontal),
+      maxHeight: Math.max(0, constraints.maxHeight - vertical)
+    });
+    return {
+      widget: this,
+      width: Math.min(constraints.maxWidth, childBox.width + horizontal),
+      height: Math.max(this.minimumHeight, childBox.height + vertical),
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    paintTableDecorationBackground(context, this.decoration, box.x, box.y, box.width, box.height);
+    const {childBox} = box.data;
+    const innerWidth = Math.max(0, box.width - insetsHorizontal(this.padding));
+    const innerHeight = Math.max(0, box.height - insetsVertical(this.padding));
+    const childWidth = this.expandChildWidth ? innerWidth : childBox.width;
+    const offset = inscribe(this.alignment, childWidth, childBox.height, innerWidth, innerHeight);
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x + this.padding.left + offset.dx,
+      y: box.y + this.padding.top + offset.dy,
+      width: childWidth
+    });
+    paintTableDecorationBorder(context, this.decoration, box.x, box.y, box.width, box.height);
+  }
+}
+
+const defaultBorder = TableBorder.all();
+
+class TableHelper {
+  static fromTextArray({data, cellPadding = 5, cellHeight = 0, cellAlignment = "topLeft", cellAlignments = null, cellStyle = null, oddCellStyle = cellStyle, cellFormat = null, cellDecoration = null, headerCount = 1, headers = null, headerPadding = cellPadding, headerHeight = cellHeight, headerAlignment = "center", headerAlignments = cellAlignments, headerStyle = null, headerFormat = null, border = defaultBorder, columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max", headerDecoration = null, headerCellDecoration = null, rowDecoration = null, oddRowDecoration = rowDecoration, cellBuilder = null, textStyleBuilder = null}) {
+    if (!Array.isArray(data)) {
+      throw new TypeError("TableHelper.fromTextArray requires a data array");
+    }
+    const normalizedHeaderCount = Math.trunc(assertFiniteNumber(Number(headerCount), "headerCount"));
+    if (normalizedHeaderCount < 0) {
+      throw new RangeError("headerCount must not be negative");
+    }
+    const rows = [];
+    let rowNumber = 0;
+    const makeCell = (value, column, isHeader, padding, minimumHeight, cellAlignmentValue, decoration) => {
+      const resolvedAlignment = alignment(cellAlignmentValue);
+      if (value instanceof Widget) {
+        return new HelperCell({
+          child: value,
+          padding,
+          minimumHeight,
+          alignment: resolvedAlignment,
+          decoration,
+          expandChildWidth: false
+        });
+      }
+      const built = !isHeader ? cellBuilder?.(column, value, rowNumber) ?? null : null;
+      if (built !== null) {
+        if (!(built instanceof Widget)) {
+          throw new TypeError("cellBuilder must return a Widget or null");
+        }
+        return new HelperCell({
+          child: built,
+          padding,
+          minimumHeight,
+          alignment: resolvedAlignment,
+          decoration,
+          expandChildWidth: false
+        });
+      }
+      const formatter = isHeader ? headerFormat : cellFormat;
+      const formatted = formatter === null ? String(value) : formatter(column, value);
+      const isOdd = (rowNumber - normalizedHeaderCount) % 2 !== 0;
+      const style = isHeader ? headerStyle : textStyleBuilder?.(column, value, rowNumber) ?? (isOdd ? oddCellStyle : cellStyle);
+      return new HelperCell({
+        child: new TableText(formatted, isHeader, style, textAlign(resolvedAlignment)),
+        padding,
+        minimumHeight,
+        alignment: resolvedAlignment,
+        decoration,
+        expandChildWidth: true
+      });
+    };
+    if (headers !== null) {
+      const cells = headers.map((value, column) => makeCell(value, column, true, headerPadding ?? cellPadding, headerHeight ?? cellHeight, indexed(headerAlignments, column) ?? headerAlignment, headerCellDecoration));
+      rows.push(new TableRow({
+        children: cells,
+        repeat: true,
+        decoration: headerDecoration
+      }));
+      rowNumber++;
+    }
+    for (const row of data) {
+      const isHeader = rowNumber < normalizedHeaderCount;
+      const isOdd = (rowNumber - normalizedHeaderCount) % 2 !== 0;
+      const cells = row.map((value, column) => makeCell(value, column, isHeader, isHeader ? headerPadding ?? cellPadding : cellPadding, isHeader ? headerHeight ?? cellHeight : cellHeight, isHeader ? indexed(headerAlignments, column) ?? headerAlignment : indexed(cellAlignments, column) ?? cellAlignment, isHeader ? null : cellDecoration?.(column, value, rowNumber) ?? null));
+      rows.push(new TableRow({
+        children: cells,
+        repeat: isHeader,
+        decoration: isHeader ? headerDecoration : isOdd ? oddRowDecoration : rowDecoration
+      }));
+      rowNumber++;
+    }
+    return new Table({
+      border,
+      tableWidth,
+      children: rows,
+      columnWidths,
+      defaultColumnWidth,
+      defaultVerticalAlignment: "full"
+    });
+  }
+}
+
 const publicApi = Object.freeze({
   Document,
   Page,
@@ -5981,6 +6486,15 @@ const publicApi = Object.freeze({
   SizedBox,
   Divider,
   SvgImage,
+  Table,
+  TableRow,
+  TableBorder,
+  TableColumnWidth,
+  IntrinsicColumnWidth,
+  FixedColumnWidth,
+  FlexColumnWidth,
+  FractionColumnWidth,
+  TableHelper,
   Alignment,
   EdgeInsets,
   PageFormat,
@@ -6012,4 +6526,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Center, Column, Container, DefaultTextStyle, Divider, Document, EdgeInsets, Font, MultiPage, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, StatelessWidget, SvgImage, Text, TextStyle, Theme, ThemeData, Vector, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Center, Column, Container, DefaultTextStyle, Divider, Document, EdgeInsets, FixedColumnWidth, FlexColumnWidth, Font, FractionColumnWidth, IntrinsicColumnWidth, MultiPage, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableRow, Text, TextStyle, Theme, ThemeData, Vector, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

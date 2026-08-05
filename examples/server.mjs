@@ -42,7 +42,7 @@ export function generateServer(pageFormat = pw.PageFormat.A4, _data = customData
     'AnnotationUrl', 'BarDataSet', 'Border', 'BorderRadius', 'BoxDecoration',
     'CartesianGrid', 'Chart', 'EdgeInsets', 'Expanded', 'FixedAxis', 'Font', 'FullPage',
     'PageTheme', 'PointChartValue', 'RichText', 'SizedBox', 'SvgImage',
-    'TableHelper', 'TextSpan', 'TextStyle', 'ThemeData', 'UrlLink'
+    'TextSpan', 'TextStyle', 'ThemeData', 'UrlLink'
   ]);
 
   const allPlans = parsePlans(resources.pricingJson);

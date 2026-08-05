@@ -12,7 +12,7 @@ export function generateDocument(format = pw.PageFormat.A4, data = customData, r
   requireFeatures(pw, 'document', [
     'Align', 'Border', 'BoxDecoration', 'Bullet', 'Center', 'EdgeInsets', 'Font',
     'Header', 'Padding', 'PageTheme', 'Paragraph', 'PdfLogo', 'RichText', 'SizedBox',
-    'SvgImage', 'TableHelper', 'TableOfContent', 'TextSpan', 'TextStyle',
+    'SvgImage', 'TableOfContent', 'TextSpan', 'TextStyle',
     'Theme', 'ThemeData', 'UrlLink'
   ]);
 

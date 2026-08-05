@@ -276,7 +276,7 @@ export function generateInvoice(pageFormat = pw.PageFormat.A4, _data = customDat
     'Barcode', 'BarcodeWidget', 'Border', 'BorderRadius', 'BoxDecoration',
     'DefaultTextStyle', 'Divider', 'EdgeInsets', 'Expanded', 'FittedBox', 'Font',
     'FullPage', 'GridView', 'LoremText', 'PageTheme', 'PdfLogo', 'RichText', 'SizedBox',
-    'SvgImage', 'TableHelper', 'TextSpan', 'TextStyle', 'ThemeData'
+    'SvgImage', 'TextSpan', 'TextStyle', 'ThemeData'
   ]);
 
   const lorem = new pw.LoremText();

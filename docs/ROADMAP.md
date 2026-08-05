@@ -13,9 +13,9 @@ TypeScript, with the runtime contract and attribution enforced by
 `npm run check`. Output is a valid PDF written through a real indirect-object
 model, with per-page resource dictionaries and **embedded TrueType fonts** —
 subset, written as Type0/CIDFontType2 composites, and selected through a theme.
-Beyond text, `SvgImage` now exposes the SVG painter with fitting, alignment,
-clipping and PDF shading-pattern gradients; tables and raster images are still
-absent.
+Beyond text, `SvgImage` exposes the SVG painter with fitting, alignment,
+clipping and PDF shading-pattern gradients, and tables now lay out fixed,
+intrinsic and flexible tracks. Raster images are still absent.
 
 **Phases 0, 1 and 2 are complete.** The foundations are in place, the WinAnsi
 ceiling is gone and the vector pipeline is public; phase 3 (layout) is what the
@@ -83,6 +83,12 @@ or type-3 stitching for multiple stops. Units, transforms, inherited
 references, fill/stroke selection and the real invoice/document assets are
 covered end to end.
 
+**Phase 3.1 — tables — landed 2026-08-05.** `Table` computes shared fixed,
+flex, fraction or intrinsic column tracks, aligns cells vertically and paints
+row/cell decoration plus exterior/interior rules. `TableHelper.fromTextArray`
+adds theme-aware text, padding, formatting callbacks and repeatable headers. It
+removed `TableHelper` from four example gates; the missing total fell 88 → 84.
+
 **Phase 2.3 — XML reader — landed 2026-08-05.** `src/svg/xml.ts` reads
 elements, attributes, text, CDATA, comments, entities and namespaces. Every SVG
 in `examples/assets/` and the inline markup in `server-assets.json` parse.
@@ -108,11 +114,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 3.1 — tables.** Port fixed, flex and intrinsic column widths, cell
-> alignment, borders and repeating headers through `Table` and `TableHelper`.
+> **Phase 3.2 — spanning widgets.** Add save/restore layout state so a long
+> table can consume one page, repeat its header and resume on the next.
 
-The SVG pipeline is complete enough for the example corpus. Layout now resumes
-at the first shared blocker in the document, invoice, report and server gates.
+The table surface is public; pagination is now the blocking half. Until 3.2 an
+oversized table remains one atomic widget and raises the existing overflow
+error.
 
 ---
 
@@ -721,12 +728,27 @@ render correctly, including transforms, viewBox, groups and clipping.
 Once text is real, the widget gaps become the limiting factor. This phase
 produces the first two fully generated examples.
 
-### 3.1 Table
+### 3.1 Table ✅ *(landed 2026-08-05)*
 
 - **Ports:** `widgets/table.dart`, `table_helper.dart`
 - Column widths (fixed / flex / intrinsic), cell alignment, borders, repeating
   headers.
 - **Example gate:** `TableHelper` for `document`, `invoice`, `report`, `server`.
+
+Landed as a pure `TableLayoutData` hand-off: column and row measurements, cell
+offsets and allocated tracks all travel from `layout()` to `paint()` without
+being cached on the widget. Fixed, flex, intrinsic and fractional column-width
+strategies work with `min`/`max` table sizing; top, middle, bottom and full cell
+alignment remain distinct. `TableBorder` paints each exterior and interior
+side in widget coordinates, while structural decorations keep the helper
+compatible with the `BoxDecoration`/`Border` objects arriving in 3.5.
+
+`TableHelper.fromTextArray` covers headers from a separate array or leading
+data rows, repeat markers, theme table styles, per-column alignment, padding,
+minimum heights, format/build/style/decoration callbacks and odd-row variants.
+Ten tests assert layout numbers and emitted operators. Pagination is
+deliberately not hidden here: repeat markers are retained, but 3.2 introduces
+the context protocol that can safely advance the same table across pages.
 
 ### 3.2 Spanning widgets
 

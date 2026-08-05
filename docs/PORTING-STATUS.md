@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 69 `.ts` files, ~11,500 lines (TypeScript)
+**Ported:** 71 `.ts` files, ~12,500 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -25,15 +25,16 @@ table. Run `npm run examples`; current state, from
 | `hello-world` | ✅ generated (740 bytes) | 0 | — |
 | `calendar` | failed | 6 | 3.6 |
 | `certificate` | failed | 10 | 3.9 |
-| `report` | failed | 13 | 5.1 |
-| `invoice` | failed | 14 | 5.2 |
-| `document` | failed | 11 | 5.3 |
-| `server` | failed | 15 | 5.3 |
+| `report` | failed | 12 | 5.1 |
+| `invoice` | failed | 13 | 5.2 |
+| `document` | failed | 10 | 5.3 |
+| `server` | failed | 14 | 5.3 |
 | `resume` | failed | 19 | 5.5 |
 
-**1 of 8**, with the missing-API total down from 124 to 88 — phase 1.4 cleared
+**1 of 8**, with the missing-API total down from 124 to 84 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
-from every one of the seven, and phase 2.7 cleared `SvgImage` from six. See
+from every one of the seven, phase 2.7 cleared `SvgImage` from six, and phase
+3.1 cleared `TableHelper` from four. See
 [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which phase clears
 each one.
 
@@ -160,7 +161,7 @@ both, and will grow the shape factories in 2.5.
 | `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`; owns the theme and the per-document font cache |
 | `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts`, `src/widgets/svg.ts` | partial — imperative `Vector`; public `SvgImage` with all `BoxFit` modes, alignment, clipping and colour filter; no SVG text or embedded raster content |
 | `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | partial — `Padding`, `Align`, `Center`, `SizedBox`, `Divider`; no `Transform`/`Opacity`/`FittedBox` (blocked on **2.1** and `/ExtGState`), no `ConstrainedBox`/`AspectRatio`/`FullPage` |
-| `widgets/table.dart`, `table_helper.dart` | 834 | — | — **phase 3.1** |
+| `widgets/table.dart`, `table_helper.dart` | 834 | `src/widgets/table.ts`, `table_helper.ts` | partial — fixed/flex/intrinsic/fraction tracks, alignment, decorations, borders and `TableHelper`; repeatable rows are marked, pagination waits for **3.2** |
 | `widgets/theme.dart`, `font.dart` | 461 | `src/widgets/theme.ts`, `src/widgets/font.ts` | partial — `Font`, `ThemeData`, `Theme`, `DefaultTextStyle`; no `iconTheme` (**5.4**), no `DefaultTextStyle.merge` (needs `Builder`) |
 | `widgets/image.dart`, `image_provider.dart` | 423 | — | — `Image`, `MemoryImage` — **phase 4.3** |
 | `widgets/border_radius.dart` | 466 | — | — `BorderRadius` — **phase 3.5** |
@@ -186,7 +187,7 @@ both, and will grow the shape factories in 2.5.
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
 | SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping and gradients done; SVG text and embedded raster content remain |
-| Widgets | ~14,000 | ~18 widgets of ~60, plus styles and themes |
+| Widgets | ~14,000 | ~20 widgets of ~60, plus tables, styles and themes |
 
 **Phases 0, 1 and 2 are complete.** The WinAnsi ceiling is gone: a TrueType font
 is parsed, subset to the glyphs a document used, embedded as a

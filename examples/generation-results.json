@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T20:11:48.617Z",
+  "generatedAt": "2026-08-05T20:21:10.798Z",
   "results": [
     {
       "name": "hello-world",
@@ -19,17 +19,17 @@
     {
       "name": "document",
       "status": "failed",
-      "error": "document requires unported js_pdf APIs: Border, BoxDecoration, Bullet, Header, Paragraph, PdfLogo, RichText, TableHelper, TableOfContent, TextSpan, UrlLink"
+      "error": "document requires unported js_pdf APIs: Border, BoxDecoration, Bullet, Header, Paragraph, PdfLogo, RichText, TableOfContent, TextSpan, UrlLink"
     },
     {
       "name": "invoice",
       "status": "failed",
-      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, Border, BorderRadius, BoxDecoration, Expanded, FittedBox, FullPage, GridView, LoremText, PdfLogo, RichText, TableHelper, TextSpan"
+      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, Border, BorderRadius, BoxDecoration, Expanded, FittedBox, FullPage, GridView, LoremText, PdfLogo, RichText, TextSpan"
     },
     {
       "name": "report",
       "status": "failed",
-      "error": "report requires unported js_pdf APIs: BarDataSet, CartesianGrid, Chart, ChartLegend, Expanded, FixedAxis, Flexible, LineDataSet, PieDataSet, PieGrid, PointChartValue, TableHelper, Transform"
+      "error": "report requires unported js_pdf APIs: BarDataSet, CartesianGrid, Chart, ChartLegend, Expanded, FixedAxis, Flexible, LineDataSet, PieDataSet, PieGrid, PointChartValue, Transform"
     },
     {
       "name": "resume",
@@ -39,7 +39,7 @@
     {
       "name": "server",
       "status": "failed",
-      "error": "server requires unported js_pdf APIs: AnnotationUrl, BarDataSet, Border, BorderRadius, BoxDecoration, CartesianGrid, Chart, Expanded, FixedAxis, FullPage, PointChartValue, RichText, TableHelper, TextSpan, UrlLink"
+      "error": "server requires unported js_pdf APIs: AnnotationUrl, BarDataSet, Border, BorderRadius, BoxDecoration, CartesianGrid, Chart, Expanded, FixedAxis, FullPage, PointChartValue, RichText, TextSpan, UrlLink"
     }
   ]
 }
