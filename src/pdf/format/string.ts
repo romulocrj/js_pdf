@@ -13,7 +13,14 @@
  *
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/format/string.dart
+ *
+ * PORT GAP: only the literal `(...)` branch exists. Upstream also emits hex
+ * `<...>` strings, UTF-16BE text and PDF dates. The hex branch arrives with TTF
+ * embedding in roadmap phase 1.3, which is what needs it.
  */
+
+import { PdfDataType } from './base.ts';
+import type { PdfStream } from './stream.ts';
 
 /**
  * Unicode code point to CP1252 (WinAnsiEncoding) byte, for the 0x80..0x9F
@@ -60,4 +67,18 @@ export function pdfLiteral(value: string): string {
   }
 
   return `(${output})`;
+}
+
+/** A PDF string object. */
+export class PdfString extends PdfDataType {
+  readonly value: string;
+
+  constructor(value: string) {
+    super();
+    this.value = value;
+  }
+
+  override output(s: PdfStream): void {
+    s.putString(pdfLiteral(this.value));
+  }
 }

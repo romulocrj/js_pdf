@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 21 `.ts` files, ~2,340 lines (TypeScript)
+**Ported:** 37 `.ts` files, ~3,420 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -47,13 +47,20 @@ phase clears each one.
 
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
-| `format/num.dart` | 96 | `src/pdf/format/num.ts` | done for the operators in use |
-| `format/string.dart` | 204 | `src/pdf/format/string.ts` | partial — literal + WinAnsi; no hex, no UTF-16BE, no PDF-date |
-| `format/stream.dart`, `format/base.dart` | 133 | `src/pdf/format/stream.ts` | partial — byte helpers only |
-| `format/xref.dart` | 406 | folded into `src/pdf/document.ts` | partial — classic xref table; no xref streams, no incremental update |
-| `format/dict.dart`, `dict_stream.dart`, `array.dart`, `name.dart`, `bool.dart`, `null_value.dart`, `indirect.dart`, `object_base.dart` | 574 | — | — inlined as string building; needs extraction before images/TTF |
-| `format/ascii85.dart` | 91 | — | — |
-| `format/diagnostic.dart` | 66 | — | — |
+| `format/num.dart` | 96 | `src/pdf/format/num.ts` | done — `PdfNum`, `PdfNumList`; 4-decimal precision vs. upstream's 5 |
+| `format/string.dart` | 204 | `src/pdf/format/string.ts` | partial — `PdfString`, literal + WinAnsi; no hex, no UTF-16BE, no PDF-date |
+| `format/stream.dart` | 83 | `src/pdf/format/stream.ts` | done — growable `PdfStream` byte buffer |
+| `format/base.dart` | 50 | `src/pdf/format/base.ts` | done — `PdfDataType`; `output(stream)` only, no settings or indent |
+| `format/object_base.dart` | 118 | `src/pdf/format/object_base.ts` | partial — `PdfObjectBase`, `ref()`, `prepare()`; no `PdfSettings` |
+| `format/dict.dart` | 135 | `src/pdf/format/dict.ts` | partial — `PdfDict`, insertion-ordered; no `merge`, no type parameter |
+| `format/array.dart` | 126 | `src/pdf/format/array.ts` | partial — `PdfArray`, `fromNum`, `fromObjects`; no `uniq`, no `fromColor` |
+| `format/dict_stream.dart` | 98 | `src/pdf/format/dict_stream.ts` | partial — `PdfDictStream`, derived `/Length`; no `/Filter`, no encryption |
+| `format/name.dart` | 63 | `src/pdf/format/name.ts` | done — also escapes `)`, which upstream misses |
+| `format/indirect.dart` | 44 | `src/pdf/format/indirect.ts` | done — `PdfIndirect` |
+| `format/bool.dart`, `null_value.dart` | 78 | `src/pdf/format/bool.ts`, `null_value.ts` | done |
+| `format/xref.dart` | 406 | `src/pdf/format/xref.ts` | partial — classic xref table; no xref streams, no incremental update |
+| `format/ascii85.dart` | 91 | — | — needs `/Filter` support first |
+| `format/diagnostic.dart` | 66 | — | n/a — drives upstream's verbose mode, which the port does not reproduce |
 
 ## `src/pdf/` — document and graphics
 
@@ -64,7 +71,7 @@ phase clears each one.
 | `colors.dart` | 406 | — | — named color constants |
 | `graphics.dart` | 1415 | `src/pdf/graphics.ts` | partial — fill/stroke rect, line, circle, text; no paths, transforms, clipping, alpha, shading |
 | `graphic_state.dart` | 194 | folded into `src/pdf/graphics.ts` | stub — `q`/`Q` only; no ExtGState objects |
-| `document.dart` | 289 | `src/pdf/document.ts` | partial — catalog, page list, info, one Type1 font |
+| `document.dart` | 289 | `src/pdf/document.ts` | partial — `PdfDocument` object registry; one Type1 font until **phase 0.3** |
 | `point.dart`, `rect.dart` | 159 | folded into `src/widgets/geometry.ts` | partial |
 | `options.dart` | 8 | — | — |
 | `document_parser.dart` | 40 | — | — reading existing PDFs is out of scope |
@@ -74,18 +81,24 @@ phase clears each one.
 
 ## `src/pdf/obj/` — indirect objects
 
-Upstream models each indirect object as a `PdfObject` subclass. The port emits a
-flat object table instead; reintroducing the hierarchy is a prerequisite for
-almost everything in this section.
+Upstream models each indirect object as a `PdfObject` subclass. **Phase 0.2
+reintroduced that hierarchy**, which is what the rest of this section was waiting
+on: an object registers itself with the document, hands out references through
+`ref()`, and resolves cross-object entries in `prepare()`.
 
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
-| `obj/object.dart`, `object_dict.dart`, `object_stream.dart`, `array.dart` | 174 | folded into `src/pdf/document.ts` | stub — no reusable object model |
-| `obj/catalog.dart`, `page.dart`, `page_list.dart`, `info.dart` | 457 | folded into `src/pdf/document.ts` | partial |
-| `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; one font per document until phase 0.3 |
+| `obj/object.dart`, `object_dict.dart` | 93 | `src/pdf/obj/object.ts` | done — `PdfObject`, `PdfObjectDict` |
+| `obj/object_stream.dart` | 51 | `src/pdf/obj/object_stream.ts` | partial — no Ascii85 flag, no deflate |
+| `obj/catalog.dart` | 178 | `src/pdf/obj/catalog.ts` | partial — `/Type`, `/Pages`; no outlines, names, page labels, `/AcroForm` |
+| `obj/page_list.dart` | 46 | `src/pdf/obj/page_list.ts` | done — flat page tree |
+| `obj/page.dart` | 164 | `src/pdf/obj/page.ts` | partial — hardcoded single-font `/Resources` until **phase 0.3**; no `/Rotate`, no `/Annots` |
+| `obj/info.dart` | 69 | `src/pdf/obj/info.ts` | partial — no `/CreationDate` (no clock) and no `/Keywords` |
+| `obj/array.dart` | 30 | — | — |
+| `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; `resourceDict()` returns a `PdfDict` as of 0.2; one font per document until phase 0.3 |
 | `obj/font_descriptor.dart` | 139 | — | — needed for embedded TTF in **phase 1.3** |
 | `obj/ttffont.dart`, `unicode_cmap.dart` | 278 | — | — **phase 1.3** |
-| `obj/graphic_stream.dart`, `xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 362 | — | — resource dictionary is **phase 0.3** |
+| `obj/graphic_stream.dart`, `xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 362 | — | — resource dictionary is **phase 0.3**, the next step |
 | `obj/image.dart`, `smask.dart` | 347 | — | — **phase 4.1–4.2** |
 | `obj/shading.dart`, `pattern.dart`, `function.dart` | 349 | — | — SVG gradients, **phase 2.8** |
 | `obj/annotation.dart`, `border.dart`, `names.dart`, `outline.dart` | 1366 | — | — links **phase 5.3**; names/outlines needed by `TableOfContent` in **3.8** |
@@ -158,12 +171,14 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 
 | Subsystem | Upstream lines | State |
 |---|---:|---|
-| Object syntax / serialization | ~1,700 | minimal but correct output |
+| Object syntax / serialization | ~1,700 | self-serializing value types; no filters, no xref streams |
 | Graphics | ~1,600 | ~15% of the operator surface |
-| Indirect objects | ~4,300 | flat table; no object model |
+| Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams |
 | Fonts | ~2,100 | Type1 AFM metrics done; no TTF parsing or embedding |
 | SVG | ~2,800 | not started |
 | Widgets | ~14,000 | ~10 widgets of ~60 |
 
-The next structural gate is the **object model**; embedded TTF remains the major
-font milestone. See [ROADMAP.md](ROADMAP.md).
+The object model landed in phase 0.2, so the structural blocker is gone. The next
+gate is the **per-page resource dictionary** (phase 0.3), which ends the
+single-font limit; embedded TTF remains the major font milestone. See
+[ROADMAP.md](ROADMAP.md).

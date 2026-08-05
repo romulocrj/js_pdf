@@ -111,6 +111,124 @@ PdfFontMetrics.zero = new PdfFontMetrics({
   bottom: 0
 });
 
+const GROW = 65536;
+
+class PdfStream {
+  constructor() {
+    this.buffer = new Uint8Array(GROW);
+    this.length = 0;
+  }
+  get offset() {
+    return this.length;
+  }
+  ensure(size) {
+    if (this.buffer.length - this.length >= size) {
+      return;
+    }
+    const grown = new Uint8Array(this.length + size + GROW);
+    grown.set(this.buffer.subarray(0, this.length));
+    this.buffer = grown;
+  }
+  putByte(byte) {
+    this.ensure(1);
+    this.buffer[this.length++] = byte;
+  }
+  putBytes(bytes) {
+    this.ensure(bytes.length);
+    this.buffer.set(bytes, this.length);
+    this.length += bytes.length;
+  }
+  putString(value) {
+    this.ensure(value.length);
+    for (let index = 0; index < value.length; index++) {
+      this.buffer[this.length++] = value.charCodeAt(index) & 255;
+    }
+  }
+  output() {
+    return this.buffer.slice(0, this.length);
+  }
+}
+
+function encodeLatin1(value) {
+  const result = new Uint8Array(value.length);
+  for (let index = 0; index < value.length; index++) {
+    result[index] = value.charCodeAt(index) & 255;
+  }
+  return result;
+}
+
+class PdfDataType {
+  toString() {
+    const stream = new PdfStream;
+    this.output(stream);
+    let result = "";
+    for (const byte of stream.output()) {
+      result += String.fromCharCode(byte);
+    }
+    return result;
+  }
+}
+
+class PdfDict extends PdfDataType {
+  constructor(values) {
+    super();
+    this.values = new Map(values);
+  }
+  static fromObjectMap(objects) {
+    const dict = new PdfDict;
+    for (const [key, object] of objects) {
+      dict.set(key, object.ref());
+    }
+    return dict;
+  }
+  get isEmpty() {
+    return this.values.size === 0;
+  }
+  has(key) {
+    return this.values.has(key);
+  }
+  get(key) {
+    return this.values.get(key);
+  }
+  set(key, value) {
+    this.values.set(key, value);
+  }
+  output(s) {
+    s.putString("<< ");
+    let first = true;
+    for (const [key, value] of this.values) {
+      if (!first) {
+        s.putByte(32);
+      }
+      first = false;
+      s.putString(key);
+      s.putByte(32);
+      value.output(s);
+    }
+    s.putString(" >>");
+  }
+}
+
+class PdfName extends PdfDataType {
+  constructor(value) {
+    super();
+    if (value.charCodeAt(0) !== 47) {
+      throw new TypeError(`PDF name must start with "/": ${value}`);
+    }
+    this.value = value;
+  }
+  output(s) {
+    for (let index = 0; index < this.value.length; index++) {
+      const code = this.value.charCodeAt(index);
+      if (code < 33 || code > 126 || code === 35 || code === 47 && index > 0 || code === 91 || code === 93 || code === 40 || code === 41 || code === 60 || code === 62) {
+        s.putString(`#${code.toString(16).padStart(2, "0")}`);
+      } else {
+        s.putByte(code);
+      }
+    }
+  }
+}
+
 const CP1252 = Object.freeze({
   8364: 128,
   8218: 130,
@@ -163,6 +281,16 @@ function pdfLiteral(value) {
     }
   }
   return `(${output})`;
+}
+
+class PdfString extends PdfDataType {
+  constructor(value) {
+    super();
+    this.value = value;
+  }
+  output(s) {
+    s.putString(pdfLiteral(this.value));
+  }
 }
 
 const helveticaWidths = Object.freeze([ .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .278, .278, .355, .556, .556, .889, .667, .191, .333, .333, .389, .584, .278, .333, .278, .278, .556, .556, .556, .556, .556, .556, .556, .556, .556, .556, .278, .278, .584, .584, .584, .556, 1.015, .667, .667, .722, .722, .667, .611, .778, .722, .278, .5, .667, .556, .833, .722, .778, .667, .778, .722, .667, .611, .722, .667, .944, .667, .667, .611, .278, .278, .277, .469, .556, .333, .556, .556, .5, .556, .556, .278, .556, .556, .222, .222, .5, .222, .833, .556, .556, .556, .556, .333, .5, .278, .556, .5, .722, .5, .5, .5, .334, .26, .334, .584, .5, .655, .5, .222, .278, .333, 1, .556, .556, .333, 1, .667, .25, 1, .5, .611, .5, .5, .222, .221, .333, .333, .35, .556, 1, .333, 1, .5, .25, .938, .5, .5, .667, .278, .278, .556, .556, .556, .556, .26, .556, .333, .737, .37, .448, .584, .333, .737, .333, .606, .584, .35, .35, .333, .556, .537, .278, .333, .35, .365, .448, .869, .869, .879, .556, .667, .667, .667, .667, .667, .667, 1, .722, .667, .667, .667, .667, .278, .278, .278, .278, .722, .722, .778, .778, .778, .778, .778, .584, .778, .722, .722, .722, .722, .667, .666, .611, .556, .556, .556, .556, .556, .556, .896, .5, .556, .556, .556, .556, .251, .251, .251, .251, .556, .556, .556, .556, .556, .556, .556, .584, .611, .556, .556, .556, .556, .5, .555, .5 ]);
@@ -321,7 +449,7 @@ class PdfType1Font {
     return pdfLiteral(text);
   }
   resourceDict() {
-    return `<< /Type /Font /Subtype /Type1 /BaseFont /${this.fontName} /Encoding /WinAnsiEncoding >>`;
+    return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/Type1") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfName("/WinAnsiEncoding") ] ]);
   }
 }
 
@@ -341,6 +469,16 @@ function clamp(value, min, max) {
 function formatNumber(value) {
   const rounded = Math.abs(value) < 1e-6 ? 0 : value;
   return Number(rounded.toFixed(4)).toString();
+}
+
+class PdfNum extends PdfDataType {
+  constructor(value) {
+    super();
+    this.value = value;
+  }
+  output(s) {
+    s.putString(formatNumber(this.value));
+  }
 }
 
 function normalizeColor(value, fallback = [ 0, 0, 0 ]) {
@@ -437,72 +575,262 @@ class Container extends Widget {
   }
 }
 
-function encodeLatin1(value) {
-  const result = new Uint8Array(value.length);
-  for (let index = 0; index < value.length; index++) {
-    result[index] = value.charCodeAt(index) & 255;
-  }
-  return result;
+function legacyRef(xref, free = false) {
+  const offset = String(xref.offset).padStart(10, "0");
+  const gen = String(xref.gen).padStart(5, "0");
+  return `${offset} ${gen} ${free ? "f" : "n"} `;
 }
 
-function concatBytes(chunks) {
-  const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const output = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    output.set(chunk, offset);
-    offset += chunk.length;
+class PdfXrefTable {
+  constructor() {
+    this.params = new PdfDict;
+    this.objects = [];
   }
-  return output;
+  add(object) {
+    this.objects.push(object);
+  }
+  writeBlock(s, firstId, block) {
+    s.putString(`${firstId} ${block.length}\n`);
+    for (const row of block) {
+      s.putString(row);
+      s.putByte(10);
+    }
+  }
+  output(s) {
+    s.putString("%PDF-1.7\n%âãÏÓ\n");
+    const ordered = [ ...this.objects ].sort((a, b) => a.objser - b.objser);
+    const xrefList = [];
+    for (const object of ordered) {
+      const offset = object.output(s);
+      xrefList.push({
+        ser: object.objser,
+        gen: object.objgen,
+        offset
+      });
+    }
+    const xrefOffset = s.offset;
+    s.putString("xref\n");
+    let firstId = 0;
+    let lastId = 0;
+    let block = [ legacyRef({
+      gen: 65535,
+      offset: 0
+    }, true) ];
+    for (const xref of xrefList) {
+      if (xref.ser !== lastId + 1) {
+        this.writeBlock(s, firstId, block);
+        block = [];
+        firstId = xref.ser;
+      }
+      block.push(legacyRef(xref));
+      lastId = xref.ser;
+    }
+    this.writeBlock(s, firstId, block);
+    const trailer = new PdfDict;
+    trailer.set("/Size", new PdfNum(lastId + 1));
+    for (const [key, value] of this.params.values) {
+      trailer.set(key, value);
+    }
+    s.putString("trailer\n");
+    trailer.output(s);
+    s.putByte(10);
+    s.putString(`startxref\n${xrefOffset}\n%%EOF\n`);
+  }
 }
 
-function metadataDictionary(metadata) {
-  const entries = [];
-  if (metadata.title) entries.push(`/Title ${pdfLiteral(metadata.title)}`);
-  if (metadata.author) entries.push(`/Author ${pdfLiteral(metadata.author)}`);
-  if (metadata.subject) entries.push(`/Subject ${pdfLiteral(metadata.subject)}`);
-  if (metadata.creator) entries.push(`/Creator ${pdfLiteral(metadata.creator)}`);
-  if (metadata.producer) entries.push(`/Producer ${pdfLiteral(metadata.producer)}`);
-  return `<< ${entries.join(" ")} >>`;
+class PdfIndirect extends PdfDataType {
+  constructor(ser, gen) {
+    super();
+    this.ser = ser;
+    this.gen = gen;
+  }
+  equals(other) {
+    return this.ser === other.ser && this.gen === other.gen;
+  }
+  output(s) {
+    s.putString(`${this.ser} ${this.gen} R`);
+  }
+}
+
+class PdfObjectBase {
+  constructor(objser, params, objgen = 0) {
+    this.objser = objser;
+    this.objgen = objgen;
+    this.params = params;
+  }
+  ref() {
+    return new PdfIndirect(this.objser, this.objgen);
+  }
+  prepare() {}
+  output(s) {
+    const offset = s.offset;
+    s.putString(`${this.objser} ${this.objgen} obj\n`);
+    this.writeContent(s);
+    s.putString("endobj\n");
+    return offset;
+  }
+  writeContent(s) {
+    this.params.output(s);
+    s.putByte(10);
+  }
+}
+
+class PdfObject extends PdfObjectBase {
+  constructor(document, params, objser) {
+    super(objser ?? document.genSerial(), params);
+    document.register(this);
+  }
+}
+
+class PdfCatalog extends PdfObject {
+  constructor(document, pageList, objser) {
+    super(document, new PdfDict([ [ "/Type", new PdfName("/Catalog") ] ]), objser);
+    this.pageList = pageList;
+  }
+  prepare() {
+    this.params.set("/Pages", this.pageList.ref());
+  }
+}
+
+class PdfInfo extends PdfObject {
+  constructor(document, metadata) {
+    super(document, new PdfDict);
+    const entries = [ [ "/Title", metadata.title ], [ "/Author", metadata.author ], [ "/Subject", metadata.subject ], [ "/Creator", metadata.creator ], [ "/Producer", metadata.producer ] ];
+    for (const [key, value] of entries) {
+      if (value) {
+        this.params.set(key, new PdfString(value));
+      }
+    }
+  }
+}
+
+class PdfDictStream extends PdfDict {
+  constructor(data = new Uint8Array(0), values) {
+    super(values);
+    this.data = data;
+  }
+  output(s) {
+    this.set("/Length", new PdfNum(this.data.length));
+    super.output(s);
+    s.putString("\nstream\n");
+    s.putBytes(this.data);
+    if (this.data.length === 0 || this.data[this.data.length - 1] !== 10) {
+      s.putByte(10);
+    }
+    s.putString("endstream");
+  }
+}
+
+class PdfObjectStream extends PdfObject {
+  constructor(document, data) {
+    super(document, new PdfDictStream(data));
+  }
+}
+
+class PdfArray extends PdfDataType {
+  constructor(values = []) {
+    super();
+    this.values = [ ...values ];
+  }
+  static fromNum(values) {
+    return new PdfArray(values.map(value => new PdfNum(value)));
+  }
+  static fromObjects(objects) {
+    return new PdfArray(objects.map(object => object.ref()));
+  }
+  get length() {
+    return this.values.length;
+  }
+  add(value) {
+    this.values.push(value);
+  }
+  output(s) {
+    s.putString("[");
+    for (let index = 0; index < this.values.length; index++) {
+      if (index > 0) {
+        s.putByte(32);
+      }
+      this.values[index]?.output(s);
+    }
+    s.putString("]");
+  }
+}
+
+class PdfPage extends PdfObject {
+  constructor(document, pageList, pageFormat, font) {
+    super(document, new PdfDict([ [ "/Type", new PdfName("/Page") ] ]));
+    this.contents = [];
+    this.pageFormat = pageFormat;
+    this.pageList = pageList;
+    this.font = font;
+    pageList.pages.push(this);
+  }
+  prepare() {
+    this.params.set("/Parent", this.pageList.ref());
+    this.params.set("/MediaBox", PdfArray.fromNum([ 0, 0, this.pageFormat.width, this.pageFormat.height ]));
+    this.params.set("/Resources", new PdfDict([ [ "/Font", PdfDict.fromObjectMap([ [ "/F1", this.font ] ]) ] ]));
+    if (this.contents.length === 1) {
+      this.params.set("/Contents", this.contents[0].ref());
+    } else if (this.contents.length > 1) {
+      this.params.set("/Contents", PdfArray.fromObjects(this.contents));
+    }
+  }
+}
+
+class PdfPageList extends PdfObject {
+  constructor(document, objser) {
+    super(document, new PdfDict([ [ "/Type", new PdfName("/Pages") ] ]), objser);
+    this.pages = [];
+  }
+  prepare() {
+    this.params.set("/Count", new PdfNum(this.pages.length));
+    this.params.set("/Kids", PdfArray.fromObjects(this.pages));
+  }
+}
+
+class PdfDocument {
+  constructor(metadata, font = defaultPdfFont) {
+    this.serial = 0;
+    this.xref = new PdfXrefTable;
+    const catalogSerial = this.genSerial();
+    this.pageList = new PdfPageList(this);
+    this.catalog = new PdfCatalog(this, this.pageList, catalogSerial);
+    this.fontObject = new PdfObject(this, font.resourceDict());
+    this.info = new PdfInfo(this, metadata);
+  }
+  get objects() {
+    return this.xref.objects;
+  }
+  genSerial() {
+    return ++this.serial;
+  }
+  register(object) {
+    this.xref.add(object);
+  }
+  addPage(format, content) {
+    const stream = new PdfObjectStream(this, encodeLatin1(content));
+    const page = new PdfPage(this, this.pageList, format, this.fontObject);
+    page.contents.push(stream);
+    return page;
+  }
+  save() {
+    for (const object of this.objects) {
+      object.prepare();
+    }
+    this.xref.params.set("/Root", this.catalog.ref());
+    this.xref.params.set("/Info", this.info.ref());
+    const stream = new PdfStream;
+    this.xref.output(stream);
+    return stream.output();
+  }
 }
 
 function serializePdf(pages, metadata, font = defaultPdfFont) {
-  const objects = [ null ];
-  const allocate = body => {
-    objects.push(body);
-    return objects.length - 1;
-  };
-  const catalogId = allocate("");
-  const pagesId = allocate("");
-  const fontId = allocate(font.resourceDict());
-  const infoId = allocate(metadataDictionary(metadata));
-  const pageIds = [];
+  const document = new PdfDocument(metadata, font);
   for (const page of pages) {
-    const contentBytes = encodeLatin1(page.content);
-    const contentId = allocate(`<< /Length ${contentBytes.length} >>\nstream\n${page.content}endstream`);
-    const pageId = allocate(`<< /Type /Page /Parent ${pagesId} 0 R ` + `/MediaBox [0 0 ${formatNumber(page.format.width)} ${formatNumber(page.format.height)}] ` + `/Resources << /Font << /F1 ${fontId} 0 R >> >> ` + `/Contents ${contentId} 0 R >>`);
-    pageIds.push(pageId);
+    document.addPage(page.format, page.content);
   }
-  objects[pagesId] = `<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] >>`;
-  objects[catalogId] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
-  const header = encodeLatin1("%PDF-1.7\n%âãÏÓ\n");
-  const chunks = [ header ];
-  const xrefLines = [ "0000000000 65535 f \n" ];
-  let byteOffset = header.length;
-  for (let id = 1; id < objects.length; id++) {
-    const body = objects[id];
-    if (body == null) {
-      throw new Error(`PDF object ${id} was allocated but never filled`);
-    }
-    xrefLines.push(`${String(byteOffset).padStart(10, "0")} 00000 n \n`);
-    const bytes = encodeLatin1(`${id} 0 obj\n${body}\nendobj\n`);
-    chunks.push(bytes);
-    byteOffset += bytes.length;
-  }
-  const xrefOffset = byteOffset;
-  const trailer = [ `xref\n0 ${objects.length}\n`, xrefLines.join(""), `trailer\n<< /Size ${objects.length} /Root ${catalogId} 0 R /Info ${infoId} 0 R >>\n`, `startxref\n${xrefOffset}\n%%EOF\n` ].join("");
-  chunks.push(encodeLatin1(trailer));
-  return concatBytes(chunks);
+  return document.save();
 }
 
 class PdfCanvas {

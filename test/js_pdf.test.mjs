@@ -111,9 +111,12 @@ test('Type1 font encoding and resource dictionary use the font seam', () => {
   const font = Pdf.PdfType1Font.timesBoldItalic();
 
   assert.equal(font.encodeText('Ação'), '(A\\347\\343o)');
-  assert.match(font.resourceDict(), /\/Subtype \/Type1/);
-  assert.match(font.resourceDict(), /\/BaseFont \/Times-BoldItalic/);
-  assert.match(font.resourceDict(), /\/Encoding \/WinAnsiEncoding/);
+
+  // resourceDict() returns a PdfDict as of phase 0.2, not a string.
+  const dict = font.resourceDict().toString();
+  assert.match(dict, /\/Subtype \/Type1/);
+  assert.match(dict, /\/BaseFont \/Times-BoldItalic/);
+  assert.match(dict, /\/Encoding \/WinAnsiEncoding/);
 });
 
 test('the namespace export exposes the same API as the named exports', () => {

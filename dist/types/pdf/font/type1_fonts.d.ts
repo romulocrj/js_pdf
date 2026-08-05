@@ -1,5 +1,6 @@
 import { PdfFontMetrics } from './font_metrics.ts';
 import type { PdfFont } from './font.ts';
+import { PdfDict } from '../format/dict.ts';
 /**
  * AFM advance widths for the standard proportional Type1 fonts, expressed in
  * em units and indexed by the encoded byte. Oblique variants have their own
@@ -40,6 +41,12 @@ export declare class PdfType1Font implements PdfFont {
     glyphMetrics(charCode: number): PdfFontMetrics;
     stringMetrics(text: string, size: number, letterSpacing?: number): PdfFontMetrics;
     encodeText(text: string): string;
-    resourceDict(): string;
+    /**
+     * PORT GAP: no `/FirstChar`, `/LastChar`, `/Widths` or `/FontDescriptor`.
+     * Upstream emits those for PDF 1.5 and up. They are optional for the 14
+     * standard fonts, whose metrics every reader already has built in — which is
+     * exactly the set this class covers.
+     */
+    resourceDict(): PdfDict;
 }
 export declare const defaultPdfFont: PdfFont;

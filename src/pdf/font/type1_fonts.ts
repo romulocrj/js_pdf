@@ -19,6 +19,8 @@
 
 import { PdfFontMetrics } from './font_metrics.ts';
 import type { PdfFont } from './font.ts';
+import { PdfDict } from '../format/dict.ts';
+import { PdfName } from '../format/name.ts';
 import { pdfLiteral, toWinAnsiByte } from '../format/string.ts';
 
 /**
@@ -477,8 +479,19 @@ export class PdfType1Font implements PdfFont {
     return pdfLiteral(text);
   }
 
-  resourceDict(): string {
-    return `<< /Type /Font /Subtype /Type1 /BaseFont /${this.fontName} /Encoding /WinAnsiEncoding >>`;
+  /**
+   * PORT GAP: no `/FirstChar`, `/LastChar`, `/Widths` or `/FontDescriptor`.
+   * Upstream emits those for PDF 1.5 and up. They are optional for the 14
+   * standard fonts, whose metrics every reader already has built in — which is
+   * exactly the set this class covers.
+   */
+  resourceDict(): PdfDict {
+    return new PdfDict([
+      ['/Type', new PdfName('/Font')],
+      ['/Subtype', new PdfName('/Type1')],
+      ['/BaseFont', new PdfName(`/${this.fontName}`)],
+      ['/Encoding', new PdfName('/WinAnsiEncoding')]
+    ]);
   }
 }
 

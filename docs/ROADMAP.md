@@ -11,26 +11,37 @@ Ordered plan for the port. Current coverage is in
 The MVP is restructured into a module tree that mirrors `dart_pdf`, written in
 TypeScript, with the runtime contract and attribution enforced by
 `npm run check`. Output is a valid single-font PDF with selectable standard
-Type1 fonts and real AFM metrics. Nothing beyond that is real yet.
+Type1 fonts and real AFM metrics, written through a real indirect-object model.
+Beyond that — TTF, SVG, tables, images — nothing is real yet.
 
-**Phase 0.0 — TypeScript migration — landed 2026-08-05.** All 19 modules are
-`.ts`; `tsconfig.json` compiles against the ES2020 lib with no DOM and no node
-types, which turns the runtime contract into a compile error rather than a
-convention. `Widget<TData>` makes the `layout` → `paint` hand-off type-safe.
-Output is byte-identical to the JavaScript it replaced. Done before the font
-work, not during it, so the branded integer types that phase 1 needs
-(glyph id vs. codepoint vs. CID) exist from the start.
+**Phase 0.0 — TypeScript migration — landed 2026-08-05.** Every module is `.ts`;
+`tsconfig.json` compiles against the ES2020 lib with no DOM and no host types,
+which turns the runtime contract into a compile error rather than a convention.
+`Widget<TData>` makes the `layout` → `paint` hand-off type-safe. Output is
+byte-identical to the JavaScript it replaced. Done before the font work, not
+during it, so the branded integer types that phase 1 needs (glyph id vs.
+codepoint vs. CID) exist from the start.
+
+**Phase 0.1 — Type1 font metrics — landed 2026-08-05.** Real AFM advance widths
+for all 14 standard fonts behind a `PdfFont` interface, which is the seam phase 1
+plugs embedded TTF into.
+
+**Phase 0.2 — object model — landed 2026-08-05.** `src/pdf/format/` holds the
+PDF value types and `src/pdf/obj/` the indirect objects; `document.ts` is a
+registry that assigns serial numbers and writes the file. Output is
+byte-identical to the string builder it replaced.
 
 ## Next step
 
-> **Phase 0.2 — object model.** Replace the flat object table in
-> `src/pdf/document.ts` with self-serializing indirect objects under
-> `src/pdf/format/` and `src/pdf/obj/` while keeping the current fixtures
-> byte-identical.
+> **Phase 0.3 — resource dictionary.** Replace the hardcoded single-font
+> `/Resources` in `src/pdf/obj/page.ts` with per-page registration of `/Font`,
+> `/XObject` and `/ExtGState`, naming entries `/F1`, `/F2`, … automatically.
 
-This is required before a document can own a variable number of fonts, images,
-XObjects or annotations, and it prepares the resource registration in phase
-0.3 without changing observable output.
+This is the last thing standing between the port and more than one font per
+document, so it gates all of phase 1. `PdfPage` already owns its `/Resources`
+dictionary as of 0.2 — the work is a `PdfGraphicStream` equivalent that allocates
+names, plus threading the chosen font from `PdfCanvas.text` through to the page
+instead of the fixed `/F1`.
 
 ---
 
@@ -78,8 +89,8 @@ Prerequisites that phases 1–3 all depend on. Do these before the big
 subsystems, not alongside them.
 
 **Example gate:** none — phase 0 unlocks no API requested by the upstream
-examples. `hello-world` must keep generating through 0.2; its metrics-dependent
-positions change in 0.1 to match the AFM tables.
+examples. `hello-world` must keep generating through 0.3; its metrics-dependent
+positions changed in 0.1 to match the AFM tables, and 0.2 left every byte alone.
 
 ### 0.0 TypeScript migration ✅ *(landed 2026-08-05)*
 
@@ -112,19 +123,44 @@ the 14 standard fonts through `PdfType1Font`; per-page multi-font registration
 remains phase 0.3. The serializer structure is unchanged, while alignment and
 wrapping now use the real advances.
 
-### 0.2 Object model
+### 0.2 Object model ✅ *(landed 2026-08-05)*
 
 - **Ports:** `pdf/lib/src/pdf/obj/object.dart`, `object_dict.dart`,
-  `format/dict.dart`, `array.dart`, `name.dart`, `indirect.dart`,
-  `dict_stream.dart`
-- **Into:** `src/pdf/format/*.ts`, `src/pdf/obj/object.ts`
+  `object_stream.dart`, `catalog.dart`, `page.dart`, `page_list.dart`,
+  `info.dart`, `format/base.dart`, `object_base.dart`, `dict.dart`, `array.dart`,
+  `name.dart`, `indirect.dart`, `dict_stream.dart`, `bool.dart`,
+  `null_value.dart`, `num.dart`, `string.dart`, `stream.dart`, `xref.dart`
+- **Into:** `src/pdf/format/*.ts`, `src/pdf/obj/*.ts`
 - Replace the flat object table in `src/pdf/document.ts` with real indirect
   objects that serialize themselves. Required before a document can hold a
   variable number of fonts, images, or XObjects.
 - **Test:** byte-identical output to the current serializer for the existing
   fixtures — this phase must change nothing observable.
 
-### 0.3 Resource dictionary
+Landed as a 13-module `format/` layer (`PdfDataType` and the value types, plus
+`PdfObjectBase`, `PdfStream` and `PdfXrefTable`) and a 6-module `obj/` layer
+(`PdfObject`, `PdfObjectStream`, `PdfCatalog`, `PdfPageList`, `PdfPage`,
+`PdfInfo`). Verified byte-identical across 20 fixtures — the 14 standard fonts,
+both page formats, accented text, empty and full metadata, multi-page overflow
+and vector drawing — and `hello-world` still generates at 740 bytes.
+
+Divergences worth knowing, each noted in the file that makes it:
+
+- `output(stream)` takes no settings object and no indent. Upstream's exist for
+  compression, encryption and a verbose pretty-printer; the port has none of the
+  three, so a value never consults its owning object.
+- Dictionaries and arrays keep the port's spacing (`<< /Type /Page >>`,
+  `[/A /B]`) rather than upstream's compact form. That is what made byte
+  identity achievable, and it is what the tests assert.
+- Object bodies are laid out in serial order, not creation order, so the xref
+  table is a single contiguous block and the catalog can be object 1 while still
+  referencing a page list created after it.
+- `PdfName` also escapes `)`, which upstream's escape list omits.
+- `PdfFont.resourceDict()` returns a `PdfDict` instead of a string, which is the
+  seam TTF embedding needs in 1.3 — a descriptor and a `FontFile2` stream are
+  references, and a reference cannot be spliced into text.
+
+### 0.3 Resource dictionary ← **next**
 
 - **Ports:** `pdf/lib/src/pdf/obj/graphic_stream.dart`, `page.dart`
 - **Into:** `src/pdf/obj/graphic_stream.ts`

@@ -1,0 +1,234 @@
+/*
+ * js_pdf tests — the phase 0.2 object model.
+ * Copyright (C) 2026, Romulo Campos
+ * Licensed under the Apache License, Version 2.0.
+ *
+ * Tests may use Node APIs; src/ may not (enforced by tools/check-source.mjs).
+ *
+ * These import the format and obj modules directly rather than through
+ * src/index.ts: the object model is internal, and phase 0.2 deliberately adds
+ * nothing to the public API.
+ */
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { PdfArray } from '../src/pdf/format/array.ts';
+import { PdfBool } from '../src/pdf/format/bool.ts';
+import { PdfDict } from '../src/pdf/format/dict.ts';
+import { PdfDictStream } from '../src/pdf/format/dict_stream.ts';
+import { PdfIndirect } from '../src/pdf/format/indirect.ts';
+import { PdfName } from '../src/pdf/format/name.ts';
+import { PdfNull } from '../src/pdf/format/null_value.ts';
+import { PdfNum, PdfNumList } from '../src/pdf/format/num.ts';
+import { PdfObjectBase } from '../src/pdf/format/object_base.ts';
+import { PdfStream, encodeLatin1 } from '../src/pdf/format/stream.ts';
+import { PdfString } from '../src/pdf/format/string.ts';
+import { PdfDocument } from '../src/pdf/document.ts';
+import { PageFormat } from '../src/pdf/page_format.ts';
+
+function latin1(bytes) {
+  let output = '';
+  for (const byte of bytes) output += String.fromCharCode(byte);
+  return output;
+}
+
+function write(value) {
+  const stream = new PdfStream();
+  value.output(stream);
+  return latin1(stream.output());
+}
+
+test('PdfStream grows past its initial capacity and reports a running offset', () => {
+  const stream = new PdfStream();
+  assert.equal(stream.offset, 0);
+
+  const chunk = 'x'.repeat(70000);
+  stream.putString(chunk);
+  assert.equal(stream.offset, 70000);
+
+  stream.putByte(0x0a);
+  stream.putBytes(encodeLatin1('end'));
+  assert.equal(stream.offset, 70004);
+
+  const bytes = stream.output();
+  assert.equal(bytes.length, 70004);
+  assert.equal(latin1(bytes.subarray(70000)), '\nend');
+});
+
+test('PdfStream keeps high bytes intact', () => {
+  // The file header's binary marker is not 7-bit, unlike upstream's assertion.
+  assert.equal(write(new PdfName('/A')), '/A');
+  const stream = new PdfStream();
+  stream.putString('%\xE2\xE3\xCF\xD3');
+  assert.deepEqual(Array.from(stream.output()), [0x25, 0xe2, 0xe3, 0xcf, 0xd3]);
+});
+
+test('PdfName hex-escapes delimiters and keeps the leading slash literal', () => {
+  assert.equal(write(new PdfName('/Type')), '/Type');
+  assert.equal(write(new PdfName('/A B')), '/A#20B');
+  assert.equal(write(new PdfName('/a/b')), '/a#2fb');
+  assert.equal(write(new PdfName('/x#y')), '/x#23y');
+  assert.equal(write(new PdfName('/[]()<>')), '/#5b#5d#28#29#3c#3e');
+  assert.throws(() => new PdfName('Type'), TypeError);
+});
+
+test('PdfNum drops trailing zeros, negative zero and exponent notation', () => {
+  assert.equal(write(new PdfNum(0)), '0');
+  assert.equal(write(new PdfNum(-0)), '0');
+  assert.equal(write(new PdfNum(1e-9)), '0');
+  assert.equal(write(new PdfNum(12)), '12');
+  assert.equal(write(new PdfNum(595.2755905511812)), '595.2756');
+  assert.equal(write(new PdfNum(-3.5)), '-3.5');
+  assert.equal(write(new PdfNumList([1, 0, 0, 1, 40, 789.89])), '1 0 0 1 40 789.89');
+});
+
+test('PdfString, PdfBool, PdfNull and PdfIndirect serialize to PDF syntax', () => {
+  assert.equal(write(new PdfString('js_pdf')), '(js_pdf)');
+  assert.equal(write(new PdfString('Relatório')), '(Relat\\363rio)');
+  assert.equal(write(new PdfString('a(b)c\\d')), '(a\\(b\\)c\\\\d)');
+  assert.equal(write(new PdfBool(true)), 'true');
+  assert.equal(write(new PdfBool(false)), 'false');
+  assert.equal(write(new PdfNull()), 'null');
+  assert.equal(write(new PdfIndirect(12, 0)), '12 0 R');
+  assert.ok(new PdfIndirect(3, 0).equals(new PdfIndirect(3, 0)));
+  assert.ok(!new PdfIndirect(3, 0).equals(new PdfIndirect(3, 1)));
+});
+
+test('PdfArray separates every element with a single space', () => {
+  assert.equal(write(new PdfArray()), '[]');
+  assert.equal(write(PdfArray.fromNum([0, 0, 595.2756, 841.8898])), '[0 0 595.2756 841.8898]');
+  assert.equal(write(new PdfArray([new PdfName('/A'), new PdfName('/B')])), '[/A /B]');
+
+  const objects = [
+    new PdfObjectBase(5, new PdfDict()),
+    new PdfObjectBase(9, new PdfDict())
+  ];
+  assert.equal(write(PdfArray.fromObjects(objects)), '[5 0 R 9 0 R]');
+});
+
+test('PdfDict emits insertion order and nests', () => {
+  const dict = new PdfDict([
+    ['/Type', new PdfName('/Page')],
+    ['/Parent', new PdfIndirect(2, 0)]
+  ]);
+  assert.equal(write(dict), '<< /Type /Page /Parent 2 0 R >>');
+
+  // Re-setting a key keeps its original position.
+  dict.set('/Type', new PdfName('/Pages'));
+  assert.equal(write(dict), '<< /Type /Pages /Parent 2 0 R >>');
+
+  dict.set('/Resources', new PdfDict([['/Font', new PdfDict([['/F1', new PdfIndirect(3, 0)]])]]));
+  assert.match(write(dict), /\/Resources << \/Font << \/F1 3 0 R >> >>/);
+
+  assert.equal(write(new PdfDict()), '<<  >>');
+  assert.ok(new PdfDict().isEmpty);
+  assert.ok(dict.has('/Type'));
+  assert.equal(dict.get('/missing'), undefined);
+});
+
+test('PdfDict.fromObjectMap turns objects into references', () => {
+  const font = new PdfObjectBase(3, new PdfDict());
+  assert.equal(write(PdfDict.fromObjectMap([['/F1', font]])), '<< /F1 3 0 R >>');
+});
+
+test('PdfDictStream derives /Length and terminates the data with one newline', () => {
+  // Data already ending in a newline is not given a second one, which is what
+  // keeps page content streams byte-identical to the pre-0.2 serializer.
+  const ending = new PdfDictStream(encodeLatin1('BT ET\n'));
+  assert.equal(write(ending), '<< /Length 6 >>\nstream\nBT ET\nendstream');
+
+  // Binary data that does not end in a newline gets one, as the spec wants.
+  const binary = new PdfDictStream(new Uint8Array([0x00, 0xff]));
+  assert.equal(write(binary), '<< /Length 2 >>\nstream\n\x00\xff\nendstream');
+
+  const empty = new PdfDictStream();
+  assert.equal(write(empty), '<< /Length 0 >>\nstream\n\nendstream');
+});
+
+test('PdfObjectBase wraps its value and reports the offset it started at', () => {
+  const stream = new PdfStream();
+  stream.putString('%PDF\n');
+
+  const object = new PdfObjectBase(7, new PdfDict([['/Type', new PdfName('/Font')]]), 0);
+  const offset = object.output(stream);
+
+  assert.equal(offset, 5);
+  assert.equal(latin1(stream.output()).slice(offset), '7 0 obj\n<< /Type /Font >>\nendobj\n');
+  assert.equal(write(object.ref()), '7 0 R');
+});
+
+test('PdfDocument numbers the catalog first and content before its page', () => {
+  const document = new PdfDocument({ creator: 'js_pdf' });
+
+  assert.equal(document.catalog.objser, 1);
+  assert.equal(document.pageList.objser, 2);
+  assert.equal(document.fontObject.objser, 3);
+  assert.equal(document.info.objser, 4);
+
+  const first = document.addPage(PageFormat.A4, 'BT ET\n');
+  assert.equal(first.contents[0].objser, 5, 'content stream precedes its page');
+  assert.equal(first.objser, 6);
+
+  const second = document.addPage(PageFormat.A4, 'BT ET\n');
+  assert.equal(second.contents[0].objser, 7);
+  assert.equal(second.objser, 8);
+});
+
+test('prepare resolves forward references and the xref table stays contiguous', () => {
+  const document = new PdfDocument({ creator: 'js_pdf' });
+  document.addPage(PageFormat.A4, 'BT ET\n');
+  const source = latin1(document.save());
+
+  // The catalog points at a page list created after it.
+  assert.match(source, /1 0 obj\n<< \/Type \/Catalog \/Pages 2 0 R >>\nendobj/);
+  assert.match(source, /2 0 obj\n<< \/Type \/Pages \/Count 1 \/Kids \[6 0 R\] >>\nendobj/);
+  assert.match(source, /\/Type \/Page \/Parent 2 0 R \/MediaBox \[0 0 595\.28 841\.89\]/);
+
+  // One block covering object 0 through 6, then the trailer.
+  assert.match(source, /xref\n0 7\n0000000000 65535 f \n/);
+  assert.equal((source.match(/ 00000 n \n/g) ?? []).length, 6);
+  assert.match(source, /trailer\n<< \/Size 7 \/Root 1 0 R \/Info 4 0 R >>\n/);
+});
+
+test('startxref points at the byte offset of the xref keyword', () => {
+  const document = new PdfDocument({ creator: 'js_pdf' });
+  document.addPage(PageFormat.A4, 'BT ET\n');
+  const source = latin1(document.save());
+
+  const declared = Number(/startxref\n(\d+)\n/.exec(source)[1]);
+  assert.equal(source.slice(declared, declared + 5), 'xref\n');
+  assert.equal(declared, source.lastIndexOf('xref\n0 '));
+});
+
+test('every xref offset lands on its own object header', () => {
+  const document = new PdfDocument({ title: 'Título', creator: 'js_pdf' });
+  document.addPage(PageFormat.A4, 'BT ET\n');
+  document.addPage(PageFormat.LETTER, 'BT ET\n');
+  const source = latin1(document.save());
+
+  const offsets = Array.from(source.matchAll(/^(\d{10}) 00000 n $/gm), m => Number(m[1]));
+  assert.equal(offsets.length, 8);
+
+  offsets.forEach((offset, index) => {
+    assert.equal(
+      source.slice(offset, offset + `${index + 1} 0 obj`.length),
+      `${index + 1} 0 obj`,
+      `xref row ${index + 1} must point at object ${index + 1}`
+    );
+  });
+});
+
+test('a page with several content streams references them as an array', () => {
+  const document = new PdfDocument({ creator: 'js_pdf' });
+  const page = document.addPage(PageFormat.A4, 'BT ET\n');
+  const extra = document.addPage(PageFormat.A4, 'q Q\n');
+
+  // Re-home the second page's stream onto the first, then drop the page so the
+  // document holds one page with two content streams.
+  page.contents.push(extra.contents[0]);
+  document.pageList.pages.splice(1, 1);
+
+  const source = latin1(document.save());
+  assert.match(source, /\/Contents \[5 0 R 7 0 R\]/);
+});
