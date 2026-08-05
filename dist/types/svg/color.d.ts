@@ -1,5 +1,6 @@
 import type { Rgb } from '../pdf/color.ts';
 import type { PdfCanvas } from '../pdf/graphics.ts';
+import type { SvgOperation } from './operation.ts';
 import type { SvgParser } from './parser.ts';
 export declare class SvgColor {
     readonly color: Rgb | null;
@@ -19,8 +20,8 @@ export declare class SvgColor {
     get isEmpty(): boolean;
     get isNotEmpty(): boolean;
     merge(other: SvgColor): SvgColor;
-    setFillColor(canvas: PdfCanvas): void;
-    setStrokeColor(canvas: PdfCanvas): void;
+    setFillColor(_operation: SvgOperation, canvas: PdfCanvas): void;
+    setStrokeColor(_operation: SvgOperation, canvas: PdfCanvas): void;
     static fromXml(color: string | null | undefined, parser: SvgParser, currentColor?: SvgColor): SvgColor;
     /** `#abc` to `#aabbcc`; the port's colour reader takes six digits only. */
     private static expandHex;

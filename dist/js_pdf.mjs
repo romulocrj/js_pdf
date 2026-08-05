@@ -1866,6 +1866,7 @@ class PdfGraphicStream extends PdfObject {
     this.fonts = new Map;
     this.xObjects = new Map;
     this.graphicStates = new Map;
+    this.patterns = new Map;
   }
   addFont(name, font) {
     if (!this.fonts.has(name)) {
@@ -1882,6 +1883,11 @@ class PdfGraphicStream extends PdfObject {
       this.graphicStates.set(name, state);
     }
   }
+  addPattern(name, pattern) {
+    if (!this.patterns.has(name)) {
+      this.patterns.set(name, pattern);
+    }
+  }
   resources() {
     const resources = new PdfDict;
     if (this.fonts.size > 0) {
@@ -1892,6 +1898,9 @@ class PdfGraphicStream extends PdfObject {
     }
     if (this.graphicStates.size > 0) {
       resources.set("/ExtGState", new PdfDict(this.graphicStates));
+    }
+    if (this.patterns.size > 0) {
+      resources.set("/Pattern", new PdfDict(this.patterns));
     }
     return resources.isEmpty ? null : resources;
   }
@@ -1962,7 +1971,7 @@ class PdfDocument {
     this.fontObjects.set(font, object);
     return object;
   }
-  addPage(format, content, fonts = new Map, graphicStates = new Map) {
+  addPage(format, content, fonts = new Map, graphicStates = new Map, patterns = new Map) {
     const resources = [];
     for (const [font, name] of fonts) {
       resources.push([ name, this.fontObject(font) ]);
@@ -1974,6 +1983,9 @@ class PdfDocument {
     }
     for (const [name, state] of graphicStates) {
       page.addGraphicState(name, state);
+    }
+    for (const [name, pattern] of patterns) {
+      page.addPattern(name, pattern);
     }
     page.contents.push(stream);
     return page;
@@ -1993,7 +2005,7 @@ class PdfDocument {
 function serializePdf(pages, metadata) {
   const document = new PdfDocument(metadata);
   for (const page of pages) {
-    document.addPage(page.format, page.content, page.fonts, page.graphicStates);
+    document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns);
   }
   return document.save();
 }
@@ -2165,6 +2177,8 @@ class PdfCanvas {
     this.fontNames = new Map;
     this.stateNames = new Map;
     this.stateDicts = new Map;
+    this.patternNames = new Map;
+    this.patternDicts = new Map;
     this.currentTransform = identityMatrix;
     this.transformStack = [];
     this.pageHeight = pageHeight;
@@ -2189,6 +2203,9 @@ class PdfCanvas {
   }
   get graphicStates() {
     return this.stateDicts;
+  }
+  get patterns() {
+    return this.patternDicts;
   }
   saveContext() {
     this.push("q");
@@ -2228,6 +2245,26 @@ class PdfCanvas {
     this.stateNames.set(state.key, name);
     this.stateDicts.set(name, state.output());
     this.push(`${name} gs`);
+    return name;
+  }
+  addPattern(pattern) {
+    const existing = this.patternNames.get(pattern.key);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const name = `/p${this.patternDicts.size + 1}`;
+    this.patternNames.set(pattern.key, name);
+    this.patternDicts.set(name, pattern.output());
+    return name;
+  }
+  setFillPattern(pattern) {
+    const name = this.addPattern(pattern);
+    this.push(`/Pattern cs ${name} scn`);
+    return name;
+  }
+  setStrokePattern(pattern) {
+    const name = this.addPattern(pattern);
+    this.push(`/Pattern CS ${name} SCN`);
     return name;
   }
   moveTo(x, y) {
@@ -2602,7 +2639,8 @@ class MultiPage {
       format: this.format,
       content: canvas.output(),
       fonts: canvas.fonts,
-      graphicStates: canvas.graphicStates
+      graphicStates: canvas.graphicStates,
+      patterns: canvas.patterns
     }));
   }
 }
@@ -2656,7 +2694,8 @@ class Page {
       format,
       content: canvas.output(),
       fonts: canvas.fonts,
-      graphicStates: canvas.graphicStates
+      graphicStates: canvas.graphicStates,
+      patterns: canvas.patterns
     } ];
   }
   paintLayer(build, context, format) {
@@ -3562,12 +3601,12 @@ class SvgColor {
   merge(other) {
     return new SvgColor(other.color ?? this.color, false, other.color === null ? this.opacity : other.opacity);
   }
-  setFillColor(canvas) {
+  setFillColor(_operation, canvas) {
     if (this.color !== null) {
       canvas.setFillColor(this.color);
     }
   }
-  setStrokeColor(canvas) {
+  setStrokeColor(_operation, canvas) {
     if (this.color !== null) {
       canvas.setStrokeColor(this.color);
     }
@@ -3638,6 +3677,375 @@ SvgColor.none = new SvgColor;
 
 SvgColor.inherited = new SvgColor(null, true);
 
+function interpolation(start, end) {
+  return new PdfDict([ [ "/FunctionType", new PdfNum(2) ], [ "/Domain", PdfArray.fromNum([ 0, 1 ]) ], [ "/C0", PdfArray.fromNum(start) ], [ "/C1", PdfArray.fromNum(end) ], [ "/N", new PdfNum(1) ] ]);
+}
+
+class PdfBaseFunction {
+  static colorsAndStops(colors, stops = []) {
+    if (colors.length === 0) {
+      throw new RangeError("A gradient needs at least one colour");
+    }
+    if (stops.length > 0 && colors.length !== stops.length) {
+      throw new RangeError("The number of gradient colours must match the number of stops");
+    }
+    const normalizedColors = [ ...colors ];
+    const normalizedStops = stops.length === 0 ? normalizedColors.map((_, index) => normalizedColors.length === 1 ? 0 : index / (normalizedColors.length - 1)) : stops.map(value => Math.min(1, Math.max(0, value)));
+    if (normalizedColors.length === 1) {
+      normalizedColors.push(normalizedColors[0]);
+      normalizedStops.push(1);
+    }
+    for (let index = 1; index < normalizedStops.length; index++) {
+      normalizedStops[index] = Math.max(normalizedStops[index], normalizedStops[index - 1]);
+    }
+    if (normalizedStops[0] > 0) {
+      normalizedStops.unshift(0);
+      normalizedColors.unshift(normalizedColors[0]);
+    }
+    if (normalizedStops[normalizedStops.length - 1] < 1) {
+      normalizedStops.push(1);
+      normalizedColors.push(normalizedColors[normalizedColors.length - 1]);
+    }
+    if (normalizedColors.length === 2) {
+      return interpolation(normalizedColors[0], normalizedColors[1]);
+    }
+    const functions = [];
+    for (let index = 1; index < normalizedColors.length; index++) {
+      functions.push(interpolation(normalizedColors[index - 1], normalizedColors[index]));
+    }
+    const encode = [];
+    for (let index = 0; index < functions.length; index++) {
+      encode.push(0, 1);
+    }
+    return new PdfDict([ [ "/FunctionType", new PdfNum(3) ], [ "/Domain", PdfArray.fromNum([ 0, 1 ]) ], [ "/Functions", new PdfArray(functions) ], [ "/Bounds", PdfArray.fromNum(normalizedStops.slice(1, -1)) ], [ "/Encode", PdfArray.fromNum(encode) ] ]);
+  }
+}
+
+class PdfShadingPattern {
+  constructor({shading, matrix = null}) {
+    this.shading = shading;
+    this.matrix = matrix;
+  }
+  output() {
+    const result = new PdfDict([ [ "/PatternType", new PdfNum(2) ], [ "/Shading", this.shading.output() ] ]);
+    if (this.matrix !== null) {
+      result.set("/Matrix", PdfArray.fromNum(this.matrix));
+    }
+    return result;
+  }
+  get key() {
+    return this.output().toString();
+  }
+}
+
+class PdfBool extends PdfDataType {
+  constructor(value) {
+    super();
+    this.value = value;
+  }
+  output(s) {
+    s.putString(this.value ? "true" : "false");
+  }
+}
+
+class PdfShading {
+  constructor(options) {
+    this.options = options;
+    if (options.type === "radial" && (options.radius0 == null || options.radius1 == null)) {
+      throw new TypeError("A radial shading needs both radii");
+    }
+  }
+  output() {
+    const {options} = this;
+    const result = new PdfDict([ [ "/ShadingType", new PdfNum(options.type === "axial" ? 2 : 3) ] ]);
+    if (options.boundingBox !== null && options.boundingBox !== undefined) {
+      const box = options.boundingBox;
+      result.set("/BBox", PdfArray.fromNum([ box.x, box.y, box.x + box.width, box.y + box.height ]));
+    }
+    result.set("/AntiAlias", new PdfBool(true));
+    result.set("/ColorSpace", new PdfName("/DeviceRGB"));
+    result.set("/Coords", options.type === "axial" ? PdfArray.fromNum([ options.start.x, options.start.y, options.end.x, options.end.y ]) : PdfArray.fromNum([ options.start.x, options.start.y, options.radius0, options.end.x, options.end.y, options.radius1 ]));
+    if (options.extendStart === true || options.extendEnd === true) {
+      result.set("/Extend", new PdfArray([ new PdfBool(options.extendStart ?? false), new PdfBool(options.extendEnd ?? false) ]));
+    }
+    result.set("/Function", options.fn);
+    return result;
+  }
+}
+
+const TRANSFORM = /(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/g;
+
+function toRadians(degrees) {
+  return degrees * Math.PI / 180;
+}
+
+class SvgTransform {
+  constructor(matrix) {
+    this.matrix = matrix;
+  }
+  get isEmpty() {
+    return this.matrix === null;
+  }
+  get isNotEmpty() {
+    return this.matrix !== null;
+  }
+  static fromXml(element) {
+    return SvgTransform.fromString(element.getAttribute("transform"));
+  }
+  static fromString(transform) {
+    if (transform === null || transform === undefined) {
+      return SvgTransform.none;
+    }
+    let matrix = identityMatrix;
+    for (const match of transform.matchAll(TRANSFORM)) {
+      const name = match[1];
+      const parameters = splitDoubles(match[2]);
+      switch (name) {
+       case "matrix":
+        {
+          const m = [ ...parameters, 0, 0, 0, 0, 0, 0 ].slice(0, 6);
+          matrix = multiplyMatrix(matrix, m);
+          break;
+        }
+
+       case "translate":
+        {
+          const dx = parameters[0] ?? 0;
+          const dy = parameters[1] ?? 0;
+          matrix = multiplyMatrix(matrix, translationMatrix(dx, dy));
+          break;
+        }
+
+       case "scale":
+        {
+          const sx = parameters[0] ?? 1;
+          const sy = parameters[1] ?? sx;
+          matrix = multiplyMatrix(matrix, scaleMatrix(sx, sy));
+          break;
+        }
+
+       case "rotate":
+        {
+          const degrees = parameters[0] ?? 0;
+          const ox = parameters[1] ?? 0;
+          const oy = parameters[2] ?? 0;
+          if (parameters.length > 1) {
+            matrix = multiplyMatrix(matrix, translationMatrix(ox, oy));
+          }
+          matrix = multiplyMatrix(matrix, rotationMatrix(toRadians(degrees)));
+          if (ox !== 0 || oy !== 0) {
+            matrix = multiplyMatrix(matrix, translationMatrix(-ox, -oy));
+          }
+          break;
+        }
+
+       case "skewX":
+        matrix = multiplyMatrix(matrix, skewMatrix(toRadians(parameters[0] ?? 0), 0));
+        break;
+
+       case "skewY":
+        matrix = multiplyMatrix(matrix, skewMatrix(0, toRadians(parameters[0] ?? 0)));
+        break;
+      }
+    }
+    return new SvgTransform(matrix);
+  }
+}
+
+SvgTransform.none = new SvgTransform(null);
+
+function readStops(element, parser) {
+  const colors = [];
+  const stops = [];
+  const opacities = [];
+  let previous = 0;
+  for (const child of element.elements) {
+    if (child.name.local !== "stop") {
+      continue;
+    }
+    convertStyle(child);
+    const color = SvgColor.fromXml(child.getAttribute("stop-color") ?? "black", parser);
+    const offset = Math.min(1, Math.max(previous, getNumeric(child, "offset", null, {
+      defaultValue: 0
+    }).sizeValue));
+    previous = offset;
+    colors.push(color.color ?? [ 0, 0, 0 ]);
+    stops.push(offset);
+    opacities.push(Math.min(1, Math.max(0, getDouble(child, "stop-opacity", {
+      defaultValue: 1
+    }) ?? 1)) * color.opacity);
+  }
+  return {
+    colors,
+    stops,
+    opacities
+  };
+}
+
+function hrefElement(element, parser) {
+  const xlink = [ "http:", "", "www.w3.org", "1999", "xlink" ].join("/");
+  const href = element.getAttribute("href") ?? element.getAttribute("href", xlink);
+  return href?.startsWith("#") === true ? parser.findById(href.slice(1)) : null;
+}
+
+class SvgGradient extends SvgColor {
+  constructor(gradientUnits, transform, colors, stops, opacityList, spreadMethod) {
+    const uniformOpacity = opacityList.length > 0 && opacityList.every(value => value === opacityList[0]) ? opacityList[0] : 1;
+    super(null, false, uniformOpacity);
+    this.gradientUnits = gradientUnits;
+    this.transform = transform;
+    this.colors = colors;
+    this.stops = stops;
+    this.opacityList = opacityList;
+    this.spreadMethod = spreadMethod ?? "pad";
+    this.hasSpreadMethod = spreadMethod !== null;
+  }
+  get isEmpty() {
+    return this.colors.length === 0;
+  }
+  get isNotEmpty() {
+    return !this.isEmpty;
+  }
+  patternMatrix(operation, canvas) {
+    let matrix = canvas.getTransform();
+    if (this.gradientUnits !== "userSpaceOnUse") {
+      const box = operation.boundingBox();
+      matrix = multiplyMatrix(matrix, translationMatrix(box.x, box.y));
+      matrix = multiplyMatrix(matrix, scaleMatrix(box.width, box.height));
+    }
+    if (this.transform.matrix !== null) {
+      matrix = multiplyMatrix(matrix, this.transform.matrix);
+    }
+    return matrix;
+  }
+  setFillColor(operation, canvas) {
+    if (this.isNotEmpty) {
+      canvas.setFillPattern(this.buildGradient(operation, canvas));
+    }
+  }
+  setStrokeColor(operation, canvas) {
+    if (this.isNotEmpty) {
+      canvas.setStrokePattern(this.buildGradient(operation, canvas));
+    }
+  }
+  static fromReference(value, parser) {
+    const match = /^url\(\s*#([^)\s]+)\s*\)$/.exec(value.trim());
+    if (match === null) {
+      return null;
+    }
+    const element = parser.findById(match[1]);
+    if (element?.name.local === "linearGradient") {
+      return SvgLinearGradient.fromElement(element, parser);
+    }
+    if (element?.name.local === "radialGradient") {
+      return SvgRadialGradient.fromElement(element, parser);
+    }
+    return null;
+  }
+}
+
+class SvgLinearGradient extends SvgGradient {
+  constructor(gradientUnits, x1, y1, x2, y2, transform, colors, stops, opacities, spreadMethod) {
+    super(gradientUnits, transform, colors, stops, opacities, spreadMethod);
+    this.x1 = x1;
+    this.y1 = y1;
+    this.x2 = x2;
+    this.y2 = y2;
+  }
+  static fromElement(element, parser, seen = []) {
+    const id = element.getAttribute("id");
+    if (id !== null && seen.includes(id)) {
+      throw new SyntaxError(`Circular gradient reference: ${id}`);
+    }
+    const nextSeen = id === null ? seen : [ ...seen, id ];
+    const stopData = readStops(element, parser);
+    const local = new SvgLinearGradient(SvgLinearGradient.units(element), getNumeric(element, "x1", null)?.sizeValue ?? null, getNumeric(element, "y1", null)?.sizeValue ?? null, getNumeric(element, "x2", null)?.sizeValue ?? null, getNumeric(element, "y2", null)?.sizeValue ?? null, SvgTransform.fromString(element.getAttribute("gradientTransform")), stopData.colors, stopData.stops, stopData.opacities, SvgLinearGradient.spread(element));
+    const inherited = hrefElement(element, parser);
+    return inherited?.name.local === "linearGradient" ? SvgLinearGradient.fromElement(inherited, parser, nextSeen).mergeWith(local) : local;
+  }
+  static units(element) {
+    const value = element.getAttribute("gradientUnits");
+    return value === "userSpaceOnUse" || value === "objectBoundingBox" ? value : null;
+  }
+  static spread(element) {
+    const value = element.getAttribute("spreadMethod");
+    return value === "pad" || value === "reflect" || value === "repeat" ? value : null;
+  }
+  mergeWith(other) {
+    return new SvgLinearGradient(other.gradientUnits ?? this.gradientUnits, other.x1 ?? this.x1, other.y1 ?? this.y1, other.x2 ?? this.x2, other.y2 ?? this.y2, other.transform.isNotEmpty ? other.transform : this.transform, other.colors.length > 0 ? other.colors : this.colors, other.stops.length > 0 ? other.stops : this.stops, other.opacityList.length > 0 ? other.opacityList : this.opacityList, other.hasSpreadMethod ? other.spreadMethod : this.spreadMethod);
+  }
+  buildGradient(operation, canvas) {
+    return new PdfShadingPattern({
+      shading: new PdfShading({
+        type: "axial",
+        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
+        start: {
+          x: this.x1 ?? 0,
+          y: this.y1 ?? 0
+        },
+        end: {
+          x: this.x2 ?? 1,
+          y: this.y2 ?? 0
+        },
+        extendStart: true,
+        extendEnd: true
+      }),
+      matrix: this.patternMatrix(operation, canvas)
+    });
+  }
+}
+
+class SvgRadialGradient extends SvgGradient {
+  constructor(gradientUnits, r, cx, cy, fr, fx, fy, transform, colors, stops, opacities, spreadMethod) {
+    super(gradientUnits, transform, colors, stops, opacities, spreadMethod);
+    this.r = r;
+    this.cx = cx;
+    this.cy = cy;
+    this.fr = fr;
+    this.fx = fx;
+    this.fy = fy;
+  }
+  static fromElement(element, parser, seen = []) {
+    const id = element.getAttribute("id");
+    if (id !== null && seen.includes(id)) {
+      throw new SyntaxError(`Circular gradient reference: ${id}`);
+    }
+    const nextSeen = id === null ? seen : [ ...seen, id ];
+    const stopData = readStops(element, parser);
+    const unitsValue = element.getAttribute("gradientUnits");
+    const spreadValue = element.getAttribute("spreadMethod");
+    const local = new SvgRadialGradient(unitsValue === "userSpaceOnUse" || unitsValue === "objectBoundingBox" ? unitsValue : null, getNumeric(element, "r", null)?.sizeValue ?? null, getNumeric(element, "cx", null)?.sizeValue ?? null, getNumeric(element, "cy", null)?.sizeValue ?? null, getNumeric(element, "fr", null)?.sizeValue ?? null, getNumeric(element, "fx", null)?.sizeValue ?? null, getNumeric(element, "fy", null)?.sizeValue ?? null, SvgTransform.fromString(element.getAttribute("gradientTransform")), stopData.colors, stopData.stops, stopData.opacities, spreadValue === "pad" || spreadValue === "reflect" || spreadValue === "repeat" ? spreadValue : null);
+    const inherited = hrefElement(element, parser);
+    return inherited?.name.local === "radialGradient" ? SvgRadialGradient.fromElement(inherited, parser, nextSeen).mergeWith(local) : local;
+  }
+  mergeWith(other) {
+    return new SvgRadialGradient(other.gradientUnits ?? this.gradientUnits, other.r ?? this.r, other.cx ?? this.cx, other.cy ?? this.cy, other.fr ?? this.fr, other.fx ?? this.fx, other.fy ?? this.fy, other.transform.isNotEmpty ? other.transform : this.transform, other.colors.length > 0 ? other.colors : this.colors, other.stops.length > 0 ? other.stops : this.stops, other.opacityList.length > 0 ? other.opacityList : this.opacityList, other.hasSpreadMethod ? other.spreadMethod : this.spreadMethod);
+  }
+  buildGradient(operation, canvas) {
+    const cx = this.cx ?? .5;
+    const cy = this.cy ?? .5;
+    return new PdfShadingPattern({
+      shading: new PdfShading({
+        type: "radial",
+        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
+        start: {
+          x: this.fx ?? cx,
+          y: this.fy ?? cy
+        },
+        end: {
+          x: cx,
+          y: cy
+        },
+        radius0: this.fr ?? 0,
+        radius1: this.r ?? .5,
+        extendStart: true,
+        extendEnd: true
+      }),
+      matrix: this.patternMatrix(operation, canvas)
+    });
+  }
+}
+
 const BLEND_MODES = Object.freeze({
   normal: "normal",
   multiply: "multiply",
@@ -3703,11 +4111,11 @@ class SvgBrush {
     }
     let fill = other.fill ?? this.fill;
     if (fill?.inherit === true && this.fill !== null && other.fill !== null) {
-      fill = this.fill.merge(other.fill);
+      fill = this.fill;
     }
     let stroke = other.stroke ?? this.stroke;
     if (stroke?.inherit === true && this.stroke !== null && other.stroke !== null) {
-      stroke = this.stroke.merge(other.stroke);
+      stroke = this.stroke;
     }
     return new SvgBrush({
       color: other.color?.inherit === true ? this.color : other.color ?? this.color,
@@ -3763,6 +4171,15 @@ class SvgBrush {
     const blendMode = element.getAttribute("mix-blend-mode");
     const color = SvgColor.fromXml(element.getAttribute("color"), parser, parent.color ?? SvgColor.defaultColor);
     const currentColor = color.inherit ? parent.color ?? SvgColor.defaultColor : color;
+    const paint = value => {
+      if (parser.colorFilter === null && value !== null) {
+        const gradient = SvgGradient.fromReference(value, parser);
+        if (gradient !== null) {
+          return gradient;
+        }
+      }
+      return SvgColor.fromXml(value, parser, currentColor);
+    };
     return parent.merge(new SvgBrush({
       color,
       opacity: getDouble(element, "opacity", {
@@ -3780,9 +4197,9 @@ class SvgBrush {
       strokeMiterLimit: getDouble(element, "stroke-miterlimit", {
         defaultValue: null
       }),
-      fill: SvgColor.fromXml(element.getAttribute("fill"), parser, currentColor),
+      fill: paint(element.getAttribute("fill")),
       fillEvenOdd: fillRule === null ? null : fillRule === "evenodd",
-      stroke: SvgColor.fromXml(element.getAttribute("stroke"), parser, currentColor),
+      stroke: paint(element.getAttribute("stroke")),
       strokeWidth: getNumeric(element, "stroke-width", parent),
       strokeDashArray: strokeDashArray === null ? null : strokeDashArray === "none" ? [] : splitNumeric(strokeDashArray, parent).map(n => n.value),
       strokeDashOffset: getNumeric(element, "stroke-dashoffset", parent)?.sizeValue ?? null,
@@ -3954,87 +4371,6 @@ class SvgOperation {
     canvas.restoreContext();
   }
 }
-
-const TRANSFORM = /(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/g;
-
-function toRadians(degrees) {
-  return degrees * Math.PI / 180;
-}
-
-class SvgTransform {
-  constructor(matrix) {
-    this.matrix = matrix;
-  }
-  get isEmpty() {
-    return this.matrix === null;
-  }
-  get isNotEmpty() {
-    return this.matrix !== null;
-  }
-  static fromXml(element) {
-    return SvgTransform.fromString(element.getAttribute("transform"));
-  }
-  static fromString(transform) {
-    if (transform === null || transform === undefined) {
-      return SvgTransform.none;
-    }
-    let matrix = identityMatrix;
-    for (const match of transform.matchAll(TRANSFORM)) {
-      const name = match[1];
-      const parameters = splitDoubles(match[2]);
-      switch (name) {
-       case "matrix":
-        {
-          const m = [ ...parameters, 0, 0, 0, 0, 0, 0 ].slice(0, 6);
-          matrix = multiplyMatrix(matrix, m);
-          break;
-        }
-
-       case "translate":
-        {
-          const dx = parameters[0] ?? 0;
-          const dy = parameters[1] ?? 0;
-          matrix = multiplyMatrix(matrix, translationMatrix(dx, dy));
-          break;
-        }
-
-       case "scale":
-        {
-          const sx = parameters[0] ?? 1;
-          const sy = parameters[1] ?? sx;
-          matrix = multiplyMatrix(matrix, scaleMatrix(sx, sy));
-          break;
-        }
-
-       case "rotate":
-        {
-          const degrees = parameters[0] ?? 0;
-          const ox = parameters[1] ?? 0;
-          const oy = parameters[2] ?? 0;
-          if (parameters.length > 1) {
-            matrix = multiplyMatrix(matrix, translationMatrix(ox, oy));
-          }
-          matrix = multiplyMatrix(matrix, rotationMatrix(toRadians(degrees)));
-          if (ox !== 0 || oy !== 0) {
-            matrix = multiplyMatrix(matrix, translationMatrix(-ox, -oy));
-          }
-          break;
-        }
-
-       case "skewX":
-        matrix = multiplyMatrix(matrix, skewMatrix(toRadians(parameters[0] ?? 0), 0));
-        break;
-
-       case "skewY":
-        matrix = multiplyMatrix(matrix, skewMatrix(0, toRadians(parameters[0] ?? 0)));
-        break;
-      }
-    }
-    return new SvgTransform(matrix);
-  }
-}
-
-SvgTransform.none = new SvgTransform(null);
 
 class SvgGroup extends SvgOperation {
   constructor(children, brush, clip, transform, painter) {
@@ -4865,7 +5201,7 @@ class SvgPath extends SvgOperation {
   paintShape(canvas) {
     const fill = this.brush.fill;
     if (fill?.isNotEmpty === true) {
-      fill.setFillColor(canvas);
+      fill.setFillColor(this, canvas);
       const opacity = (this.brush.fillOpacity ?? 1) * fill.opacity;
       if (opacity < 1) {
         canvas.saveContext();
@@ -4883,7 +5219,7 @@ class SvgPath extends SvgOperation {
     }
     const stroke = this.brush.stroke;
     if (stroke?.isNotEmpty === true) {
-      stroke.setStrokeColor(canvas);
+      stroke.setStrokeColor(this, canvas);
       const opacity = (this.brush.strokeOpacity ?? 1) * stroke.opacity;
       if (opacity < 1) {
         canvas.setGraphicState(new PdfGraphicState({

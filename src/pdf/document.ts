@@ -54,6 +54,9 @@ export interface SerializedPage {
 
   /** The `/ExtGState` dictionaries `content` selected, by the name it wrote. */
   readonly graphicStates?: ReadonlyMap<string, PdfDict>;
+
+  /** The direct shading-pattern dictionaries `content` selected. */
+  readonly patterns?: ReadonlyMap<string, PdfDict>;
 }
 
 /**
@@ -132,7 +135,8 @@ export class PdfDocument {
     format: PageSize,
     content: string,
     fonts: ReadonlyMap<PdfFont, string> = new Map(),
-    graphicStates: ReadonlyMap<string, PdfDict> = new Map()
+    graphicStates: ReadonlyMap<string, PdfDict> = new Map(),
+    patterns: ReadonlyMap<string, PdfDict> = new Map()
   ): PdfPage {
     const resources: [string, PdfObject<PdfDict>][] = [];
     for (const [font, name] of fonts) {
@@ -148,6 +152,10 @@ export class PdfDocument {
 
     for (const [name, state] of graphicStates) {
       page.addGraphicState(name, state);
+    }
+
+    for (const [name, pattern] of patterns) {
+      page.addPattern(name, pattern);
     }
 
     page.contents.push(stream);
@@ -176,7 +184,7 @@ export function serializePdf(
   const document = new PdfDocument(metadata);
 
   for (const page of pages) {
-    document.addPage(page.format, page.content, page.fonts, page.graphicStates);
+    document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns);
   }
 
   return document.save();

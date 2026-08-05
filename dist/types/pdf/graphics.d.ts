@@ -2,6 +2,7 @@ import type { ColorInput } from './color.ts';
 import type { PdfFont } from './font/font.ts';
 import { PdfDict } from './format/dict.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
+import type { PdfShadingPattern } from './obj/pattern.ts';
 import type { PdfMatrix } from './matrix.ts';
 import type { PdfRect } from './rect.ts';
 /**
@@ -74,6 +75,8 @@ export declare class PdfCanvas {
     private readonly fontNames;
     private readonly stateNames;
     private readonly stateDicts;
+    private readonly patternNames;
+    private readonly patternDicts;
     /**
      * The current transformation matrix, tracked so a widget can ask what space
      * it is drawing in. `q`/`Q` save and restore it, as they do in the reader.
@@ -101,6 +104,8 @@ export declare class PdfCanvas {
     get fonts(): ReadonlyMap<PdfFont, string>;
     /** The `/ExtGState` entries this page selected, by the name it wrote. */
     get graphicStates(): ReadonlyMap<string, PdfDict>;
+    /** The `/Pattern` entries this page selected, by content-stream name. */
+    get patterns(): ReadonlyMap<string, PdfDict>;
     /**
      * `q`. Upstream calls this `saveContext`; `save` is kept as the name the
      * port's own widgets have used since before the graphics context existed.
@@ -118,6 +123,9 @@ export declare class PdfCanvas {
      * so a page that draws fifty half-transparent boxes writes one dictionary.
      */
     setGraphicState(state: PdfGraphicState): string | null;
+    private addPattern;
+    setFillPattern(pattern: PdfShadingPattern): string;
+    setStrokePattern(pattern: PdfShadingPattern): string;
     moveTo(x: number, y: number): void;
     lineTo(x: number, y: number): void;
     /**

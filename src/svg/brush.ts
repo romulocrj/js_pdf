@@ -34,6 +34,7 @@
 import type { PdfBlendMode } from '../pdf/graphic_state.ts';
 import type { PdfLineCap, PdfLineJoin } from '../pdf/graphics.ts';
 import { SvgColor } from './color.ts';
+import { SvgGradient } from './gradient.ts';
 import { SvgNumeric, convertStyle, getDouble, getNumeric, splitNumeric } from './parser.ts';
 import type { SvgParser } from './parser.ts';
 import type { XmlElement } from './xml.ts';
@@ -180,12 +181,15 @@ export class SvgBrush implements SvgBrushFields {
 
     let fill = other.fill ?? this.fill;
     if (fill?.inherit === true && this.fill !== null && other.fill !== null) {
-      fill = this.fill.merge(other.fill);
+      // Preserve the concrete paint server. Rebuilding through `SvgColor.merge`
+      // would erase a gradient's subtype because gradients intentionally carry
+      // no single RGB value.
+      fill = this.fill;
     }
 
     let stroke = other.stroke ?? this.stroke;
     if (stroke?.inherit === true && this.stroke !== null && other.stroke !== null) {
-      stroke = this.stroke.merge(other.stroke);
+      stroke = this.stroke;
     }
 
     return new SvgBrush({
@@ -252,6 +256,15 @@ export class SvgBrush implements SvgBrushFields {
 
     const color = SvgColor.fromXml(element.getAttribute('color'), parser, parent.color ?? SvgColor.defaultColor);
     const currentColor = color.inherit ? parent.color ?? SvgColor.defaultColor : color;
+    const paint = (value: string | null): SvgColor => {
+      if (parser.colorFilter === null && value !== null) {
+        const gradient = SvgGradient.fromReference(value, parser);
+        if (gradient !== null) {
+          return gradient;
+        }
+      }
+      return SvgColor.fromXml(value, parser, currentColor);
+    };
 
     return parent.merge(new SvgBrush({
       color,
@@ -262,9 +275,9 @@ export class SvgBrush implements SvgBrushFields {
       strokeLineCap: strokeLineCap === null ? null : LINE_CAPS[strokeLineCap] ?? null,
       strokeLineJoin: strokeLineJoin === null ? null : LINE_JOINS[strokeLineJoin] ?? null,
       strokeMiterLimit: getDouble(element, 'stroke-miterlimit', { defaultValue: null }),
-      fill: SvgColor.fromXml(element.getAttribute('fill'), parser, currentColor),
+      fill: paint(element.getAttribute('fill')),
       fillEvenOdd: fillRule === null ? null : fillRule === 'evenodd',
-      stroke: SvgColor.fromXml(element.getAttribute('stroke'), parser, currentColor),
+      stroke: paint(element.getAttribute('stroke')),
       strokeWidth: getNumeric(element, 'stroke-width', parent),
       strokeDashArray: strokeDashArray === null
         ? null

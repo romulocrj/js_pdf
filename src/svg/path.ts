@@ -964,7 +964,7 @@ export class SvgPath extends SvgOperation {
   protected paintShape(canvas: PdfCanvas): void {
     const fill = this.brush.fill;
     if (fill?.isNotEmpty === true) {
-      fill.setFillColor(canvas);
+      fill.setFillColor(this, canvas);
       const opacity = (this.brush.fillOpacity ?? 1) * fill.opacity;
       if (opacity < 1) {
         canvas.saveContext();
@@ -979,7 +979,7 @@ export class SvgPath extends SvgOperation {
 
     const stroke = this.brush.stroke;
     if (stroke?.isNotEmpty === true) {
-      stroke.setStrokeColor(canvas);
+      stroke.setStrokeColor(this, canvas);
       const opacity = (this.brush.strokeOpacity ?? 1) * stroke.opacity;
       if (opacity < 1) {
         canvas.setGraphicState(new PdfGraphicState({ opacity }));

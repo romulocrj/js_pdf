@@ -22,14 +22,14 @@
  * back to when it could not read the attribute. Keeping them apart is what lets
  * an unsupported paint degrade to nothing drawn rather than to black.
  *
- * PORT GAP: `url(#gradient)` resolves to `unknown`, so a gradient-filled shape
- * is not painted. Gradients are phase 2.8 and need `obj/shading.dart` and
- * `obj/pattern.dart`, neither of which the port has.
+ * Gradient references are resolved by `SvgBrush`, which has the document tree
+ * needed to distinguish a gradient URL from another paint server.
  */
 
 import { normalizeColor } from '../pdf/color.ts';
 import type { Rgb } from '../pdf/color.ts';
 import type { PdfCanvas } from '../pdf/graphics.ts';
+import type { SvgOperation } from './operation.ts';
 import { svgColors } from './colors.ts';
 import { splitNumeric } from './parser.ts';
 import type { SvgParser } from './parser.ts';
@@ -101,13 +101,13 @@ export class SvgColor {
     return new SvgColor(other.color ?? this.color, false, other.color === null ? this.opacity : other.opacity);
   }
 
-  setFillColor(canvas: PdfCanvas): void {
+  setFillColor(_operation: SvgOperation, canvas: PdfCanvas): void {
     if (this.color !== null) {
       canvas.setFillColor(this.color);
     }
   }
 
-  setStrokeColor(canvas: PdfCanvas): void {
+  setStrokeColor(_operation: SvgOperation, canvas: PdfCanvas): void {
     if (this.color !== null) {
       canvas.setStrokeColor(this.color);
     }
@@ -176,8 +176,8 @@ export class SvgColor {
     }
 
     if (lower.startsWith('url(#')) {
-      // A gradient. Phase 2.8; until then the shape is left unpainted rather
-      // than filled with an arbitrary colour.
+      // `SvgBrush` resolves supported paint servers before reaching this
+      // fallback. An unknown URL remains unpainted.
       return SvgColor.unknown;
     }
 

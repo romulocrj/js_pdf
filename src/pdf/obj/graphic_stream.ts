@@ -31,8 +31,7 @@
  *     predating PDF 1.4. The port has no `altered` flag — it never drops an
  *     untouched content stream — and the key is long deprecated.
  *
- * PORT GAP: no `/Shading` and no `/Pattern`; those arrive with SVG gradients in
- * phase 2.8. `/ExtGState` is registered per stream here, whereas upstream points
+ * `/ExtGState` and `/Pattern` are registered per stream here, whereas upstream points
  * every stream at one document-wide states object; that indirection is worth
  * adding when opacity and blend modes actually exist.
  */
@@ -66,6 +65,7 @@ export class PdfGraphicStream extends PdfObject<PdfDict> {
    * writes each page's states inline, for the same reason names are page-local.
    */
   readonly graphicStates = new Map<string, PdfDict>();
+  readonly patterns = new Map<string, PdfDict>();
 
   /** Register a font under the name the content stream used. First one wins. */
   addFont(name: string, font: PdfResource): void {
@@ -83,6 +83,12 @@ export class PdfGraphicStream extends PdfObject<PdfDict> {
   addGraphicState(name: string, state: PdfDict): void {
     if (!this.graphicStates.has(name)) {
       this.graphicStates.set(name, state);
+    }
+  }
+
+  addPattern(name: string, pattern: PdfDict): void {
+    if (!this.patterns.has(name)) {
+      this.patterns.set(name, pattern);
     }
   }
 
@@ -105,6 +111,10 @@ export class PdfGraphicStream extends PdfObject<PdfDict> {
 
     if (this.graphicStates.size > 0) {
       resources.set('/ExtGState', new PdfDict(this.graphicStates));
+    }
+
+    if (this.patterns.size > 0) {
+      resources.set('/Pattern', new PdfDict(this.patterns));
     }
 
     return resources.isEmpty ? null : resources;

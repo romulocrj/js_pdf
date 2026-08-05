@@ -13,12 +13,13 @@ TypeScript, with the runtime contract and attribution enforced by
 `npm run check`. Output is a valid PDF written through a real indirect-object
 model, with per-page resource dictionaries and **embedded TrueType fonts** —
 subset, written as Type0/CIDFontType2 composites, and selected through a theme.
-Beyond text, `SvgImage` now exposes the SVG painter with fitting, alignment and
-clipping; tables and raster images are still absent.
+Beyond text, `SvgImage` now exposes the SVG painter with fitting, alignment,
+clipping and PDF shading-pattern gradients; tables and raster images are still
+absent.
 
-**Phases 0 and 1 are complete.** The foundations are in place and the WinAnsi
-ceiling is gone; phase 2 (SVG) and phase 3 (layout) are what the examples now
-wait on.
+**Phases 0, 1 and 2 are complete.** The foundations are in place, the WinAnsi
+ceiling is gone and the vector pipeline is public; phase 3 (layout) is what the
+examples now wait on.
 
 **Phase 0.0 — TypeScript migration — landed 2026-08-05.** Every module is `.ts`;
 `tsconfig.json` compiles against the ES2020 lib with no DOM and no host types,
@@ -76,6 +77,12 @@ sizes from explicit or intrinsic dimensions, supports every `BoxFit`, aligns a
 cropped viewBox, clips its box and installs the y-down-to-PDF matrix. It removed
 `SvgImage` from six example dependency lists; the total fell from 94 to 88.
 
+**Phase 2.8 — SVG gradients — landed 2026-08-05.** Linear and radial paint
+servers now serialize as PDF axial/radial shadings, with type-2 interpolation
+or type-3 stitching for multiple stops. Units, transforms, inherited
+references, fill/stroke selection and the real invoice/document assets are
+covered end to end.
+
 **Phase 2.3 — XML reader — landed 2026-08-05.** `src/svg/xml.ts` reads
 elements, attributes, text, CDATA, comments, entities and namespaces. Every SVG
 in `examples/assets/` and the inline markup in `server-assets.json` parse.
@@ -101,12 +108,11 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 2.8 — SVG gradients.** Add PDF functions, axial/radial shadings and
-> shading patterns, then resolve `linearGradient`/`radialGradient` paint with
-> stops, transforms, spread modes and inherited references.
+> **Phase 3.1 — tables.** Port fixed, flex and intrinsic column widths, cell
+> alignment, borders and repeating headers through `Table` and `TableHelper`.
 
-The non-optional SVG pipeline is complete. Gradients are the final optional
-fidelity phase before layout work resumes at 3.1.
+The SVG pipeline is complete enough for the example corpus. Layout now resumes
+at the first shared blocker in the document, invoice, report and server gates.
 
 ---
 
@@ -295,8 +301,9 @@ Divergences worth knowing, each noted in the file that makes it:
   same font both call it `/F1` and share one font object.
 - No `/ProcSet`. Upstream emits it for readers predating PDF 1.4, gated on an
   `altered` flag the port does not have.
-- `/Shading` and `/Pattern` are absent until phase 2.8, and `/ExtGState` entries
-  are per page rather than pointing at one document-wide states object.
+- `/Pattern` and `/ExtGState` entries are direct, per-page dictionaries rather
+  than pointing at document-wide objects. Standalone `/Shading` resources are
+  still absent; SVG gradients nest their shading inside a pattern.
 
 Two consequences outside `obj/`. `Text` and `Vector`'s `text()` accept a `font`,
 the minimal ancestor of upstream's `TextStyle.font` — a per-page resource dict is
@@ -681,12 +688,28 @@ filtering, malformed input and an end-to-end serialized PDF. The six example
 gates no longer report `SvgImage`; none generates yet because each still has
 later layout dependencies.
 
-### 2.8 Gradients 
+### 2.8 Gradients ✅ *(landed 2026-08-05)*
 
-- **Ports:** `pdf/lib/src/svg/gradient.dart`, `pdf/obj/shading.dart`,
+- **Ports:** `pdf/lib/src/svg/gradient.dart`, `pdf/lib/src/pdf/obj/shading.dart`,
   `pattern.dart`, `function.dart`
 - Linear and radial gradients as PDF shading patterns. Defer until 2.1–2.7 are
   solid.
+
+Landed with direct PDF shading-pattern dictionaries, axial and radial
+coordinates, type-2 interpolation for a two-colour ramp and type-3 stitching
+for longer stop lists. `gradientUnits`, `gradientTransform`, object bounding
+boxes, `href`/namespaced inheritance, fill, stroke, group inheritance and
+colour filtering all work. Ten tests bring the SVG suite to 117 and render both
+`invoice.svg` and `document.svg` through the complete serializer.
+
+Two fidelity limits stay explicit in `src/svg/gradient.ts`. Different opacity
+at each stop requires the luminosity soft mask coupled to phase 4's form
+XObjects; uniform opacity works now. `repeat` and `reflect` currently extend the
+edge colours, as upstream's current shading output does; a true repeated ramp
+needs a tiling pattern. The port uses direct type-2/type-3 dictionaries instead
+of upstream's indirect sampled streams because pages are painted before a
+`PdfDocument` exists; the resulting RGB interpolation is equivalent and keeps
+pattern resources page-local.
 
 **Done when:** a real-world SVG logo and a chart exported from a drawing tool
 render correctly, including transforms, viewBox, groups and clipping.

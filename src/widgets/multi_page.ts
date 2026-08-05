@@ -189,7 +189,8 @@ export class MultiPage implements Section {
       format: this.format,
       content: canvas.output(),
       fonts: canvas.fonts,
-      graphicStates: canvas.graphicStates
+      graphicStates: canvas.graphicStates,
+      patterns: canvas.patterns
     }));
   }
 }

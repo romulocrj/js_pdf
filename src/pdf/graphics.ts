@@ -43,6 +43,7 @@ import { defaultPdfFont } from './font/type1_fonts.ts';
 import { PdfDict } from './format/dict.ts';
 import { formatNumber } from './format/num.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
+import type { PdfShadingPattern } from './obj/pattern.ts';
 import { identityMatrix, multiplyMatrix } from './matrix.ts';
 import type { PdfMatrix } from './matrix.ts';
 import type { PdfRect } from './rect.ts';
@@ -146,6 +147,8 @@ export class PdfCanvas {
   private readonly fontNames = new Map<PdfFont, string>();
   private readonly stateNames = new Map<string, string>();
   private readonly stateDicts = new Map<string, PdfDict>();
+  private readonly patternNames = new Map<string, string>();
+  private readonly patternDicts = new Map<string, PdfDict>();
 
   /**
    * The current transformation matrix, tracked so a widget can ask what space
@@ -198,6 +201,11 @@ export class PdfCanvas {
   /** The `/ExtGState` entries this page selected, by the name it wrote. */
   get graphicStates(): ReadonlyMap<string, PdfDict> {
     return this.stateDicts;
+  }
+
+  /** The `/Pattern` entries this page selected, by content-stream name. */
+  get patterns(): ReadonlyMap<string, PdfDict> {
+    return this.patternDicts;
   }
 
   // ---------------------------------------------------------------- context
@@ -258,6 +266,30 @@ export class PdfCanvas {
     this.stateNames.set(state.key, name);
     this.stateDicts.set(name, state.output());
     this.push(`${name} gs`);
+    return name;
+  }
+
+  private addPattern(pattern: PdfShadingPattern): string {
+    const existing = this.patternNames.get(pattern.key);
+    if (existing !== undefined) {
+      return existing;
+    }
+
+    const name = `/p${this.patternDicts.size + 1}`;
+    this.patternNames.set(pattern.key, name);
+    this.patternDicts.set(name, pattern.output());
+    return name;
+  }
+
+  setFillPattern(pattern: PdfShadingPattern): string {
+    const name = this.addPattern(pattern);
+    this.push(`/Pattern cs ${name} scn`);
+    return name;
+  }
+
+  setStrokePattern(pattern: PdfShadingPattern): string {
+    const name = this.addPattern(pattern);
+    this.push(`/Pattern CS ${name} SCN`);
     return name;
   }
 

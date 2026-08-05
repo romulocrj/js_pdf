@@ -141,7 +141,8 @@ export class Page implements Section {
       format,
       content: canvas.output(),
       fonts: canvas.fonts,
-      graphicStates: canvas.graphicStates
+      graphicStates: canvas.graphicStates,
+      patterns: canvas.patterns
     }];
   }
 

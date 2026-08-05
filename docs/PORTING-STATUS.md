@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 65 `.ts` files, ~10,900 lines (TypeScript)
+**Ported:** 69 `.ts` files, ~11,500 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -72,7 +72,7 @@ each one.
 | `page_format.dart` | 171 | `src/pdf/page_format.ts` | partial — A4 and Letter, plus the physical-unit constants SVG lengths need |
 | `color.dart` | 725 | `src/pdf/color.ts` | partial — RGB / DeviceRGB only |
 | `colors.dart` | 406 | — | — named color constants |
-| `graphics.dart` | 1415 | `src/pdf/graphics.ts`, `src/svg/path.ts` | partial — full path API (`m`/`l`/`c`/`h`/`re`, ellipses, rounded rects, elliptical arcs), SVG path drawing, fill rules, clipping, CTM, cap/join/miter/dash, colors, `gs`; no `drawImage` (**4**), shading or patterns (**2.8**) |
+| `graphics.dart` | 1415 | `src/pdf/graphics.ts`, `src/svg/path.ts` | partial — full path API (`m`/`l`/`c`/`h`/`re`, ellipses, rounded rects, elliptical arcs), SVG path drawing, fill rules, clipping, CTM, cap/join/miter/dash, colors, `gs` and shading-pattern paint; no `drawImage` (**4**) or direct `sh` operator |
 | `graphic_state.dart` | 194 | `src/pdf/graphic_state.ts` | partial — `/ca`, `/CA`, `/BM`, deduplicated per page; no `PdfGraphicStates` document object, no `/SMask`, no `/TR` |
 | *(no upstream file — `vector_math`)* | — | `src/pdf/matrix.ts` | done — the 2×3 affine `cm` operand, composition, inversion and the y-down conjugation |
 | `document.dart` | 289 | `src/pdf/document.ts` | partial — `PdfDocument` object registry; one font object per distinct font, created on first use |
@@ -102,10 +102,10 @@ on: an object registers itself with the document, hands out references through
 | `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; `resourceDict(registry)` returns a `PdfDict` and may create the objects it references |
 | `obj/font_descriptor.dart` | 139 | `src/pdf/obj/font_descriptor.ts` | partial — bbox, flags, ascent/descent, `/FontFile2`; `/ItalicAngle`, `/CapHeight` and `/StemV` are upstream's constants |
 | `obj/ttffont.dart`, `unicode_cmap.dart` | 278 | `src/pdf/obj/ttf_font.ts`, `src/pdf/obj/unicode_cmap.ts` | partial — Type0/CIDFontType2, `/Identity-H`, `/ToUnicode`; no simple `/TrueType` branch, no Arabic or bidi coupling |
-| `obj/graphic_stream.dart` | 156 | `src/pdf/obj/graphic_stream.ts` | partial — `/Font`, `/XObject`, `/ExtGState` (inline dictionaries, per page); base class rather than a mixin, no `/ProcSet`, `/Shading` or `/Pattern` |
+| `obj/graphic_stream.dart` | 156 | `src/pdf/obj/graphic_stream.ts` | partial — `/Font`, `/XObject`, `/ExtGState` and `/Pattern` (inline dictionaries, per page); base class rather than a mixin, no `/ProcSet` or standalone `/Shading` resources |
 | `obj/xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 206 | — | — form XObjects, **phase 4** |
 | `obj/image.dart`, `smask.dart` | 347 | — | — **phase 4.1–4.2** |
-| `obj/shading.dart`, `pattern.dart`, `function.dart` | 349 | — | — SVG gradients, **phase 2.8** |
+| `obj/shading.dart`, `pattern.dart`, `function.dart` | 349 | `src/pdf/obj/shading.ts`, `pattern.ts`, `function.ts` | partial — axial/radial DeviceRGB shadings, type-2 interpolation and type-3 stitching, direct shading-pattern dictionaries; no sampled streams or tiling patterns |
 | `obj/annotation.dart`, `border.dart`, `names.dart`, `outline.dart` | 1366 | — | — links **phase 5.3**; names/outlines needed by `TableOfContent` in **3.8** |
 | `obj/metadata.dart`, `page_label.dart` | 248 | — | — |
 | `obj/encryption.dart`, `signature.dart` | 151 | — | — |
@@ -139,9 +139,9 @@ both, and will grow the shape factories in 2.5.
 | `svg/painter.dart`, `operation.dart` | 251 | `src/svg/painter.ts`, `operation.ts` — partial: scoped transforms, clipping, opacity/blend states, visibility and operation dispatch; text/image later |
 | `svg/transform.dart` | 124 | `src/svg/transform.ts` — done: `matrix translate scale rotate skewX skewY`, composed left to right |
 | `svg/group.dart`, `use.dart`, `symbol.dart` | 287 | `src/svg/group.ts`, `use.ts`, `symbol.ts` — done: inherited groups and local or namespaced references |
-| `svg/brush.dart`, `color.dart`, `colors.dart` | 609 | `src/svg/brush.ts`, `color.ts`, `colors.ts` — partial: complete named table, functional/hex colours, `currentColor`, inherited paint and stroke state; gradient references wait for **2.8** |
+| `svg/brush.dart`, `color.dart`, `colors.dart` | 609 | `src/svg/brush.ts`, `color.ts`, `colors.ts` — partial: complete named table, functional/hex colours, `currentColor`, inherited solid and gradient paint, stroke state |
 | `svg/clip_path.dart`, `mask_path.dart` | 148 | `src/svg/clip_path.ts` — partial: `clipPath`, `clip-rule`, user-space/object-bounding-box units and nested scopes; soft masks wait for phase 4 form XObjects and `/SMask` |
-| `svg/gradient.dart` | 436 | — **phase 2.8**, optional |
+| `svg/gradient.dart` | 436 | `src/svg/gradient.ts` — partial: linear/radial gradients, stops, transforms, units and inherited references; varying stop alpha and true repeat/reflect wait on soft masks/tiling patterns |
 | `svg/text.dart` | 221 | — |
 | `svg/image.dart` | 150 | — |
 | *(no upstream file — the `xml` package)* | — | `src/svg/xml.ts` — done: elements, attributes, text, CDATA, comments, entities, namespaces; no DTD subset, no validation |
@@ -182,18 +182,19 @@ both, and will grow the shape factories in 2.5.
 | Subsystem | Upstream lines | State |
 |---|---:|---|
 | Object syntax / serialization | ~1,700 | self-serializing value types; no filters, no xref streams |
-| Graphics | ~1,600 | paths, transforms, clipping and graphic states done; images, shading and patterns not |
+| Graphics | ~1,600 | paths, transforms, clipping, graphic states and shading patterns done; images and direct shading operators not |
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
-| SVG | ~2,800 | public widget, paths, XML, transforms, units, basic shapes, groups, references and clipping done; gradients are 2.8 |
+| SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping and gradients done; SVG text and embedded raster content remain |
 | Widgets | ~14,000 | ~18 widgets of ~60, plus styles and themes |
 
-**Phases 0 and 1 are complete.** The WinAnsi ceiling is gone: a TrueType font is
-parsed, subset to the glyphs a document used, embedded as a Type0/CIDFontType2
-composite with `/Identity-H`, and selected through `Font`, `TextStyle` and
-`ThemeData`. Text outside Latin-1 is no longer replaced with `?` — it is drawn
-from the embedded font and stays searchable through the `/ToUnicode` CMap.
+**Phases 0, 1 and 2 are complete.** The WinAnsi ceiling is gone: a TrueType font
+is parsed, subset to the glyphs a document used, embedded as a
+Type0/CIDFontType2 composite with `/Identity-H`, and selected through `Font`,
+`TextStyle` and `ThemeData`. Text outside Latin-1 is no longer replaced with `?`
+— it is drawn from the embedded font and stays searchable through the
+`/ToUnicode` CMap. The public SVG pipeline now reaches PDF shading patterns.
 
-What still limits the port is layout, not text: **SVG (phase 2) and the widget
-set (phase 3)** are what the seven remaining examples are waiting on. See
+What now limits the port is layout, not text or vector art: **the widget set
+(phase 3)** is what the seven remaining examples are waiting on. See
 [ROADMAP.md](ROADMAP.md).
