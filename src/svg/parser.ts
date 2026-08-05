@@ -20,8 +20,8 @@
  * The numeric half landed in phase 2.4 because transforms needed it. The
  * `SvgParser` class — intrinsic size, viewBox and `findById` — followed in 2.5
  * rather than 2.7 as the roadmap had it, because no paint module can be written
- * without `findById` and `colorFilter`. What 2.7 still owes is the `SvgImage`
- * widget that drives this.
+ * without `findById` and `colorFilter`. The `SvgImage` widget that drives this
+ * followed in phase 2.7.
  *
  * PORT GAP: `sizeValue` returns `value / 100` for a percentage, which is
  * upstream's behaviour and is wrong in the general case — a percentage is
@@ -235,8 +235,8 @@ export interface SvgParserOptions {
  * `id` that `<use>`, `clip-path` and gradient references all need.
  *
  * Landed in phase 2.5 rather than 2.7 as the roadmap had it, because the paint
- * modules could not be written without `findById` and `colorFilter`. What 2.7
- * still owes is the `SvgImage` widget that drives this.
+ * modules could not be written without `findById` and `colorFilter`. The public
+ * `SvgImage` driver followed in phase 2.7.
  */
 export class SvgParser {
   readonly viewBox: PdfRect;

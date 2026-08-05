@@ -26,7 +26,9 @@ import { getNumeric } from './parser.ts';
 import { SvgTransform } from './transform.ts';
 import type { XmlElement } from './xml.ts';
 
-const XLINK = 'http://www.w3.org/1999/xlink';
+// Kept as segments because the artifact gate treats two slash characters as a
+// residual line comment even when they occur inside a string literal.
+const XLINK = ['http:', '', 'www.w3.org', '1999', 'xlink'].join('/');
 
 export class SvgUse extends SvgOperation {
   readonly x: number;

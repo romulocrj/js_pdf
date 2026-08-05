@@ -58,8 +58,8 @@ export interface SvgParserOptions {
  * `id` that `<use>`, `clip-path` and gradient references all need.
  *
  * Landed in phase 2.5 rather than 2.7 as the roadmap had it, because the paint
- * modules could not be written without `findById` and `colorFilter`. What 2.7
- * still owes is the `SvgImage` widget that drives this.
+ * modules could not be written without `findById` and `colorFilter`. The public
+ * `SvgImage` driver followed in phase 2.7.
  */
 export declare class SvgParser {
     readonly viewBox: PdfRect;

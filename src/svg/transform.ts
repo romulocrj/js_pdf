@@ -20,8 +20,8 @@
  * PORT GAP: no `preserveAspectRatio`. Upstream has none either — `SvgImage`
  * fits the viewBox into the widget's box with `BoxFit` and `Alignment` instead,
  * which covers every alignment `preserveAspectRatio` can express but is stated
- * by the caller rather than read from the document. Phase 2.7 is where that
- * fitting lands.
+ * by the caller rather than read from the document. `SvgImage` has provided
+ * that fitting since phase 2.7.
  */
 
 import { identityMatrix, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, translationMatrix } from '../pdf/matrix.ts';

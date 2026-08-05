@@ -26,6 +26,14 @@ const PageFormat = Object.freeze({
 
 const DEFAULT_MARGIN = 40;
 
+const PageUnit = Object.freeze({
+  point: 1,
+  inch: 72,
+  cm: 72 / 2.54,
+  mm: 72 / 25.4,
+  pica: 12
+});
+
 class PdfFontMetrics {
   constructor({left, top, right, bottom, ascent = bottom, descent = top, advanceWidth = right - left, leftBearing = left}) {
     this.left = left;
@@ -3146,6 +3154,2364 @@ class Vector extends Widget {
   }
 }
 
+const svgColors = Object.freeze({
+  indigo: "#4b0082",
+  gold: "#ffd700",
+  hotpink: "#ff69b4",
+  firebrick: "#b22222",
+  indianred: "#cd5c5c",
+  yellow: "#ffff00",
+  mistyrose: "#ffe4e1",
+  darkolivegreen: "#556b2f",
+  olive: "#808000",
+  darkseagreen: "#8fbc8f",
+  pink: "#ffc0cb",
+  tomato: "#ff6347",
+  lightcoral: "#f08080",
+  orangered: "#ff4500",
+  navajowhite: "#ffdead",
+  lime: "#00ff00",
+  palegreen: "#98fb98",
+  darkslategrey: "#2f4f4f",
+  greenyellow: "#adff2f",
+  burlywood: "#deb887",
+  seashell: "#fff5ee",
+  mediumspringgreen: "#00fa9a",
+  fuchsia: "#ff00ff",
+  papayawhip: "#ffefd5",
+  blanchedalmond: "#ffebcd",
+  chartreuse: "#7fff00",
+  dimgray: "#696969",
+  transparent: "#ffffff",
+  black: "#000000",
+  peachpuff: "#ffdab9",
+  springgreen: "#00ff7f",
+  aquamarine: "#7fffd4",
+  white: "#ffffff",
+  orange: "#ffa500",
+  lightsalmon: "#ffa07a",
+  darkslategray: "#2f4f4f",
+  brown: "#a52a2a",
+  ivory: "#fffff0",
+  dodgerblue: "#1e90ff",
+  peru: "#cd853f",
+  lawngreen: "#7cfc00",
+  chocolate: "#d2691e",
+  crimson: "#dc143c",
+  forestgreen: "#228b22",
+  darkgrey: "#a9a9a9",
+  lightseagreen: "#20b2aa",
+  cyan: "#00ffff",
+  mintcream: "#f5fffa",
+  silver: "#c0c0c0",
+  antiquewhite: "#faebd7",
+  mediumorchid: "#ba55d3",
+  skyblue: "#87ceeb",
+  gray: "#808080",
+  darkturquoise: "#00ced1",
+  goldenrod: "#daa520",
+  darkgreen: "#006400",
+  floralwhite: "#fffaf0",
+  darkviolet: "#9400d3",
+  darkgray: "#a9a9a9",
+  moccasin: "#ffe4b5",
+  saddlebrown: "#8b4513",
+  grey: "#808080",
+  darkslateblue: "#483d8b",
+  lightskyblue: "#87cefa",
+  lightpink: "#ffb6c1",
+  mediumvioletred: "#c71585",
+  slategrey: "#708090",
+  red: "#ff0000",
+  deeppink: "#ff1493",
+  limegreen: "#32cd32",
+  darkmagenta: "#8b008b",
+  palegoldenrod: "#eee8aa",
+  plum: "#dda0dd",
+  turquoise: "#40e0d0",
+  lightgrey: "#d3d3d3",
+  lightgoldenrodyellow: "#fafad2",
+  darkgoldenrod: "#b8860b",
+  lavender: "#e6e6fa",
+  maroon: "#800000",
+  yellowgreen: "#9acd32",
+  sandybrown: "#f4a460",
+  thistle: "#d8bfd8",
+  violet: "#ee82ee",
+  navy: "#000080",
+  magenta: "#ff00ff",
+  dimgrey: "#696969",
+  tan: "#d2b48c",
+  rosybrown: "#bc8f8f",
+  olivedrab: "#6b8e23",
+  blue: "#0000ff",
+  lightblue: "#add8e6",
+  ghostwhite: "#f8f8ff",
+  honeydew: "#f0fff0",
+  cornflowerblue: "#6495ed",
+  slateblue: "#6a5acd",
+  linen: "#faf0e6",
+  darkblue: "#00008b",
+  powderblue: "#b0e0e6",
+  seagreen: "#2e8b57",
+  darkkhaki: "#bdb76b",
+  snow: "#fffafa",
+  sienna: "#a0522d",
+  mediumblue: "#0000cd",
+  royalblue: "#4169e1",
+  lightcyan: "#e0ffff",
+  green: "#008000",
+  mediumpurple: "#9370db",
+  midnightblue: "#191970",
+  cornsilk: "#fff8dc",
+  paleturquoise: "#afeeee",
+  bisque: "#ffe4c4",
+  slategray: "#708090",
+  darkcyan: "#008b8b",
+  khaki: "#f0e68c",
+  wheat: "#f5deb3",
+  teal: "#008080",
+  darkorchid: "#9932cc",
+  deepskyblue: "#00bfff",
+  salmon: "#fa8072",
+  darkred: "#8b0000",
+  steelblue: "#4682b4",
+  palevioletred: "#db7093",
+  lightslategray: "#778899",
+  aliceblue: "#f0f8ff",
+  lightslategrey: "#778899",
+  lightgreen: "#90ee90",
+  orchid: "#da70d6",
+  gainsboro: "#dcdcdc",
+  mediumseagreen: "#3cb371",
+  lightgray: "#d3d3d3",
+  mediumturquoise: "#48d1cc",
+  lemonchiffon: "#fffacd",
+  cadetblue: "#5f9ea0",
+  lightyellow: "#ffffe0",
+  lavenderblush: "#fff0f5",
+  coral: "#ff7f50",
+  purple: "#800080",
+  aqua: "#00ffff",
+  whitesmoke: "#f5f5f5",
+  mediumslateblue: "#7b68ee",
+  darkorange: "#ff8c00",
+  mediumaquamarine: "#66cdaa",
+  darksalmon: "#e9967a",
+  beige: "#f5f5dc",
+  blueviolet: "#8a2be2",
+  azure: "#f0ffff",
+  lightsteelblue: "#b0c4de",
+  oldlace: "#fdf5e6"
+});
+
+const PdfPoint = Object.freeze({
+  zero: Object.freeze({
+    x: 0,
+    y: 0
+  }),
+  translate(point, dx, dy) {
+    return {
+      x: point.x + dx,
+      y: point.y + dy
+    };
+  }
+});
+
+const PdfRect = Object.freeze({
+  zero: Object.freeze({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0
+  }),
+  fromLTRB(left, bottom, right, top) {
+    return {
+      x: left,
+      y: bottom,
+      width: right - left,
+      height: top - bottom
+    };
+  },
+  left(rect) {
+    return rect.x;
+  },
+  bottom(rect) {
+    return rect.y;
+  },
+  right(rect) {
+    return rect.x + rect.width;
+  },
+  top(rect) {
+    return rect.y + rect.height;
+  },
+  horizontalCenter(rect) {
+    return rect.x + rect.width / 2;
+  },
+  verticalCenter(rect) {
+    return rect.y + rect.height / 2;
+  },
+  inflate(rect, delta) {
+    return {
+      x: rect.x - delta,
+      y: rect.y - delta,
+      width: rect.width + delta * 2,
+      height: rect.height + delta * 2
+    };
+  },
+  deflate(rect, delta) {
+    return PdfRect.inflate(rect, -delta);
+  },
+  scale(rect, factor) {
+    return {
+      x: rect.x * factor,
+      y: rect.y * factor,
+      width: rect.width * factor,
+      height: rect.height * factor
+    };
+  }
+});
+
+const UNIT_SUFFIXES = Object.freeze({
+  px: "pixels",
+  mm: "millimeters",
+  cm: "centimeters",
+  in: "inch",
+  em: "em",
+  "%": "percent",
+  pt: "points",
+  "": "direct"
+});
+
+class SvgNumeric {
+  constructor(value, brush, unit = "direct") {
+    this.value = value;
+    this.unit = unit;
+    this.brush = brush;
+  }
+  static parse(text, brush) {
+    const match = /([-+]?[\d.]+)\s*(px|pt|em|cm|mm|in|%|)/.exec(text);
+    if (match === null) {
+      throw new SyntaxError(`Not a number: "${text}"`);
+    }
+    const value = Number.parseFloat(match[1]);
+    if (!Number.isFinite(value)) {
+      throw new SyntaxError(`Not a number: "${text}"`);
+    }
+    return new SvgNumeric(value, brush, UNIT_SUFFIXES[match[2] ?? ""] ?? "direct");
+  }
+  get colorValue() {
+    if (this.unit === "percent") {
+      return this.value / 100;
+    }
+    if (this.unit === "direct") {
+      return this.value / 255;
+    }
+    throw new SyntaxError(`Invalid color value ${this.value} (${this.unit})`);
+  }
+  get sizeValue() {
+    switch (this.unit) {
+     case "percent":
+      return this.value / 100;
+
+     case "direct":
+     case "pixels":
+     case "points":
+      return this.value;
+
+     case "millimeters":
+      return this.value * PageUnit.mm;
+
+     case "centimeters":
+      return this.value * PageUnit.cm;
+
+     case "inch":
+      return this.value * PageUnit.inch;
+
+     case "em":
+      {
+        const fontSize = this.brush?.fontSize;
+        if (fontSize === null || fontSize === undefined) {
+          throw new SyntaxError("An em length needs a font size in scope");
+        }
+        return this.value * fontSize.sizeValue;
+      }
+    }
+  }
+}
+
+const PARAMETER = /[\w.-]+(px|pt|em|cm|mm|in|%|)/g;
+
+function splitNumeric(parameters, brush) {
+  return [ ...parameters.matchAll(PARAMETER) ].map(match => SvgNumeric.parse(match[0], brush));
+}
+
+function splitDoubles(parameters) {
+  return [ ...parameters.matchAll(PARAMETER) ].map(match => {
+    const value = Number.parseFloat(match[0]);
+    if (!Number.isFinite(value)) {
+      throw new SyntaxError(`Not a number: "${match[0]}"`);
+    }
+    return value;
+  });
+}
+
+function getDouble(element, name, {namespace, defaultValue = 0} = {}) {
+  const attribute = element.getAttribute(name, namespace);
+  if (attribute === null) {
+    return defaultValue;
+  }
+  const value = Number.parseFloat(attribute);
+  if (!Number.isFinite(value)) {
+    throw new SyntaxError(`Attribute ${name}="${attribute}" is not a number`);
+  }
+  return value;
+}
+
+function getNumeric(element, name, brush, {namespace, defaultValue = null} = {}) {
+  const attribute = element.getAttribute(name, namespace);
+  if (attribute === null) {
+    return defaultValue === null ? null : new SvgNumeric(defaultValue, null);
+  }
+  return SvgNumeric.parse(attribute, brush);
+}
+
+const STYLE_DECLARATION = /([\w-]+)\s*:\s*(.*)/;
+
+function convertStyle(element) {
+  const style = element.getAttribute("style")?.trim();
+  if (style === undefined || style === null || style.length === 0) {
+    return;
+  }
+  for (const declaration of style.split(";")) {
+    if (declaration.trim().length === 0) {
+      continue;
+    }
+    const match = STYLE_DECLARATION.exec(declaration);
+    if (match === null) {
+      continue;
+    }
+    element.setAttribute(match[1], match[2].trim());
+  }
+}
+
+class SvgParser {
+  constructor(width, height, viewBox, root, colorFilter) {
+    this.width = width;
+    this.height = height;
+    this.viewBox = viewBox;
+    this.root = root;
+    this.colorFilter = colorFilter;
+  }
+  static fromXml({xml, colorFilter = null}) {
+    const root = xml.rootElement;
+    const viewBoxAttribute = root.getAttribute("viewBox");
+    const width = getNumeric(root, "width", null)?.sizeValue ?? null;
+    const height = getNumeric(root, "height", null)?.sizeValue ?? null;
+    const parsed = viewBoxAttribute === null ? [ 0, 0, width ?? 1e3, height ?? 1e3 ] : splitDoubles(viewBoxAttribute);
+    if (parsed.length === 0 || parsed.length > 4) {
+      throw new SyntaxError("viewBox must contain 1..4 parameters");
+    }
+    const box = [ ...new Array(4 - parsed.length).fill(0), ...parsed ];
+    return new SvgParser(width, height, {
+      x: box[0],
+      y: box[1],
+      width: box[2],
+      height: box[3]
+    }, root, colorFilter);
+  }
+  findById(id) {
+    for (const element of this.root.descendants) {
+      if (element.getAttribute("id") === id) {
+        return element;
+      }
+    }
+    return this.root.getAttribute("id") === id ? this.root : null;
+  }
+}
+
+function hslToRgb(hue, saturation, lightness) {
+  const h = (hue % 1 + 1) % 1;
+  const s = Math.min(1, Math.max(0, saturation));
+  const l = Math.min(1, Math.max(0, lightness));
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(h * 6 % 2 - 1));
+  const m = l - c / 2;
+  const sector = Math.floor(h * 6);
+  const table = [ [ c, x, 0 ], [ x, c, 0 ], [ 0, c, x ], [ 0, x, c ], [ x, 0, c ], [ c, 0, x ] ];
+  const [r, g, b] = table[sector % 6];
+  return [ r + m, g + m, b + m ];
+}
+
+function functionArguments(value) {
+  return value.slice(value.indexOf("(") + 1, value.lastIndexOf(")"));
+}
+
+class SvgColor {
+  constructor(color = null, inherit = false, opacity = 1) {
+    this.color = color;
+    this.inherit = inherit;
+    this.opacity = opacity;
+  }
+  get isEmpty() {
+    return this.color === null;
+  }
+  get isNotEmpty() {
+    return !this.isEmpty;
+  }
+  merge(other) {
+    return new SvgColor(other.color ?? this.color, false, other.color === null ? this.opacity : other.opacity);
+  }
+  setFillColor(canvas) {
+    if (this.color !== null) {
+      canvas.setFillColor(this.color);
+    }
+  }
+  setStrokeColor(canvas) {
+    if (this.color !== null) {
+      canvas.setStrokeColor(this.color);
+    }
+  }
+  static fromXml(color, parser, currentColor = SvgColor.defaultColor) {
+    if (color === null || color === undefined) {
+      return SvgColor.inherited;
+    }
+    const value = color.trim();
+    if (value === "none") {
+      return SvgColor.none;
+    }
+    if (value.toLowerCase() === "currentcolor") {
+      return currentColor;
+    }
+    if (parser.colorFilter !== null) {
+      return new SvgColor(parser.colorFilter);
+    }
+    const named = svgColors[value.toLowerCase()];
+    if (named !== undefined) {
+      return new SvgColor(normalizeColor(named));
+    }
+    const lower = value.toLowerCase();
+    if (lower.startsWith("rgba")) {
+      const parts = splitNumeric(functionArguments(value), null);
+      if (parts.length >= 3) {
+        return new SvgColor([ parts[0].colorValue, parts[1].colorValue, parts[2].colorValue ], false, Math.min(1, Math.max(0, parts[3]?.value ?? 1)));
+      }
+      return SvgColor.unknown;
+    }
+    if (lower.startsWith("hsl")) {
+      const parts = splitNumeric(functionArguments(value), null);
+      if (parts.length >= 3) {
+        return new SvgColor(hslToRgb(parts[0].colorValue, parts[1].colorValue, parts[2].colorValue));
+      }
+      return SvgColor.unknown;
+    }
+    if (lower.startsWith("rgb")) {
+      const parts = splitNumeric(functionArguments(value), null);
+      if (parts.length >= 3) {
+        return new SvgColor([ parts[0].colorValue, parts[1].colorValue, parts[2].colorValue ]);
+      }
+      return SvgColor.unknown;
+    }
+    if (lower.startsWith("url(#")) {
+      return SvgColor.unknown;
+    }
+    try {
+      return new SvgColor(normalizeColor(SvgColor.expandHex(value)));
+    } catch {
+      return SvgColor.unknown;
+    }
+  }
+  static expandHex(value) {
+    if (/^#[0-9a-fA-F]{3}$/.test(value)) {
+      const [, r, g, b] = value;
+      return `#${r}${r}${g}${g}${b}${b}`;
+    }
+    return value;
+  }
+}
+
+SvgColor.unknown = new SvgColor;
+
+SvgColor.defaultColor = new SvgColor([ 0, 0, 0 ]);
+
+SvgColor.none = new SvgColor;
+
+SvgColor.inherited = new SvgColor(null, true);
+
+const BLEND_MODES = Object.freeze({
+  normal: "normal",
+  multiply: "multiply",
+  screen: "screen",
+  overlay: "overlay",
+  darken: "darken",
+  lighten: "lighten",
+  "color-dodge": "colorDodge",
+  "color-burn": "colorBurn",
+  "hard-light": "hardLight",
+  "soft-light": "softLight",
+  difference: "difference",
+  exclusion: "exclusion",
+  hue: "hue",
+  saturation: "saturation",
+  color: "color",
+  luminosity: "luminosity"
+});
+
+const LINE_CAPS = Object.freeze({
+  butt: "butt",
+  round: "round",
+  square: "square"
+});
+
+const LINE_JOINS = Object.freeze({
+  miter: "miter",
+  bevel: "bevel",
+  round: "round"
+});
+
+const TEXT_ANCHORS = Object.freeze({
+  start: "start",
+  middle: "middle",
+  end: "end"
+});
+
+class SvgBrush {
+  constructor(fields) {
+    this.color = fields.color;
+    this.opacity = fields.opacity;
+    this.fill = fields.fill;
+    this.fillEvenOdd = fields.fillEvenOdd;
+    this.fillOpacity = fields.fillOpacity;
+    this.stroke = fields.stroke;
+    this.strokeOpacity = fields.strokeOpacity;
+    this.strokeWidth = fields.strokeWidth;
+    this.strokeDashArray = fields.strokeDashArray;
+    this.strokeDashOffset = fields.strokeDashOffset;
+    this.strokeLineCap = fields.strokeLineCap;
+    this.strokeLineJoin = fields.strokeLineJoin;
+    this.strokeMiterLimit = fields.strokeMiterLimit;
+    this.fontSize = fields.fontSize;
+    this.fontFamily = fields.fontFamily;
+    this.fontStyle = fields.fontStyle;
+    this.fontWeight = fields.fontWeight;
+    this.textAnchor = fields.textAnchor;
+    this.blendMode = fields.blendMode;
+  }
+  merge(other) {
+    if (other === null) {
+      return this;
+    }
+    let fill = other.fill ?? this.fill;
+    if (fill?.inherit === true && this.fill !== null && other.fill !== null) {
+      fill = this.fill.merge(other.fill);
+    }
+    let stroke = other.stroke ?? this.stroke;
+    if (stroke?.inherit === true && this.stroke !== null && other.stroke !== null) {
+      stroke = this.stroke.merge(other.stroke);
+    }
+    return new SvgBrush({
+      color: other.color?.inherit === true ? this.color : other.color ?? this.color,
+      opacity: other.opacity ?? 1,
+      blendMode: other.blendMode,
+      fillOpacity: other.fillOpacity ?? this.fillOpacity,
+      strokeOpacity: other.strokeOpacity ?? this.strokeOpacity,
+      fill,
+      fillEvenOdd: other.fillEvenOdd ?? this.fillEvenOdd,
+      stroke,
+      strokeWidth: other.strokeWidth ?? this.strokeWidth,
+      strokeDashArray: other.strokeDashArray ?? this.strokeDashArray,
+      strokeDashOffset: other.strokeDashOffset ?? this.strokeDashOffset,
+      fontSize: other.fontSize ?? this.fontSize,
+      fontFamily: other.fontFamily ?? this.fontFamily,
+      fontStyle: other.fontStyle ?? this.fontStyle,
+      fontWeight: other.fontWeight ?? this.fontWeight,
+      textAnchor: other.textAnchor ?? this.textAnchor,
+      strokeLineCap: other.strokeLineCap ?? this.strokeLineCap,
+      strokeLineJoin: other.strokeLineJoin ?? this.strokeLineJoin,
+      strokeMiterLimit: other.strokeMiterLimit ?? this.strokeMiterLimit
+    });
+  }
+  copyWith(fields) {
+    return new SvgBrush({
+      color: fields.color ?? this.color,
+      opacity: fields.opacity ?? this.opacity,
+      fill: fields.fill ?? this.fill,
+      fillEvenOdd: fields.fillEvenOdd ?? this.fillEvenOdd,
+      fillOpacity: fields.fillOpacity ?? this.fillOpacity,
+      stroke: fields.stroke ?? this.stroke,
+      strokeOpacity: fields.strokeOpacity ?? this.strokeOpacity,
+      strokeWidth: fields.strokeWidth ?? this.strokeWidth,
+      strokeDashArray: fields.strokeDashArray ?? this.strokeDashArray,
+      strokeDashOffset: fields.strokeDashOffset ?? this.strokeDashOffset,
+      strokeLineCap: fields.strokeLineCap ?? this.strokeLineCap,
+      strokeLineJoin: fields.strokeLineJoin ?? this.strokeLineJoin,
+      strokeMiterLimit: fields.strokeMiterLimit ?? this.strokeMiterLimit,
+      fontSize: fields.fontSize ?? this.fontSize,
+      fontFamily: fields.fontFamily ?? this.fontFamily,
+      fontStyle: fields.fontStyle ?? this.fontStyle,
+      fontWeight: fields.fontWeight ?? this.fontWeight,
+      textAnchor: fields.textAnchor ?? this.textAnchor,
+      blendMode: fields.blendMode ?? this.blendMode
+    });
+  }
+  static fromXml(element, parent, parser) {
+    convertStyle(element);
+    const strokeDashArray = element.getAttribute("stroke-dasharray");
+    const fillRule = element.getAttribute("fill-rule");
+    const strokeLineCap = element.getAttribute("stroke-linecap");
+    const strokeLineJoin = element.getAttribute("stroke-linejoin");
+    const blendMode = element.getAttribute("mix-blend-mode");
+    const color = SvgColor.fromXml(element.getAttribute("color"), parser, parent.color ?? SvgColor.defaultColor);
+    const currentColor = color.inherit ? parent.color ?? SvgColor.defaultColor : color;
+    return parent.merge(new SvgBrush({
+      color,
+      opacity: getDouble(element, "opacity", {
+        defaultValue: null
+      }),
+      blendMode: blendMode === null ? null : BLEND_MODES[blendMode] ?? null,
+      fillOpacity: getDouble(element, "fill-opacity", {
+        defaultValue: null
+      }),
+      strokeOpacity: getDouble(element, "stroke-opacity", {
+        defaultValue: null
+      }),
+      strokeLineCap: strokeLineCap === null ? null : LINE_CAPS[strokeLineCap] ?? null,
+      strokeLineJoin: strokeLineJoin === null ? null : LINE_JOINS[strokeLineJoin] ?? null,
+      strokeMiterLimit: getDouble(element, "stroke-miterlimit", {
+        defaultValue: null
+      }),
+      fill: SvgColor.fromXml(element.getAttribute("fill"), parser, currentColor),
+      fillEvenOdd: fillRule === null ? null : fillRule === "evenodd",
+      stroke: SvgColor.fromXml(element.getAttribute("stroke"), parser, currentColor),
+      strokeWidth: getNumeric(element, "stroke-width", parent),
+      strokeDashArray: strokeDashArray === null ? null : strokeDashArray === "none" ? [] : splitNumeric(strokeDashArray, parent).map(n => n.value),
+      strokeDashOffset: getNumeric(element, "stroke-dashoffset", parent)?.sizeValue ?? null,
+      fontSize: getNumeric(element, "font-size", parent),
+      fontFamily: element.getAttribute("font-family"),
+      fontStyle: element.getAttribute("font-style"),
+      fontWeight: element.getAttribute("font-weight"),
+      textAnchor: TEXT_ANCHORS[element.getAttribute("text-anchor") ?? ""] ?? null
+    }));
+  }
+}
+
+SvgBrush.defaultContext = new SvgBrush({
+  color: SvgColor.defaultColor,
+  opacity: 1,
+  blendMode: null,
+  fillOpacity: 1,
+  strokeOpacity: 1,
+  fill: SvgColor.defaultColor,
+  fillEvenOdd: false,
+  stroke: SvgColor.none,
+  strokeLineCap: "butt",
+  strokeLineJoin: "miter",
+  strokeMiterLimit: 4,
+  strokeWidth: new SvgNumeric(1, null, "pixels"),
+  strokeDashArray: [],
+  strokeDashOffset: 0,
+  fontSize: new SvgNumeric(16, null),
+  fontFamily: "sans-serif",
+  fontWeight: "normal",
+  fontStyle: "normal",
+  textAnchor: "start"
+});
+
+class SvgClipPath {
+  constructor(children, units = "userSpaceOnUse", evenOdd = false) {
+    this.children = children;
+    this.units = units;
+    this.evenOdd = evenOdd;
+  }
+  get isEmpty() {
+    return this.children.length === 0;
+  }
+  get isNotEmpty() {
+    return !this.isEmpty;
+  }
+  static fromXml(element, painter, parent) {
+    const attribute = element.getAttribute("clip-path");
+    if (attribute?.startsWith("url(#") !== true) {
+      return SvgClipPath.empty;
+    }
+    const closing = attribute.lastIndexOf(")");
+    if (closing < 5) {
+      return SvgClipPath.empty;
+    }
+    const referenced = painter.parser.findById(attribute.slice(5, closing));
+    if (referenced === null || referenced.name.local !== "clipPath") {
+      return SvgClipPath.empty;
+    }
+    const brush = SvgBrush.fromXml(referenced, parent, painter.parser);
+    const children = [];
+    let evenOdd = referenced.getAttribute("clip-rule") === "evenodd";
+    for (const child of referenced.elements) {
+      const operation = painter.operationFromXml(child, brush);
+      if (operation !== null) {
+        children.push(operation);
+        evenOdd || (evenOdd = child.getAttribute("clip-rule") === "evenodd");
+      }
+    }
+    const units = referenced.getAttribute("clipPathUnits") === "objectBoundingBox" ? "objectBoundingBox" : "userSpaceOnUse";
+    return new SvgClipPath(children, units, evenOdd);
+  }
+  apply(canvas, target) {
+    if (this.isEmpty) {
+      return;
+    }
+    if (this.units === "objectBoundingBox") {
+      canvas.saveContext();
+      canvas.setTransform(multiplyMatrix(translationMatrix(target.x, target.y), scaleMatrix(target.width, target.height)));
+    }
+    for (const child of this.children) {
+      child.draw(canvas);
+    }
+    if (this.units === "objectBoundingBox") {
+      canvas.restoreContext();
+    }
+    canvas.clipPath({
+      evenOdd: this.evenOdd
+    });
+  }
+}
+
+SvgClipPath.empty = new SvgClipPath([]);
+
+const BLEND_MODE_NAMES = Object.freeze({
+  normal: "/Normal",
+  multiply: "/Multiply",
+  screen: "/Screen",
+  overlay: "/Overlay",
+  darken: "/Darken",
+  lighten: "/Lighten",
+  colorDodge: "/ColorDodge",
+  colorBurn: "/ColorBurn",
+  hardLight: "/HardLight",
+  softLight: "/SoftLight",
+  difference: "/Difference",
+  exclusion: "/Exclusion",
+  hue: "/Hue",
+  saturation: "/Saturation",
+  color: "/Color",
+  luminosity: "/Luminosity"
+});
+
+class PdfGraphicState {
+  constructor({opacity = null, fillOpacity = null, strokeOpacity = null, blendMode = null} = {}) {
+    this.fillOpacity = fillOpacity ?? opacity;
+    this.strokeOpacity = strokeOpacity ?? opacity;
+    this.blendMode = blendMode;
+  }
+  get isEmpty() {
+    return this.fillOpacity === null && this.strokeOpacity === null && this.blendMode === null;
+  }
+  get key() {
+    return `${this.fillOpacity}|${this.strokeOpacity}|${this.blendMode}`;
+  }
+  output() {
+    const params = new PdfDict;
+    if (this.strokeOpacity !== null) {
+      params.set("/CA", new PdfNum(this.strokeOpacity));
+    }
+    if (this.fillOpacity !== null) {
+      params.set("/ca", new PdfNum(this.fillOpacity));
+    }
+    if (this.blendMode !== null) {
+      params.set("/BM", new PdfName(BLEND_MODE_NAMES[this.blendMode]));
+    }
+    return params;
+  }
+}
+
+class SvgOperation {
+  constructor(brush, clip, transform, painter) {
+    this.brush = brush;
+    this.clip = clip;
+    this.transform = transform;
+    this.painter = painter;
+  }
+  paint(canvas) {
+    canvas.saveContext();
+    this.clip.apply(canvas, this.boundingBox());
+    if (this.transform.matrix !== null) {
+      canvas.setTransform(this.transform.matrix);
+    }
+    if ((this.brush.opacity ?? 1) < 1 || this.brush.blendMode !== null) {
+      canvas.setGraphicState(new PdfGraphicState({
+        opacity: this.brush.opacity === 1 ? null : this.brush.opacity,
+        blendMode: this.brush.blendMode
+      }));
+    }
+    this.paintShape(canvas);
+    canvas.restoreContext();
+  }
+  draw(canvas) {
+    canvas.saveContext();
+    if (this.transform.matrix !== null) {
+      canvas.setTransform(this.transform.matrix);
+    }
+    this.drawShape(canvas);
+    canvas.restoreContext();
+  }
+}
+
+const TRANSFORM = /(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/g;
+
+function toRadians(degrees) {
+  return degrees * Math.PI / 180;
+}
+
+class SvgTransform {
+  constructor(matrix) {
+    this.matrix = matrix;
+  }
+  get isEmpty() {
+    return this.matrix === null;
+  }
+  get isNotEmpty() {
+    return this.matrix !== null;
+  }
+  static fromXml(element) {
+    return SvgTransform.fromString(element.getAttribute("transform"));
+  }
+  static fromString(transform) {
+    if (transform === null || transform === undefined) {
+      return SvgTransform.none;
+    }
+    let matrix = identityMatrix;
+    for (const match of transform.matchAll(TRANSFORM)) {
+      const name = match[1];
+      const parameters = splitDoubles(match[2]);
+      switch (name) {
+       case "matrix":
+        {
+          const m = [ ...parameters, 0, 0, 0, 0, 0, 0 ].slice(0, 6);
+          matrix = multiplyMatrix(matrix, m);
+          break;
+        }
+
+       case "translate":
+        {
+          const dx = parameters[0] ?? 0;
+          const dy = parameters[1] ?? 0;
+          matrix = multiplyMatrix(matrix, translationMatrix(dx, dy));
+          break;
+        }
+
+       case "scale":
+        {
+          const sx = parameters[0] ?? 1;
+          const sy = parameters[1] ?? sx;
+          matrix = multiplyMatrix(matrix, scaleMatrix(sx, sy));
+          break;
+        }
+
+       case "rotate":
+        {
+          const degrees = parameters[0] ?? 0;
+          const ox = parameters[1] ?? 0;
+          const oy = parameters[2] ?? 0;
+          if (parameters.length > 1) {
+            matrix = multiplyMatrix(matrix, translationMatrix(ox, oy));
+          }
+          matrix = multiplyMatrix(matrix, rotationMatrix(toRadians(degrees)));
+          if (ox !== 0 || oy !== 0) {
+            matrix = multiplyMatrix(matrix, translationMatrix(-ox, -oy));
+          }
+          break;
+        }
+
+       case "skewX":
+        matrix = multiplyMatrix(matrix, skewMatrix(toRadians(parameters[0] ?? 0), 0));
+        break;
+
+       case "skewY":
+        matrix = multiplyMatrix(matrix, skewMatrix(0, toRadians(parameters[0] ?? 0)));
+        break;
+      }
+    }
+    return new SvgTransform(matrix);
+  }
+}
+
+SvgTransform.none = new SvgTransform(null);
+
+class SvgGroup extends SvgOperation {
+  constructor(children, brush, clip, transform, painter) {
+    super(brush, clip, transform, painter);
+    this.children = children;
+  }
+  static fromXml(element, painter, parent) {
+    const brush = SvgBrush.fromXml(element, parent, painter.parser);
+    const children = [];
+    for (const child of element.elements) {
+      if (child.name.local === "symbol") {
+        continue;
+      }
+      const operation = painter.operationFromXml(child, brush);
+      if (operation !== null) {
+        children.push(operation);
+      }
+    }
+    return new SvgGroup(children, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+  }
+  paintShape(canvas) {
+    for (const child of this.children) {
+      child.paint(canvas);
+    }
+  }
+  drawShape(canvas) {
+    for (const child of this.children) {
+      child.draw(canvas);
+    }
+  }
+  boundingBox() {
+    if (this.children.length === 0) {
+      return PdfRect.zero;
+    }
+    let left = Infinity;
+    let bottom = Infinity;
+    let right = -Infinity;
+    let top = -Infinity;
+    for (const child of this.children) {
+      const box = child.boundingBox();
+      left = Math.min(left, PdfRect.left(box));
+      bottom = Math.min(bottom, PdfRect.bottom(box));
+      right = Math.max(right, PdfRect.right(box));
+      top = Math.max(top, PdfRect.top(box));
+    }
+    return PdfRect.fromLTRB(left, bottom, right, top);
+  }
+}
+
+const ZERO = Object.freeze({
+  dx: 0,
+  dy: 0
+});
+
+const COMMANDS = "MmLlHhVvCcSsQqTtAaZz";
+
+function commandOf(character) {
+  return COMMANDS.includes(character) ? character : "?";
+}
+
+function isCubicCommand(command) {
+  return command === "C" || command === "c" || command === "S" || command === "s";
+}
+
+function isQuadraticCommand(command) {
+  return command === "Q" || command === "q" || command === "T" || command === "t";
+}
+
+function newSegment() {
+  return {
+    command: "?",
+    targetPoint: ZERO,
+    point1: ZERO,
+    point2: ZERO,
+    arcAngle: 0,
+    arcLarge: false,
+    arcSweep: false
+  };
+}
+
+const SPACE = 32;
+
+const NEWLINE = 10;
+
+const TAB = 9;
+
+const RETURN = 13;
+
+const FORM_FEED = 12;
+
+const COMMA = 44;
+
+const PLUS = 43;
+
+const MINUS = 45;
+
+const PERIOD = 46;
+
+const DIGIT_0 = 48;
+
+const DIGIT_1 = 49;
+
+const DIGIT_9 = 57;
+
+const LOWER_E = 101;
+
+const UPPER_E = 69;
+
+const LOWER_X = 120;
+
+const LOWER_M = 109;
+
+class SvgPathStringSource {
+  constructor(source) {
+    this.index = 0;
+    this.previousCommand = "?";
+    this.source = source;
+    this.length = source.length;
+    this.skipOptionalSpaces();
+  }
+  get hasMoreData() {
+    return this.index < this.length;
+  }
+  parseSegments() {
+    const segments = [];
+    while (this.hasMoreData) {
+      segments.push(this.parseSegment());
+    }
+    return segments;
+  }
+  isSpace(code) {
+    return code <= SPACE && (code === SPACE || code === NEWLINE || code === TAB || code === RETURN || code === FORM_FEED);
+  }
+  skipOptionalSpaces() {
+    for (;;) {
+      if (this.index >= this.length) {
+        return -1;
+      }
+      const code = this.source.charCodeAt(this.index);
+      if (!this.isSpace(code)) {
+        return code;
+      }
+      this.index++;
+    }
+  }
+  skipOptionalSpacesOrDelimiter(delimiter = COMMA) {
+    if (this.skipOptionalSpaces() === delimiter) {
+      this.index++;
+      this.skipOptionalSpaces();
+    }
+  }
+  static isNumberStart(code) {
+    return code >= DIGIT_0 && code <= DIGIT_9 || code === PLUS || code === MINUS || code === PERIOD;
+  }
+  readCodeUnit() {
+    if (this.index >= this.length) {
+      return -1;
+    }
+    return this.source.charCodeAt(this.index++);
+  }
+  maybeImplicitCommand(lookahead, next) {
+    if (!SvgPathStringSource.isNumberStart(lookahead) || this.previousCommand === "Z" || this.previousCommand === "z") {
+      return next;
+    }
+    if (this.previousCommand === "M") return "L";
+    if (this.previousCommand === "m") return "l";
+    return this.previousCommand;
+  }
+  parseNumber() {
+    this.skipOptionalSpaces();
+    let sign = 1;
+    let c = this.readCodeUnit();
+    if (c === PLUS) {
+      c = this.readCodeUnit();
+    } else if (c === MINUS) {
+      sign = -1;
+      c = this.readCodeUnit();
+    }
+    if ((c < DIGIT_0 || c > DIGIT_9) && c !== PERIOD) {
+      throw new SyntaxError("First character of a number must be one of [0-9+-.]");
+    }
+    let integer = 0;
+    while (c >= DIGIT_0 && c <= DIGIT_9) {
+      integer = integer * 10 + (c - DIGIT_0);
+      c = this.readCodeUnit();
+    }
+    if (!Number.isFinite(integer)) {
+      throw new RangeError("Numeric overflow in path data");
+    }
+    let decimal = 0;
+    if (c === PERIOD) {
+      c = this.readCodeUnit();
+      if (c < DIGIT_0 || c > DIGIT_9) {
+        throw new SyntaxError("There must be at least one digit following the .");
+      }
+      let frac = 1;
+      while (c >= DIGIT_0 && c <= DIGIT_9) {
+        frac *= .1;
+        decimal += (c - DIGIT_0) * frac;
+        c = this.readCodeUnit();
+      }
+    }
+    let number = (integer + decimal) * sign;
+    if (this.index < this.length && (c === LOWER_E || c === UPPER_E) && this.source.charCodeAt(this.index) !== LOWER_X && this.source.charCodeAt(this.index) !== LOWER_M) {
+      c = this.readCodeUnit();
+      let exponentIsNegative = false;
+      if (c === PLUS) {
+        c = this.readCodeUnit();
+      } else if (c === MINUS) {
+        c = this.readCodeUnit();
+        exponentIsNegative = true;
+      }
+      if (c < DIGIT_0 || c > DIGIT_9) {
+        throw new SyntaxError("Missing exponent in path data");
+      }
+      let exponent = 0;
+      while (c >= DIGIT_0 && c <= DIGIT_9) {
+        exponent = exponent * 10 + (c - DIGIT_0);
+        c = this.readCodeUnit();
+      }
+      if (exponentIsNegative) {
+        exponent = -exponent;
+      }
+      if (exponent < -37 || exponent > 38) {
+        throw new RangeError(`Invalid exponent ${exponent} in path data`);
+      }
+      if (exponent !== 0) {
+        number *= Math.pow(10, exponent);
+      }
+    }
+    if (!Number.isFinite(number)) {
+      throw new RangeError("Numeric overflow in path data");
+    }
+    if (c !== -1) {
+      this.index--;
+      this.skipOptionalSpacesOrDelimiter();
+    }
+    return number;
+  }
+  parseArcFlag() {
+    if (!this.hasMoreData) {
+      throw new SyntaxError("Expected an arc flag");
+    }
+    const flag = this.source.charCodeAt(this.index++);
+    this.skipOptionalSpacesOrDelimiter();
+    if (flag === DIGIT_0) return false;
+    if (flag === DIGIT_1) return true;
+    throw new SyntaxError("Arc flag must be 0 or 1");
+  }
+  parseSegment() {
+    const segment = newSegment();
+    const lookahead = this.source.charCodeAt(this.index);
+    let command = commandOf(this.source[this.index]);
+    if (this.previousCommand === "?") {
+      if (command !== "M" && command !== "m") {
+        throw new SyntaxError("Path data must begin with a moveTo command");
+      }
+      this.index++;
+    } else if (command === "?") {
+      command = this.maybeImplicitCommand(lookahead, command);
+      if (command === "?") {
+        throw new SyntaxError(`Expected a path command at offset ${this.index}`);
+      }
+    } else {
+      this.index++;
+    }
+    segment.command = command;
+    this.previousCommand = command;
+    switch (command) {
+     case "C":
+     case "c":
+      segment.point1 = {
+        dx: this.parseNumber(),
+        dy: this.parseNumber()
+      };
+      segment.point2 = {
+        dx: this.parseNumber(),
+        dy: this.parseNumber()
+      };
+      segment.targetPoint = {
+        dx: this.parseNumber(),
+        dy: this.parseNumber()
+      };
+      break;
+
+     case "S":
+     case "s":
+      segment.point2 = {
+        dx: this.parseNumber(),
+        dy: this.parseNumber()
+      };
+      segment.targetPoint = {
+        dx: this.parseNumber(),
+        dy: this.parseNumber()
+      };
+      break;
+
+     case "M":
+     case "m":
+     case "L":
+     case "l":
+     case "T":
+     case "t":
+      segment.targetPoint = {
+        dx: this.parseNumber(),
+        dy: this.parseNumber()
+      };
+      break;
+
+     case "H":
+     case "h":
+      segment.targetPoint = {
+        dx: this.parseNumber(),
+        dy: 0
+      };
+      break;
+
+     case "V":
+     case "v":
+      segment.targetPoint = {
+        dx: 0,
+        dy: this.parseNumber()
+      };
+      break;
+
+     case "Z":
+     case "z":
+      this.skipOptionalSpaces();
+      break;
+
+     case "Q":
+     case "q":
+      segment.point1 = {
+        dx: this.parseNumber(),
+        dy: this.parseNumber()
+      };
+      segment.targetPoint = {
+        dx: this.parseNumber(),
+        dy: this.parseNumber()
+      };
+      break;
+
+     case "A":
+     case "a":
+      segment.point1 = {
+        dx: this.parseNumber(),
+        dy: this.parseNumber()
+      };
+      segment.arcAngle = this.parseNumber();
+      segment.arcLarge = this.parseArcFlag();
+      segment.arcSweep = this.parseArcFlag();
+      segment.targetPoint = {
+        dx: this.parseNumber(),
+        dy: this.parseNumber()
+      };
+      break;
+
+     default:
+      throw new SyntaxError("Unknown path command");
+    }
+    return segment;
+  }
+}
+
+function add(a, b) {
+  return {
+    dx: a.dx + b.dx,
+    dy: a.dy + b.dy
+  };
+}
+
+function subtract(a, b) {
+  return {
+    dx: a.dx - b.dx,
+    dy: a.dy - b.dy
+  };
+}
+
+function times(a, factor) {
+  return {
+    dx: a.dx * factor,
+    dy: a.dy * factor
+  };
+}
+
+function reflectedPoint(reflectedIn, pointToReflect) {
+  return {
+    dx: 2 * reflectedIn.dx - pointToReflect.dx,
+    dy: 2 * reflectedIn.dy - pointToReflect.dy
+  };
+}
+
+const ONE_OVER_THREE = 1 / 3;
+
+function blendPoints(p1, p2) {
+  return {
+    dx: (p1.dx + 2 * p2.dx) * ONE_OVER_THREE,
+    dy: (p1.dy + 2 * p2.dy) * ONE_OVER_THREE
+  };
+}
+
+const TWO_PI = Math.PI * 2;
+
+const PI_OVER_TWO = Math.PI / 2;
+
+class SvgPathNormalizer {
+  constructor() {
+    this.currentPoint = ZERO;
+    this.subPathPoint = ZERO;
+    this.controlPoint = ZERO;
+    this.lastCommand = "?";
+  }
+  emitSegment(segment, path) {
+    const command = segment.command;
+    switch (command) {
+     case "q":
+      segment.point1 = add(segment.point1, this.currentPoint);
+      segment.targetPoint = add(segment.targetPoint, this.currentPoint);
+      break;
+
+     case "c":
+      segment.point1 = add(segment.point1, this.currentPoint);
+      segment.point2 = add(segment.point2, this.currentPoint);
+      segment.targetPoint = add(segment.targetPoint, this.currentPoint);
+      break;
+
+     case "s":
+      segment.point2 = add(segment.point2, this.currentPoint);
+      segment.targetPoint = add(segment.targetPoint, this.currentPoint);
+      break;
+
+     case "m":
+     case "l":
+     case "h":
+     case "v":
+     case "t":
+     case "a":
+      segment.targetPoint = add(segment.targetPoint, this.currentPoint);
+      break;
+
+     case "H":
+      segment.targetPoint = {
+        dx: segment.targetPoint.dx,
+        dy: this.currentPoint.dy
+      };
+      break;
+
+     case "V":
+      segment.targetPoint = {
+        dx: this.currentPoint.dx,
+        dy: segment.targetPoint.dy
+      };
+      break;
+
+     case "Z":
+     case "z":
+      segment.targetPoint = this.subPathPoint;
+      break;
+    }
+    switch (command) {
+     case "M":
+     case "m":
+      this.subPathPoint = segment.targetPoint;
+      path.moveTo(segment.targetPoint.dx, segment.targetPoint.dy);
+      break;
+
+     case "L":
+     case "l":
+     case "H":
+     case "h":
+     case "V":
+     case "v":
+      path.lineTo(segment.targetPoint.dx, segment.targetPoint.dy);
+      break;
+
+     case "Z":
+     case "z":
+      path.close();
+      break;
+
+     case "S":
+     case "s":
+     case "C":
+     case "c":
+      {
+        if (command === "S" || command === "s") {
+          segment.point1 = isCubicCommand(this.lastCommand) ? reflectedPoint(this.currentPoint, this.controlPoint) : this.currentPoint;
+        }
+        this.controlPoint = segment.point2;
+        path.cubicTo(segment.point1.dx, segment.point1.dy, segment.point2.dx, segment.point2.dy, segment.targetPoint.dx, segment.targetPoint.dy);
+        break;
+      }
+
+     case "T":
+     case "t":
+     case "Q":
+     case "q":
+      {
+        if (command === "T" || command === "t") {
+          segment.point1 = isQuadraticCommand(this.lastCommand) ? reflectedPoint(this.currentPoint, this.controlPoint) : this.currentPoint;
+        }
+        this.controlPoint = segment.point1;
+        const p1 = blendPoints(this.currentPoint, this.controlPoint);
+        const p2 = blendPoints(segment.targetPoint, this.controlPoint);
+        path.cubicTo(p1.dx, p1.dy, p2.dx, p2.dy, segment.targetPoint.dx, segment.targetPoint.dy);
+        break;
+      }
+
+     case "A":
+     case "a":
+      if (!this.decomposeArcToCubic(this.currentPoint, segment, path)) {
+        path.lineTo(segment.targetPoint.dx, segment.targetPoint.dy);
+      }
+      break;
+
+     default:
+      throw new SyntaxError("Invalid command type in path");
+    }
+    this.currentPoint = segment.targetPoint;
+    if (!isCubicCommand(command) && !isQuadraticCommand(command)) {
+      this.controlPoint = this.currentPoint;
+    }
+    this.lastCommand = command;
+  }
+  decomposeArcToCubic(currentPoint, segment, path) {
+    let rx = Math.abs(segment.point1.dx);
+    let ry = Math.abs(segment.point1.dy);
+    if (rx === 0 || ry === 0) {
+      return false;
+    }
+    if (segment.targetPoint.dx === currentPoint.dx && segment.targetPoint.dy === currentPoint.dy) {
+      return false;
+    }
+    const angle = segment.arcAngle * Math.PI / 180;
+    const midPointDistance = times(subtract(currentPoint, segment.targetPoint), .5);
+    const unrotate = rotationMatrix(-angle);
+    const transformedMidPoint = transformPoint(unrotate, midPointDistance.dx, midPointDistance.dy);
+    const squareRx = rx * rx;
+    const squareRy = ry * ry;
+    const squareX = transformedMidPoint.x * transformedMidPoint.x;
+    const squareY = transformedMidPoint.y * transformedMidPoint.y;
+    const radiiScale = squareX / squareRx + squareY / squareRy;
+    if (radiiScale > 1) {
+      rx *= Math.sqrt(radiiScale);
+      ry *= Math.sqrt(radiiScale);
+    }
+    const toUnitCircle = multiplyMatrix(scaleMatrix(1 / rx, 1 / ry), rotationMatrix(-angle));
+    const mapped1 = transformPoint(toUnitCircle, currentPoint.dx, currentPoint.dy);
+    const mapped2 = transformPoint(toUnitCircle, segment.targetPoint.dx, segment.targetPoint.dy);
+    let point1 = {
+      dx: mapped1.x,
+      dy: mapped1.y
+    };
+    let point2 = {
+      dx: mapped2.x,
+      dy: mapped2.y
+    };
+    let delta = subtract(point2, point1);
+    const d = delta.dx * delta.dx + delta.dy * delta.dy;
+    const scaleFactorSquared = Math.max(1 / d - .25, 0);
+    let scaleFactor = Math.sqrt(scaleFactorSquared);
+    if (!Number.isFinite(scaleFactor)) {
+      scaleFactor = 0;
+    }
+    if (segment.arcSweep === segment.arcLarge) {
+      scaleFactor = -scaleFactor;
+    }
+    delta = times(delta, scaleFactor);
+    const midpoint = times(add(point1, point2), .5);
+    const centerPoint = {
+      dx: midpoint.dx - delta.dy,
+      dy: midpoint.dy + delta.dx
+    };
+    const theta1 = Math.atan2(point1.dy - centerPoint.dy, point1.dx - centerPoint.dx);
+    const theta2 = Math.atan2(point2.dy - centerPoint.dy, point2.dx - centerPoint.dx);
+    let thetaArc = theta2 - theta1;
+    if (thetaArc < 0 && segment.arcSweep) {
+      thetaArc += TWO_PI;
+    } else if (thetaArc > 0 && !segment.arcSweep) {
+      thetaArc -= TWO_PI;
+    }
+    const fromUnitCircle = multiplyMatrix(rotationMatrix(angle), scaleMatrix(rx, ry));
+    const segments = Math.ceil(Math.abs(thetaArc / (PI_OVER_TWO + .001)));
+    for (let i = 0; i < segments; i++) {
+      const startTheta = theta1 + i * thetaArc / segments;
+      const endTheta = theta1 + (i + 1) * thetaArc / segments;
+      const t = 8 / 6 * Math.tan(.25 * (endTheta - startTheta));
+      if (!Number.isFinite(t)) {
+        return false;
+      }
+      const sinStart = Math.sin(startTheta);
+      const cosStart = Math.cos(startTheta);
+      const sinEnd = Math.sin(endTheta);
+      const cosEnd = Math.cos(endTheta);
+      point1 = {
+        dx: cosStart - t * sinStart + centerPoint.dx,
+        dy: sinStart + t * cosStart + centerPoint.dy
+      };
+      const targetPoint = {
+        dx: cosEnd + centerPoint.dx,
+        dy: sinEnd + centerPoint.dy
+      };
+      point2 = {
+        dx: targetPoint.dx + t * sinEnd,
+        dy: targetPoint.dy - t * cosEnd
+      };
+      const c1 = transformPoint(fromUnitCircle, point1.dx, point1.dy);
+      const c2 = transformPoint(fromUnitCircle, point2.dx, point2.dy);
+      const end = transformPoint(fromUnitCircle, targetPoint.dx, targetPoint.dy);
+      path.cubicTo(c1.x, c1.y, c2.x, c2.y, end.x, end.y);
+    }
+    return true;
+  }
+}
+
+function writeSvgPathDataToPath(d, path) {
+  if (d === null || d === undefined || d === "") {
+    return;
+  }
+  const source = new SvgPathStringSource(d);
+  const normalizer = new SvgPathNormalizer;
+  for (const segment of source.parseSegments()) {
+    normalizer.emitSegment(segment, path);
+  }
+}
+
+class CanvasPathProxy {
+  constructor(canvas) {
+    this.canvas = canvas;
+  }
+  moveTo(x, y) {
+    this.canvas.moveTo(x, y);
+  }
+  lineTo(x, y) {
+    this.canvas.lineTo(x, y);
+  }
+  cubicTo(x1, y1, x2, y2, x3, y3) {
+    this.canvas.curveTo(x1, y1, x2, y2, x3, y3);
+  }
+  close() {
+    this.canvas.closePath();
+  }
+}
+
+function drawShape(canvas, d) {
+  writeSvgPathDataToPath(d, new CanvasPathProxy(canvas));
+}
+
+class BoundingBoxPathProxy {
+  constructor() {
+    this.xMin = Infinity;
+    this.yMin = Infinity;
+    this.xMax = -Infinity;
+    this.yMax = -Infinity;
+    this.px = 0;
+    this.py = 0;
+  }
+  get box() {
+    if (this.xMin > this.xMax || this.yMin > this.yMax) {
+      return PdfRect.zero;
+    }
+    return PdfRect.fromLTRB(this.xMin, this.yMin, this.xMax, this.yMax);
+  }
+  moveTo(x, y) {
+    this.px = x;
+    this.py = y;
+    this.updateMinMax(x, y);
+  }
+  lineTo(x, y) {
+    this.px = x;
+    this.py = y;
+    this.updateMinMax(x, y);
+  }
+  close() {}
+  cubicTo(x1, y1, x2, y2, x3, y3) {
+    const tValues = [];
+    for (let axis = 0; axis < 2; axis++) {
+      let a;
+      let b;
+      let c;
+      if (axis === 0) {
+        b = 6 * this.px - 12 * x1 + 6 * x2;
+        a = -3 * this.px + 9 * x1 - 9 * x2 + 3 * x3;
+        c = 3 * x1 - 3 * this.px;
+      } else {
+        b = 6 * this.py - 12 * y1 + 6 * y2;
+        a = -3 * this.py + 9 * y1 - 9 * y2 + 3 * y3;
+        c = 3 * y1 - 3 * this.py;
+      }
+      if (Math.abs(a) < 1e-12) {
+        if (Math.abs(b) < 1e-12) {
+          continue;
+        }
+        const t = -c / b;
+        if (t > 0 && t < 1) {
+          tValues.push(t);
+        }
+        continue;
+      }
+      const b2ac = b * b - 4 * c * a;
+      if (b2ac < 0) {
+        if (Math.abs(b2ac) < 1e-12) {
+          const t = -b / (2 * a);
+          if (t > 0 && t < 1) {
+            tValues.push(t);
+          }
+        }
+        continue;
+      }
+      const sqrtB2ac = Math.sqrt(b2ac);
+      const t1 = (-b + sqrtB2ac) / (2 * a);
+      if (t1 > 0 && t1 < 1) {
+        tValues.push(t1);
+      }
+      const t2 = (-b - sqrtB2ac) / (2 * a);
+      if (t2 > 0 && t2 < 1) {
+        tValues.push(t2);
+      }
+    }
+    for (const t of tValues) {
+      const mt = 1 - t;
+      this.updateMinMax(mt * mt * mt * this.px + 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t * t * t * x3, mt * mt * mt * this.py + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * y3);
+    }
+    this.updateMinMax(this.px, this.py);
+    this.updateMinMax(x3, y3);
+    this.px = x3;
+    this.py = y3;
+  }
+  updateMinMax(x, y) {
+    this.xMin = Math.min(this.xMin, x);
+    this.yMin = Math.min(this.yMin, y);
+    this.xMax = Math.max(this.xMax, x);
+    this.yMax = Math.max(this.yMax, y);
+  }
+}
+
+function shapeBoundingBox(d) {
+  const proxy = new BoundingBoxPathProxy;
+  writeSvgPathDataToPath(d, proxy);
+  return proxy.box;
+}
+
+class SvgPath extends SvgOperation {
+  constructor(d, brush, clip, transform, painter) {
+    super(brush, clip, transform, painter);
+    this.d = d;
+  }
+  static fromXmlElement(element, painter, parent) {
+    const brush = SvgBrush.fromXml(element, parent, painter.parser);
+    let d;
+    switch (element.name.local) {
+     case "path":
+      {
+        const attribute = element.getAttribute("d");
+        if (attribute === null) {
+          throw new SyntaxError("Path element must contain a d attribute");
+        }
+        d = attribute;
+        break;
+      }
+
+     case "rect":
+      d = SvgPath.rectData(element, brush);
+      break;
+
+     case "circle":
+      {
+        const cx = SvgPath.numeric(element, "cx", brush);
+        const cy = SvgPath.numeric(element, "cy", brush);
+        const r = SvgPath.numeric(element, "r", brush);
+        d = `M${cx - r},${cy}A${r},${r} 0,0,0 ${cx + r},${cy}` + `A${r},${r} 0,0,0 ${cx - r},${cy}z`;
+        break;
+      }
+
+     case "ellipse":
+      {
+        const cx = SvgPath.numeric(element, "cx", brush);
+        const cy = SvgPath.numeric(element, "cy", brush);
+        const rx = SvgPath.numeric(element, "rx", brush);
+        const ry = SvgPath.numeric(element, "ry", brush);
+        d = `M${cx - rx},${cy}A${rx},${ry} 0,0,0 ${cx + rx},${cy}` + `A${rx},${ry} 0,0,0 ${cx - rx},${cy}z`;
+        break;
+      }
+
+     case "line":
+      {
+        const x1 = SvgPath.numeric(element, "x1", brush);
+        const y1 = SvgPath.numeric(element, "y1", brush);
+        const x2 = SvgPath.numeric(element, "x2", brush);
+        const y2 = SvgPath.numeric(element, "y2", brush);
+        d = `M${x1} ${y1} ${x2} ${y2}`;
+        break;
+      }
+
+     case "polyline":
+      d = `M${element.getAttribute("points") ?? "0, 0"}`;
+      break;
+
+     case "polygon":
+      d = `M${element.getAttribute("points") ?? "0, 0"}z`;
+      break;
+
+     default:
+      throw new SyntaxError(`Unsupported SVG shape: ${element.name.local}`);
+    }
+    return new SvgPath(d, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+  }
+  static numeric(element, name, brush) {
+    return getNumeric(element, name, brush, {
+      defaultValue: 0
+    }).sizeValue;
+  }
+  static rectData(element, brush) {
+    const x = SvgPath.numeric(element, "x", brush);
+    const y = SvgPath.numeric(element, "y", brush);
+    const width = SvgPath.numeric(element, "width", brush);
+    const height = SvgPath.numeric(element, "height", brush);
+    let rx = getNumeric(element, "rx", brush)?.sizeValue ?? null;
+    let ry = getNumeric(element, "ry", brush)?.sizeValue ?? null;
+    ry = ry ?? rx ?? 0;
+    rx = rx ?? ry;
+    const topRight = rx !== 0 || ry !== 0 ? `a ${rx} ${ry} 0 0 1 ${rx} ${ry}` : "";
+    const bottomRight = rx !== 0 || ry !== 0 ? `a ${rx} ${ry} 0 0 1 ${-rx} ${ry}` : "";
+    const bottomLeft = rx !== 0 || ry !== 0 ? `a ${rx} ${ry} 0 0 1 ${-rx} ${-ry}` : "";
+    const topLeft = rx !== 0 || ry !== 0 ? `a ${rx} ${ry} 0 0 1 ${rx} ${-ry}` : "";
+    return `M${x + rx} ${y}h${width - rx * 2}${topRight}` + `v${height - ry * 2}${bottomRight}` + `h${-(width - rx * 2)}${bottomLeft}` + `v${-(height - ry * 2)}${topLeft}z`;
+  }
+  paintShape(canvas) {
+    const fill = this.brush.fill;
+    if (fill?.isNotEmpty === true) {
+      fill.setFillColor(canvas);
+      const opacity = (this.brush.fillOpacity ?? 1) * fill.opacity;
+      if (opacity < 1) {
+        canvas.saveContext();
+        canvas.setGraphicState(new PdfGraphicState({
+          opacity
+        }));
+      }
+      drawShape(canvas, this.d);
+      canvas.fillPath({
+        evenOdd: this.brush.fillEvenOdd ?? false
+      });
+      if (opacity < 1) {
+        canvas.restoreContext();
+      }
+    }
+    const stroke = this.brush.stroke;
+    if (stroke?.isNotEmpty === true) {
+      stroke.setStrokeColor(canvas);
+      const opacity = (this.brush.strokeOpacity ?? 1) * stroke.opacity;
+      if (opacity < 1) {
+        canvas.setGraphicState(new PdfGraphicState({
+          opacity
+        }));
+      }
+      drawShape(canvas, this.d);
+      canvas.setLineCap(this.brush.strokeLineCap ?? "butt");
+      canvas.setLineJoin(this.brush.strokeLineJoin ?? "miter");
+      canvas.setMiterLimit(Math.max(1, this.brush.strokeMiterLimit ?? 4));
+      canvas.setLineDashPattern(this.brush.strokeDashArray ?? [], this.brush.strokeDashOffset ?? 0);
+      canvas.setLineWidth(this.brush.strokeWidth?.sizeValue ?? 1);
+      canvas.strokePath();
+    }
+  }
+  drawShape(canvas) {
+    drawShape(canvas, this.d);
+  }
+  boundingBox() {
+    return shapeBoundingBox(this.d);
+  }
+}
+
+class SvgSymbol extends SvgGroup {
+  static fromXml(element, painter, parent) {
+    const brush = painter.brushFor(element, parent);
+    const children = [];
+    for (const child of element.elements) {
+      const operation = painter.operationFromXml(child, brush);
+      if (operation !== null) {
+        children.push(operation);
+      }
+    }
+    return new SvgSymbol(children, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+  }
+}
+
+const XLINK = [ "http:", "", "www.w3.org", "1999", "xlink" ].join("/");
+
+class SvgUse extends SvgOperation {
+  constructor(x, y, width, height, href, brush, clip, transform, painter) {
+    super(brush, clip, transform, painter);
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+    this.href = href;
+  }
+  static fromXml(element, painter, parent) {
+    const brush = SvgBrush.fromXml(element, parent, painter.parser);
+    const x = getNumeric(element, "x", brush, {
+      defaultValue: 0
+    }).sizeValue;
+    const y = getNumeric(element, "y", brush, {
+      defaultValue: 0
+    }).sizeValue;
+    const width = getNumeric(element, "width", brush, {
+      defaultValue: 0
+    }).sizeValue;
+    const height = getNumeric(element, "height", brush, {
+      defaultValue: 0
+    }).sizeValue;
+    const hrefAttribute = element.getAttribute("href") ?? element.getAttribute("href", XLINK);
+    let href = null;
+    if (hrefAttribute?.startsWith("#") === true) {
+      const referenced = painter.parser.findById(hrefAttribute.slice(1));
+      if (referenced !== null && referenced !== element) {
+        href = painter.operationFromXml(referenced, brush);
+      }
+    }
+    return new SvgUse(x, y, width, height, href, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+  }
+  paintShape(canvas) {
+    if (this.x !== 0 || this.y !== 0) {
+      canvas.setTransform(translationMatrix(this.x, this.y));
+    }
+    this.href?.paint(canvas);
+  }
+  drawShape(canvas) {
+    if (this.x !== 0 || this.y !== 0) {
+      canvas.setTransform(translationMatrix(this.x, this.y));
+    }
+    this.href?.draw(canvas);
+  }
+  boundingBox() {
+    return this.href?.boundingBox() ?? PdfRect.zero;
+  }
+}
+
+class SvgPainter {
+  constructor(parser, canvas, boundingBox) {
+    this.parser = parser;
+    this.canvas = canvas;
+    this.boundingBox = boundingBox;
+  }
+  brushFor(element, parent) {
+    return SvgBrush.fromXml(element, parent, this.parser);
+  }
+  operationFromXml(element, brush) {
+    if (element.getAttribute("visibility") === "hidden" || element.getAttribute("display") === "none") {
+      return null;
+    }
+    switch (element.name.local) {
+     case "circle":
+     case "ellipse":
+     case "line":
+     case "path":
+     case "polygon":
+     case "polyline":
+     case "rect":
+      return SvgPath.fromXmlElement(element, this, brush);
+
+     case "g":
+     case "svg":
+      return SvgGroup.fromXml(element, this, brush);
+
+     case "symbol":
+      return SvgSymbol.fromXml(element, this, brush);
+
+     case "use":
+      return SvgUse.fromXml(element, this, brush);
+
+     default:
+      return null;
+    }
+  }
+  rootOperation() {
+    return SvgGroup.fromXml(this.parser.root, this, SvgBrush.defaultContext);
+  }
+  paint() {
+    this.rootOperation().paint(this.canvas);
+  }
+}
+
+class XmlText {
+  constructor(value) {
+    this.value = value;
+  }
+}
+
+function splitName(qualified) {
+  const colon = qualified.indexOf(":");
+  if (colon < 0) {
+    return {
+      qualified,
+      local: qualified,
+      prefix: null
+    };
+  }
+  return {
+    qualified,
+    local: qualified.slice(colon + 1),
+    prefix: qualified.slice(0, colon)
+  };
+}
+
+class XmlElement {
+  constructor(qualifiedName, namespaces) {
+    this.children = [];
+    this.attributes = new Map;
+    this.parent = null;
+    this.name = splitName(qualifiedName);
+    this.namespaces = namespaces;
+  }
+  getAttribute(name, namespace) {
+    if (namespace === undefined) {
+      return this.attributes.get(name) ?? null;
+    }
+    for (const [key, value] of this.attributes) {
+      const attributeName = splitName(key);
+      if (attributeName.local !== name || attributeName.prefix === null) {
+        continue;
+      }
+      if (this.namespaces.get(attributeName.prefix) === namespace) {
+        return value;
+      }
+    }
+    return null;
+  }
+  setAttribute(name, value) {
+    this.attributes.set(name, value);
+  }
+  get elements() {
+    return this.children.filter(node => node instanceof XmlElement);
+  }
+  get descendants() {
+    const found = [];
+    const walk = element => {
+      for (const child of element.elements) {
+        found.push(child);
+        walk(child);
+      }
+    };
+    walk(this);
+    return found;
+  }
+  get text() {
+    let output = "";
+    for (const child of this.children) {
+      output += child instanceof XmlText ? child.value : child.text;
+    }
+    return output;
+  }
+  findElements(localName) {
+    return this.elements.filter(element => element.name.local === localName);
+  }
+}
+
+class XmlDocument {
+  constructor(rootElement) {
+    this.rootElement = rootElement;
+  }
+  static parse(source) {
+    return parseXml(source);
+  }
+}
+
+const PREDEFINED_ENTITIES = Object.freeze({
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'"
+});
+
+function describePosition(source, index) {
+  let line = 1;
+  let column = 1;
+  for (let i = 0; i < index && i < source.length; i++) {
+    if (source.charCodeAt(i) === 10) {
+      line++;
+      column = 1;
+    } else {
+      column++;
+    }
+  }
+  return `line ${line}, column ${column}`;
+}
+
+class XmlParser {
+  constructor(source) {
+    this.index = 0;
+    this.source = source;
+  }
+  fail(message, at = this.index) {
+    throw new SyntaxError(`${message} at ${describePosition(this.source, at)}`);
+  }
+  get atEnd() {
+    return this.index >= this.source.length;
+  }
+  skipWhitespace() {
+    while (!this.atEnd && /\s/.test(this.source[this.index])) {
+      this.index++;
+    }
+  }
+  startsWith(text) {
+    return this.source.startsWith(text, this.index);
+  }
+  expect(text) {
+    if (!this.startsWith(text)) {
+      this.fail(`Expected "${text}"`);
+    }
+    this.index += text.length;
+  }
+  skipUntil(terminator, what) {
+    const start = this.index;
+    const end = this.source.indexOf(terminator, this.index);
+    if (end < 0) {
+      this.fail(`Unterminated ${what}`, start);
+    }
+    this.index = end + terminator.length;
+  }
+  skipDoctype() {
+    this.index += "<!DOCTYPE".length;
+    let depth = 0;
+    while (!this.atEnd) {
+      const character = this.source[this.index];
+      if (character === "[") depth++; else if (character === "]") depth--; else if (character === ">" && depth <= 0) {
+        this.index++;
+        return;
+      }
+      this.index++;
+    }
+    this.fail("Unterminated DOCTYPE");
+  }
+  skipMisc() {
+    let skipped = false;
+    for (;;) {
+      this.skipWhitespace();
+      if (this.startsWith("<?")) {
+        this.skipUntil("?>", "processing instruction");
+      } else if (this.startsWith("\x3c!--")) {
+        this.skipUntil("--\x3e", "comment");
+      } else if (this.startsWith("<!DOCTYPE")) {
+        this.skipDoctype();
+      } else {
+        return skipped;
+      }
+      skipped = true;
+    }
+  }
+  readName() {
+    const start = this.index;
+    while (!this.atEnd && /[^\s/>=]/.test(this.source[this.index])) {
+      this.index++;
+    }
+    if (this.index === start) {
+      this.fail("Expected a name");
+    }
+    return this.source.slice(start, this.index);
+  }
+  decode(text) {
+    if (!text.includes("&")) {
+      return text;
+    }
+    return text.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|[^;\s&]+);/g, (match, reference) => {
+      if (reference.startsWith("#x") || reference.startsWith("#X")) {
+        const code = Number.parseInt(reference.slice(2), 16);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+      }
+      if (reference.startsWith("#")) {
+        const code = Number.parseInt(reference.slice(1), 10);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+      }
+      return PREDEFINED_ENTITIES[reference] ?? match;
+    });
+  }
+  readAttributeValue() {
+    const quote = this.source[this.index];
+    if (quote !== '"' && quote !== "'") {
+      this.fail("Attribute value must be quoted");
+    }
+    this.index++;
+    const start = this.index;
+    const end = this.source.indexOf(quote, this.index);
+    if (end < 0) {
+      this.fail("Unterminated attribute value", start);
+    }
+    this.index = end + 1;
+    return this.decode(this.source.slice(start, end));
+  }
+  parseElement(inherited) {
+    const openedAt = this.index;
+    this.expect("<");
+    const qualifiedName = this.readName();
+    const attributes = [];
+    let selfClosing = false;
+    for (;;) {
+      this.skipWhitespace();
+      if (this.atEnd) {
+        this.fail(`Unterminated element <${qualifiedName}>`, openedAt);
+      }
+      if (this.startsWith("/>")) {
+        this.index += 2;
+        selfClosing = true;
+        break;
+      }
+      if (this.startsWith(">")) {
+        this.index++;
+        break;
+      }
+      const attributeName = this.readName();
+      this.skipWhitespace();
+      this.expect("=");
+      this.skipWhitespace();
+      attributes.push([ attributeName, this.readAttributeValue() ]);
+    }
+    let namespaces = inherited;
+    const declarations = attributes.filter(([name]) => name === "xmlns" || name.startsWith("xmlns:"));
+    if (declarations.length > 0) {
+      const merged = new Map(inherited);
+      for (const [name, value] of declarations) {
+        merged.set(name === "xmlns" ? "" : name.slice("xmlns:".length), value);
+      }
+      namespaces = merged;
+    }
+    const element = new XmlElement(qualifiedName, namespaces);
+    for (const [name, value] of attributes) {
+      element.attributes.set(name, value);
+    }
+    if (selfClosing) {
+      return element;
+    }
+    this.parseContent(element, qualifiedName, openedAt);
+    return element;
+  }
+  parseContent(element, qualifiedName, openedAt) {
+    let text = "";
+    const flushText = () => {
+      if (text.length > 0) {
+        element.children.push(new XmlText(this.decode(text)));
+        text = "";
+      }
+    };
+    for (;;) {
+      if (this.atEnd) {
+        this.fail(`Unterminated element <${qualifiedName}>`, openedAt);
+      }
+      if (this.startsWith("</")) {
+        flushText();
+        this.index += 2;
+        const closing = this.readName();
+        if (closing !== qualifiedName) {
+          this.fail(`Closing tag </${closing}> does not match <${qualifiedName}>`);
+        }
+        this.skipWhitespace();
+        this.expect(">");
+        return;
+      }
+      if (this.startsWith("<![CDATA[")) {
+        flushText();
+        const start = this.index + "<![CDATA[".length;
+        const end = this.source.indexOf("]]>", start);
+        if (end < 0) {
+          this.fail("Unterminated CDATA section");
+        }
+        element.children.push(new XmlText(this.source.slice(start, end)));
+        this.index = end + "]]>".length;
+        continue;
+      }
+      if (this.startsWith("\x3c!--")) {
+        flushText();
+        this.skipUntil("--\x3e", "comment");
+        continue;
+      }
+      if (this.startsWith("<?")) {
+        flushText();
+        this.skipUntil("?>", "processing instruction");
+        continue;
+      }
+      if (this.startsWith("<!DOCTYPE")) {
+        flushText();
+        this.skipDoctype();
+        continue;
+      }
+      if (this.startsWith("<")) {
+        flushText();
+        const child = this.parseElement(element.namespaces);
+        child.parent = element;
+        element.children.push(child);
+        continue;
+      }
+      text += this.source[this.index];
+      this.index++;
+    }
+  }
+  parseDocument() {
+    this.skipMisc();
+    if (this.atEnd || !this.startsWith("<")) {
+      this.fail("Document has no root element");
+    }
+    const root = this.parseElement(new Map);
+    this.skipMisc();
+    if (!this.atEnd) {
+      this.fail("Content after the root element");
+    }
+    return new XmlDocument(root);
+  }
+}
+
+function parseXml(source) {
+  if (typeof source !== "string") {
+    throw new TypeError("XML source must be a string");
+  }
+  return new XmlParser(source).parseDocument();
+}
+
+function size(width, height) {
+  return {
+    width: Math.max(0, width),
+    height: Math.max(0, height)
+  };
+}
+
+function applyBoxFit(fit, input, output) {
+  const iw = input.width;
+  const ih = input.height;
+  const ow = output.width;
+  const oh = output.height;
+  if (iw <= 0 || ih <= 0 || ow <= 0 || oh <= 0) {
+    return {
+      source: size(0, 0),
+      destination: size(0, 0)
+    };
+  }
+  switch (fit) {
+   case "fill":
+    return {
+      source: size(iw, ih),
+      destination: size(ow, oh)
+    };
+
+   case "contain":
+    {
+      const scale = Math.min(ow / iw, oh / ih);
+      return {
+        source: size(iw, ih),
+        destination: size(iw * scale, ih * scale)
+      };
+    }
+
+   case "cover":
+    {
+      const scale = Math.max(ow / iw, oh / ih);
+      return {
+        source: size(ow / scale, oh / scale),
+        destination: size(ow, oh)
+      };
+    }
+
+   case "fitWidth":
+    {
+      const scale = ow / iw;
+      const height = ih * scale;
+      return height > oh ? {
+        source: size(iw, oh / scale),
+        destination: size(ow, oh)
+      } : {
+        source: size(iw, ih),
+        destination: size(ow, height)
+      };
+    }
+
+   case "fitHeight":
+    {
+      const scale = oh / ih;
+      const width = iw * scale;
+      return width > ow ? {
+        source: size(ow / scale, ih),
+        destination: size(ow, oh)
+      } : {
+        source: size(iw, ih),
+        destination: size(width, oh)
+      };
+    }
+
+   case "none":
+    {
+      const source = size(Math.min(iw, ow), Math.min(ih, oh));
+      return {
+        source,
+        destination: source
+      };
+    }
+
+   case "scaleDown":
+    {
+      const scale = Math.min(1, ow / iw, oh / ih);
+      return {
+        source: size(iw, ih),
+        destination: size(iw * scale, ih * scale)
+      };
+    }
+
+   default:
+    throw new TypeError(`Unknown BoxFit: ${fit}`);
+  }
+}
+
+function resolveAlignment(value) {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const resolved = Alignment[value];
+  if (resolved === undefined) {
+    throw new TypeError(`Unknown alignment: ${value}`);
+  }
+  return resolved;
+}
+
+function constrain(value, maximum) {
+  return Math.max(0, Math.min(value, maximum));
+}
+
+class SvgImage extends Widget {
+  constructor({svg, fit = "contain", alignment = Alignment.center, clip = true, width = null, height = null, colorFilter = null}) {
+    super();
+    this.parser = SvgParser.fromXml({
+      xml: parseXml(svg),
+      colorFilter: colorFilter === null ? null : normalizeColor(colorFilter)
+    });
+    this.fit = fit;
+    this.alignment = resolveAlignment(alignment);
+    this.clip = Boolean(clip);
+    this.width = width === null ? null : Number(width);
+    this.height = height === null ? null : Number(height);
+  }
+  layout(_context, constraints) {
+    const offeredWidth = this.width !== null || this.parser.width !== null ? constrain(this.width ?? this.parser.width, constraints.maxWidth) : Number.isFinite(constraints.maxWidth) ? constraints.maxWidth : constrain(this.parser.viewBox.width, constraints.maxWidth);
+    const offeredHeight = this.height !== null || this.parser.height !== null ? constrain(this.height ?? this.parser.height, constraints.maxHeight) : Number.isFinite(constraints.maxHeight) ? constraints.maxHeight : constrain(this.parser.viewBox.height, constraints.maxHeight);
+    const fitted = applyBoxFit(this.fit, size(this.parser.viewBox.width, this.parser.viewBox.height), size(offeredWidth, offeredHeight));
+    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, this.parser.viewBox.width, this.parser.viewBox.height);
+    return {
+      widget: this,
+      width: fitted.destination.width,
+      height: fitted.destination.height,
+      data: {
+        source: fitted.source,
+        destination: fitted.destination,
+        sourceX: this.parser.viewBox.x + sourceOffset.dx,
+        sourceY: this.parser.viewBox.y + sourceOffset.dy
+      }
+    };
+  }
+  paint(context, box) {
+    const {source, destination, sourceX, sourceY} = box.data;
+    if (source.width <= 0 || source.height <= 0) {
+      return;
+    }
+    const sx = destination.width / source.width;
+    const sy = destination.height / source.height;
+    const matrix = [ sx, 0, 0, -sy, box.x - sourceX * sx, context.canvas.pageHeight - box.y + sourceY * sy ];
+    context.canvas.saveContext();
+    if (this.clip) {
+      context.canvas.drawRect(box.x, context.canvas.pageHeight - box.y - box.height, box.width, box.height);
+      context.canvas.clipPath();
+    }
+    context.canvas.setTransform(matrix);
+    new SvgPainter(this.parser, context.canvas, {
+      x: 0,
+      y: 0,
+      width: context.pageFormat.width,
+      height: context.pageFormat.height
+    }).paint();
+    context.canvas.restoreContext();
+  }
+}
+
 function textWidth(font, text, fontSize, letterSpacing = 0) {
   return font.stringMetrics(text, fontSize, letterSpacing).advanceWidth;
 }
@@ -3263,119 +5629,6 @@ class Text extends Widget {
   }
 }
 
-const BLEND_MODE_NAMES = Object.freeze({
-  normal: "/Normal",
-  multiply: "/Multiply",
-  screen: "/Screen",
-  overlay: "/Overlay",
-  darken: "/Darken",
-  lighten: "/Lighten",
-  colorDodge: "/ColorDodge",
-  colorBurn: "/ColorBurn",
-  hardLight: "/HardLight",
-  softLight: "/SoftLight",
-  difference: "/Difference",
-  exclusion: "/Exclusion",
-  hue: "/Hue",
-  saturation: "/Saturation",
-  color: "/Color",
-  luminosity: "/Luminosity"
-});
-
-class PdfGraphicState {
-  constructor({opacity = null, fillOpacity = null, strokeOpacity = null, blendMode = null} = {}) {
-    this.fillOpacity = fillOpacity ?? opacity;
-    this.strokeOpacity = strokeOpacity ?? opacity;
-    this.blendMode = blendMode;
-  }
-  get isEmpty() {
-    return this.fillOpacity === null && this.strokeOpacity === null && this.blendMode === null;
-  }
-  get key() {
-    return `${this.fillOpacity}|${this.strokeOpacity}|${this.blendMode}`;
-  }
-  output() {
-    const params = new PdfDict;
-    if (this.strokeOpacity !== null) {
-      params.set("/CA", new PdfNum(this.strokeOpacity));
-    }
-    if (this.fillOpacity !== null) {
-      params.set("/ca", new PdfNum(this.fillOpacity));
-    }
-    if (this.blendMode !== null) {
-      params.set("/BM", new PdfName(BLEND_MODE_NAMES[this.blendMode]));
-    }
-    return params;
-  }
-}
-
-const PdfPoint = Object.freeze({
-  zero: Object.freeze({
-    x: 0,
-    y: 0
-  }),
-  translate(point, dx, dy) {
-    return {
-      x: point.x + dx,
-      y: point.y + dy
-    };
-  }
-});
-
-const PdfRect = Object.freeze({
-  zero: Object.freeze({
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0
-  }),
-  fromLTRB(left, bottom, right, top) {
-    return {
-      x: left,
-      y: bottom,
-      width: right - left,
-      height: top - bottom
-    };
-  },
-  left(rect) {
-    return rect.x;
-  },
-  bottom(rect) {
-    return rect.y;
-  },
-  right(rect) {
-    return rect.x + rect.width;
-  },
-  top(rect) {
-    return rect.y + rect.height;
-  },
-  horizontalCenter(rect) {
-    return rect.x + rect.width / 2;
-  },
-  verticalCenter(rect) {
-    return rect.y + rect.height / 2;
-  },
-  inflate(rect, delta) {
-    return {
-      x: rect.x - delta,
-      y: rect.y - delta,
-      width: rect.width + delta * 2,
-      height: rect.height + delta * 2
-    };
-  },
-  deflate(rect, delta) {
-    return PdfRect.inflate(rect, -delta);
-  },
-  scale(rect, factor) {
-    return {
-      x: rect.x * factor,
-      y: rect.y * factor,
-      width: rect.width * factor,
-      height: rect.height * factor
-    };
-  }
-});
-
 const publicApi = Object.freeze({
   Document,
   Page,
@@ -3391,6 +5644,7 @@ const publicApi = Object.freeze({
   Center,
   SizedBox,
   Divider,
+  SvgImage,
   Alignment,
   EdgeInsets,
   PageFormat,
@@ -3422,4 +5676,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Center, Column, Container, DefaultTextStyle, Divider, Document, EdgeInsets, Font, MultiPage, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, StatelessWidget, Text, TextStyle, Theme, ThemeData, Vector, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Center, Column, Container, DefaultTextStyle, Divider, Document, EdgeInsets, Font, MultiPage, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, StatelessWidget, SvgImage, Text, TextStyle, Theme, ThemeData, Vector, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

@@ -32,8 +32,8 @@
  * setting a transform conjugates it with `flipMatrix` from `matrix.ts`.
  *
  * PORT GAP: no `drawImage` (phase 4), no `applyShader` / `setFillPattern` /
- * `setStrokePattern` (phase 2.8 gradients), and no `drawShape` — the SVG path
- * grammar is phase 2.2, which adds it here once `svg/path.ts` exists.
+ * `setStrokePattern` (phase 2.8 gradients). SVG `drawShape` lives in
+ * `svg/path.ts` to preserve the one-way import direction.
  */
 
 import { colorOperator } from './color.ts';

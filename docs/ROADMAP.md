@@ -13,8 +13,8 @@ TypeScript, with the runtime contract and attribution enforced by
 `npm run check`. Output is a valid PDF written through a real indirect-object
 model, with per-page resource dictionaries and **embedded TrueType fonts** —
 subset, written as Type0/CIDFontType2 composites, and selected through a theme.
-Beyond text, the internal SVG painter now handles basic shapes and groups;
-tables, images and the public `SvgImage` widget are still absent.
+Beyond text, `SvgImage` now exposes the SVG painter with fitting, alignment and
+clipping; tables and raster images are still absent.
 
 **Phases 0 and 1 are complete.** The foundations are in place and the WinAnsi
 ceiling is gone; phase 2 (SVG) and phase 3 (layout) are what the examples now
@@ -71,6 +71,11 @@ now produces operators, although no public widget drives the painter until 2.7.
 `objectBoundingBox` units and nesting. Soft masks remain explicitly coupled to
 phase 4's form XObjects and `/SMask`; upstream cannot create one without them.
 
+**Phase 2.7 — SVG parser and widget — landed 2026-08-05.** Public `SvgImage`
+sizes from explicit or intrinsic dimensions, supports every `BoxFit`, aligns a
+cropped viewBox, clips its box and installs the y-down-to-PDF matrix. It removed
+`SvgImage` from six example dependency lists; the total fell from 94 to 88.
+
 **Phase 2.3 — XML reader — landed 2026-08-05.** `src/svg/xml.ts` reads
 elements, attributes, text, CDATA, comments, entities and namespaces. Every SVG
 in `examples/assets/` and the inline markup in `server-assets.json` parse.
@@ -96,12 +101,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 2.7 — SVG parser and widget.** Add the public `SvgImage` widget,
-> size it from intrinsic dimensions/viewBox, fit and align it in its layout box,
-> and drive the painter through the widget canvas.
+> **Phase 2.8 — SVG gradients.** Add PDF functions, axial/radial shadings and
+> shading patterns, then resolve `linearGradient`/`radialGradient` paint with
+> stops, transforms, spread modes and inherited references.
 
-The internal SVG pipeline is ready; this is the phase that exposes it to six
-ported examples.
+The non-optional SVG pipeline is complete. Gradients are the final optional
+fidelity phase before layout work resumes at 3.1.
 
 ---
 
@@ -656,7 +661,7 @@ Four operator-level tests bring the SVG suite to 98 tests. `mask_path.dart` is
 deferred intact to phase 4: its first executable line constructs a form XObject
 and its result is a `/SMask` graphic state, neither of which exists earlier.
 
-### 2.7 Parser and widget
+### 2.7 Parser and widget ✅ *(landed 2026-08-05)*
 
 - **Ports:** `pdf/lib/src/svg/parser.dart`, `widgets/svg.dart`
 - **Into:** `src/svg/parser.ts`, `src/widgets/svg.ts`
@@ -668,6 +673,13 @@ and its result is a `/SMask` graphic state, neither of which exists earlier.
   `medail.svg`, the four `swirls*.svg`, `garland.svg`, and the inline SVG in
   `server-assets.json`. Unblocks `SvgImage` for `calendar`, `certificate`,
   `document`, `invoice`, `resume`, `server`.
+
+Landed as a public `SvgImage` in named exports, `js_pdf` and the `createPdf`
+callback API. Nine tests cover pure layout data, intrinsic/explicit sizes, all
+seven fits, crop alignment, clipping, the coordinate-flip matrix, colour
+filtering, malformed input and an end-to-end serialized PDF. The six example
+gates no longer report `SvgImage`; none generates yet because each still has
+later layout dependencies.
 
 ### 2.8 Gradients 
 

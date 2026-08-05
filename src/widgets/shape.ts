@@ -15,10 +15,9 @@
  *   - pdf/lib/src/widgets/shape.dart
  *   - pdf/lib/src/widgets/svg.dart
  *
- * `Vector` is the imperative drawing surface that the future SVG subsystem
- * will target: `src/svg/parser.ts` will translate SVG elements into these same
- * primitives rather than emitting operators directly. See phase 2 of
- * docs/ROADMAP.md.
+ * `Vector` is the imperative drawing surface for caller-defined graphics.
+ * `SvgImage` uses the richer path API directly because SVG needs cubic paths,
+ * transforms and clipping beyond this convenience surface.
  */
 
 import { normalizeColor } from '../pdf/color.ts';
