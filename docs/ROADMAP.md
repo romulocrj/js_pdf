@@ -33,10 +33,51 @@ the `PdfFont` seam that phase 1 needs.
 
 ---
 
+## Example gates
+
+`examples/` holds JavaScript ports of the upstream `dart_pdf` examples. They are
+**capability probes, not reduced approximations**: each one still references
+every widget the Dart original used, and calls `requireFeatures()` to report the
+public APIs `js_pdf` does not have yet. That turns the example set into an
+executable definition of "done" for each phase.
+
+```sh
+npm run examples     # build, then try to generate all of them
+```
+
+Successful runs write `examples/<name>.pdf`; failures land in
+`examples/generation-results.json` with the list of missing APIs, and one
+failure does not stop the rest. **Expect a non-zero exit until phase 5** — that
+is the gate working, not a broken build.
+
+Every phase below carries an **Example gate** line naming the examples it
+advances, and the phases marked ⇒ are the ones where an example first generates
+end to end. When a phase lands, run `npm run examples` and check the PDFs it
+was supposed to unlock.
+
+| Example | Upstream source | Unlocks at | What it proves |
+|---|---|---|---|
+| `hello-world` | `pdf/example/main.dart` | ✅ now | document, page, text, serializer |
+| `calendar` | `demo/lib/examples/calendar.dart` | **3.6** | TTF + theming + SVG + grid layout |
+| `certificate` | `demo/lib/examples/certificate.dart` | **3.9** | absolute positioning, transforms, rich text |
+| `report` | `demo/lib/examples/report.dart` | **5.1** | charts and tables — the only example needing no SVG and no images |
+| `invoice` | `demo/lib/examples/invoice.dart` | **5.2** | tables, decoration, barcodes — the archetypal business document |
+| `document` | `demo/lib/examples/document.dart` | **5.3** | long-form content: headers, paragraphs, TOC, links |
+| `server` | `demo/lib/examples/server.dart` | **5.3** | charts + SVG + links together |
+| `resume` | `demo/lib/examples/resume.dart` | **5.5** | everything: images, icons, clipping, partitions, progress |
+
+`resume` is deliberately last — it is the widest probe in the set, so it doubles
+as the acceptance test for the port as a whole.
+
+---
+
 ## Phase 0 — foundations
 
 Prerequisites that phases 1–3 all depend on. Do these before the big
 subsystems, not alongside them.
+
+**Example gate:** none — phase 0 changes no public API. `hello-world` must keep
+generating byte-identical output through 0.2.
 
 ### 0.0 TypeScript migration ✅ *(landed 2026-08-05)*
 
@@ -93,6 +134,10 @@ without it, any text outside WinAnsi is silently replaced with `?`.
 
 Depends on phases 0.1–0.3.
 
+**Example gate:** 1.4 is the single biggest unblock in the roadmap — *every*
+failing example needs `Font`, `TextStyle` and `ThemeData`. None generates yet
+after this phase, but all seven move.
+
 ### 1.1 TTF parser
 
 - **Ports:** `pdf/lib/src/pdf/font/ttf_parser.dart` (693 lines)
@@ -100,8 +145,9 @@ Depends on phases 0.1–0.3.
 - Table directory; `head`, `hhea`, `hmtx`, `maxp`, `name`, `post`, `OS/2`;
   `cmap` formats 4, 6 and 12; `loca`/`glyf` bounds; optional `CFF ` detection.
 - Read from a `Uint8Array` with `DataView` — no host buffer API.
-- **Test:** parse a small open-licensed TTF fixture; assert unitsPerEm, a known
-  advance width, and a known codepoint→glyph mapping.
+- **Test:** parse the fixtures already in `examples/assets/` (`OpenSans-Regular`,
+  `Roboto-Regular`); assert unitsPerEm, a known advance width, and a known
+  codepoint→glyph mapping.
 
 ### 1.2 TTF subsetting writer
 
@@ -125,13 +171,18 @@ Depends on phases 0.1–0.3.
 - **Test:** a document with accented and CJK text; assert the `/ToUnicode`
   stream round-trips back to the source string.
 
-### 1.4 Font selection
+### 1.4 Font selection and theming
 
-- **Ports:** `pdf/lib/src/widgets/font.dart`, `theme.dart`, `text_style.dart`
-- **Into:** `src/widgets/font.ts`, `src/widgets/theme.ts`
-- A `TextStyle` carrying a font, and a `Theme` that supplies a default. Requires
-  adding inherited values to the render context.
+- **Ports:** `pdf/lib/src/widgets/font.dart`, `theme.dart`, `text_style.dart`,
+  `page_theme.dart`
+- **Into:** `src/widgets/font.ts`, `src/widgets/theme.ts`,
+  `src/widgets/text_style.ts`, `src/widgets/page_theme.ts`
+- `Font`, `TextStyle`, `Theme`, `ThemeData`, `DefaultTextStyle`, `PageTheme`.
+  Requires adding inherited values to the render context.
 - **Test:** nested styles resolve to the expected font per text run.
+- **Example gate:** unblocks `Font`/`TextStyle`/`ThemeData`/`PageTheme` for
+  `calendar`, `certificate`, `document`, `invoice`, `report`, `resume`,
+  `server` — all seven.
 
 **Done when:** a document renders Portuguese, Japanese and Arabic *characters*
 from an embedded TTF, with correct advance widths and working text selection.
@@ -143,6 +194,10 @@ from an embedded TTF, with correct advance widths and working text selection.
 
 Depends on phase 2.1 landing first; the rest can proceed in parallel with
 phase 1 once it does.
+
+**Example gate:** `SvgImage` (2.7) is needed by six of the seven remaining
+examples. `report` is the exception, which makes it the useful probe while this
+phase is in flight.
 
 ### 2.1 Graphics path operators
 
@@ -205,6 +260,11 @@ phase 1 once it does.
 - An `SvgImage` widget taking an SVG string, sizing from `viewBox`/`width`/
   `height`, painting through the phase-2.1 canvas.
 - **Test:** end-to-end fixtures rendering to expected operator streams.
+- **Example gate:** the assets in `examples/assets/` are the real corpus —
+  `logo.svg`, `invoice.svg`, `calendar.svg`, `document.svg`, `resume.svg`,
+  `medail.svg`, the four `swirls*.svg`, `garland.svg`, and the inline SVG in
+  `server-assets.json`. Unblocks `SvgImage` for `calendar`, `certificate`,
+  `document`, `invoice`, `resume`, `server`.
 
 ### 2.8 Gradients *(optional)*
 
@@ -220,37 +280,150 @@ render correctly, including transforms, viewBox, groups and clipping.
 
 ## Phase 3 — layout completeness
 
-Once text is real, the widget gaps become the limiting factor.
+Once text is real, the widget gaps become the limiting factor. This phase
+produces the first two fully generated examples.
 
-- **3.1 Table** — `widgets/table.dart`, `table_helper.dart`. Column widths
-  (fixed / flex / intrinsic), cell alignment, borders, repeating headers.
-- **3.2 Spanning widgets** — `widgets/multi_page.dart`'s `SpanningWidget`
-  protocol, so a long table or paragraph splits across pages instead of
-  throwing. Requires the layout protocol to grow a save/restore context.
-- **3.3 Basic widgets** — `widgets/basic.dart`: `Align`, `Center`, `Padding`,
-  `SizedBox`, `AspectRatio`, `Transform`, `Opacity`, `FittedBox`.
-- **3.4 Full flex** — `widgets/flex.dart`: `mainAxisAlignment`,
-  `crossAxisAlignment`, `Expanded`, `Flexible`, `FlexFit`, `mainAxisSize`.
-- **3.5 Decoration** — `widgets/decoration.dart`, `box_border.dart`,
-  `border_radius.dart`: per-side borders, radii, gradients, shadows.
-- **3.6 Stack and Wrap** — `widgets/stack.dart`, `wrap.dart`.
-- **3.7 Rich text** — `widgets/text.dart`: `TextSpan`, per-span styles,
-  justification, decorations.
+### 3.1 Table
+
+- **Ports:** `widgets/table.dart`, `table_helper.dart`
+- Column widths (fixed / flex / intrinsic), cell alignment, borders, repeating
+  headers.
+- **Example gate:** `TableHelper` for `document`, `invoice`, `report`, `server`.
+
+### 3.2 Spanning widgets
+
+- **Ports:** `widgets/multi_page.dart`'s `SpanningWidget` protocol
+- A long table or paragraph splits across pages instead of throwing. Requires
+  the layout protocol to grow a save/restore context.
+- **Example gate:** no new API, but `document`, `invoice` and `report` all
+  overflow a page — without this they will throw `RangeError` even once their
+  widgets exist.
+
+### 3.3 Basic widgets
+
+- **Ports:** `widgets/basic.dart`, `widgets/geometry.dart`, `widgets/widget.dart`
+- `Align`, `Center`, `Padding`, `SizedBox`, `AspectRatio`, `Transform`,
+  `Opacity`, `FittedBox`, `Divider`, `FullPage`; `EdgeInsets` as a real exported
+  type rather than the internal `normalizeInsets`; `StatelessWidget` for
+  composition.
+- **Example gate:** the second-largest unblock after 1.4 — all seven examples.
+
+### 3.4 Full flex
+
+- **Ports:** `widgets/flex.dart`
+- `mainAxisAlignment`, `crossAxisAlignment`, `Expanded`, `Flexible`, `FlexFit`,
+  `mainAxisSize`.
+- **Example gate:** `Expanded`/`Flexible` for `calendar`, `certificate`,
+  `invoice`, `report`, `server`.
+
+### 3.5 Decoration
+
+- **Ports:** `widgets/decoration.dart`, `box_border.dart`, `border_radius.dart`
+- `BoxDecoration`, `Border`, `BorderSide`, `BorderRadius`: per-side borders,
+  radii, gradients, shadows.
+- **Example gate:** `calendar`, `certificate`, `document`, `invoice`, `resume`,
+  `server`.
+
+### 3.6 Stack, Wrap, Grid ⇒ `calendar`
+
+- **Ports:** `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`,
+  `partitions.dart`
+- `Stack`, `Positioned`, `Wrap`, `GridView`, `Partitions`.
+- **Example gate:** ⇒ **`calendar` generates end to end here.** Also advances
+  `certificate`, `invoice`, `resume`.
+
+### 3.7 Rich text
+
+- **Ports:** `widgets/text.dart`
+- `RichText`, `TextSpan`, per-span styles, justification, decorations.
+- **Example gate:** `certificate`, `document`, `invoice`, `server`.
+
+### 3.8 Content widgets
+
+- **Ports:** `widgets/content.dart`
+- `Header`, `Paragraph`, `Bullet`, `TableOfContent`. `TableOfContent` also needs
+  named destinations from `obj/names.dart` and `obj/outline.dart` — pull those
+  in here rather than deferring to phase 5.
+- **Example gate:** `document` (all four).
+
+### 3.9 Placeholders ⇒ `certificate`
+
+- **Ports:** `widgets/placeholders.dart`
+- `PdfLogo`, `Lorem`, `LoremText`. Small, but four examples use them as filler.
+- **Example gate:** ⇒ **`certificate` generates end to end here.** Also advances
+  `document`, `invoice`, `resume`.
+
+### 3.10 Clipping widgets
+
+- **Ports:** `widgets/clip.dart`
+- `ClipRect`, `ClipOval`, `ClipRRect`, on top of the phase-2.1 clip operators.
+- **Example gate:** `ClipOval` for `resume`.
+
+---
 
 ## Phase 4 — images
+
+**Example gate:** only `resume` needs images (`profile.jpg`), so this phase can
+slot in wherever convenient relative to phase 5.
 
 - **4.1** PNG decoder (zlib inflate included — no host decompression API is
   available). `pdf/lib/src/pdf/obj/image.dart`, `smask.dart`.
 - **4.2** Baseline JPEG: pass through as `/DCTDecode`, parse SOF for dimensions.
+  This is what `examples/assets/profile.jpg` exercises.
 - **4.3** `Image` widget and provider — `widgets/image.dart`,
-  `image_provider.dart`. Bytes are supplied by the caller; the port never
-  fetches.
+  `image_provider.dart`. `Image`, `MemoryImage`. Bytes are supplied by the
+  caller; the port never fetches.
+
+---
 
 ## Phase 5 — document features
 
-Charts (`widgets/chart/*`), barcodes (`widgets/barcode.dart`), annotations and
-links (`obj/annotation.dart`, `widgets/annotations.dart`), forms
-(`widgets/forms.dart`), outlines and page labels, metadata and XMP.
+The last four examples all land here, one per sub-phase.
+
+### 5.1 Charts ⇒ `report`
+
+- **Ports:** `widgets/chart/*.dart` (1,989 lines)
+- `Chart`, `CartesianGrid`, `FixedAxis`, `BarDataSet`, `LineDataSet`,
+  `PieDataSet`, `PieGrid`, `ChartLegend`, `PointChartValue`.
+- **Example gate:** ⇒ **`report` generates end to end here** (nine APIs, its
+  last dependency). Also advances `server`.
+
+### 5.2 Barcodes ⇒ `invoice`
+
+- **Ports:** `widgets/barcode.dart`
+- `Barcode`, `BarcodeWidget`. Upstream delegates to the separate `barcode`
+  Dart package; that generator has to be ported too, or narrowed to the symbol
+  types the examples use.
+- **Example gate:** ⇒ **`invoice` generates end to end here.** Also advances
+  `resume`.
+
+### 5.3 Annotations and links ⇒ `document`, `server`
+
+- **Ports:** `obj/annotation.dart`, `widgets/annotations.dart`
+- `UrlLink`, `AnnotationUrl`, plus internal destinations.
+- **Example gate:** ⇒ **`document` and `server` generate end to end here.**
+  Also advances `resume`.
+
+### 5.4 Icons
+
+- **Ports:** `widgets/icon.dart`
+- `Icon`, `IconData`, backed by the `MaterialIcons.ttf` already in
+  `examples/assets/`. Depends on phase 1.
+- **Example gate:** `resume`.
+
+### 5.5 Progress ⇒ `resume`
+
+- **Ports:** `widgets/progress.dart`
+- `CircularProgressIndicator`, `LinearProgressIndicator`.
+- **Example gate:** ⇒ **`resume` generates end to end here — the whole example
+  set now passes.**
+
+### 5.6 Remaining
+
+Forms (`widgets/forms.dart`), page labels, metadata and XMP. No example depends
+on these.
+
+---
 
 ## Out of scope
 
@@ -271,4 +444,7 @@ Every change that moves a checkbox must, in the same commit:
 1. Update [PORTING-STATUS.md](PORTING-STATUS.md) — the affected rows and the
    header counts.
 2. Update this file — mark the phase, and move the **Next step** callout.
-3. Pass `npm run verify`.
+3. Run `npm run examples` and commit the refreshed
+   `examples/generation-results.json`. If the phase was marked ⇒, the named
+   example must now appear as `generated`; say so in the commit.
+4. Pass `npm run verify`.

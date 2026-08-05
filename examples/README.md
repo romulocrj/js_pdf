@@ -25,12 +25,37 @@ not implemented by `js_pdf` yet. They are capability probes for porting work,
 not reduced visual approximations. `requireFeatures()` reports the missing
 public APIs before each document is built.
 
-Run all examples independently:
+Run all examples:
 
 ```sh
-node examples/run-upstream-examples.mjs
+npm run examples        # builds first
 ```
 
 Successful files are written beside the sources. Failures are collected in
 `generation-results.json`; one failure does not stop the remaining examples.
 The assets and fonts are the same resources referenced by the Dart examples.
+
+**A non-zero exit is expected until phase 5** — that is the gate working, not a
+broken build.
+
+## Roadmap gates
+
+Each example is the acceptance test for a specific roadmap phase: the phase that
+lands its *last* missing API. See
+[docs/ROADMAP.md § Example gates](../docs/ROADMAP.md#example-gates) for the
+per-phase breakdown of which APIs each one is still waiting on.
+
+| Example | Unlocks at | What it proves |
+|---|---|---|
+| `hello-world` | ✅ now | document, page, text, serializer |
+| `calendar` | **3.6** | TTF + theming + SVG + grid layout |
+| `certificate` | **3.9** | absolute positioning, transforms, rich text |
+| `report` | **5.1** | charts and tables — the only example needing no SVG and no images |
+| `invoice` | **5.2** | tables, decoration, barcodes |
+| `document` | **5.3** | long-form content: headers, paragraphs, TOC, links |
+| `server` | **5.3** | charts + SVG + links together |
+| `resume` | **5.5** | everything: images, icons, clipping, partitions, progress |
+
+When a phase lands, run `npm run examples`, commit the refreshed
+`generation-results.json`, and inspect the PDFs the phase was supposed to
+unlock.

@@ -51,6 +51,7 @@
     "test": "node --test \"test/**/*.test.mjs\"",
     "check": "node tools/check-source.mjs && tsc -p tsconfig.json --noEmit",
     "example": "npm run build && node examples/run-example.mjs",
+    "examples": "npm run build && node examples/run-upstream-examples.mjs",
     "verify": "npm run check && npm run build && npm test"
   },
   "devDependencies": {
