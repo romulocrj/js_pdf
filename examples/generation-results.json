@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T21:08:42.404Z",
+  "generatedAt": "2026-08-05T21:16:04.218Z",
   "results": [
     {
       "name": "hello-world",
@@ -9,22 +9,22 @@
     {
       "name": "calendar",
       "status": "generated",
-      "bytes": 20805
+      "bytes": 21030
     },
     {
       "name": "certificate",
       "status": "failed",
-      "error": "certificate requires unported js_pdf APIs: LoremText, RichText, TextSpan"
+      "error": "certificate requires unported js_pdf APIs: LoremText"
     },
     {
       "name": "document",
       "status": "failed",
-      "error": "document requires unported js_pdf APIs: Bullet, Header, Paragraph, PdfLogo, RichText, TableOfContent, TextSpan, UrlLink"
+      "error": "document requires unported js_pdf APIs: Bullet, Header, Paragraph, PdfLogo, TableOfContent, UrlLink"
     },
     {
       "name": "invoice",
       "status": "failed",
-      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, LoremText, PdfLogo, RichText, TextSpan"
+      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, LoremText, PdfLogo"
     },
     {
       "name": "report",
@@ -39,7 +39,7 @@
     {
       "name": "server",
       "status": "failed",
-      "error": "server requires unported js_pdf APIs: AnnotationUrl, BarDataSet, CartesianGrid, Chart, FixedAxis, PointChartValue, RichText, TextSpan, UrlLink"
+      "error": "server requires unported js_pdf APIs: AnnotationUrl, BarDataSet, CartesianGrid, Chart, FixedAxis, PointChartValue, UrlLink"
     }
   ]
 }

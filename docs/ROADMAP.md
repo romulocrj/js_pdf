@@ -78,6 +78,13 @@ The original constructor spelling `new EdgeInsets(...)` now works alongside
 its factories. Ten focused tests and a retained V8 proof cover the phase;
 `calendar.pdf` generates end to end and the missing-API total fell 53 → 45.
 
+**Phase 3.7 — rich text — landed 2026-08-05.** `InlineSpan`, `TextSpan`,
+`WidgetSpan` and `RichText` preserve inherited styles through immutable run and
+line layout data. The breaker supports font fallback, explicit RTL placement,
+start/end alignment, justification, inline widgets, backgrounds, combined
+single/double decorations and page continuation. Six tests and a retained V8
+proof cover the phase; the missing-API total fell 45 → 37.
+
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
 option on `Page` and `MultiPage` as well as on `PageTheme`, and every physical
@@ -147,11 +154,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 3.7 — rich text.** Port `RichText`, `TextSpan`, per-span styles,
-> justification and painted text decorations.
+> **Phase 3.8 — content widgets.** Port `Header`, `Paragraph`, `Bullet` and
+> `TableOfContent`, including the named destinations and outlines the table of
+> contents needs.
 
-The calendar now generates. Rich text is the largest shared blocker remaining,
-appearing in certificate, document, invoice and server.
+The calendar generates, and certificate now has only `LoremText` left. Content
+widgets are the next shared blocker for document.
 
 ---
 
@@ -504,10 +512,8 @@ Other divergences worth knowing:
 - `PageTheme.mustRotate` swaps the paper's dimensions rather than rotating the
   content through the CTM, which needs **2.1**. The page a reader sees is the
   same; `/MediaBox` reports the rotated size.
-- `fontFallback` is stored and merged but never consulted, and `decoration` is
-  stored but not painted. Both need the real line breaker in **3.7**.
-- `justify` is accepted by `TextAlign` and painted as `left`, for the same
-  reason.
+- `fontFallback`, painted backgrounds/decorations and justification landed with
+  the real line breaker in **3.7**.
 - No `iconTheme` on `ThemeData` — `IconThemeData` belongs with `Icon` in **5.4**.
 - No `DefaultTextStyle.merge`, which upstream builds out of `Builder` — one of
   the widgets **3.3** left open.
@@ -924,11 +930,30 @@ steps in [ORIGINAL-BUG.md](../ORIGINAL-BUG.md): stale `Positioned` dimensions,
 the grid's unconditional continuation and aspect-ratio compression, and early
 termination of uneven partitions.
 
-### 3.7 Rich text
+### 3.7 Rich text ✅ *(landed 2026-08-05)*
 
 - **Ports:** `widgets/text.dart`
 - `RichText`, `TextSpan`, per-span styles, justification, decorations.
 - **Example gate:** `certificate`, `document`, `invoice`, `server`.
+
+The public inline tree visits parent text before children and merges styles at
+each level. Layout resolves fonts per run (including ordered fallbacks), embeds
+widgets at a shared baseline, wraps long words, mirrors runs for explicit RTL,
+and distributes justified slack only across real gaps. Background decorations
+paint before text; combined underline/overline/line-through rules paint after
+it, including double rules. `RichTextState` is an immutable line cursor for
+`MultiPage` continuation.
+
+Six focused tests cover the public API, style inheritance, safe justification,
+backgrounds/decorations, inline widgets and continuation. The four example
+gates remove eight API occurrences, reducing the total 45 → 37.
+`examples/rich-text-phase-3.7.mjs` generates a 4,088-byte proof under both Node
+and bare V8. Arabic shaping and full bidi reordering remain coupled to the
+separate upstream font helpers; explicit RTL direction already resolves run
+placement and start/end alignment.
+
+The original single-run justification division-by-zero defect is recorded with
+its reproduction in [ORIGINAL-BUG.md](../ORIGINAL-BUG.md).
 
 ### 3.8 Content widgets
 

@@ -28,22 +28,21 @@
  * different font per glyph means resolving fonts inside the line breaker, which
  * belongs with `RichText` in roadmap phase 3.7.
  *
- * PORT GAP: `decoration`, `decorationColor`, `decorationStyle` and
- * `decorationThickness` are stored but not painted — text decorations land with
- * phase 3.7 as well. Upstream models `decoration` as a combinable bitmask; the
- * port uses a single name until there is a painter to care.
- *
- * PORT GAP: no per-run `background` until rich spans land in phase 3.7, and no
- * `renderingMode` (needs the `Tr` operator).
+ * Text decorations accept either one name or a list, the JavaScript equivalent
+ * of upstream's combinable bitmask. Per-run backgrounds use the phase-3.5 box
+ * decoration painter. `renderingMode` remains unported (it needs `Tr`).
  */
 
 import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { normalizeBoxDecoration } from './decoration.ts';
+import type { BoxDecoration, BoxDecorationInput } from './decoration.ts';
 import { Font } from './font.ts';
 
 export type FontWeight = 'normal' | 'bold';
 export type FontStyle = 'normal' | 'italic';
-export type TextDecoration = 'none' | 'underline' | 'overline' | 'lineThrough';
+export type TextDecorationName = 'none' | 'underline' | 'overline' | 'lineThrough';
+export type TextDecoration = TextDecorationName | readonly TextDecorationName[];
 export type TextDecorationStyle = 'solid' | 'double';
 
 /** 12 points, upstream's `TextStyle._defaultFontSize`. */
@@ -84,6 +83,8 @@ export interface TextStyleOptions {
   /** Line box height as a multiple of the font size. */
   readonly height?: number | null;
 
+  readonly background?: BoxDecorationInput | null;
+
   readonly decoration?: TextDecoration | null;
   readonly decorationColor?: ColorInput | null;
   readonly decorationStyle?: TextDecorationStyle | null;
@@ -105,6 +106,7 @@ export class TextStyle {
   readonly wordSpacing: number | null;
   readonly lineSpacing: number | null;
   readonly height: number | null;
+  readonly background: BoxDecoration | null;
   readonly decoration: TextDecoration | null;
   readonly decorationColor: Rgb | null;
   readonly decorationStyle: TextDecorationStyle | null;
@@ -126,6 +128,7 @@ export class TextStyle {
     wordSpacing = null,
     lineSpacing = null,
     height = null,
+    background = null,
     decoration = null,
     decorationColor = null,
     decorationStyle = null,
@@ -148,6 +151,7 @@ export class TextStyle {
     this.wordSpacing = wordSpacing;
     this.lineSpacing = lineSpacing;
     this.height = height;
+    this.background = normalizeBoxDecoration(background);
     this.decoration = decoration;
     this.decorationColor = decorationColor == null ? null : normalizeColor(decorationColor);
     this.decorationStyle = decorationStyle;
@@ -215,6 +219,7 @@ export class TextStyle {
       wordSpacing: options.wordSpacing ?? this.wordSpacing,
       lineSpacing: options.lineSpacing ?? this.lineSpacing,
       height: options.height ?? this.height,
+      background: options.background ?? this.background,
       decoration: options.decoration ?? this.decoration,
       decorationColor: options.decorationColor ?? this.decorationColor,
       decorationStyle: options.decorationStyle ?? this.decorationStyle,
@@ -250,6 +255,7 @@ export class TextStyle {
       wordSpacing: other.wordSpacing,
       lineSpacing: other.lineSpacing,
       height: other.height,
+      background: other.background,
       decoration: other.decoration,
       decorationColor: other.decorationColor,
       decorationStyle: other.decorationStyle,

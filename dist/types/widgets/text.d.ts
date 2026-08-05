@@ -1,72 +1,164 @@
 import type { ColorInput, Rgb } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
-import type { TextStyle } from './text_style.ts';
-import { DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT } from './text_style.ts';
-import { Widget } from './widget.ts';
-import type { Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
+import { DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT, TextStyle } from './text_style.ts';
+import type { TextDecorationName } from './text_style.ts';
+import { SpanningWidget } from './widget.ts';
+import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext, SpanLayout } from './widget.ts';
 export { DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT };
-/**
- * PORT GAP: `justify` is accepted but painted as `left`. Justifying means
- * distributing the slack across a line's word gaps, which is part of the real
- * line breaker in roadmap phase 3.7.
- */
-export type TextAlign = 'left' | 'center' | 'right' | 'justify';
-/** Upstream's `TextOverflow`. Carried by the theme; not yet acted on. */
+export type TextAlign = 'left' | 'right' | 'start' | 'end' | 'center' | 'justify';
+export type TextDirection = 'ltr' | 'rtl';
 export type TextOverflow = 'clip' | 'visible' | 'span';
+export interface InlineSpanOptions {
+    readonly style?: TextStyle | null;
+    readonly baseline?: number;
+    /** Retained for source compatibility; phase 5.3 supplies annotation painters. */
+    readonly annotation?: unknown;
+}
+export type InlineSpanVisitor = (span: InlineSpan, style: TextStyle, annotation: unknown) => boolean;
+/** Immutable node in a styled inline tree. */
+export declare abstract class InlineSpan {
+    readonly style: TextStyle | null;
+    readonly baseline: number;
+    readonly annotation: unknown;
+    constructor({ style, baseline, annotation }?: InlineSpanOptions);
+    abstract copyWith(options?: InlineSpanOptions): InlineSpan;
+    abstract visitChildren(visitor: InlineSpanVisitor, parentStyle: TextStyle, annotation?: unknown): boolean;
+    toPlainText(): string;
+}
+export interface TextSpanOptions extends InlineSpanOptions {
+    readonly text?: string | null;
+    readonly children?: readonly InlineSpan[] | null;
+}
+export declare class TextSpan extends InlineSpan {
+    readonly text: string | null;
+    readonly children: readonly InlineSpan[];
+    constructor({ text, children, ...options }?: TextSpanOptions);
+    copyWith(options?: TextSpanOptions): TextSpan;
+    visitChildren(visitor: InlineSpanVisitor, parentStyle: TextStyle, annotation?: unknown): boolean;
+}
+export interface WidgetSpanOptions extends InlineSpanOptions {
+    readonly child: AnyWidget;
+}
+export declare class WidgetSpan extends InlineSpan {
+    readonly child: AnyWidget;
+    constructor({ child, ...options }: WidgetSpanOptions);
+    copyWith(options?: InlineSpanOptions): WidgetSpan;
+    visitChildren(visitor: InlineSpanVisitor, parentStyle: TextStyle, annotation?: unknown): boolean;
+}
+export interface RichTextOptions {
+    readonly text: InlineSpan;
+    readonly textAlign?: TextAlign | null;
+    readonly textDirection?: TextDirection;
+    readonly softWrap?: boolean | null;
+    readonly tightBounds?: boolean;
+    readonly textScaleFactor?: number;
+    readonly maxLines?: number | null;
+    readonly overflow?: TextOverflow | null;
+    readonly margin?: InsetsInput;
+}
 export interface TextOptions {
-    /** Merged onto the theme's default text style. */
     readonly style?: TextStyle;
     readonly fontSize?: number;
     readonly lineHeight?: number;
     readonly color?: ColorInput;
     readonly align?: TextAlign;
+    readonly textAlign?: TextAlign;
+    readonly textDirection?: TextDirection;
+    readonly softWrap?: boolean;
+    readonly tightBounds?: boolean;
+    readonly textScaleFactor?: number;
     readonly margin?: InsetsInput;
-    /** Drop every line past this one. Upstream's `maxLines`. */
     readonly maxLines?: number;
-    /**
-     * Draw with this font object, bypassing the theme entirely. Predates
-     * `TextStyle` — a `Font` declaration belongs in `style.font`; this is the
-     * escape hatch for a caller holding a `PdfFont`.
-     */
+    readonly overflow?: TextOverflow;
+    /** Direct font escape hatch retained from the early port. */
     readonly font?: PdfFont;
 }
-/** A `TextStyle` with every field the painter needs already decided. */
-interface ResolvedTextStyle {
+export interface ResolvedTextStyle {
     readonly font: PdfFont;
     readonly fontSize: number;
     readonly color: Rgb;
-    readonly align: TextAlign;
     readonly lineAdvance: number;
     readonly letterSpacing: number;
     readonly wordSpacing: number;
-    readonly maxLines: number | null;
+    readonly baseline: number;
+    readonly background: TextStyle['background'];
+    readonly decorations: readonly TextDecorationName[];
+    readonly decorationColor: Rgb;
+    readonly decorationStyle: 'solid' | 'double';
+    readonly decorationThickness: number;
 }
-export interface TextLayoutData {
-    readonly lines: readonly string[];
-    readonly lineAdvance: number;
-    readonly contentWidth: number;
+interface TextFlowToken {
+    readonly kind: 'text' | 'gap';
+    readonly text: string;
+    readonly width: number;
     readonly style: ResolvedTextStyle;
 }
-/** Greedy line breaker. Explicit newlines always start a new line. */
+interface WidgetFlowToken {
+    readonly kind: 'widget';
+    readonly width: number;
+    readonly height: number;
+    readonly style: ResolvedTextStyle;
+    readonly childBox: AnyLayoutBox;
+}
+type FlowToken = TextFlowToken | WidgetFlowToken;
+interface BreakToken {
+    readonly kind: 'break';
+    readonly style: ResolvedTextStyle;
+}
+type InputToken = FlowToken | BreakToken;
+export interface RichTextRunLayout {
+    readonly kind: 'text' | 'gap' | 'widget';
+    readonly text: string;
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+    readonly baseline: number;
+    readonly style: ResolvedTextStyle;
+    readonly childBox: AnyLayoutBox | null;
+}
+export interface RichTextLineLayout {
+    readonly runs: readonly RichTextRunLayout[];
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+    readonly wrapped: boolean;
+}
+export interface RichTextLayoutData {
+    readonly lines: readonly RichTextLineLayout[];
+    readonly contentWidth: number;
+    readonly clip: boolean;
+}
+export interface RichTextState {
+    readonly lineIndex: number;
+}
+/** Legacy layout shape retained as an alias for callers that named it. */
+export type TextLayoutData = RichTextLayoutData;
+/** Single-style helper kept for compatibility with phase-0 callers. */
 export declare function wrapText(value: string, maxWidth: number, fontSize: number, font?: PdfFont): string[];
-export declare class Text extends Widget<TextLayoutData> {
-    readonly value: string;
-    readonly style: TextStyle | null;
-    readonly fontSize: number | null;
-    readonly lineHeight: number | null;
-    readonly color: Rgb | null;
-    readonly align: TextAlign | null;
-    readonly margin: Insets;
+export declare class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> {
+    readonly text: InlineSpan;
+    readonly textAlign: TextAlign | null;
+    readonly textDirection: TextDirection;
+    readonly softWrap: boolean | null;
+    readonly tightBounds: boolean;
+    readonly textScaleFactor: number;
     readonly maxLines: number | null;
-    readonly font: PdfFont | null;
-    constructor(value: string, { style, fontSize, lineHeight, color, align, margin, maxLines, font }?: TextOptions);
-    /**
-     * Resolved per call rather than in the constructor: neither the theme nor the
-     * document's fonts exist until render time, and `layout()` must stay free of
-     * cached state — `MultiPage` re-lays the same instance on the next page.
-     */
-    private resolveStyle;
-    layout(context: RenderContext, constraints: Constraints): LayoutBox<TextLayoutData>;
-    paint(context: RenderContext, box: PositionedBox<TextLayoutData>): void;
+    readonly overflow: TextOverflow | null;
+    readonly margin: Insets;
+    constructor({ text, textAlign, textDirection, softWrap, tightBounds, textScaleFactor, maxLines, overflow, margin }: RichTextOptions);
+    initialSpanState(): RichTextState;
+    protected inputTokens(context: RenderContext, maxWidth: number): InputToken[];
+    private allLines;
+    private fragment;
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<RichTextLayoutData>;
+    layoutSpan(context: RenderContext, constraints: Constraints, state: RichTextState): SpanLayout<RichTextLayoutData, RichTextState>;
+    paint(context: RenderContext, box: PositionedBox<RichTextLayoutData>): void;
+}
+export declare class Text extends RichText {
+    readonly value: string;
+    constructor(value: string, { style, fontSize, lineHeight, color, align, textAlign, textDirection, softWrap, tightBounds, textScaleFactor, margin, maxLines, overflow, font }?: TextOptions);
+    private readonly directFont;
+    protected inputTokens(context: RenderContext, maxWidth: number): InputToken[];
 }

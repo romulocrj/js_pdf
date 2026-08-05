@@ -54,3 +54,14 @@ curta acaba.
 **Correção no port:** a continuação permanece ativa enquanto qualquer coluna
 tiver conteúdo. Estados de colunas concluídas geram fragmentos vazios e as
 demais continuam normalmente.
+
+## Justificação divide por zero em linha com um único trecho (`text.dart`)
+
+**Como reproduzir:** use `TextAlign.justify` numa largura que force uma palavra
+longa a ocupar sozinha uma linha marcada como quebrada. `_Line.realign` calcula
+o intervalo como `(totalWidth - wordsWidth) / (spans.length - 1)`; com um único
+span, o denominador é zero e o deslocamento seguinte deixa de ser finito.
+
+**Correção no port:** a folga é distribuída apenas quando a linha quebrada tem
+ao menos um intervalo real entre palavras. Linhas sem intervalo conservam sua
+posição normal, e todos os deslocamentos permanecem finitos.

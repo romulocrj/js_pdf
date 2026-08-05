@@ -71,7 +71,7 @@ import {
   TableRow
 } from './widgets/table.ts';
 import { TableHelper } from './widgets/table_helper.ts';
-import { Text } from './widgets/text.ts';
+import { InlineSpan, RichText, Text, TextSpan, WidgetSpan } from './widgets/text.ts';
 import { TextStyle } from './widgets/text_style.ts';
 import { DefaultTextStyle, Theme, ThemeData } from './widgets/theme.ts';
 import { SpanningWidget, StatelessWidget, Widget } from './widgets/widget.ts';
@@ -145,7 +145,10 @@ export {
   TableColumnWidth,
   TableHelper,
   TableRow,
+  InlineSpan,
+  RichText,
   Text,
+  TextSpan,
   TextStyle,
   Theme,
   ThemeData,
@@ -153,6 +156,7 @@ export {
   Vector,
   VerticalDivider,
   Widget,
+  WidgetSpan,
   Wrap
 };
 
@@ -194,6 +198,7 @@ export type {
   FontStyle,
   FontWeight,
   TextDecoration,
+  TextDecorationName,
   TextDecorationStyle,
   TextStyleOptions
 } from './widgets/text_style.ts';
@@ -363,7 +368,21 @@ export type {
   TableAlignmentName,
   TableTextArrayOptions
 } from './widgets/table_helper.ts';
-export type { TextAlign, TextOptions, TextOverflow } from './widgets/text.ts';
+export type {
+  InlineSpanOptions,
+  InlineSpanVisitor,
+  RichTextLayoutData,
+  RichTextLineLayout,
+  RichTextOptions,
+  RichTextRunLayout,
+  RichTextState,
+  TextAlign,
+  TextLayoutData,
+  TextOptions,
+  TextOverflow,
+  TextSpanOptions,
+  WidgetSpanOptions
+} from './widgets/text.ts';
 export type { VectorApi, VectorOptions } from './widgets/shape.ts';
 export type {
   AlignmentInput,
@@ -383,6 +402,10 @@ export interface PublicApi {
   readonly Page: typeof Page;
   readonly MultiPage: typeof MultiPage;
   readonly Text: typeof Text;
+  readonly InlineSpan: typeof InlineSpan;
+  readonly RichText: typeof RichText;
+  readonly TextSpan: typeof TextSpan;
+  readonly WidgetSpan: typeof WidgetSpan;
   readonly Column: typeof Column;
   readonly Row: typeof Row;
   readonly Flex: typeof Flex;
@@ -459,6 +482,10 @@ const publicApi: PublicApi = Object.freeze({
   Page,
   MultiPage,
   Text,
+  InlineSpan,
+  RichText,
+  TextSpan,
+  WidgetSpan,
   Column,
   Row,
   Flex,

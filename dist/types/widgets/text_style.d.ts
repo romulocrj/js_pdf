@@ -1,8 +1,10 @@
 import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { BoxDecoration, BoxDecorationInput } from './decoration.ts';
 import { Font } from './font.ts';
 export type FontWeight = 'normal' | 'bold';
 export type FontStyle = 'normal' | 'italic';
-export type TextDecoration = 'none' | 'underline' | 'overline' | 'lineThrough';
+export type TextDecorationName = 'none' | 'underline' | 'overline' | 'lineThrough';
+export type TextDecoration = TextDecorationName | readonly TextDecorationName[];
 export type TextDecorationStyle = 'solid' | 'double';
 /** 12 points, upstream's `TextStyle._defaultFontSize`. */
 export declare const DEFAULT_FONT_SIZE = 12;
@@ -33,6 +35,7 @@ export interface TextStyleOptions {
     readonly lineSpacing?: number | null;
     /** Line box height as a multiple of the font size. */
     readonly height?: number | null;
+    readonly background?: BoxDecorationInput | null;
     readonly decoration?: TextDecoration | null;
     readonly decorationColor?: ColorInput | null;
     readonly decorationStyle?: TextDecorationStyle | null;
@@ -53,11 +56,12 @@ export declare class TextStyle {
     readonly wordSpacing: number | null;
     readonly lineSpacing: number | null;
     readonly height: number | null;
+    readonly background: BoxDecoration | null;
     readonly decoration: TextDecoration | null;
     readonly decorationColor: Rgb | null;
     readonly decorationStyle: TextDecorationStyle | null;
     readonly decorationThickness: number | null;
-    constructor({ inherit, color, font, fontNormal, fontBold, fontItalic, fontBoldItalic, fontFallback, fontSize, fontWeight, fontStyle, letterSpacing, wordSpacing, lineSpacing, height, decoration, decorationColor, decorationStyle, decorationThickness }?: TextStyleOptions);
+    constructor({ inherit, color, font, fontNormal, fontBold, fontItalic, fontBoldItalic, fontFallback, fontSize, fontWeight, fontStyle, letterSpacing, wordSpacing, lineSpacing, height, background, decoration, decorationColor, decorationStyle, decorationThickness }?: TextStyleOptions);
     /**
      * The complete style every other one is merged onto: Helvetica in its four
      * faces, black, 12 points.

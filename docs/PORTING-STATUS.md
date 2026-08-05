@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 78 `.ts` files, ~16,300 lines (TypeScript)
+**Ported:** 78 `.ts` files, ~16,900 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -23,23 +23,23 @@ table. Run `npm run examples`; current state, from
 | Example | Status | Missing APIs | Unlocks at |
 |---|---|---:|---|
 | `hello-world` | ✅ generated (736 bytes) | 0 | — |
-| `calendar` | ✅ generated (20,805 bytes) | 0 | 3.6 |
-| `certificate` | failed | 3 | 3.9 |
+| `calendar` | ✅ generated (21,030 bytes) | 0 | 3.6 |
+| `certificate` | failed | 1 | 3.9 |
 | `report` | failed | 9 | 5.1 |
-| `invoice` | failed | 6 | 5.2 |
-| `document` | failed | 8 | 5.3 |
-| `server` | failed | 9 | 5.3 |
+| `invoice` | failed | 4 | 5.2 |
+| `document` | failed | 6 | 5.3 |
+| `server` | failed | 7 | 5.3 |
 | `resume` | failed | 10 | 5.5 |
 
-**2 of 8**, with the missing-API total down from 124 to 45 — phase 1.4 cleared
+**2 of 8**, with the missing-API total down from 124 to 37 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
 from every one of the seven, phase 2.7 cleared `SvgImage` from six, and phase
 3.1 cleared `TableHelper` from four. Phase 3.3 then cleared the composition
 primitives `Transform`, `Opacity`, `FittedBox`, `AspectRatio`, `FullPage`,
 `Builder` and `LayoutBuilder` wherever they occurred. Phase 3.4 cleared
 `Expanded`/`Flexible` from five examples, phase 3.5 cleared decoration, borders
-and radii from six, and phase 3.6 cleared stack/grid/partitions from four and
-made the calendar generate. See
+and radii from six, phase 3.6 cleared stack/grid/partitions from four and made
+the calendar generate, and phase 3.7 cleared rich text from four. See
 [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which phase clears
 each one.
 
@@ -158,7 +158,7 @@ both, and will grow the shape factories in 2.5.
 |---|---:|---|---|
 | `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | partial — pure layout protocol, `StatelessWidget`, immutable `SpanningWidget` continuation state and theme on the render context; no `InheritedWidget` |
 | `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — `BoxConstraints` with factories/transforms, `EdgeInsets`, `Alignment`, `inscribe`; no directional geometry or `TextDirection` |
-| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts` | partial — `TextStyle` with merge and the four font slots, greedy wrap, `maxLines`; no `RichText`/`TextSpan`, no justification, no painted decorations, no `fontFallback` (**3.7**) |
+| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, inherited per-run styles and fallback fonts, wrapping, immutable page continuation, LTR/explicit RTL placement, justification, backgrounds and combined decorations; no Arabic shaping or Unicode bidi reordering |
 | `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — full `Flex`/`Row`/`Column` allocation, all main/cross alignments, `mainAxisSize`, vertical direction, `Expanded`, `Flexible`, proportional `Spacer`, plus `gap`/weighted-row extensions; no `ListView`, bidi direction or baseline alignment |
 | `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts`, `decoration.ts`, `box_border.ts` | partial — `Container`, `DecoratedBox`, background/foreground `BoxDecoration`, per-side/dashed borders, axial/radial gradients and vector shadows; decoration images wait for **4.3** |
 | `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground; **one document may mix orientations and paper sizes**, per section; no `clip` |
@@ -192,7 +192,7 @@ both, and will grow the shape factories in 2.5.
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
 | SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping and gradients done; SVG text and embedded raster content remain |
-| Widgets | ~14,000 | ~57 public widget/value constructors, plus tables, styles and themes |
+| Widgets | ~14,000 | ~61 public widget/value constructors, plus tables, rich styles and themes |
 
 **Phases 0, 1 and 2 are complete.** The WinAnsi ceiling is gone: a TrueType font
 is parsed, subset to the glyphs a document used, embedded as a

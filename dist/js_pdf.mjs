@@ -4327,7 +4327,7 @@ const DEFAULT_FONT_SIZE = 12;
 const DEFAULT_LINE_HEIGHT = 1.2;
 
 class TextStyle {
-  constructor({inherit = true, color = null, font = null, fontNormal = null, fontBold = null, fontItalic = null, fontBoldItalic = null, fontFallback = null, fontSize = null, fontWeight = null, fontStyle = null, letterSpacing = null, wordSpacing = null, lineSpacing = null, height = null, decoration = null, decorationColor = null, decorationStyle = null, decorationThickness = null} = {}) {
+  constructor({inherit = true, color = null, font = null, fontNormal = null, fontBold = null, fontItalic = null, fontBoldItalic = null, fontFallback = null, fontSize = null, fontWeight = null, fontStyle = null, letterSpacing = null, wordSpacing = null, lineSpacing = null, height = null, background = null, decoration = null, decorationColor = null, decorationStyle = null, decorationThickness = null} = {}) {
     const isItalic = fontStyle === "italic";
     const isBold = fontWeight === "bold";
     this.inherit = inherit;
@@ -4344,6 +4344,7 @@ class TextStyle {
     this.wordSpacing = wordSpacing;
     this.lineSpacing = lineSpacing;
     this.height = height;
+    this.background = normalizeBoxDecoration(background);
     this.decoration = decoration;
     this.decorationColor = decorationColor == null ? null : normalizeColor(decorationColor);
     this.decorationStyle = decorationStyle;
@@ -4398,6 +4399,7 @@ class TextStyle {
       wordSpacing: options.wordSpacing ?? this.wordSpacing,
       lineSpacing: options.lineSpacing ?? this.lineSpacing,
       height: options.height ?? this.height,
+      background: options.background ?? this.background,
       decoration: options.decoration ?? this.decoration,
       decorationColor: options.decorationColor ?? this.decorationColor,
       decorationStyle: options.decorationStyle ?? this.decorationStyle,
@@ -4426,6 +4428,7 @@ class TextStyle {
       wordSpacing: other.wordSpacing,
       lineSpacing: other.lineSpacing,
       height: other.height,
+      background: other.background,
       decoration: other.decoration,
       decorationColor: other.decorationColor,
       decorationStyle: other.decorationStyle,
@@ -8397,125 +8400,497 @@ class Table extends SpanningWidget {
   }
 }
 
-function textWidth(font, text, fontSize, letterSpacing = 0) {
-  return font.stringMetrics(text, fontSize, letterSpacing).advanceWidth;
+class InlineSpan {
+  constructor({style = null, baseline = 0, annotation = null} = {}) {
+    this.style = style;
+    this.baseline = assertFiniteNumber(Number(baseline), "baseline");
+    this.annotation = annotation;
+  }
+  toPlainText() {
+    let value = "";
+    this.visitChildren(span => {
+      if (span instanceof TextSpan && span.text !== null) value += span.text;
+      return true;
+    }, TextStyle.defaultStyle());
+    return value;
+  }
 }
 
-function breakLongWord(word, maxWidth, fontSize, font) {
-  const chunks = [];
+class TextSpan extends InlineSpan {
+  constructor({text = null, children = null, ...options} = {}) {
+    super(options);
+    this.text = text === null ? null : String(text);
+    this.children = children === null ? [] : [ ...children ];
+  }
+  copyWith(options = {}) {
+    return new TextSpan({
+      text: options.text ?? this.text,
+      children: options.children ?? this.children,
+      style: options.style ?? this.style,
+      baseline: options.baseline ?? this.baseline,
+      annotation: options.annotation ?? this.annotation
+    });
+  }
+  visitChildren(visitor, parentStyle, annotation = null) {
+    const style = parentStyle.merge(this.style);
+    const effectiveAnnotation = this.annotation ?? annotation;
+    if (this.text !== null && !visitor(this, style, effectiveAnnotation)) return false;
+    for (const child of this.children) {
+      if (!child.visitChildren(visitor, style, effectiveAnnotation)) return false;
+    }
+    return true;
+  }
+}
+
+class WidgetSpan extends InlineSpan {
+  constructor({child, ...options}) {
+    super(options);
+    this.child = child;
+  }
+  copyWith(options = {}) {
+    return new WidgetSpan({
+      child: this.child,
+      style: options.style ?? this.style,
+      baseline: options.baseline ?? this.baseline,
+      annotation: options.annotation ?? this.annotation
+    });
+  }
+  visitChildren(visitor, parentStyle, annotation = null) {
+    return visitor(this, parentStyle.merge(this.style), this.annotation ?? annotation);
+  }
+}
+
+function countSpaces(value) {
+  let count = 0;
+  for (const character of value) if (/\s/u.test(character)) count++;
+  return count;
+}
+
+function textWidth(style, value) {
+  return style.font.stringMetrics(value, style.fontSize, style.letterSpacing).advanceWidth + countSpaces(value) * style.wordSpacing;
+}
+
+function supportsRune(font, codePoint) {
+  const candidate = font;
+  return candidate.isRuneSupported?.(codePoint) ?? codePoint <= 255;
+}
+
+function decorationNames(style) {
+  const value = style.decoration ?? "none";
+  const values = Array.isArray(value) ? value : [ value ];
+  return values.filter(name => name !== "none");
+}
+
+function resolveStyle(context, style, baseline, scale, directFont = null) {
+  const fontSize = (style.fontSize ?? DEFAULT_FONT_SIZE) * scale;
+  const declaredFont = style.font;
+  const font = directFont ?? (declaredFont === null ? context.document.font : declaredFont.getFont(context));
+  return {
+    font,
+    fontSize,
+    color: style.color ?? [ 0, 0, 0 ],
+    lineAdvance: fontSize * (style.height ?? DEFAULT_LINE_HEIGHT) + (style.lineSpacing ?? 0) * scale,
+    letterSpacing: (style.letterSpacing ?? 0) * scale,
+    wordSpacing: (style.wordSpacing ?? 0) * scale,
+    baseline: baseline * scale,
+    background: style.background,
+    decorations: decorationNames(style),
+    decorationColor: style.decorationColor ?? style.color ?? [ 0, 0, 0 ],
+    decorationStyle: style.decorationStyle ?? "solid",
+    decorationThickness: style.decorationThickness ?? 1
+  };
+}
+
+function splitLongWord(value, maxWidth, style) {
+  const parts = [];
   let current = "";
-  for (const character of word) {
+  for (const character of value) {
     const candidate = current + character;
-    if (current && textWidth(font, candidate, fontSize) > maxWidth) {
-      chunks.push(current);
+    if (current !== "" && textWidth(style, candidate) > maxWidth) {
+      parts.push(current);
       current = character;
     } else {
       current = candidate;
     }
   }
-  if (current) chunks.push(current);
-  return chunks;
+  if (current !== "") parts.push(current);
+  return parts.length === 0 ? [ "" ] : parts;
 }
 
-function wrapText(value, maxWidth, fontSize, font = defaultPdfFont) {
-  const lines = [];
-  const paragraphs = String(value).replace(/\r\n?/g, "\n").split("\n");
-  for (const paragraph of paragraphs) {
-    if (paragraph.length === 0) {
-      lines.push("");
-      continue;
-    }
-    const rawWords = paragraph.split(/\s+/);
-    let current = "";
-    for (const rawWord of rawWords) {
-      const words = textWidth(font, rawWord, fontSize) <= maxWidth ? [ rawWord ] : breakLongWord(rawWord, maxWidth, fontSize, font);
-      for (const word of words) {
-        const candidate = current ? `${current} ${word}` : word;
-        if (current && textWidth(font, candidate, fontSize) > maxWidth) {
-          lines.push(current);
-          current = word;
-        } else {
-          current = candidate;
-        }
-      }
-    }
-    if (current) lines.push(current);
+function trimTrailingGaps(line) {
+  while (line.tokens[line.tokens.length - 1]?.kind === "gap") {
+    line.width -= line.tokens.pop()?.width ?? 0;
   }
-  return lines.length ? lines : [ "" ];
 }
 
-class Text extends Widget {
-  constructor(value, {style = undefined, fontSize = undefined, lineHeight = undefined, color = undefined, align = undefined, margin = 0, maxLines = undefined, font = undefined} = {}) {
+function positionLine(line, y, contentWidth, align, direction) {
+  let ascent = line.emptyStyle.fontSize + Math.max(0, line.emptyStyle.baseline);
+  let descent = Math.max(0, line.emptyStyle.lineAdvance - line.emptyStyle.fontSize - line.emptyStyle.baseline);
+  let minimumHeight = line.emptyStyle.lineAdvance;
+  for (const token of line.tokens) {
+    minimumHeight = Math.max(minimumHeight, token.style.lineAdvance);
+    if (token.kind === "widget") {
+      ascent = Math.max(ascent, token.height + token.style.baseline);
+      descent = Math.max(descent, -token.style.baseline);
+    } else {
+      ascent = Math.max(ascent, token.style.fontSize + token.style.baseline);
+      descent = Math.max(descent, token.style.lineAdvance - token.style.fontSize - token.style.baseline);
+    }
+  }
+  const height = Math.max(minimumHeight, ascent + descent);
+  const effectiveAlign = align === "start" ? direction === "rtl" ? "right" : "left" : align === "end" ? direction === "rtl" ? "left" : "right" : align;
+  let offset = 0;
+  if (effectiveAlign === "right") offset = contentWidth - line.width;
+  if (effectiveAlign === "center") offset = (contentWidth - line.width) / 2;
+  const gapCount = line.wrapped && effectiveAlign === "justify" ? line.tokens.filter(token => token.kind === "gap").length : 0;
+  const extraPerGap = gapCount === 0 ? 0 : Math.max(0, contentWidth - line.width) / gapCount;
+  const paintTokens = [];
+  for (const token of line.tokens) {
+    const previous = paintTokens[paintTokens.length - 1];
+    if (extraPerGap === 0 && token.kind !== "widget" && previous !== undefined && previous.kind !== "widget" && previous.style === token.style) {
+      paintTokens[paintTokens.length - 1] = {
+        kind: "text",
+        text: previous.text + token.text,
+        width: previous.width + token.width,
+        style: token.style
+      };
+    } else {
+      paintTokens.push(token);
+    }
+  }
+  let x = offset;
+  let accumulatedExtra = 0;
+  const runs = [];
+  for (const token of paintTokens) {
+    let runX = x + accumulatedExtra;
+    if (direction === "rtl") runX = contentWidth - runX - token.width;
+    const tokenBaseline = y + ascent - token.style.baseline;
+    const tokenY = token.kind === "widget" ? tokenBaseline - token.height : tokenBaseline - token.style.fontSize;
+    runs.push({
+      kind: token.kind,
+      text: token.kind === "widget" ? "" : token.text,
+      x: runX,
+      y: tokenY,
+      width: token.width,
+      height: token.kind === "widget" ? token.height : token.style.lineAdvance,
+      baseline: tokenBaseline,
+      style: token.style,
+      childBox: token.kind === "widget" ? token.childBox : null
+    });
+    x += token.width;
+    if (token.kind === "gap") accumulatedExtra += extraPerGap;
+  }
+  const usedWidth = extraPerGap === 0 ? line.width : contentWidth;
+  return {
+    runs,
+    y,
+    width: usedWidth,
+    height,
+    wrapped: line.wrapped
+  };
+}
+
+function rebaseLines(lines, top) {
+  return lines.map(line => ({
+    ...line,
+    y: line.y - top,
+    runs: line.runs.map(run => ({
+      ...run,
+      y: run.y - top,
+      baseline: run.baseline - top
+    }))
+  }));
+}
+
+class RichText extends SpanningWidget {
+  constructor({text, textAlign = null, textDirection = "ltr", softWrap = null, tightBounds = false, textScaleFactor = 1, maxLines = null, overflow = null, margin = 0}) {
     super();
-    this.value = String(value);
-    this.style = style ?? null;
-    this.fontSize = fontSize === undefined ? null : assertFiniteNumber(Number(fontSize), "fontSize");
-    this.lineHeight = lineHeight === undefined ? null : assertFiniteNumber(Number(lineHeight), "lineHeight");
-    this.color = color === undefined ? null : normalizeColor(color);
-    this.align = align ?? null;
+    this.text = text;
+    this.textAlign = textAlign;
+    this.textDirection = textDirection;
+    this.softWrap = softWrap;
+    this.tightBounds = tightBounds;
+    this.textScaleFactor = assertFiniteNumber(Number(textScaleFactor), "textScaleFactor");
+    this.maxLines = maxLines;
+    this.overflow = overflow;
     this.margin = normalizeInsets(margin);
-    this.maxLines = maxLines ?? null;
-    this.font = font ?? null;
   }
-  resolveStyle(context) {
-    const theme = context.theme;
-    const merged = theme.defaultTextStyle.merge(this.style);
-    const fontSize = this.fontSize ?? merged.fontSize ?? DEFAULT_FONT_SIZE;
-    const declaredFont = merged.font;
+  initialSpanState() {
     return {
-      font: this.font ?? (declaredFont === null ? context.document.font : declaredFont.getFont(context)),
-      fontSize,
-      color: this.color ?? merged.color ?? [ 0, 0, 0 ],
-      align: this.align ?? theme.textAlign ?? "left",
-      lineAdvance: fontSize * (this.lineHeight ?? merged.height ?? DEFAULT_LINE_HEIGHT) + (merged.lineSpacing ?? 0),
-      letterSpacing: merged.letterSpacing ?? 0,
-      wordSpacing: merged.wordSpacing ?? 0,
-      maxLines: this.maxLines ?? theme.maxLines
+      lineIndex: 0
+    };
+  }
+  inputTokens(context, maxWidth) {
+    const result = [];
+    const scale = this.textScaleFactor;
+    this.text.visitChildren((span, textStyle) => {
+      const baseStyle = resolveStyle(context, textStyle, span.baseline, scale);
+      if (span instanceof WidgetSpan) {
+        const childBox = span.child.layout(context, new BoxConstraints({
+          maxWidth,
+          maxHeight: Infinity
+        }));
+        result.push({
+          kind: "widget",
+          width: childBox.width,
+          height: childBox.height,
+          style: baseStyle,
+          childBox
+        });
+        return true;
+      }
+      if (!(span instanceof TextSpan) || span.text === null) return true;
+      let group = "";
+      let groupFont = baseStyle.font;
+      const flush = () => {
+        if (group === "") return;
+        const style = groupFont === baseStyle.font ? baseStyle : {
+          ...baseStyle,
+          font: groupFont
+        };
+        for (const part of group.replace(/\r\n?/g, "\n").split(/(\n|[^\S\n]+|[^\s]+)/u)) {
+          if (part === "") continue;
+          if (part === "\n") result.push({
+            kind: "break",
+            style
+          }); else result.push({
+            kind: /^\s+$/u.test(part) ? "gap" : "text",
+            text: part,
+            width: textWidth(style, part),
+            style
+          });
+        }
+        group = "";
+      };
+      for (const character of span.text) {
+        const codePoint = character.codePointAt(0) ?? 0;
+        let font = baseStyle.font;
+        if (!supportsRune(font, codePoint)) {
+          for (const fallback of textStyle.fontFallback) {
+            const candidate = fallback.getFont(context);
+            if (supportsRune(candidate, codePoint)) {
+              font = candidate;
+              break;
+            }
+          }
+        }
+        if (font !== groupFont && group !== "") flush();
+        groupFont = font;
+        group += character;
+      }
+      flush();
+      return true;
+    }, context.theme.defaultTextStyle);
+    return result;
+  }
+  allLines(context, contentWidth) {
+    const align = this.textAlign ?? context.theme.textAlign ?? "left";
+    const softWrap = this.softWrap ?? context.theme.softWrap;
+    const maxLines = this.maxLines ?? context.theme.maxLines;
+    const tokens = this.inputTokens(context, contentWidth);
+    const fallbackStyle = resolveStyle(context, context.theme.defaultTextStyle, 0, this.textScaleFactor);
+    const raw = [];
+    let current = {
+      tokens: [],
+      width: 0,
+      wrapped: false,
+      emptyStyle: fallbackStyle
+    };
+    const pushLine = wrapped => {
+      trimTrailingGaps(current);
+      current.wrapped = wrapped;
+      raw.push(current);
+      current = {
+        tokens: [],
+        width: 0,
+        wrapped: false,
+        emptyStyle: current.emptyStyle
+      };
+    };
+    for (const token of tokens) {
+      current.emptyStyle = token.style;
+      if (token.kind === "break") {
+        pushLine(false);
+        continue;
+      }
+      if (token.kind === "gap" && current.tokens.length === 0) continue;
+      if (softWrap && current.tokens.length > 0 && current.width + token.width > contentWidth + 1e-5) {
+        pushLine(true);
+        if (token.kind === "gap") continue;
+      }
+      if (token.kind === "text" && softWrap && token.width > contentWidth + 1e-5) {
+        const pieces = splitLongWord(token.text, contentWidth, token.style);
+        for (let index = 0; index < pieces.length; index++) {
+          const piece = pieces[index] ?? "";
+          const part = {
+            ...token,
+            text: piece,
+            width: textWidth(token.style, piece)
+          };
+          if (current.tokens.length > 0) pushLine(true);
+          current.tokens.push(part);
+          current.width = part.width;
+          if (index < pieces.length - 1) pushLine(true);
+        }
+        continue;
+      }
+      current.tokens.push(token);
+      current.width += token.width;
+    }
+    if (current.tokens.length > 0 || raw.length === 0 || tokens[tokens.length - 1]?.kind === "break") pushLine(false);
+    const limited = maxLines === null ? raw : raw.slice(0, Math.max(1, maxLines));
+    const targetWidth = limited.some(line => line.wrapped || align === "justify") ? contentWidth : Math.max(0, ...limited.map(line => line.width));
+    let y = 0;
+    const lines = [];
+    for (const line of limited) {
+      const positioned = positionLine(line, y, targetWidth, align, this.textDirection);
+      lines.push(positioned);
+      y += positioned.height;
+    }
+    return lines;
+  }
+  fragment(context, constraints, lineIndex, spanning) {
+    const parent = BoxConstraints.from(constraints);
+    const contentWidth = Math.max(1, parent.maxWidth - this.margin.left - this.margin.right);
+    const all = this.allLines(context, contentWidth);
+    const topMargin = lineIndex === 0 ? this.margin.top : 0;
+    const availableHeight = Math.max(0, parent.maxHeight - topMargin);
+    let end = lineIndex;
+    let height = 0;
+    while (end < all.length) {
+      const nextHeight = all[end]?.height ?? 0;
+      const finalBottom = end === all.length - 1 ? this.margin.bottom : 0;
+      if (spanning && height + nextHeight + finalBottom > availableHeight + 1e-5) break;
+      height += nextHeight;
+      end++;
+      if (!spanning && height > availableHeight + 1e-5) break;
+    }
+    if (!spanning) end = all.length;
+    const isFinal = end >= all.length;
+    const bottomMargin = isFinal ? this.margin.bottom : 0;
+    const lineTop = all[lineIndex]?.y ?? 0;
+    const selected = rebaseLines(all.slice(lineIndex, end), lineTop - topMargin);
+    const widest = Math.max(0, ...selected.map(line => line.width));
+    const naturalHeight = topMargin + selected.reduce((sum, line) => sum + line.height, 0) + bottomMargin;
+    const size = parent.constrain({
+      width: widest + this.margin.left + this.margin.right,
+      height: naturalHeight
+    });
+    const effectiveOverflow = this.overflow ?? context.theme.overflow;
+    return {
+      box: {
+        widget: this,
+        width: size.width,
+        height: size.height,
+        data: {
+          lines: selected,
+          contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
+          clip: effectiveOverflow === "clip" || naturalHeight > size.height + 1e-5
+        }
+      },
+      nextState: {
+        lineIndex: end
+      },
+      hasMore: end < all.length
     };
   }
   layout(context, constraints) {
-    const parent = BoxConstraints.from(constraints);
-    const style = this.resolveStyle(context);
-    const availableContentWidth = Math.max(1, parent.maxWidth - this.margin.left - this.margin.right);
-    const wrapped = wrapText(this.value, availableContentWidth, style.fontSize, style.font);
-    const lines = style.maxLines === null ? wrapped : wrapped.slice(0, Math.max(1, style.maxLines));
-    const contentHeight = lines.length * style.lineAdvance;
-    const widest = Math.max(...lines.map(line => textWidth(style.font, line, style.fontSize, style.letterSpacing)), 0);
-    const size = parent.constrain({
-      width: widest + this.margin.left + this.margin.right,
-      height: contentHeight + this.margin.top + this.margin.bottom
-    });
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: {
-        lines,
-        lineAdvance: style.lineAdvance,
-        contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
-        style
-      }
-    };
+    return this.fragment(context, constraints, 0, false).box;
+  }
+  layoutSpan(context, constraints, state) {
+    return this.fragment(context, constraints, state.lineIndex, true);
   }
   paint(context, box) {
     const {canvas} = context;
-    const {lines, lineAdvance, contentWidth, style} = box.data;
-    const xStart = box.x + this.margin.left;
-    let baseline = box.y + this.margin.top + style.fontSize;
-    for (const line of lines) {
-      const lineWidth = textWidth(style.font, line, style.fontSize, style.letterSpacing);
-      let x = xStart;
-      if (style.align === "center") x += (contentWidth - lineWidth) / 2;
-      if (style.align === "right") x += contentWidth - lineWidth;
-      canvas.text(line, x, baseline, {
-        fontSize: style.fontSize,
-        color: style.color,
-        font: style.font,
-        letterSpacing: style.letterSpacing,
-        wordSpacing: style.wordSpacing
-      });
-      baseline += lineAdvance;
+    if (box.data.clip) {
+      canvas.saveContext();
+      canvas.drawRect(box.x, canvas.pageHeight - box.y - box.height, box.width, box.height);
+      canvas.clipPath();
     }
+    for (const line of box.data.lines) {
+      for (const run of line.runs) {
+        const x = box.x + this.margin.left + run.x;
+        const y = box.y + run.y;
+        if (run.style.background !== null && run.width > 0) {
+          run.style.background.paint(context, x, y, run.width, run.height, "all", this.textDirection);
+        }
+      }
+    }
+    for (const line of box.data.lines) {
+      for (const run of line.runs) {
+        const x = box.x + this.margin.left + run.x;
+        if (run.kind === "text") {
+          canvas.text(run.text, x, box.y + run.baseline, {
+            font: run.style.font,
+            fontSize: run.style.fontSize,
+            color: run.style.color,
+            letterSpacing: run.style.letterSpacing,
+            wordSpacing: run.style.wordSpacing
+          });
+        } else if (run.kind === "widget" && run.childBox !== null) {
+          run.childBox.widget.paint(context, {
+            ...run.childBox,
+            x,
+            y: box.y + run.y
+          });
+        }
+      }
+    }
+    for (const line of box.data.lines) {
+      for (const run of line.runs) {
+        if (run.style.decorations.length === 0 || run.width <= 0) continue;
+        const x = box.x + this.margin.left + run.x;
+        const width = Math.max(.25, run.style.fontSize * .05 * run.style.decorationThickness);
+        for (const decoration of run.style.decorations) {
+          const top = decoration === "underline" ? box.y + run.baseline + run.style.fontSize * .08 : decoration === "overline" ? box.y + run.baseline - run.style.fontSize : box.y + run.baseline - run.style.fontSize * .35;
+          canvas.line(x, top, x + run.width, top, run.style.decorationColor, width);
+          if (run.style.decorationStyle === "double") {
+            const gap = Math.max(width * 2, run.style.fontSize * .04);
+            canvas.line(x, top + gap, x + run.width, top + gap, run.style.decorationColor, width);
+          }
+        }
+      }
+    }
+    if (box.data.clip) canvas.restoreContext();
+  }
+}
+
+class Text extends RichText {
+  constructor(value, {style = undefined, fontSize = undefined, lineHeight = undefined, color = undefined, align = undefined, textAlign = undefined, textDirection = "ltr", softWrap = undefined, tightBounds = false, textScaleFactor = 1, margin = 0, maxLines = undefined, overflow = undefined, font = undefined} = {}) {
+    const overrides = new TextStyle({
+      color: color === undefined ? null : normalizeColor(color),
+      font: font === undefined ? null : undefined,
+      fontSize: fontSize === undefined ? null : assertFiniteNumber(Number(fontSize), "fontSize"),
+      height: lineHeight === undefined ? null : assertFiniteNumber(Number(lineHeight), "lineHeight")
+    });
+    const merged = (style ?? new TextStyle).merge(overrides);
+    super({
+      text: new TextSpan({
+        text: String(value),
+        style: merged
+      }),
+      textAlign: textAlign ?? align ?? null,
+      textDirection,
+      softWrap: softWrap ?? null,
+      tightBounds,
+      textScaleFactor,
+      maxLines: maxLines ?? null,
+      overflow: overflow ?? null,
+      margin
+    });
+    this.value = String(value);
+    this.directFont = font ?? null;
+  }
+  inputTokens(context, maxWidth) {
+    if (this.directFont === null) return super.inputTokens(context, maxWidth);
+    const tokens = super.inputTokens(context, maxWidth);
+    return tokens.map(token => ({
+      ...token,
+      style: {
+        ...token.style,
+        font: this.directFont
+      }
+    }));
   }
 }
 
@@ -8894,6 +9269,10 @@ const publicApi = Object.freeze({
   Page,
   MultiPage,
   Text,
+  InlineSpan,
+  RichText,
+  TextSpan,
+  WidgetSpan,
   Column,
   Row,
   Flex,
@@ -8983,4 +9362,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Center, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, Font, FractionColumnWidth, FullPage, Gradient, GridView, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Positioned, PositionedDirectional, RadialGradient, Radius, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableRow, Text, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, Wrap, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Center, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, Font, FractionColumnWidth, FullPage, Gradient, GridView, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Positioned, PositionedDirectional, RadialGradient, Radius, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
