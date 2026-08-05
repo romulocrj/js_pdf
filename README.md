@@ -14,8 +14,8 @@ at build time rather than by convention.
 ## Status
 
 Early. The low-level PDF writer, the layout protocol and a small widget set are
-in place; fonts are limited to built-in Helvetica with WinAnsi text, and there is
-no SVG, image, or table subsystem yet.
+in place; all 14 built-in Type1 fonts are available with real AFM metrics and
+WinAnsi text, while SVG, image and table subsystems are not implemented yet.
 
 - [docs/PORTING-STATUS.md](docs/PORTING-STATUS.md) — what has been ported so far, file by file
 - [docs/ROADMAP.md](docs/ROADMAP.md) — the next steps, in order
@@ -46,9 +46,12 @@ Each JavaScript artifact carries the attribution banner and no other comment.
 Node, or any bundler:
 
 ```js
-import { createPdf } from 'js_pdf';
+import { createPdf, PdfType1Font } from 'js_pdf';
 
-const bytes = createPdf({ title: 'Report' }, ({ Page, Text }) => [
+const bytes = createPdf({
+  title: 'Report',
+  font: PdfType1Font.times()
+}, ({ Page, Text }) => [
   new Page({ build: () => new Text('Hello js_pdf') })
 ]);
 // bytes instanceof Uint8Array
@@ -85,7 +88,8 @@ depends on your ClearScript version and host binding strategy.
 ## Public API
 
 `createPdf`, `Document`, `Page`, `MultiPage`, `Text`, `Column`, `Row`,
-`Container`, `Spacer`, `Vector`, `PageFormat`, `Widget`.
+`Container`, `Spacer`, `Vector`, `PageFormat`, `PdfType1Font`,
+`PdfFontMetrics`, `Widget`.
 
 ## Example
 
@@ -95,8 +99,8 @@ table. Run it with `npm run example`.
 
 ## Current limitations
 
-- Helvetica / WinAnsi only; no embedded TTF, so no CJK and no arbitrary Unicode.
-- Glyph advance widths are approximated, so text measurement drifts from dart_pdf.
+- One built-in Type1 font per document with WinAnsi text; no embedded TTF, so
+  no CJK and no arbitrary Unicode.
 - `Vector` emits PDF vector operators directly; there is no SVG parser yet.
 - No image, table, spanning widget, RTL shaping, encryption, signature or PDF/A support.
 - A `MultiPage` child taller than one content area is rejected rather than split.

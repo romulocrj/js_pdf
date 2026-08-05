@@ -1,3 +1,4 @@
+import type { PdfFont } from './font/font.ts';
 import type { PageSize } from './page_format.ts';
 export interface DocumentMetadata {
     readonly title?: string | null;
@@ -12,4 +13,4 @@ export interface SerializedPage {
     readonly content: string;
 }
 /** Write the object table, the classic cross-reference table and the trailer. */
-export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata): Uint8Array;
+export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata, font?: PdfFont): Uint8Array;

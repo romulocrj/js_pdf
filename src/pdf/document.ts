@@ -29,6 +29,8 @@
  */
 
 import { formatNumber } from './format/num.ts';
+import type { PdfFont } from './font/font.ts';
+import { defaultPdfFont } from './font/type1_fonts.ts';
 import { pdfLiteral } from './format/string.ts';
 import { concatBytes, encodeLatin1 } from './format/stream.ts';
 import type { PageSize } from './page_format.ts';
@@ -60,7 +62,8 @@ function metadataDictionary(metadata: DocumentMetadata): string {
 /** Write the object table, the classic cross-reference table and the trailer. */
 export function serializePdf(
   pages: readonly SerializedPage[],
-  metadata: DocumentMetadata
+  metadata: DocumentMetadata,
+  font: PdfFont = defaultPdfFont
 ): Uint8Array {
   // Index 0 is the free head of the xref table and is never emitted as an
   // object; `null` marks an id that has been reserved but not yet filled.
@@ -72,7 +75,7 @@ export function serializePdf(
 
   const catalogId = allocate('');
   const pagesId = allocate('');
-  const fontId = allocate('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+  const fontId = allocate(font.resourceDict());
   const infoId = allocate(metadataDictionary(metadata));
   const pageIds: number[] = [];
 

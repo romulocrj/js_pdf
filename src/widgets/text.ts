@@ -23,7 +23,8 @@
 import { assertFiniteNumber } from '../base/assert.ts';
 import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput, Rgb } from '../pdf/color.ts';
-import { estimateTextWidth } from '../pdf/font/font_metrics.ts';
+import type { PdfFont } from '../pdf/font/font.ts';
+import { defaultPdfFont } from '../pdf/font/type1_fonts.ts';
 import { normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import { Widget } from './widget.ts';
@@ -49,13 +50,17 @@ export interface TextLayoutData {
 }
 
 /** Hard-split a word that cannot fit on a line by itself. */
-function breakLongWord(word: string, maxWidth: number, fontSize: number): string[] {
+function textWidth(font: PdfFont, text: string, fontSize: number): number {
+  return font.stringMetrics(text, fontSize).advanceWidth;
+}
+
+function breakLongWord(word: string, maxWidth: number, fontSize: number, font: PdfFont): string[] {
   const chunks: string[] = [];
   let current = '';
 
   for (const character of word) {
     const candidate = current + character;
-    if (current && estimateTextWidth(candidate, fontSize) > maxWidth) {
+    if (current && textWidth(font, candidate, fontSize) > maxWidth) {
       chunks.push(current);
       current = character;
     } else {
@@ -68,7 +73,12 @@ function breakLongWord(word: string, maxWidth: number, fontSize: number): string
 }
 
 /** Greedy line breaker. Explicit newlines always start a new line. */
-export function wrapText(value: string, maxWidth: number, fontSize: number): string[] {
+export function wrapText(
+  value: string,
+  maxWidth: number,
+  fontSize: number,
+  font: PdfFont = defaultPdfFont
+): string[] {
   const lines: string[] = [];
   const paragraphs = String(value).replace(/\r\n?/g, '\n').split('\n');
 
@@ -82,13 +92,13 @@ export function wrapText(value: string, maxWidth: number, fontSize: number): str
     let current = '';
 
     for (const rawWord of rawWords) {
-      const words = estimateTextWidth(rawWord, fontSize) <= maxWidth
+      const words = textWidth(font, rawWord, fontSize) <= maxWidth
         ? [rawWord]
-        : breakLongWord(rawWord, maxWidth, fontSize);
+        : breakLongWord(rawWord, maxWidth, fontSize, font);
 
       for (const word of words) {
         const candidate = current ? `${current} ${word}` : word;
-        if (current && estimateTextWidth(candidate, fontSize) > maxWidth) {
+        if (current && textWidth(font, candidate, fontSize) > maxWidth) {
           lines.push(current);
           current = word;
         } else {
@@ -127,15 +137,16 @@ export class Text extends Widget<TextLayoutData> {
     this.margin = normalizeInsets(margin);
   }
 
-  override layout(_context: RenderContext, constraints: Constraints): LayoutBox<TextLayoutData> {
+  override layout(context: RenderContext, constraints: Constraints): LayoutBox<TextLayoutData> {
+    const font = context.document.font;
     const contentWidth = Math.max(1, constraints.maxWidth - this.margin.left - this.margin.right);
-    const lines = wrapText(this.value, contentWidth, this.fontSize);
+    const lines = wrapText(this.value, contentWidth, this.fontSize, font);
     const lineAdvance = this.fontSize * this.lineHeight;
     const contentHeight = lines.length * lineAdvance;
 
     return {
       widget: this,
-      width: Math.min(constraints.maxWidth, Math.max(...lines.map(line => estimateTextWidth(line, this.fontSize)), 0) + this.margin.left + this.margin.right),
+      width: Math.min(constraints.maxWidth, Math.max(...lines.map(line => textWidth(font, line, this.fontSize)), 0) + this.margin.left + this.margin.right),
       height: contentHeight + this.margin.top + this.margin.bottom,
       data: { lines, lineAdvance, contentWidth }
     };
@@ -143,19 +154,21 @@ export class Text extends Widget<TextLayoutData> {
 
   override paint(context: RenderContext, box: PositionedBox<TextLayoutData>): void {
     const { canvas } = context;
+    const font = context.document.font;
     const { lines, lineAdvance, contentWidth } = box.data;
     const xStart = box.x + this.margin.left;
     let baseline = box.y + this.margin.top + this.fontSize;
 
     for (const line of lines) {
-      const lineWidth = estimateTextWidth(line, this.fontSize);
+      const lineWidth = textWidth(font, line, this.fontSize);
       let x = xStart;
       if (this.align === 'center') x += (contentWidth - lineWidth) / 2;
       if (this.align === 'right') x += contentWidth - lineWidth;
 
       canvas.text(line, x, baseline, {
         fontSize: this.fontSize,
-        color: this.color
+        color: this.color,
+        font
       });
       baseline += lineAdvance;
     }

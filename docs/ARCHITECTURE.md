@@ -109,8 +109,10 @@ safety) and that JavaScript has to check by hand.
 - **`color.ts`** — `#RRGGBB` or `[r,g,b]` → normalized triple, plus the
   `rg`/`RG` operators. DeviceRGB only.
 - **`page_format.ts`** — page dimensions in PDF points.
-- **`font/font_metrics.ts`** — glyph advance widths. Currently an
-  approximation; see §5.
+- **`font/font_metrics.ts`** — glyph and string bounding metrics, including
+  ascent, descent, bearings and advance width.
+- **`font/font.ts` / `font/type1_fonts.ts`** — the common font seam and AFM
+  widths for all 14 standard Type1 fonts. A document currently selects one.
 - **`graphics.ts`** — `PdfCanvas`, the content-stream builder. It owns the
   coordinate flip (see §4) and appends operator strings to a buffer it never
   re-reads.
@@ -201,7 +203,7 @@ roadmap phase lands.
 
 | Area | dart_pdf | js_pdf |
 |---|---|---|
-| Font metrics | Real AFM tables for the 14 standard fonts; `hmtx` for TTF | Character-class approximation in `font/font_metrics.ts` |
+| Font metrics | Real AFM tables for the 14 standard fonts; `hmtx` for TTF | Real Type1 AFM tables; no TTF metrics until phase 1.1 |
 | Text encoding | WinAnsi *or* hex-encoded CID strings for TTF | WinAnsi only; anything outside becomes `?` |
 | Object model | One `PdfObject` subclass per indirect object, each self-serializing | Flat object table in `pdf/document.ts` |
 | Colors | `PdfColor` value type with CMYK and HSL variants | RGB triple, DeviceRGB only |
@@ -210,9 +212,8 @@ roadmap phase lands.
 | Decoration | `BoxDecoration`: gradients, shapes, radii, shadows, per-side borders | Flat `background` / `borderColor` / `borderWidth` |
 | Async | `save()` returns a `Future` | `save()` returns `Uint8Array` |
 
-The font-metrics row is the most consequential: it means line breaks and
-alignment in a js_pdf document do not match dart_pdf's for the same input. It is
-phase 1 of the roadmap for that reason.
+Type1 line breaks and alignment now match dart_pdf's AFM inputs. The remaining
+font-metrics divergence belongs to embedded TTF, which starts in phase 1.1.
 
 ## 6. Build
 

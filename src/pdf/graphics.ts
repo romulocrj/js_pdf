@@ -18,12 +18,14 @@
 
 import { colorOperator } from './color.ts';
 import type { ColorInput } from './color.ts';
+import type { PdfFont } from './font/font.ts';
+import { defaultPdfFont } from './font/type1_fonts.ts';
 import { formatNumber } from './format/num.ts';
-import { pdfLiteral } from './format/string.ts';
 
 export interface TextStyle {
   readonly fontSize: number;
   readonly color: ColorInput;
+  readonly font?: PdfFont;
 }
 
 export interface CircleOptions {
@@ -73,12 +75,13 @@ export class PdfCanvas {
   text(text: string, x: number, baselineFromTop: number, style: TextStyle): void {
     const baseline = this.pageHeight - baselineFromTop;
     const fontSize = style.fontSize;
+    const font = style.font ?? defaultPdfFont;
     const command = [
       'BT',
       '/F1', formatNumber(fontSize), 'Tf',
       colorOperator(style.color),
       '1 0 0 1', formatNumber(x), formatNumber(baseline), 'Tm',
-      pdfLiteral(text), 'Tj',
+      font.encodeText(text), 'Tj',
       'ET'
     ].join(' ');
     this.push(command);

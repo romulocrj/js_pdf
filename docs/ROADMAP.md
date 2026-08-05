@@ -10,8 +10,8 @@ Ordered plan for the port. Current coverage is in
 
 The MVP is restructured into a module tree that mirrors `dart_pdf`, written in
 TypeScript, with the runtime contract and attribution enforced by
-`npm run check`. Output is a valid single-font PDF. Nothing beyond that is real
-yet.
+`npm run check`. Output is a valid single-font PDF with selectable standard
+Type1 fonts and real AFM metrics. Nothing beyond that is real yet.
 
 **Phase 0.0 — TypeScript migration — landed 2026-08-05.** All 19 modules are
 `.ts`; `tsconfig.json` compiles against the ES2020 lib with no DOM and no node
@@ -23,13 +23,14 @@ work, not during it, so the branded integer types that phase 1 needs
 
 ## Next step
 
-> **Phase 0.1 — real Type1 font metrics.** Replace the character-class width
-> approximation in `src/pdf/font/font_metrics.ts` with the AFM advance-width
-> table for Helvetica, ported from `pdf/lib/src/pdf/font/type1_fonts.dart`.
+> **Phase 0.2 — object model.** Replace the flat object table in
+> `src/pdf/document.ts` with self-serializing indirect objects under
+> `src/pdf/format/` and `src/pdf/obj/` while keeping the current fixtures
+> byte-identical.
 
-Small, self-contained, and it removes the single largest source of divergence
-from dart_pdf in everyday documents. It is also the natural place to introduce
-the `PdfFont` seam that phase 1 needs.
+This is required before a document can own a variable number of fonts, images,
+XObjects or annotations, and it prepares the resource registration in phase
+0.3 without changing observable output.
 
 ---
 
@@ -76,8 +77,9 @@ as the acceptance test for the port as a whole.
 Prerequisites that phases 1–3 all depend on. Do these before the big
 subsystems, not alongside them.
 
-**Example gate:** none — phase 0 changes no public API. `hello-world` must keep
-generating byte-identical output through 0.2.
+**Example gate:** none — phase 0 unlocks no API requested by the upstream
+examples. `hello-world` must keep generating through 0.2; its metrics-dependent
+positions change in 0.1 to match the AFM tables.
 
 ### 0.0 TypeScript migration ✅ *(landed 2026-08-05)*
 
@@ -90,7 +92,7 @@ generating byte-identical output through 0.2.
   widget API for the first time.
 - Node runs `src/*.ts` directly via type stripping, so tests need no build step.
 
-### 0.1 Type1 font metrics *(next)*
+### 0.1 Type1 font metrics ✅ *(landed 2026-08-05)*
 
 - **Ports:** `pdf/lib/src/pdf/font/type1_fonts.dart`, `font/font_metrics.dart`
 - **Into:** `src/pdf/font/type1_fonts.ts`, rewrite `src/pdf/font/font_metrics.ts`
@@ -102,6 +104,13 @@ generating byte-identical output through 0.2.
   implementation. Everything in phase 1 plugs into this seam.
 - **Test:** width of a known string against the AFM table; a document using each
   standard font.
+
+Landed with the complete 256-entry tables for the ten distinct proportional
+faces (the four Courier faces use their fixed 0.600 em advance),
+`PdfFontMetrics`, and the `PdfFont` seam. `DocumentOptions.font` selects one of
+the 14 standard fonts through `PdfType1Font`; per-page multi-font registration
+remains phase 0.3. The serializer structure is unchanged, while alignment and
+wrapping now use the real advances.
 
 ### 0.2 Object model
 

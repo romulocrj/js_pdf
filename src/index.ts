@@ -22,6 +22,7 @@
  */
 
 import { PageFormat } from './pdf/page_format.ts';
+import { PdfType1Font } from './pdf/font/type1_fonts.ts';
 import { Container } from './widgets/container.ts';
 import { Document } from './widgets/document.ts';
 import { Column, Row, Spacer } from './widgets/flex.ts';
@@ -40,6 +41,7 @@ export {
   MultiPage,
   Page,
   PageFormat,
+  PdfType1Font,
   Row,
   Spacer,
   Text,
@@ -48,6 +50,9 @@ export {
 };
 
 export type { ColorInput, Rgb } from './pdf/color.ts';
+export type { PdfFont } from './pdf/font/font.ts';
+export type { PdfFontMetricsOptions } from './pdf/font/font_metrics.ts';
+export { PdfFontMetrics } from './pdf/font/font_metrics.ts';
 export type { PageSize } from './pdf/page_format.ts';
 export type { TextStyle } from './pdf/graphics.ts';
 export type { PdfCanvas } from './pdf/graphics.ts';
@@ -81,6 +86,7 @@ export interface PublicApi {
   readonly Spacer: typeof Spacer;
   readonly Vector: typeof Vector;
   readonly PageFormat: typeof PageFormat;
+  readonly PdfType1Font: typeof PdfType1Font;
 }
 
 const publicApi: PublicApi = Object.freeze({
@@ -93,7 +99,8 @@ const publicApi: PublicApi = Object.freeze({
   Container,
   Spacer,
   Vector,
-  PageFormat
+  PageFormat,
+  PdfType1Font
 });
 
 /**

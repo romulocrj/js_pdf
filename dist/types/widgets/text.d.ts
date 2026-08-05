@@ -1,4 +1,5 @@
 import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { PdfFont } from '../pdf/font/font.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import { Widget } from './widget.ts';
 import type { Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
@@ -18,7 +19,7 @@ export interface TextLayoutData {
     readonly contentWidth: number;
 }
 /** Greedy line breaker. Explicit newlines always start a new line. */
-export declare function wrapText(value: string, maxWidth: number, fontSize: number): string[];
+export declare function wrapText(value: string, maxWidth: number, fontSize: number, font?: PdfFont): string[];
 export declare class Text extends Widget<TextLayoutData> {
     readonly value: string;
     readonly fontSize: number;
@@ -27,6 +28,6 @@ export declare class Text extends Widget<TextLayoutData> {
     readonly align: TextAlign;
     readonly margin: Insets;
     constructor(value: string, { fontSize, lineHeight, color, align, margin }?: TextOptions);
-    layout(_context: RenderContext, constraints: Constraints): LayoutBox<TextLayoutData>;
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<TextLayoutData>;
     paint(context: RenderContext, box: PositionedBox<TextLayoutData>): void;
 }

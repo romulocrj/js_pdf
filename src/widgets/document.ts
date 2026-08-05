@@ -21,6 +21,8 @@
 
 import { serializePdf } from '../pdf/document.ts';
 import type { DocumentMetadata, SerializedPage } from '../pdf/document.ts';
+import type { PdfFont } from '../pdf/font/font.ts';
+import { defaultPdfFont } from '../pdf/font/type1_fonts.ts';
 import { MultiPage } from './multi_page.ts';
 import { Page } from './page.ts';
 import type { Section } from './page.ts';
@@ -32,10 +34,12 @@ export interface DocumentOptions {
   readonly subject?: string | null;
   readonly creator?: string | null;
   readonly producer?: string | null;
+  readonly font?: PdfFont;
 }
 
 export class Document {
   readonly metadata: DocumentMetadata;
+  readonly font: PdfFont;
   readonly sections: Section[] = [];
 
   constructor({
@@ -43,9 +47,11 @@ export class Document {
     author = null,
     subject = null,
     creator = 'js_pdf',
-    producer = 'js_pdf'
+    producer = 'js_pdf',
+    font = defaultPdfFont
   }: DocumentOptions = {}) {
     this.metadata = { title, author, subject, creator, producer };
+    this.font = font;
   }
 
   addPage(page: Section): this {
@@ -68,6 +74,6 @@ export class Document {
       throw new Error('Document must contain at least one page');
     }
 
-    return serializePdf(pages, this.metadata);
+    return serializePdf(pages, this.metadata, this.font);
   }
 }

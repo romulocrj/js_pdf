@@ -16,6 +16,13 @@ function latin1(bytes) {
   return output;
 }
 
+function assertClose(actual, expected, tolerance = 1e-12) {
+  assert.ok(
+    Math.abs(actual - expected) <= tolerance,
+    `expected ${actual} to be within ${tolerance} of ${expected}`
+  );
+}
+
 test('createPdf returns a valid Uint8Array PDF with one page', () => {
   const bytes = Pdf.createPdf({}, () => [
     new Pdf.Page({
@@ -60,8 +67,57 @@ test('Text emits WinAnsi octal escapes for Portuguese accents', () => {
   assert.match(source, /execu\\347\\343o/);
 });
 
+test('Helvetica measures a known string with AFM advance widths', () => {
+  const font = Pdf.PdfType1Font.helvetica();
+  const metrics = font.stringMetrics('Hello', 12);
+
+  assertClose(metrics.advanceWidth, 27.336);
+  assertClose(metrics.width, 27.336);
+  assertClose(metrics.ascent, 11.172);
+  assertClose(metrics.descent, -2.7);
+});
+
+test('all 14 standard Type1 fonts can be selected for a document', () => {
+  const fonts = [
+    Pdf.PdfType1Font.courier(),
+    Pdf.PdfType1Font.courierBold(),
+    Pdf.PdfType1Font.courierBoldOblique(),
+    Pdf.PdfType1Font.courierOblique(),
+    Pdf.PdfType1Font.helvetica(),
+    Pdf.PdfType1Font.helveticaBold(),
+    Pdf.PdfType1Font.helveticaBoldOblique(),
+    Pdf.PdfType1Font.helveticaOblique(),
+    Pdf.PdfType1Font.times(),
+    Pdf.PdfType1Font.timesBold(),
+    Pdf.PdfType1Font.timesBoldItalic(),
+    Pdf.PdfType1Font.timesItalic(),
+    Pdf.PdfType1Font.symbol(),
+    Pdf.PdfType1Font.zapfDingbats()
+  ];
+
+  assert.equal(fonts.length, 14);
+  for (const font of fonts) {
+    const bytes = Pdf.createPdf({ font }, () => new Pdf.Page({
+      build: () => new Pdf.Text('Font metrics')
+    }));
+    const source = latin1(bytes);
+
+    assert.match(source, new RegExp(`/BaseFont /${font.fontName}\\b`));
+    assert.match(source, /BT \/F1 12 Tf/);
+  }
+});
+
+test('Type1 font encoding and resource dictionary use the font seam', () => {
+  const font = Pdf.PdfType1Font.timesBoldItalic();
+
+  assert.equal(font.encodeText('Ação'), '(A\\347\\343o)');
+  assert.match(font.resourceDict(), /\/Subtype \/Type1/);
+  assert.match(font.resourceDict(), /\/BaseFont \/Times-BoldItalic/);
+  assert.match(font.resourceDict(), /\/Encoding \/WinAnsiEncoding/);
+});
+
 test('the namespace export exposes the same API as the named exports', () => {
-  for (const name of ['Document', 'Page', 'MultiPage', 'Text', 'Column', 'Row', 'Container', 'Spacer', 'Vector', 'PageFormat']) {
+  for (const name of ['Document', 'Page', 'MultiPage', 'Text', 'Column', 'Row', 'Container', 'Spacer', 'Vector', 'PageFormat', 'PdfType1Font']) {
     assert.equal(Pdf.js_pdf[name], Pdf[name], `js_pdf.${name} must match the named export`);
   }
   assert.equal(typeof Pdf.js_pdf.createPdf, 'function');

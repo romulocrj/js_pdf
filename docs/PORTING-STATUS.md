@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 19 `.ts` files, ~1,690 lines (TypeScript)
+**Ported:** 21 `.ts` files, ~2,340 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -22,7 +22,7 @@ table. Run `npm run examples`; current state, from
 
 | Example | Status | Missing APIs | Unlocks at |
 |---|---|---:|---|
-| `hello-world` | ✅ generated (741 bytes) | 0 | — |
+| `hello-world` | ✅ generated (740 bytes) | 0 | — |
 | `calendar` | failed | 14 | 3.6 |
 | `certificate` | failed | 19 | 3.9 |
 | `report` | failed | 18 | 5.1 |
@@ -82,7 +82,8 @@ almost everything in this section.
 |---|---:|---|---|
 | `obj/object.dart`, `object_dict.dart`, `object_stream.dart`, `array.dart` | 174 | folded into `src/pdf/document.ts` | stub — no reusable object model |
 | `obj/catalog.dart`, `page.dart`, `page_list.dart`, `info.dart` | 457 | folded into `src/pdf/document.ts` | partial |
-| `obj/type1_font.dart`, `font.dart`, `font_descriptor.dart` | 536 | folded into `src/pdf/document.ts` | stub — a single hardcoded `/Helvetica` `/WinAnsiEncoding` dict |
+| `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; one font per document until phase 0.3 |
+| `obj/font_descriptor.dart` | 139 | — | — needed for embedded TTF in **phase 1.3** |
 | `obj/ttffont.dart`, `unicode_cmap.dart` | 278 | — | — **phase 1.3** |
 | `obj/graphic_stream.dart`, `xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 362 | — | — resource dictionary is **phase 0.3** |
 | `obj/image.dart`, `smask.dart` | 347 | — | — **phase 4.1–4.2** |
@@ -96,8 +97,8 @@ almost everything in this section.
 
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
-| `font/font_metrics.dart` | 184 | `src/pdf/font/font_metrics.ts` | **stub** — character-class approximation, not real metrics |
-| `font/type1_fonts.dart` | 304 | — | — AFM widths for the 14 standard fonts — **phase 0.1, next** |
+| `font/font_metrics.dart` | 184 | `src/pdf/font/font_metrics.ts` | done — bounding box, bearings, ascent/descent and advance width |
+| `font/type1_fonts.dart` | 304 | `src/pdf/font/type1_fonts.ts` | done — complete AFM widths for the 14 standard fonts |
 | `font/ttf_parser.dart` | 693 | — | — **phase 1.1** |
 | `font/ttf_writer.dart` | 399 | — | — **phase 1.2** |
 | `font/bidi_utils.dart`, `arabic.dart` | 502 | — | — |
@@ -160,9 +161,9 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 | Object syntax / serialization | ~1,700 | minimal but correct output |
 | Graphics | ~1,600 | ~15% of the operator surface |
 | Indirect objects | ~4,300 | flat table; no object model |
-| Fonts | ~2,100 | **stub metrics, no embedding** |
+| Fonts | ~2,100 | Type1 AFM metrics done; no TTF parsing or embedding |
 | SVG | ~2,800 | not started |
 | Widgets | ~14,000 | ~10 widgets of ~60 |
 
-The two entries that gate everything downstream are **fonts** and **the object
-model**. See [ROADMAP.md](ROADMAP.md).
+The next structural gate is the **object model**; embedded TTF remains the major
+font milestone. See [ROADMAP.md](ROADMAP.md).

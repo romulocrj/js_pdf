@@ -1,7 +1,9 @@
 import type { ColorInput } from './color.ts';
+import type { PdfFont } from './font/font.ts';
 export interface TextStyle {
     readonly fontSize: number;
     readonly color: ColorInput;
+    readonly font?: PdfFont;
 }
 export interface CircleOptions {
     readonly fill?: ColorInput | null;
