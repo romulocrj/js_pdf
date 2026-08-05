@@ -47,16 +47,25 @@ neither. `Padding`, `Align`, `Center`, `SizedBox` and `Divider`, plus
 result — every one of the seven calls `Font.ttf`, so phase 1 remains on all their
 critical paths — but the missing-API total across them fell from 147 to 124.
 
+**Phase 1.1 — TTF parser — landed 2026-08-05.** `TtfParser` reads the table
+directory, `head`/`hhea`/`maxp`/`name`, `cmap` formats 0/4/6/12, `loca`/`glyf`
+bounds and composite glyph components. All eleven fonts in `examples/assets/`
+parse, and every glyph in `OpenSans-Regular` and `Roboto-Regular` reads back
+without overrunning its `loca` entry.
+
 ## Next step
 
-> **Phase 1.1 — TTF parser.** Port `pdf/lib/src/pdf/font/ttf_parser.dart` into
-> `src/pdf/font/ttf_parser.ts`: table directory, `head`/`hhea`/`hmtx`/`maxp`/
-> `name`/`post`/`OS/2`, `cmap` formats 4, 6 and 12, `loca`/`glyf` bounds.
+> **Phase 1.2 — TTF subsetting writer.** Port
+> `pdf/lib/src/pdf/font/ttf_writer.dart` into `src/pdf/font/ttf_writer.ts`:
+> build a font containing only the used glyphs plus the components their
+> composites pull in, rebuild `loca`, `glyf`, `hmtx` and `cmap`, and recompute
+> the table checksums.
 
-Phase 0 is finished, so nothing structural is in the way. Read the fixtures
-already sitting in `examples/assets/` with `DataView` over a `Uint8Array` — no
-host buffer API — and assert unitsPerEm, a known advance width and a known
-codepoint→glyph mapping against `OpenSans-Regular` and `Roboto-Regular`.
+`TtfParser.readGlyph` already returns each glyph's raw program and its
+`compounds` list, which is exactly the input the subsetter needs — the traversal
+to write is "seed with the used glyphs, follow `compounds` to a fixed point".
+**Test:** the subset re-parses with the 1.1 parser and still contains the
+requested glyphs.
 
 ---
 
@@ -227,7 +236,7 @@ Depends on phases 0.1–0.3.
 failing example needs `Font`, `TextStyle` and `ThemeData`. None generates yet
 after this phase, but all seven move.
 
-### 1.1 TTF parser
+### 1.1 TTF parser ✅ *(landed 2026-08-05)*
 
 - **Ports:** `pdf/lib/src/pdf/font/ttf_parser.dart` (693 lines)
 - **Into:** `src/pdf/font/ttf_parser.ts`
@@ -237,6 +246,28 @@ after this phase, but all seven move.
 - **Test:** parse the fixtures already in `examples/assets/` (`OpenSans-Regular`,
   `Roboto-Regular`); assert unitsPerEm, a known advance width, and a known
   codepoint→glyph mapping.
+
+Landed with `cmap` format 0 as well, per-glyph `PdfFontMetrics` normalized to em
+units, and `readGlyph` walking both simple and composite glyph programs. The
+parser is **internal** — nothing is exported from `src/index.ts` until 1.3 has
+something to embed, the same way the object model stayed internal through 0.2.
+
+Divergences, each noted in the file:
+
+- Upstream asserts its way through malformed input, which a Dart release build
+  compiles out. The port throws: a font failing these checks cannot be subset or
+  embedded either, so parse time is where the error is cheapest to read.
+- No `CBLC`/`CBDT` bitmap glyphs. Colour emoji is a separate feature from the
+  outline path phase 1 needs, with its own metrics shape.
+- No bidi coupling. Upstream's format 4 reader also maps each Arabic codepoint's
+  isolated form to the same glyph; that belongs with the unported
+  `font/arabic.dart` and `bidi_utils.dart`.
+
+**Test coverage:** all eleven fonts in `examples/assets/` parse; `loca` offsets
+are monotonic and in bounds; every glyph in `OpenSans-Regular` and
+`Roboto-Regular` reads without overrunning its `loca` entry and refers only to
+glyphs inside the font; `MaterialIcons` resolves Private Use Area codepoints,
+which is what phase 5.4 needs.
 
 ### 1.2 TTF subsetting writer
 

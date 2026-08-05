@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 39 `.ts` files, ~3,930 lines (TypeScript)
+**Ported:** 40 `.ts` files, ~4,690 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -113,7 +113,7 @@ on: an object registers itself with the document, hands out references through
 |---|---:|---|---|
 | `font/font_metrics.dart` | 184 | `src/pdf/font/font_metrics.ts` | done — bounding box, bearings, ascent/descent and advance width |
 | `font/type1_fonts.dart` | 304 | `src/pdf/font/type1_fonts.ts` | done — complete AFM widths for the 14 standard fonts |
-| `font/ttf_parser.dart` | 693 | — | — **phase 1.1** |
+| `font/ttf_parser.dart` | 693 | `src/pdf/font/ttf_parser.ts` | partial — tables, `cmap` 0/4/6/12, `loca`/`glyf`, composite glyphs, `CFF ` detection; no `CBLC`/`CBDT` bitmaps, no bidi isolated-form mapping |
 | `font/ttf_writer.dart` | 399 | — | — **phase 1.2** |
 | `font/bidi_utils.dart`, `arabic.dart` | 502 | — | — |
 
@@ -175,12 +175,13 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 | Object syntax / serialization | ~1,700 | self-serializing value types; no filters, no xref streams |
 | Graphics | ~1,600 | ~15% of the operator surface |
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources |
-| Fonts | ~2,100 | Type1 AFM metrics done, any number per document; no TTF parsing or embedding |
+| Fonts | ~2,100 | Type1 AFM metrics done, any number per document; TTF parsing done, no subsetting or embedding |
 | SVG | ~2,800 | not started |
 | Widgets | ~14,000 | ~15 widgets of ~60 |
 
-**Phase 0 is complete.** The object model landed in 0.2 and the per-page resource
-dictionary in 0.3, so neither the object graph nor the single-font limit is a
-blocker any more. The next gate is **phase 1**, embedded TTF — until it lands,
-any text outside WinAnsi is silently replaced with `?`. See
+**Phase 0 is complete**, and phase 1 is under way. The object model landed in 0.2
+and the per-page resource dictionary in 0.3, so neither the object graph nor the
+single-font limit is a blocker any more. Phase 1.1 reads a TTF; **1.2–1.4 are
+what actually lift the WinAnsi ceiling** — until a font can be subset, embedded
+and selected, any text outside WinAnsi is still replaced with `?`. See
 [ROADMAP.md](ROADMAP.md).
