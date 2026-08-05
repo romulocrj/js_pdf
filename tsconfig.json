@@ -1,0 +1,52 @@
+{
+  "// license": [
+    "js_pdf TypeScript configuration.",
+    "Copyright (C) 2026, Romulo Campos",
+    "Licensed under the Apache License, Version 2.0."
+  ],
+
+  "// lib": [
+    "ES2020 only — deliberately no DOM and no @types/node. This is the runtime",
+    "contract expressed as a compiler setting: `document`, `window`, `fetch`,",
+    "`setTimeout`, `Buffer` and `process` are compile errors inside src/, not",
+    "just lint findings. Do not add 'DOM' or 'types': ['node'] here."
+  ],
+
+  "// extensions": [
+    "Relative imports carry the .ts extension so Node can run src/ directly via",
+    "type stripping (tests import ../src/index.ts with no build step).",
+    "rewriteRelativeImportExtensions rewrites them to .js on emit."
+  ],
+
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "types": [],
+
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "erasableSyntaxOnly": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "declaration": true,
+    "rootDir": "src",
+    "outDir": "build",
+    "declarationDir": "dist/types",
+    "removeComments": false,
+    "skipLibCheck": true
+  },
+
+  "include": ["src"]
+}

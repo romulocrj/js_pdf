@@ -1,0 +1,61 @@
+{
+  "name": "js_pdf",
+  "version": "0.1.0",
+  "description": "JavaScript port of DavBfr/dart_pdf. Dependency-free PDF composition for pure ECMAScript hosts (browser importmap, ClearScript, Node).",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "Romulo Campos",
+  "contributors": [
+    "David PHAM-VAN (original Dart implementation, dart_pdf)"
+  ],
+  "homepage": "https://github.com/DavBfr/dart_pdf",
+  "keywords": [
+    "pdf",
+    "dart_pdf",
+    "clearscript",
+    "esm",
+    "no-dependencies"
+  ],
+  "main": "./dist/js_pdf.mjs",
+  "module": "./dist/js_pdf.mjs",
+  "types": "./dist/types/index.d.ts",
+  "unpkg": "./dist/js_pdf.min.mjs",
+  "jsdelivr": "./dist/js_pdf.min.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/js_pdf.mjs",
+      "default": "./dist/js_pdf.mjs"
+    },
+    "./min": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/js_pdf.min.mjs",
+      "default": "./dist/js_pdf.min.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run compile && rollup --config rollup.config.mjs",
+    "compile": "tsc -p tsconfig.json",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "check": "node tools/check-source.mjs && tsc -p tsconfig.json --noEmit",
+    "example": "npm run build && node examples/run-example.mjs",
+    "verify": "npm run check && npm run build && npm test"
+  },
+  "devDependencies": {
+    "@rollup/plugin-terser": "^1.0.0",
+    "rollup": "^4.62.4",
+    "typescript": "^7.0.2"
+  }
+}
