@@ -1,0 +1,94 @@
+/*
+ * js_pdf baseline JPEG phase 4.2 tests.
+ * Copyright (C) 2026, Romulo Campos
+ * Licensed under the Apache License, Version 2.0.
+ */
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import * as Pdf from '../src/index.ts';
+
+const PROFILE = new Uint8Array(readFileSync(new URL('../examples/assets/profile.jpg', import.meta.url)));
+
+function segment(marker, payload) {
+  const length = payload.length + 2;
+  return [0xff, marker, length >>> 8, length & 255, ...payload];
+}
+
+function sof(marker, width, height, components) {
+  const componentData = [];
+  for (let index = 0; index < components; index++) componentData.push(index + 1, 0x11, 0);
+  return segment(marker, [
+    8, height >>> 8, height & 255, width >>> 8, width & 255,
+    components, ...componentData
+  ]);
+}
+
+function jpeg(...segments) {
+  return Uint8Array.from([0xff, 0xd8, ...segments.flat(), 0xff, 0xd9]);
+}
+
+test('parseJpeg reads the real profile dimensions and baseline colour model', () => {
+  const info = Pdf.parseJpeg(PROFILE);
+  assert.deepEqual(info, {
+    width: 200,
+    height: 200,
+    bitsPerComponent: 8,
+    components: 3,
+    colorSpace: 'rgb',
+    inverted: false
+  });
+});
+
+test('parseJpeg recognizes grayscale and CMYK Adobe transforms', () => {
+  const gray = Pdf.parseJpeg(jpeg(sof(0xc0, 17, 9, 1)));
+  assert.equal(gray.colorSpace, 'gray');
+  assert.equal(gray.inverted, false);
+
+  const adobeDirect = segment(0xee, [65, 100, 111, 98, 101, 0, 100, 0, 0, 0, 0, 0]);
+  const cmyk = Pdf.parseJpeg(jpeg(
+    sof(0xc0, 31, 23, 4),
+    // APP14 is deliberately after SOF: legal marker order that upstream stops
+    // scanning too early to observe.
+    adobeDirect
+  ));
+  assert.equal(cmyk.colorSpace, 'cmyk');
+  assert.equal(cmyk.inverted, false);
+
+  const ycck = Pdf.parseJpeg(jpeg(
+    segment(0xee, [65, 100, 111, 98, 101, 0, 100, 0, 0, 0, 0, 2]),
+    sof(0xc0, 31, 23, 4)
+  ));
+  assert.equal(ycck.inverted, true);
+});
+
+test('parseJpeg rejects progressive, truncated and unsupported component data', () => {
+  assert.throws(() => Pdf.parseJpeg(jpeg(sof(0xc2, 10, 10, 3))), /baseline/);
+  assert.throws(() => Pdf.parseJpeg(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 20])), /truncated/i);
+  assert.throws(() => Pdf.parseJpeg(jpeg(sof(0xc0, 10, 10, 2))), /component/);
+});
+
+test('PdfImage.fromJpeg passes the original bytes through a DCT image XObject', () => {
+  const image = Pdf.PdfImage.fromJpeg(PROFILE);
+  assert.equal(image.width, 200);
+  assert.equal(image.height, 200);
+  assert.equal(image.hasAlpha, false);
+  const document = new Pdf.Document();
+  document.addPage(new Pdf.Page({
+    build: () => new Pdf.CustomPaint({
+      size: { x: 100, y: 100 },
+      painter: canvas => canvas.drawImage(image, 0, 0, 100, 100)
+    })
+  }));
+  const bytes = document.save();
+  const source = String.fromCharCode(...bytes);
+  assert.match(source, /\/Subtype \/Image \/Width 200 \/Height 200 \/BitsPerComponent 8 \/Intent \/RelativeColorimetric \/Filter \/DCTDecode \/ColorSpace \/DeviceRGB/);
+  assert.equal(source.includes('/SMask'), false);
+
+  const start = bytes.findIndex((byte, index) =>
+    byte === PROFILE[0] && bytes[index + 1] === PROFILE[1] && bytes[index + 2] === PROFILE[2]
+  );
+  assert.notEqual(start, -1);
+  assert.deepEqual(bytes.slice(start, start + PROFILE.length), PROFILE);
+});

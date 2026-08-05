@@ -26,6 +26,7 @@ import { PdfType1Font } from './pdf/font/type1_fonts.ts';
 import { PdfTtfFont } from './pdf/obj/ttf_font.ts';
 import { PdfImage } from './pdf/obj/image.ts';
 import { decodePng, inflateZlib } from './pdf/image/png.ts';
+import { parseJpeg } from './pdf/image/jpeg.ts';
 import {
   Align,
   AspectRatio,
@@ -178,8 +179,9 @@ export {
   Wrap
 };
 
-export { decodePng, inflateZlib };
+export { decodePng, inflateZlib, parseJpeg };
 export type { DecodedPng } from './pdf/image/png.ts';
+export type { JpegColorSpace, JpegInfo } from './pdf/image/jpeg.ts';
 export type { PdfImageOptions, PdfImageOrientation } from './pdf/obj/image.ts';
 
 export type { ColorInput, Rgb } from './pdf/color.ts';

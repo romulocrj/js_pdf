@@ -97,3 +97,15 @@ produzir 20 palavras para uma solicitação de 15.
 
 **Correção no port:** cada sentença recebe de 3 a 10 palavras, limitada pelo
 total restante. O laço termina com exatamente o número solicitado.
+
+## APP14 depois do SOF é ignorado no JPEG (`exif.dart`)
+
+**Como reproduzir:** monte um JPEG CMYK baseline válido com o marcador SOF0
+antes de um APP14 `Adobe` cujo transform seja zero. A ordem dos segmentos é
+válida, mas `PdfJpegInfo` interrompe a varredura assim que encontra o SOF e não
+vê o APP14 posterior. Sem esse valor, presume que os componentes estão
+invertidos e emite um `/Decode` que altera as cores de um CMYK direto.
+
+**Correção no port:** `parseJpeg` guarda os dados do SOF e continua examinando
+os segmentos até SOS/EOI. Assim o transform Adobe é respeitado em qualquer
+posição válida anterior aos dados comprimidos.

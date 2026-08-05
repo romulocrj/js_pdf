@@ -21,7 +21,7 @@ import type { PdfObjectRegistry } from './object.ts';
 
 /** Binary or graphic stream that can be named from a page's `/XObject` map. */
 export class PdfXObject extends PdfObjectStream {
-  constructor(document: PdfObjectRegistry, subtype: string | null, data = new Uint8Array(0)) {
+  constructor(document: PdfObjectRegistry, subtype: string | null, data: Uint8Array = new Uint8Array(0)) {
     super(document, data);
     this.params.set('/Type', new PdfName('/XObject'));
     if (subtype !== null) this.params.set('/Subtype', new PdfName(subtype));

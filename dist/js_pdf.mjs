@@ -1803,6 +1803,68 @@ function decodePng(bytes) {
   };
 }
 
+const SOF_MARKERS = Object.freeze([ 192, 193, 194, 195, 197, 198, 199, 201, 202, 203, 205, 206, 207 ]);
+
+function u16(bytes, offset) {
+  const high = bytes[offset];
+  const low = bytes[offset + 1];
+  if (high === undefined || low === undefined) throw new RangeError("Truncated JPEG segment");
+  return high << 8 | low;
+}
+
+function parseJpeg(bytes) {
+  if (bytes.length < 4 || bytes[0] !== 255 || bytes[1] !== 216) {
+    throw new TypeError("Invalid JPEG start marker");
+  }
+  let offset = 2;
+  let width = 0;
+  let height = 0;
+  let bitsPerComponent = 0;
+  let components = 0;
+  let adobeTransform = null;
+  let foundBaseline = false;
+  while (offset < bytes.length) {
+    if (bytes[offset] !== 255) throw new RangeError(`Invalid JPEG marker at offset ${offset}`);
+    while (bytes[offset] === 255) offset++;
+    const marker = bytes[offset++];
+    if (marker === undefined) throw new RangeError("Truncated JPEG marker");
+    if (marker === 217 || marker === 218) break;
+    if (marker === 216 || marker === 1 || marker >= 208 && marker <= 215) continue;
+    const length = u16(bytes, offset);
+    if (length < 2) throw new RangeError(`Invalid JPEG segment length ${length}`);
+    const dataStart = offset + 2;
+    const dataEnd = offset + length;
+    if (dataEnd > bytes.length) throw new RangeError("Truncated JPEG segment");
+    if (SOF_MARKERS.includes(marker)) {
+      if (marker !== 192) throw new RangeError("Only baseline JPEG images are supported");
+      if (length < 8) throw new RangeError("Truncated JPEG baseline frame");
+      bitsPerComponent = bytes[dataStart];
+      height = u16(bytes, dataStart + 1);
+      width = u16(bytes, dataStart + 3);
+      components = bytes[dataStart + 5];
+      const expectedLength = 8 + components * 3;
+      if (length < expectedLength) throw new RangeError("Truncated JPEG component table");
+      foundBaseline = true;
+    } else if (marker === 238 && length >= 14 && bytes[dataStart] === 65 && bytes[dataStart + 1] === 100 && bytes[dataStart + 2] === 111 && bytes[dataStart + 3] === 98 && bytes[dataStart + 4] === 101) {
+      adobeTransform = bytes[dataStart + 11];
+    }
+    offset = dataEnd;
+  }
+  if (!foundBaseline) throw new RangeError("Unable to find a baseline JPEG frame");
+  if (width <= 0 || height <= 0) throw new RangeError("JPEG dimensions must be positive");
+  if (bitsPerComponent !== 8) throw new RangeError(`Unsupported JPEG precision ${bitsPerComponent}`);
+  const colorSpace = components === 1 ? "gray" : components === 3 ? "rgb" : components === 4 ? "cmyk" : null;
+  if (colorSpace === null) throw new RangeError(`Unsupported JPEG component count ${components}`);
+  return {
+    width,
+    height,
+    bitsPerComponent,
+    components,
+    colorSpace,
+    inverted: colorSpace === "cmyk" && adobeTransform !== 0
+  };
+}
+
 class PdfXObject extends PdfObjectStream {
   constructor(document, subtype, data = new Uint8Array(0)) {
     super(document, data);
@@ -1815,23 +1877,35 @@ class PdfXObject extends PdfObjectStream {
 }
 
 class PdfImage {
-  constructor({pixels, width, height, hasAlpha = true, orientation = "topLeft"}) {
+  constructor(options) {
+    const encoded = "jpeg" in options;
+    const width = encoded ? options.info.width : options.width;
+    const height = encoded ? options.info.height : options.height;
     if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
       throw new RangeError("Image dimensions must be positive integers");
     }
-    if (pixels.length !== width * height * 4) {
-      throw new RangeError(`RGBA image needs ${width * height * 4} bytes, received ${pixels.length}`);
+    if (!encoded && options.pixels.length !== width * height * 4) {
+      throw new RangeError(`RGBA image needs ${width * height * 4} bytes, received ${options.pixels.length}`);
     }
-    this.pixels = pixels.slice();
+    this.pixels = encoded ? null : options.pixels.slice();
+    this.jpeg = encoded ? options.jpeg.slice() : null;
+    this.jpegInfo = encoded ? options.info : null;
     this.sourceWidth = width;
     this.sourceHeight = height;
-    this.hasAlpha = Boolean(hasAlpha);
-    this.orientation = orientation;
+    this.hasAlpha = encoded ? false : Boolean(options.hasAlpha ?? true);
+    this.orientation = options.orientation ?? "topLeft";
   }
   static fromPng(bytes, orientation = "topLeft") {
     const decoded = decodePng(bytes);
     return new PdfImage({
       ...decoded,
+      orientation
+    });
+  }
+  static fromJpeg(bytes, orientation = "topLeft") {
+    return new PdfImage({
+      jpeg: bytes,
+      info: parseJpeg(bytes),
       orientation
     });
   }
@@ -1845,22 +1919,38 @@ class PdfImage {
 
 class PdfImageObject extends PdfXObject {
   constructor(document, image, channel) {
-    const pixelCount = image.sourceWidth * image.sourceHeight;
-    const data = new Uint8Array(pixelCount * (channel === "rgb" ? 3 : 1));
-    for (let index = 0; index < pixelCount; index++) {
-      if (channel === "rgb") {
-        data[index * 3] = image.pixels[index * 4];
-        data[index * 3 + 1] = image.pixels[index * 4 + 1];
-        data[index * 3 + 2] = image.pixels[index * 4 + 2];
-      } else {
-        data[index] = image.pixels[index * 4 + 3];
+    const jpeg = image.jpeg;
+    let data;
+    if (jpeg !== null) {
+      if (channel === "alpha") throw new RangeError("A JPEG image has no separate alpha channel");
+      data = jpeg;
+    } else {
+      const pixels = image.pixels;
+      const pixelCount = image.sourceWidth * image.sourceHeight;
+      data = new Uint8Array(pixelCount * (channel === "rgb" ? 3 : 1));
+      for (let index = 0; index < pixelCount; index++) {
+        if (channel === "rgb") {
+          data[index * 3] = pixels[index * 4];
+          data[index * 3 + 1] = pixels[index * 4 + 1];
+          data[index * 3 + 2] = pixels[index * 4 + 2];
+        } else {
+          data[index] = pixels[index * 4 + 3];
+        }
       }
     }
     super(document, "/Image", data);
     this.params.set("/Width", new PdfNum(image.sourceWidth));
     this.params.set("/Height", new PdfNum(image.sourceHeight));
     this.params.set("/BitsPerComponent", new PdfNum(8));
-    this.params.set("/ColorSpace", new PdfName(channel === "rgb" ? "/DeviceRGB" : "/DeviceGray"));
+    const info = image.jpegInfo;
+    if (info !== null) {
+      this.params.set("/Intent", new PdfName("/RelativeColorimetric"));
+      this.params.set("/Filter", new PdfName("/DCTDecode"));
+      this.params.set("/ColorSpace", new PdfName(info.colorSpace === "gray" ? "/DeviceGray" : info.colorSpace === "cmyk" ? "/DeviceCMYK" : "/DeviceRGB"));
+      if (info.inverted) this.params.set("/Decode", PdfArray.fromNum([ 1, 0, 1, 0, 1, 0, 1, 0 ]));
+    } else {
+      this.params.set("/ColorSpace", new PdfName(channel === "rgb" ? "/DeviceRGB" : "/DeviceGray"));
+    }
   }
   setSoftMask(mask) {
     this.params.set("/SMask", mask.ref());
@@ -10482,4 +10572,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, Center, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridView, Header, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, Lorem, LoremText, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Placeholder, Positioned, PositionedDirectional, RadialGradient, Radius, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, Center, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridView, Header, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, Lorem, LoremText, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Placeholder, Positioned, PositionedDirectional, RadialGradient, Radius, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

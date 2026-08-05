@@ -172,9 +172,9 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 4.2 — baseline JPEG.** Preserve JPEG bytes behind `/DCTDecode` and
-> parse SOF metadata for dimensions and colour space. The retained proof must
-> include the real `profile.jpg` bytes so the same module runs under V8.
+> **Phase 4.3 — image widget and provider.** Port `MemoryImage` and `Image`,
+> including BoxFit/alignment cropping. Bytes always come from the caller; make
+> `resume` lose its two image API blockers.
 
 Phase 3 is complete. Resume next needs raster images; document waits only for
 `UrlLink`.
@@ -1046,8 +1046,9 @@ slot in wherever convenient relative to phase 5.
 - **4.1** PNG decoder ✅ *(landed 2026-08-05)* (zlib inflate included — no host
   decompression API is available). `pdf/lib/src/pdf/obj/image.dart`,
   `smask.dart`.
-- **4.2** Baseline JPEG: pass through as `/DCTDecode`, parse SOF for dimensions.
-  This is what `examples/assets/profile.jpg` exercises.
+- **4.2** Baseline JPEG ✅ *(landed 2026-08-05)*: pass through as `/DCTDecode`,
+  parse SOF for dimensions. This is what `examples/assets/profile.jpg`
+  exercises.
 - **4.3** `Image` widget and provider — `widgets/image.dart`,
   `image_provider.dart`. `Image`, `MemoryImage`. Bytes are supplied by the
   caller; the port never fetches.
@@ -1065,6 +1066,18 @@ Seven focused tests cover the compression block types, filters, packed palettes,
 `examples/png-phase-4.1.mjs` embeds a complete 12×12 PNG and generates a
 2,867-byte proof under both Node and bare V8. No upstream example advances until
 the public provider/widget arrives in 4.3.
+
+Phase 4.2 scans the JPEG marker stream through SOS, accepts 8-bit SOF0, derives
+gray/RGB/CMYK colour space, honours Adobe direct-CMYK versus YCCK inversion and
+embeds the original bytes unchanged behind `/DCTDecode`. Four tests exercise the
+real 200×200 profile, gray and CMYK marker variants, malformed/progressive input
+and byte-for-byte PDF pass-through. `examples/jpeg-phase-4.2.mjs` retains that
+real profile as host-free base64 data and generates a 37,957-byte proof under
+Node and bare V8.
+
+The upstream early-SOF exit can miss a later legal APP14 marker and invert
+direct CMYK incorrectly; the correction and reproduction are recorded in
+[ORIGINAL-BUG.md](../ORIGINAL-BUG.md).
 
 ---
 
