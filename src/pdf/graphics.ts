@@ -31,9 +31,8 @@
  * A widget reaching for the path API converts with `toPdfY`, and a widget
  * setting a transform conjugates it with `flipMatrix` from `matrix.ts`.
  *
- * PORT GAP: no `drawImage` (phase 4), no `applyShader` / `setFillPattern` /
- * `setStrokePattern` (phase 2.8 gradients). SVG `drawShape` lives in
- * `svg/path.ts` to preserve the one-way import direction.
+ * PORT GAP: no `drawImage` (phase 4) or direct shading operator. SVG
+ * `drawShape` lives in `svg/path.ts` to preserve the one-way import direction.
  */
 
 import { colorOperator } from './color.ts';

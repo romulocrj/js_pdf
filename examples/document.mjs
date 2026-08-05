@@ -10,7 +10,7 @@ import { customData, requireFeatures } from './upstream-example-helpers.mjs';
 
 export function generateDocument(format = pw.PageFormat.A4, data = customData, resources = {}) {
   requireFeatures(pw, 'document', [
-    'Align', 'Border', 'BoxDecoration', 'Bullet', 'Center', 'EdgeInsets', 'Font',
+    'Align', 'Bullet', 'Center', 'EdgeInsets', 'Font',
     'Header', 'Padding', 'PageTheme', 'Paragraph', 'PdfLogo', 'RichText', 'SizedBox',
     'SvgImage', 'TableOfContent', 'TextSpan', 'TextStyle',
     'Theme', 'ThemeData', 'UrlLink'

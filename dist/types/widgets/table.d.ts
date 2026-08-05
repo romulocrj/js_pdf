@@ -1,4 +1,5 @@
 import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { BoxDecorationInput } from './decoration.ts';
 import { SpanningWidget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
 export type TableCellVerticalAlignment = 'bottom' | 'middle' | 'top' | 'full';
@@ -38,11 +39,8 @@ export declare class TableBorder {
 }
 export type TableBorderInput = TableBorder | TableBorderOptions;
 export declare function normalizeTableBorder(input: TableBorderInput | null | undefined): TableBorder | null;
-/** The subset of box decoration table rows and helper cells need in phase 3.1. */
-export interface TableDecorationInput {
-    readonly color?: ColorInput | null;
-    readonly border?: TableBorderInput | null;
-}
+/** A row or helper-cell decoration, shared with `Container`. */
+export type TableDecorationInput = BoxDecorationInput;
 export declare function paintTableDecorationBackground(context: RenderContext, decoration: TableDecorationInput | null, x: number, y: number, width: number, height: number): void;
 export declare function paintTableDecorationBorder(context: RenderContext, decoration: TableDecorationInput | null, x: number, y: number, width: number, height: number): void;
 export interface TableRowOptions {

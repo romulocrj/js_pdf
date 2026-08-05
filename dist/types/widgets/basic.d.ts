@@ -98,9 +98,8 @@ export declare const DEFAULT_DIVIDER_THICKNESS = 1;
  * inset by `indent` at the leading edge and `endIndent` at the trailing one.
  *
  * Upstream composes this out of `SizedBox` + `Center` + `Container` +
- * `BoxDecoration` + `Border` + `BorderSide`. Decoration is phase 3.5, so the
- * port fills the rule directly; the emitted `re f` is what upstream's bottom
- * border would have produced anyway. Revisit the composition when 3.5 lands.
+ * `BoxDecoration` + `Border` + `BorderSide`. The port keeps the equivalent
+ * direct fill because it is a smaller layout tree and emits the same rule.
  */
 export declare class Divider extends Widget<null> {
     readonly height: number;
@@ -114,6 +113,7 @@ export declare class Divider extends Widget<null> {
 }
 export type BasicAlignmentName = 'topLeft' | 'topCenter' | 'topRight' | 'centerLeft' | 'center' | 'centerRight' | 'bottomLeft' | 'bottomCenter' | 'bottomRight';
 export type BasicAlignmentInput = Alignment | BasicAlignmentName;
+export declare function resolveBasicAlignment(value: BasicAlignmentInput): Alignment;
 export interface TransformOptions {
     readonly transform?: PdfMatrix | null;
     readonly rotate?: number | null;

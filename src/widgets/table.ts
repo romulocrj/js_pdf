@@ -23,6 +23,8 @@ import { assertFiniteNumber } from '../base/assert.ts';
 import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput, Rgb } from '../pdf/color.ts';
 import { BoxConstraints } from './geometry.ts';
+import { normalizeBoxDecoration } from './decoration.ts';
+import type { BoxDecorationInput } from './decoration.ts';
 import { SpanningWidget } from './widget.ts';
 import type {
   AnyLayoutBox,
@@ -172,11 +174,8 @@ export function normalizeTableBorder(input: TableBorderInput | null | undefined)
   return input instanceof TableBorder ? input : new TableBorder(input);
 }
 
-/** The subset of box decoration table rows and helper cells need in phase 3.1. */
-export interface TableDecorationInput {
-  readonly color?: ColorInput | null;
-  readonly border?: TableBorderInput | null;
-}
+/** A row or helper-cell decoration, shared with `Container`. */
+export type TableDecorationInput = BoxDecorationInput;
 
 export function paintTableDecorationBackground(
   context: RenderContext,
@@ -186,9 +185,7 @@ export function paintTableDecorationBackground(
   width: number,
   height: number
 ): void {
-  if (decoration?.color !== null && decoration?.color !== undefined) {
-    context.canvas.fillRect(x, y, width, height, decoration.color);
-  }
+  normalizeBoxDecoration(decoration)?.paint(context, x, y, width, height, 'background');
 }
 
 export function paintTableDecorationBorder(
@@ -199,7 +196,7 @@ export function paintTableDecorationBorder(
   width: number,
   height: number
 ): void {
-  normalizeTableBorder(decoration?.border)?.paint(context, x, y, width, height);
+  normalizeBoxDecoration(decoration)?.paint(context, x, y, width, height, 'foreground');
 }
 
 export interface TableRowOptions {

@@ -33,7 +33,7 @@
  * phase 3.7 as well. Upstream models `decoration` as a combinable bitmask; the
  * port uses a single name until there is a painter to care.
  *
- * PORT GAP: no `background` (needs `BoxDecoration`, phase 3.5) and no
+ * PORT GAP: no per-run `background` until rich spans land in phase 3.7, and no
  * `renderingMode` (needs the `Tr` operator).
  */
 

@@ -1,4 +1,8 @@
 import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { BasicAlignmentInput } from './basic.ts';
+import { BoxDecoration } from './decoration.ts';
+import type { BoxDecorationInput, DecorationPosition } from './decoration.ts';
+import { Alignment } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import { Widget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
@@ -11,11 +15,36 @@ export interface ContainerOptions {
     readonly background?: ColorInput | null;
     readonly borderColor?: ColorInput | null;
     readonly borderWidth?: number;
+    readonly decoration?: BoxDecorationInput | null;
+    readonly foregroundDecoration?: BoxDecorationInput | null;
+    readonly alignment?: BasicAlignmentInput | null;
 }
 export interface ContainerLayoutData {
     readonly childBox: AnyLayoutBox | null;
     readonly boxWidth: number;
     readonly boxHeight: number;
+    readonly childX: number;
+    readonly childY: number;
+}
+export interface DecoratedBoxOptions {
+    readonly decoration: BoxDecorationInput;
+    readonly position?: DecorationPosition;
+    readonly child?: AnyWidget | null;
+}
+/** Paints a decoration before or after its child without affecting layout. */
+export declare class DecoratedBox extends Widget<{
+    readonly childBox: AnyLayoutBox | null;
+}> {
+    readonly decoration: BoxDecoration;
+    readonly position: DecorationPosition;
+    readonly child: AnyWidget | null;
+    constructor({ decoration, position, child }: DecoratedBoxOptions);
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<{
+        readonly childBox: AnyLayoutBox | null;
+    }>;
+    paint(context: RenderContext, box: PositionedBox<{
+        readonly childBox: AnyLayoutBox | null;
+    }>): void;
 }
 export declare class Container extends Widget<ContainerLayoutData> {
     readonly child: AnyWidget | null;
@@ -26,7 +55,10 @@ export declare class Container extends Widget<ContainerLayoutData> {
     readonly background: Rgb | null;
     readonly borderColor: Rgb | null;
     readonly borderWidth: number;
-    constructor({ child, width, height, padding, margin, background, borderColor, borderWidth }?: ContainerOptions);
+    readonly decoration: BoxDecoration | null;
+    readonly foregroundDecoration: BoxDecoration | null;
+    readonly alignment: Alignment | null;
+    constructor({ child, width, height, padding, margin, background, borderColor, borderWidth, decoration, foregroundDecoration, alignment }?: ContainerOptions);
     layout(context: RenderContext, constraints: Constraints): LayoutBox<ContainerLayoutData>;
     paint(context: RenderContext, box: PositionedBox<ContainerLayoutData>): void;
 }

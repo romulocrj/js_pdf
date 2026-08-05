@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T20:50:22.005Z",
+  "generatedAt": "2026-08-05T20:59:12.773Z",
   "results": [
     {
       "name": "hello-world",
@@ -9,22 +9,22 @@
     {
       "name": "calendar",
       "status": "failed",
-      "error": "calendar requires unported js_pdf APIs: BoxDecoration, Border, BorderSide, GridView"
+      "error": "calendar requires unported js_pdf APIs: GridView"
     },
     {
       "name": "certificate",
       "status": "failed",
-      "error": "certificate requires unported js_pdf APIs: Border, BoxDecoration, LoremText, Positioned, RichText, Stack, TextSpan"
+      "error": "certificate requires unported js_pdf APIs: LoremText, Positioned, RichText, Stack, TextSpan"
     },
     {
       "name": "document",
       "status": "failed",
-      "error": "document requires unported js_pdf APIs: Border, BoxDecoration, Bullet, Header, Paragraph, PdfLogo, RichText, TableOfContent, TextSpan, UrlLink"
+      "error": "document requires unported js_pdf APIs: Bullet, Header, Paragraph, PdfLogo, RichText, TableOfContent, TextSpan, UrlLink"
     },
     {
       "name": "invoice",
       "status": "failed",
-      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, Border, BorderRadius, BoxDecoration, GridView, LoremText, PdfLogo, RichText, TextSpan"
+      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, GridView, LoremText, PdfLogo, RichText, TextSpan"
     },
     {
       "name": "report",
@@ -34,12 +34,12 @@
     {
       "name": "resume",
       "status": "failed",
-      "error": "resume requires unported js_pdf APIs: Barcode, BarcodeWidget, Border, BorderRadius, BoxDecoration, CircularProgressIndicator, ClipOval, Icon, IconData, Image, Lorem, MemoryImage, Partition, Partitions, Positioned, Stack, UrlLink"
+      "error": "resume requires unported js_pdf APIs: Barcode, BarcodeWidget, CircularProgressIndicator, ClipOval, Icon, IconData, Image, Lorem, MemoryImage, Partition, Partitions, Positioned, Stack, UrlLink"
     },
     {
       "name": "server",
       "status": "failed",
-      "error": "server requires unported js_pdf APIs: AnnotationUrl, BarDataSet, Border, BorderRadius, BoxDecoration, CartesianGrid, Chart, FixedAxis, PointChartValue, RichText, TextSpan, UrlLink"
+      "error": "server requires unported js_pdf APIs: AnnotationUrl, BarDataSet, CartesianGrid, Chart, FixedAxis, PointChartValue, RichText, TextSpan, UrlLink"
     }
   ]
 }

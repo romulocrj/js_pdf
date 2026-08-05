@@ -304,9 +304,8 @@ export const DEFAULT_DIVIDER_THICKNESS = 1;
  * inset by `indent` at the leading edge and `endIndent` at the trailing one.
  *
  * Upstream composes this out of `SizedBox` + `Center` + `Container` +
- * `BoxDecoration` + `Border` + `BorderSide`. Decoration is phase 3.5, so the
- * port fills the rule directly; the emitted `re f` is what upstream's bottom
- * border would have produced anyway. Revisit the composition when 3.5 lands.
+ * `BoxDecoration` + `Border` + `BorderSide`. The port keeps the equivalent
+ * direct fill because it is a smaller layout tree and emits the same rule.
  */
 export class Divider extends Widget<null> {
   readonly height: number;
@@ -370,7 +369,7 @@ export type BasicAlignmentName =
 
 export type BasicAlignmentInput = Alignment | BasicAlignmentName;
 
-function resolveBasicAlignment(value: BasicAlignmentInput): Alignment {
+export function resolveBasicAlignment(value: BasicAlignmentInput): Alignment {
   if (typeof value !== 'string') return value;
   const result = Alignment[value];
   if (result === undefined) throw new TypeError(`Unknown alignment: ${value}`);

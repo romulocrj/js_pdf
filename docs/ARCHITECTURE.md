@@ -76,7 +76,7 @@ below it.
   ├────────────────────────────────────────────────────────────┤
   │  src/widgets/            layout tree: measure, then paint  │
   │    widget · geometry · text · text_style · theme · font    │
-  │    flex · container · basic · shape                        │
+  │    flex · container · decoration · borders · basic · shape │
   │    page · page_theme · multi_page · document               │
   ├────────────────────────────────────────────────────────────┤
   │  src/pdf/                PDF model: operators and objects  │
@@ -142,7 +142,10 @@ safety) and that JavaScript has to check by hand.
   declaration a style names.
 - **`flex.ts`** — full `Flex` allocation, `Column`, `Row`, `Expanded`,
   `Flexible`, proportional `Spacer`, plus `gap` and weighted row tracks.
-- **`container.ts`** — `Container`: padding, margin, fill, border.
+- **`container.ts` / `decoration.ts` / `box_border.ts` /
+  `border_radius.ts`** — `Container` and `DecoratedBox`, background/foreground
+  fills, PDF shading gradients, vector shadows, per-side rules and rounded
+  rectangle paths.
 - **`basic.ts`** — composition, fitting, transforms, opacity, builders,
   custom painting and basic sizing widgets.
 - **`shape.ts`** — `Vector`, the imperative drawing surface.
@@ -248,7 +251,7 @@ roadmap phase lands.
 | Font naming | `/F$objser`, derived from the font object's serial | Page-local `/F1`, `/F2`, … allocated as the content stream is written |
 | Colors | `PdfColor` value type with CMYK and HSL variants | RGB triple, DeviceRGB only |
 | Pagination | `SpanningWidget` saves mutable widget context between pages | Direct spanning children return immutable continuation state; `Table` supports it, while other tall widgets still throw `RangeError` |
-| Decoration | `BoxDecoration`: gradients, shapes, radii, shadows, per-side borders | Flat `background` / `borderColor` / `borderWidth` |
+| Decoration shadows | Temporary raster images produced by the raster subsystem | Concentric vector fills with scoped opacity until phase 4; other decoration features are direct ports |
 | Async | `save()` returns a `Future` | `save()` returns `Uint8Array` |
 
 Two rows left this table rather than moving: font metrics and text encoding.

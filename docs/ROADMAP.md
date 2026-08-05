@@ -6,6 +6,9 @@ Ordered plan for the port. Current coverage is in
 
 **Last updated:** 2026-08-05
 
+
+**Important** if you find a bug in original code, correct it in the port and document it in [ORIGINAL-BUG.md](ORIGINAL-BUG.md) with a brief instruction on how to reproduce and correct it.
+
 ## Current position
 
 The MVP is restructured into a module tree that mirrors `dart_pdf`, written in
@@ -60,6 +63,13 @@ main/cross alignment, axis sizing and vertical order; `Expanded`, `Flexible`
 and proportional `Spacer` are public. `ConstrainedBox`, `OverflowBox` and the
 minimum-preserving `LimitedBox` close `basic.dart`. Twelve tests and the retained
 V8 proof cover the phase, and the missing-API total fell 75 → 69.
+
+**Phase 3.5 — decoration — landed 2026-08-05.** `BoxDecoration`, background
+and foreground `DecoratedBox`, `Border`/`BorderSide`/`BorderStyle`, physical and
+directional `BorderRadius`, linear/radial gradients and vector box shadows are
+public through every API surface. `Container` and table row/cell decoration now
+share the same painter. Nine tests plus a retained Node/V8 PDF proof cover the
+phase, and the missing-API total fell 69 → 53.
 
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
@@ -130,12 +140,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 3.5 — decoration.** Port `BoxDecoration`, `Border`, `BorderSide` and
-> `BorderRadius`, including per-side rules, rounded corners, gradients and
-> shadows.
+> **Phase 3.6 — stack, wrap and grid.** Port `Stack`, `Positioned`, `Wrap`,
+> `GridView` and `Partitions`; this is the phase that makes the calendar example
+> generate end to end.
 
-Constraints and flex are complete. Decoration is now the broadest shared layout
-blocker, appearing in six of the seven remaining upstream examples.
+Decoration is complete. `GridView` is now the calendar's only missing API, while
+stack/positioned also advance certificate and resume.
 
 ---
 
@@ -763,8 +773,8 @@ offsets and allocated tracks all travel from `layout()` to `paint()` without
 being cached on the widget. Fixed, flex, intrinsic and fractional column-width
 strategies work with `min`/`max` table sizing; top, middle, bottom and full cell
 alignment remain distinct. `TableBorder` paints each exterior and interior
-side in widget coordinates, while structural decorations keep the helper
-compatible with the `BoxDecoration`/`Border` objects arriving in 3.5.
+side in widget coordinates. Phase 3.5 later replaced the structural row/cell
+subset with the shared `BoxDecoration`/`Border` painter.
 
 `TableHelper.fromTextArray` covers headers from a separate array or leading
 data rows, repeat markers, theme table styles, per-column alignment, padding,
@@ -821,11 +831,11 @@ feature occurrences from the examples, taking the total 84 → 75.
 The constraint-dependent tail (`ConstrainedBox`, `OverflowBox` and the
 minimum-preserving branch of `LimitedBox`) landed with **3.4**.
 
-Two divergences worth knowing:
+One divergence worth knowing:
 
 - `Divider` fills its rule directly rather than composing `SizedBox` + `Center` +
-  `Container` + `BoxDecoration` + `Border` + `BorderSide`, since decoration is
-  **3.5**. The emitted `re f` is what upstream's bottom border produces anyway.
+  `Container` + `BoxDecoration` + `Border` + `BorderSide`. The emitted `re f` is
+  what upstream's bottom border produces anyway, with a smaller layout tree.
 
 ### 3.4 Full flex and constraints ✅ *(landed 2026-08-05)*
 
@@ -854,13 +864,32 @@ painted PDF tracks. The example gate removed six API occurrences, reducing the
 total 75 → 69. `examples/flex-layout-phase-3.4.mjs` is the retained visual/V8
 proof.
 
-### 3.5 Decoration
+### 3.5 Decoration ✅ *(landed 2026-08-05)*
 
 - **Ports:** `widgets/decoration.dart`, `box_border.dart`, `border_radius.dart`
 - `BoxDecoration`, `Border`, `BorderSide`, `BorderRadius`: per-side borders,
   radii, gradients, shadows.
 - **Example gate:** `calendar`, `certificate`, `document`, `invoice`, `resume`,
   `server`.
+
+The physical and direction-aware radius values accept circular and elliptical
+corners; a numeric shorthand keeps the JavaScript examples concise. Uniform,
+per-side, solid, dashed and dotted borders paint in widget coordinates.
+`BoxDecoration` scopes background/foreground order, colour, circle/rectangle
+shape, axial/radial PDF shading patterns and shadows, and both `Container` and
+table decorations use it. Nine tests cover values, operators, resources and
+paint order. The six example gates remove 16 missing-API occurrences, reducing
+the total 69 → 53. `examples/decoration-phase-3.5.mjs` is the retained
+visual/V8 proof.
+
+Two deliberate corrections/divergences:
+
+- Oversized corner radii are proportionally scaled before the path is built;
+  the upstream path can self-intersect when opposing radii exceed an edge.
+- Until the phase-4 raster subsystem exists, blurred shadows are concentric
+  vector fills with scoped opacity rather than temporary raster images. Offset,
+  spread, blur extent, colour and opacity remain represented without adding a
+  host dependency.
 
 ### 3.6 Stack, Wrap, Grid ⇒ `calendar`
 

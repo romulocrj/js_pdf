@@ -43,7 +43,10 @@ import {
   Transform,
   VerticalDivider
 } from './widgets/basic.ts';
-import { Container } from './widgets/container.ts';
+import { BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, Radius } from './widgets/border_radius.ts';
+import { Border, BorderSide, BorderStyle, BoxBorder } from './widgets/box_border.ts';
+import { Container, DecoratedBox } from './widgets/container.ts';
+import { BoxDecoration, BoxShadow, Gradient, LinearGradient, RadialGradient } from './widgets/decoration.ts';
 import { Document } from './widgets/document.ts';
 import { Column, Expanded, Flex, Flexible, Row, Spacer } from './widgets/flex.ts';
 import { Font } from './widgets/font.ts';
@@ -75,7 +78,16 @@ export {
   Align,
   Alignment,
   AspectRatio,
+  Border,
+  BorderRadius,
+  BorderRadiusDirectional,
+  BorderRadiusGeometry,
+  BorderSide,
+  BorderStyle,
+  BoxBorder,
   BoxConstraints,
+  BoxDecoration,
+  BoxShadow,
   Builder,
   Center,
   Column,
@@ -83,6 +95,7 @@ export {
   Container,
   CustomPaint,
   DefaultTextStyle,
+  DecoratedBox,
   Divider,
   Document,
   EdgeInsets,
@@ -95,9 +108,11 @@ export {
   Font,
   FractionColumnWidth,
   FullPage,
+  Gradient,
   IntrinsicColumnWidth,
   LayoutBuilder,
   LimitedBox,
+  LinearGradient,
   MultiPage,
   Opacity,
   OverflowBox,
@@ -107,6 +122,8 @@ export {
   PageTheme,
   PdfTtfFont,
   PdfType1Font,
+  RadialGradient,
+  Radius,
   Row,
   SizedBox,
   Spacer,
@@ -244,7 +261,36 @@ export type {
   RowOptions,
   VerticalDirection
 } from './widgets/flex.ts';
-export type { ContainerOptions } from './widgets/container.ts';
+export type { ContainerLayoutData, ContainerOptions, DecoratedBoxOptions } from './widgets/container.ts';
+export type {
+  BorderRadiusDirectionalOnlyOptions,
+  BorderRadiusOnlyOptions,
+  RadiusInput,
+  RadiusValue,
+  TextDirection
+} from './widgets/border_radius.ts';
+export type {
+  BorderOptions,
+  BorderSideInput,
+  BorderSideOptions,
+  BorderStyleInput,
+  BorderStyleOptions,
+  BoxBorderInput,
+  BoxBorderPaintOptions
+} from './widgets/box_border.ts';
+export type {
+  BoxDecorationInput,
+  BoxDecorationOptions,
+  BoxShadowInput,
+  BoxShadowOptions,
+  BoxShape,
+  DecorationPosition,
+  GradientOptions,
+  LinearGradientOptions,
+  PaintPhase,
+  RadialGradientOptions,
+  TileMode
+} from './widgets/decoration.ts';
 export type {
   ColumnLayout,
   TableBorderInput,
@@ -298,6 +344,20 @@ export interface PublicApi {
   readonly Flexible: typeof Flexible;
   readonly Expanded: typeof Expanded;
   readonly Container: typeof Container;
+  readonly DecoratedBox: typeof DecoratedBox;
+  readonly BoxDecoration: typeof BoxDecoration;
+  readonly BoxShadow: typeof BoxShadow;
+  readonly Gradient: typeof Gradient;
+  readonly LinearGradient: typeof LinearGradient;
+  readonly RadialGradient: typeof RadialGradient;
+  readonly BoxBorder: typeof BoxBorder;
+  readonly Border: typeof Border;
+  readonly BorderSide: typeof BorderSide;
+  readonly BorderStyle: typeof BorderStyle;
+  readonly BorderRadiusGeometry: typeof BorderRadiusGeometry;
+  readonly BorderRadius: typeof BorderRadius;
+  readonly BorderRadiusDirectional: typeof BorderRadiusDirectional;
+  readonly Radius: typeof Radius;
   readonly Spacer: typeof Spacer;
   readonly Vector: typeof Vector;
   readonly Padding: typeof Padding;
@@ -353,6 +413,20 @@ const publicApi: PublicApi = Object.freeze({
   Flexible,
   Expanded,
   Container,
+  DecoratedBox,
+  BoxDecoration,
+  BoxShadow,
+  Gradient,
+  LinearGradient,
+  RadialGradient,
+  BoxBorder,
+  Border,
+  BorderSide,
+  BorderStyle,
+  BorderRadiusGeometry,
+  BorderRadius,
+  BorderRadiusDirectional,
+  Radius,
   Spacer,
   Vector,
   Padding,

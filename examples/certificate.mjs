@@ -10,8 +10,8 @@ import { customData, requireFeatures } from './upstream-example-helpers.mjs';
 
 export function generateCertificate(pageFormat = pw.PageFormat.A4, data = customData, resources = {}) {
   requireFeatures(pw, 'certificate', [
-    'Border', 'BoxDecoration', 'Divider', 'EdgeInsets', 'Font',
-    'LoremText', 'Padding', 'PageTheme', 'Positioned', 'RichText', 'SizedBox',
+    'Divider', 'EdgeInsets', 'Font', 'LoremText', 'Padding', 'PageTheme',
+    'Positioned', 'RichText', 'SizedBox',
     'Stack', 'SvgImage', 'TextSpan', 'TextStyle', 'ThemeData'
   ]);
 

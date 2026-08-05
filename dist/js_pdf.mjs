@@ -2679,8 +2679,637 @@ class VerticalDivider extends Widget {
   }
 }
 
+class Radius {
+  constructor(x, y = x) {
+    this.x = Math.max(0, Number(x));
+    this.y = Math.max(0, Number(y));
+  }
+  static circular(radius) {
+    return new Radius(radius);
+  }
+  static elliptical(x, y) {
+    return new Radius(x, y);
+  }
+  equals(other) {
+    return this.x === other.x && this.y === other.y;
+  }
+}
+
+Radius.zero = new Radius(0, 0);
+
+function radius(value = Radius.zero) {
+  if (typeof value === "number") return Radius.circular(value);
+  if (value instanceof Radius) return value;
+  return new Radius(value.x, value.y ?? value.x);
+}
+
+class BorderRadiusGeometry {}
+
+class BorderRadius extends BorderRadiusGeometry {
+  constructor({topLeft = Radius.zero, topRight = Radius.zero, bottomLeft = Radius.zero, bottomRight = Radius.zero} = {}) {
+    super();
+    this.topLeft = radius(topLeft);
+    this.topRight = radius(topRight);
+    this.bottomLeft = radius(bottomLeft);
+    this.bottomRight = radius(bottomRight);
+  }
+  static all(value) {
+    const resolved = radius(value);
+    return new BorderRadius({
+      topLeft: resolved,
+      topRight: resolved,
+      bottomLeft: resolved,
+      bottomRight: resolved
+    });
+  }
+  static circular(value) {
+    return BorderRadius.all(value);
+  }
+  static vertical({top = Radius.zero, bottom = Radius.zero} = {}) {
+    return new BorderRadius({
+      topLeft: top,
+      topRight: top,
+      bottomLeft: bottom,
+      bottomRight: bottom
+    });
+  }
+  static horizontal({left = Radius.zero, right = Radius.zero} = {}) {
+    return new BorderRadius({
+      topLeft: left,
+      bottomLeft: left,
+      topRight: right,
+      bottomRight: right
+    });
+  }
+  static only(options = {}) {
+    return new BorderRadius(options);
+  }
+  get isUniform() {
+    return this.topLeft.equals(this.topRight) && this.topLeft.equals(this.bottomLeft) && this.topLeft.equals(this.bottomRight);
+  }
+  get uniform() {
+    return this.isUniform ? this.topLeft : Radius.zero;
+  }
+  resolve() {
+    return this;
+  }
+  paint(canvas, x, top, width, height) {
+    const bottom = canvas.pageHeight - top - height;
+    const scale = Math.min(1, width / Math.max(1, this.topLeft.x + this.topRight.x, this.bottomLeft.x + this.bottomRight.x), height / Math.max(1, this.topLeft.y + this.bottomLeft.y, this.topRight.y + this.bottomRight.y));
+    const tl = new Radius(this.topLeft.x * scale, this.topLeft.y * scale);
+    const tr = new Radius(this.topRight.x * scale, this.topRight.y * scale);
+    const bl = new Radius(this.bottomLeft.x * scale, this.bottomLeft.y * scale);
+    const br = new Radius(this.bottomRight.x * scale, this.bottomRight.y * scale);
+    const m4 = .551784;
+    canvas.moveTo(x, bottom + bl.y);
+    canvas.curveTo(x, bottom + bl.y * (1 - m4), x + bl.x * (1 - m4), bottom, x + bl.x, bottom);
+    canvas.lineTo(x + width - br.x, bottom);
+    canvas.curveTo(x + width - br.x * (1 - m4), bottom, x + width, bottom + br.y * (1 - m4), x + width, bottom + br.y);
+    canvas.lineTo(x + width, bottom + height - tr.y);
+    canvas.curveTo(x + width, bottom + height - tr.y * (1 - m4), x + width - tr.x * (1 - m4), bottom + height, x + width - tr.x, bottom + height);
+    canvas.lineTo(x + tl.x, bottom + height);
+    canvas.curveTo(x + tl.x * (1 - m4), bottom + height, x, bottom + height - tl.y * (1 - m4), x, bottom + height - tl.y);
+    canvas.lineTo(x, bottom + bl.y);
+    canvas.closePath();
+  }
+}
+
+BorderRadius.zero = BorderRadius.all(0);
+
+class BorderRadiusDirectional extends BorderRadiusGeometry {
+  constructor({topStart = Radius.zero, topEnd = Radius.zero, bottomStart = Radius.zero, bottomEnd = Radius.zero} = {}) {
+    super();
+    this.topStart = radius(topStart);
+    this.topEnd = radius(topEnd);
+    this.bottomStart = radius(bottomStart);
+    this.bottomEnd = radius(bottomEnd);
+  }
+  static all(value) {
+    const resolved = radius(value);
+    return new BorderRadiusDirectional({
+      topStart: resolved,
+      topEnd: resolved,
+      bottomStart: resolved,
+      bottomEnd: resolved
+    });
+  }
+  static circular(value) {
+    return BorderRadiusDirectional.all(value);
+  }
+  static vertical({top = Radius.zero, bottom = Radius.zero} = {}) {
+    return new BorderRadiusDirectional({
+      topStart: top,
+      topEnd: top,
+      bottomStart: bottom,
+      bottomEnd: bottom
+    });
+  }
+  static horizontal({start = Radius.zero, end = Radius.zero} = {}) {
+    return new BorderRadiusDirectional({
+      topStart: start,
+      bottomStart: start,
+      topEnd: end,
+      bottomEnd: end
+    });
+  }
+  static only(options = {}) {
+    return new BorderRadiusDirectional(options);
+  }
+  get isUniform() {
+    return this.topStart.equals(this.topEnd) && this.topStart.equals(this.bottomStart) && this.topStart.equals(this.bottomEnd);
+  }
+  get uniform() {
+    return this.isUniform ? this.topStart : Radius.zero;
+  }
+  resolve(direction = "ltr") {
+    if (direction === "rtl") {
+      return new BorderRadius({
+        topLeft: this.topEnd,
+        topRight: this.topStart,
+        bottomLeft: this.bottomEnd,
+        bottomRight: this.bottomStart
+      });
+    }
+    return new BorderRadius({
+      topLeft: this.topStart,
+      topRight: this.topEnd,
+      bottomLeft: this.bottomStart,
+      bottomRight: this.bottomEnd
+    });
+  }
+}
+
+BorderRadiusDirectional.zero = BorderRadiusDirectional.all(0);
+
+class BorderStyle {
+  constructor({paint = true, pattern = null, phase = 0} = {}) {
+    this.paint = Boolean(paint);
+    this.pattern = pattern === null ? null : pattern.map(Number);
+    this.phase = Number(phase);
+  }
+  setStyle(canvas) {
+    if (!this.paint || this.pattern === null) return false;
+    canvas.saveContext();
+    canvas.setLineCap("butt");
+    canvas.setLineDashPattern(this.pattern, this.phase);
+    return true;
+  }
+  unsetStyle(canvas, saved) {
+    if (saved) canvas.restoreContext();
+  }
+}
+
+BorderStyle.none = new BorderStyle({
+  paint: false
+});
+
+BorderStyle.solid = new BorderStyle;
+
+BorderStyle.dashed = new BorderStyle({
+  pattern: [ 3, 3 ]
+});
+
+BorderStyle.dotted = new BorderStyle({
+  pattern: [ 1, 1 ]
+});
+
+function normalizeStyle(value) {
+  if (value instanceof BorderStyle) return value;
+  return BorderStyle[value];
+}
+
+class BorderSide {
+  constructor({color = "#000000", width = 1, style = BorderStyle.solid} = {}) {
+    this.color = normalizeColor(color);
+    this.width = Math.max(0, Number(width));
+    this.style = normalizeStyle(style);
+  }
+  copyWith({color, width, style} = {}) {
+    return new BorderSide({
+      color: color ?? this.color,
+      width: width ?? this.width,
+      style: style ?? this.style
+    });
+  }
+  equals(other) {
+    return this.width === other.width && this.style.paint === other.style.paint && this.style.phase === other.style.phase && String(this.style.pattern) === String(other.style.pattern) && this.color[0] === other.color[0] && this.color[1] === other.color[1] && this.color[2] === other.color[2];
+  }
+}
+
+BorderSide.none = new BorderSide({
+  width: 0,
+  style: BorderStyle.none
+});
+
+function side$1(value) {
+  if (value === null || value === undefined) return BorderSide.none;
+  return value instanceof BorderSide ? value : new BorderSide(value);
+}
+
+class BoxBorder {}
+
+class Border extends BoxBorder {
+  constructor({top = null, right = null, bottom = null, left = null} = {}) {
+    super();
+    this.top = side$1(top);
+    this.right = side$1(right);
+    this.bottom = side$1(bottom);
+    this.left = side$1(left);
+  }
+  static all(options = {}) {
+    return Border.fromBorderSide(new BorderSide(options));
+  }
+  static fromBorderSide(value) {
+    const resolved = side$1(value);
+    return new Border({
+      top: resolved,
+      right: resolved,
+      bottom: resolved,
+      left: resolved
+    });
+  }
+  static symmetric({vertical = BorderSide.none, horizontal = BorderSide.none} = {}) {
+    return new Border({
+      top: horizontal,
+      right: vertical,
+      bottom: horizontal,
+      left: vertical
+    });
+  }
+  get isUniform() {
+    return this.top.equals(this.right) && this.top.equals(this.bottom) && this.top.equals(this.left);
+  }
+  paintUniform(context, x, y, width, height, shape, borderRadius) {
+    const {canvas} = context;
+    const value = this.top;
+    if (!value.style.paint || value.width <= 0) return;
+    const saved = value.style.setStyle(canvas);
+    canvas.setStrokeColor(value.color);
+    canvas.setLineWidth(value.width);
+    canvas.setLineJoin("miter");
+    canvas.setMiterLimit(4);
+    if (shape === "circle") {
+      canvas.drawEllipse(x + width / 2, canvas.pageHeight - y - height / 2, width / 2, height / 2);
+    } else if (borderRadius !== null) {
+      borderRadius.paint(canvas, x, y, width, height);
+    } else {
+      canvas.drawRect(x, canvas.pageHeight - y - height, width, height);
+    }
+    canvas.strokePath();
+    value.style.unsetStyle(canvas, saved);
+  }
+  paintSide(canvas, value, x1, y1, x2, y2) {
+    if (!value.style.paint || value.width <= 0) return;
+    const saved = value.style.setStyle(canvas);
+    canvas.setStrokeColor(value.color);
+    canvas.setLineWidth(value.width);
+    canvas.drawLine(x1, canvas.toPdfY(y1), x2, canvas.toPdfY(y2));
+    canvas.strokePath();
+    value.style.unsetStyle(canvas, saved);
+  }
+  paint(context, x, y, width, height, {shape = "rectangle", borderRadius = null} = {}) {
+    if (this.isUniform) {
+      this.paintUniform(context, x, y, width, height, shape, borderRadius);
+      return;
+    }
+    if (shape !== "rectangle") {
+      throw new Error("A non-uniform Border can only paint a rectangle");
+    }
+    if (borderRadius !== null) {
+      throw new Error("A border radius requires a uniform Border");
+    }
+    const {canvas} = context;
+    canvas.setLineCap("square");
+    canvas.setLineJoin("miter");
+    canvas.setMiterLimit(4);
+    this.paintSide(canvas, this.top, x, y, x + width, y);
+    this.paintSide(canvas, this.right, x + width, y, x + width, y + height);
+    this.paintSide(canvas, this.bottom, x + width, y + height, x, y + height);
+    this.paintSide(canvas, this.left, x, y + height, x, y);
+  }
+}
+
+function normalizeBoxBorder(value) {
+  if (value === null || value === undefined) return null;
+  return value instanceof BoxBorder ? value : new Border(value);
+}
+
+function interpolation(start, end) {
+  return new PdfDict([ [ "/FunctionType", new PdfNum(2) ], [ "/Domain", PdfArray.fromNum([ 0, 1 ]) ], [ "/C0", PdfArray.fromNum(start) ], [ "/C1", PdfArray.fromNum(end) ], [ "/N", new PdfNum(1) ] ]);
+}
+
+class PdfBaseFunction {
+  static colorsAndStops(colors, stops = []) {
+    if (colors.length === 0) {
+      throw new RangeError("A gradient needs at least one colour");
+    }
+    if (stops.length > 0 && colors.length !== stops.length) {
+      throw new RangeError("The number of gradient colours must match the number of stops");
+    }
+    const normalizedColors = [ ...colors ];
+    const normalizedStops = stops.length === 0 ? normalizedColors.map((_, index) => normalizedColors.length === 1 ? 0 : index / (normalizedColors.length - 1)) : stops.map(value => Math.min(1, Math.max(0, value)));
+    if (normalizedColors.length === 1) {
+      normalizedColors.push(normalizedColors[0]);
+      normalizedStops.push(1);
+    }
+    for (let index = 1; index < normalizedStops.length; index++) {
+      normalizedStops[index] = Math.max(normalizedStops[index], normalizedStops[index - 1]);
+    }
+    if (normalizedStops[0] > 0) {
+      normalizedStops.unshift(0);
+      normalizedColors.unshift(normalizedColors[0]);
+    }
+    if (normalizedStops[normalizedStops.length - 1] < 1) {
+      normalizedStops.push(1);
+      normalizedColors.push(normalizedColors[normalizedColors.length - 1]);
+    }
+    if (normalizedColors.length === 2) {
+      return interpolation(normalizedColors[0], normalizedColors[1]);
+    }
+    const functions = [];
+    for (let index = 1; index < normalizedColors.length; index++) {
+      functions.push(interpolation(normalizedColors[index - 1], normalizedColors[index]));
+    }
+    const encode = [];
+    for (let index = 0; index < functions.length; index++) {
+      encode.push(0, 1);
+    }
+    return new PdfDict([ [ "/FunctionType", new PdfNum(3) ], [ "/Domain", PdfArray.fromNum([ 0, 1 ]) ], [ "/Functions", new PdfArray(functions) ], [ "/Bounds", PdfArray.fromNum(normalizedStops.slice(1, -1)) ], [ "/Encode", PdfArray.fromNum(encode) ] ]);
+  }
+}
+
+class PdfShadingPattern {
+  constructor({shading, matrix = null}) {
+    this.shading = shading;
+    this.matrix = matrix;
+  }
+  output() {
+    const result = new PdfDict([ [ "/PatternType", new PdfNum(2) ], [ "/Shading", this.shading.output() ] ]);
+    if (this.matrix !== null) {
+      result.set("/Matrix", PdfArray.fromNum(this.matrix));
+    }
+    return result;
+  }
+  get key() {
+    return this.output().toString();
+  }
+}
+
+class PdfBool extends PdfDataType {
+  constructor(value) {
+    super();
+    this.value = value;
+  }
+  output(s) {
+    s.putString(this.value ? "true" : "false");
+  }
+}
+
+class PdfShading {
+  constructor(options) {
+    this.options = options;
+    if (options.type === "radial" && (options.radius0 == null || options.radius1 == null)) {
+      throw new TypeError("A radial shading needs both radii");
+    }
+  }
+  output() {
+    const {options} = this;
+    const result = new PdfDict([ [ "/ShadingType", new PdfNum(options.type === "axial" ? 2 : 3) ] ]);
+    if (options.boundingBox !== null && options.boundingBox !== undefined) {
+      const box = options.boundingBox;
+      result.set("/BBox", PdfArray.fromNum([ box.x, box.y, box.x + box.width, box.y + box.height ]));
+    }
+    result.set("/AntiAlias", new PdfBool(true));
+    result.set("/ColorSpace", new PdfName("/DeviceRGB"));
+    result.set("/Coords", options.type === "axial" ? PdfArray.fromNum([ options.start.x, options.start.y, options.end.x, options.end.y ]) : PdfArray.fromNum([ options.start.x, options.start.y, options.radius0, options.end.x, options.end.y, options.radius1 ]));
+    if (options.extendStart === true || options.extendEnd === true) {
+      result.set("/Extend", new PdfArray([ new PdfBool(options.extendStart ?? false), new PdfBool(options.extendEnd ?? false) ]));
+    }
+    result.set("/Function", options.fn);
+    return result;
+  }
+}
+
+function alignmentPoint(alignment, box) {
+  return {
+    x: box.x + (alignment.x + 1) * box.width / 2,
+    y: box.y + (alignment.y + 1) * box.height / 2
+  };
+}
+
+class Gradient {
+  constructor({colors, stops = null}) {
+    if (colors.length === 0) throw new RangeError("A gradient needs at least one colour");
+    if (stops !== null && stops.length !== colors.length) {
+      throw new RangeError("The number of gradient colours must match the number of stops");
+    }
+    this.colors = colors.map(color => normalizeColor(color));
+    this.stops = stops === null ? [] : stops.map(value => Math.min(1, Math.max(0, Number(value))));
+  }
+}
+
+class LinearGradient extends Gradient {
+  constructor({colors, stops = null, begin = Alignment.centerLeft, end = Alignment.centerRight, tileMode = "clamp"}) {
+    super({
+      colors,
+      stops
+    });
+    this.begin = begin;
+    this.end = end;
+    this.tileMode = tileMode;
+  }
+  paint(context, box) {
+    const pattern = new PdfShadingPattern({
+      shading: new PdfShading({
+        type: "axial",
+        boundingBox: box,
+        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
+        start: alignmentPoint(this.begin, box),
+        end: alignmentPoint(this.end, box),
+        extendStart: true,
+        extendEnd: true
+      })
+    });
+    context.canvas.setFillPattern(pattern);
+    context.canvas.drawBox(box);
+    context.canvas.fillPath();
+  }
+}
+
+class RadialGradient extends Gradient {
+  constructor({colors, stops = null, center = Alignment.center, radius = .5, tileMode = "clamp", focal = null, focalRadius = 0}) {
+    super({
+      colors,
+      stops
+    });
+    this.center = center;
+    this.radius = Math.max(0, Number(radius));
+    this.tileMode = tileMode;
+    this.focal = focal;
+    this.focalRadius = Math.max(0, Number(focalRadius));
+  }
+  paint(context, box) {
+    const scale = Math.min(box.width, box.height);
+    const pattern = new PdfShadingPattern({
+      shading: new PdfShading({
+        type: "radial",
+        boundingBox: box,
+        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
+        start: alignmentPoint(this.focal ?? this.center, box),
+        end: alignmentPoint(this.center, box),
+        radius0: this.focalRadius * scale,
+        radius1: this.radius * scale,
+        extendStart: true,
+        extendEnd: true
+      })
+    });
+    context.canvas.setFillPattern(pattern);
+    context.canvas.drawBox(box);
+    context.canvas.fillPath();
+  }
+}
+
+class BoxShadow {
+  constructor({color = "#000000", offset = {
+    x: 0,
+    y: 0
+  }, blurRadius = 0, spreadRadius = 0, opacity = .25} = {}) {
+    this.color = normalizeColor(color);
+    this.offset = {
+      x: Number(offset.x),
+      y: Number(offset.y)
+    };
+    this.blurRadius = Math.max(0, Number(blurRadius));
+    this.spreadRadius = Number(spreadRadius);
+    this.opacity = Math.min(1, Math.max(0, Number(opacity)));
+  }
+}
+
+function appendShape(context, x, y, width, height, shape, borderRadius) {
+  const {canvas} = context;
+  if (shape === "circle") {
+    canvas.drawEllipse(x + width / 2, canvas.pageHeight - y - height / 2, width / 2, height / 2);
+  } else if (borderRadius !== null) {
+    borderRadius.paint(canvas, x, y, width, height);
+  } else {
+    canvas.drawRect(x, canvas.pageHeight - y - height, width, height);
+  }
+}
+
+function paintShadow(context, shadow, x, y, width, height, shape, borderRadius) {
+  if (shadow.opacity === 0) return;
+  const steps = shadow.blurRadius === 0 ? 1 : Math.max(4, Math.min(16, Math.ceil(shadow.blurRadius)));
+  for (let index = steps; index >= 1; index--) {
+    const blur = shadow.blurRadius * index / steps;
+    const spread = shadow.spreadRadius + blur;
+    const alpha = shadow.opacity * (steps === 1 ? 1 : (1 - index / (steps + 1)) / steps);
+    context.canvas.saveContext();
+    context.canvas.setGraphicState(new PdfGraphicState({
+      fillOpacity: alpha
+    }));
+    context.canvas.setFillColor(shadow.color);
+    appendShape(context, x + shadow.offset.x - spread, y + shadow.offset.y - spread, width + spread * 2, height + spread * 2, shape, borderRadius);
+    context.canvas.fillPath();
+    context.canvas.restoreContext();
+  }
+}
+
+class BoxDecoration {
+  constructor({color = null, border = null, borderRadius = null, boxShadow = null, gradient = null, shape = "rectangle"} = {}) {
+    this.color = color === null ? null : normalizeColor(color);
+    this.border = normalizeBoxBorder(border);
+    this.borderRadius = borderRadius === null ? null : borderRadius instanceof BorderRadiusGeometry ? borderRadius : BorderRadius.all(borderRadius);
+    this.boxShadow = boxShadow === null ? [] : boxShadow.map(value => value instanceof BoxShadow ? value : new BoxShadow(value));
+    this.gradient = gradient;
+    this.shape = shape;
+    if (shape === "circle" && borderRadius !== null) {
+      throw new Error("A circular BoxDecoration cannot have a border radius");
+    }
+  }
+  paint(context, x, y, width, height, phase = "all", direction = "ltr") {
+    const resolvedRadius = this.borderRadius?.resolve(direction) ?? null;
+    const box = {
+      x,
+      y: context.canvas.pageHeight - y - height,
+      width,
+      height
+    };
+    if (phase === "all" || phase === "background") {
+      for (const shadow of this.boxShadow) {
+        paintShadow(context, shadow, x, y, width, height, this.shape, resolvedRadius);
+      }
+      if (this.color !== null) {
+        if (this.shape === "rectangle" && resolvedRadius === null) {
+          context.canvas.fillRect(x, y, width, height, this.color);
+        } else {
+          context.canvas.setFillColor(this.color);
+          appendShape(context, x, y, width, height, this.shape, resolvedRadius);
+          context.canvas.fillPath();
+        }
+      }
+      if (this.gradient !== null) {
+        context.canvas.saveContext();
+        appendShape(context, x, y, width, height, this.shape, resolvedRadius);
+        context.canvas.clipPath();
+        this.gradient.paint(context, box);
+        context.canvas.restoreContext();
+      }
+    }
+    if (phase === "all" || phase === "foreground") {
+      this.border?.paint(context, x, y, width, height, {
+        shape: this.shape,
+        borderRadius: resolvedRadius
+      });
+    }
+  }
+}
+
+function normalizeBoxDecoration(value) {
+  if (value === null || value === undefined) return null;
+  return value instanceof BoxDecoration ? value : new BoxDecoration(value);
+}
+
+class DecoratedBox extends Widget {
+  constructor({decoration, position = "background", child = null}) {
+    super();
+    this.decoration = normalizeBoxDecoration(decoration);
+    this.position = position;
+    this.child = child;
+  }
+  layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const childBox = this.child?.layout(context, parent) ?? null;
+    const size = parent.constrain(childBox ?? {
+      width: 0,
+      height: 0
+    });
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    if (this.position === "background") {
+      this.decoration.paint(context, box.x, box.y, box.width, box.height);
+    }
+    const {childBox} = box.data;
+    childBox?.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+    if (this.position === "foreground") {
+      this.decoration.paint(context, box.x, box.y, box.width, box.height);
+    }
+  }
+}
+
 class Container extends Widget {
-  constructor({child = null, width = null, height = null, padding = 0, margin = 0, background = null, borderColor = null, borderWidth = 1} = {}) {
+  constructor({child = null, width = null, height = null, padding = 0, margin = 0, background = null, borderColor = null, borderWidth = 1, decoration = null, foregroundDecoration = null, alignment = null} = {}) {
     super();
     this.child = child;
     this.width = width == null ? null : Number(width);
@@ -2690,6 +3319,12 @@ class Container extends Widget {
     this.background = background == null ? null : normalizeColor(background);
     this.borderColor = borderColor == null ? null : normalizeColor(borderColor);
     this.borderWidth = Number(borderWidth);
+    this.decoration = normalizeBoxDecoration(decoration);
+    this.foregroundDecoration = normalizeBoxDecoration(foregroundDecoration);
+    this.alignment = alignment === null ? null : resolveBasicAlignment(alignment);
+    if (this.background !== null && this.decoration !== null) {
+      throw new Error("Container cannot have both background and decoration");
+    }
   }
   layout(context, constraints) {
     const parent = BoxConstraints.from(constraints);
@@ -2699,7 +3334,7 @@ class Container extends Widget {
       height: this.height
     });
     const inner = desired.deflate(this.padding);
-    const childBox = this.child?.layout(context, inner) ?? null;
+    const childBox = this.child?.layout(context, this.alignment === null ? inner : inner.loosen()) ?? null;
     const content = childBox ?? {
       width: 0,
       height: 0
@@ -2710,6 +3345,12 @@ class Container extends Widget {
     });
     const boxWidth = decorated.width;
     const boxHeight = decorated.height;
+    const contentWidth = Math.max(0, boxWidth - this.padding.left - this.padding.right);
+    const contentHeight = Math.max(0, boxHeight - this.padding.top - this.padding.bottom);
+    const childOffset = childBox === null || this.alignment === null ? {
+      dx: 0,
+      dy: 0
+    } : inscribe(this.alignment, childBox.width, childBox.height, contentWidth, contentHeight);
     const size = parent.constrain({
       width: boxWidth + this.margin.left + this.margin.right,
       height: boxHeight + this.margin.top + this.margin.bottom
@@ -2721,15 +3362,19 @@ class Container extends Widget {
       data: {
         childBox,
         boxWidth,
-        boxHeight
+        boxHeight,
+        childX: childOffset.dx,
+        childY: childOffset.dy
       }
     };
   }
   paint(context, box) {
     const x = box.x + this.margin.left;
     const y = box.y + this.margin.top;
-    const {boxWidth, boxHeight, childBox} = box.data;
-    if (this.background) {
+    const {boxWidth, boxHeight, childBox, childX, childY} = box.data;
+    if (this.decoration !== null) {
+      this.decoration.paint(context, x, y, boxWidth, boxHeight);
+    } else if (this.background) {
       context.canvas.fillRect(x, y, boxWidth, boxHeight, this.background);
     }
     if (this.borderColor && this.borderWidth > 0) {
@@ -2738,10 +3383,11 @@ class Container extends Widget {
     if (childBox) {
       childBox.widget.paint(context, {
         ...childBox,
-        x: x + this.padding.left,
-        y: y + this.padding.top
+        x: x + this.padding.left + childX,
+        y: y + this.padding.top + childY
       });
     }
+    this.foregroundDecoration?.paint(context, x, y, boxWidth, boxHeight);
   }
 }
 
@@ -4813,102 +5459,6 @@ SvgColor.defaultColor = new SvgColor([ 0, 0, 0 ]);
 SvgColor.none = new SvgColor;
 
 SvgColor.inherited = new SvgColor(null, true);
-
-function interpolation(start, end) {
-  return new PdfDict([ [ "/FunctionType", new PdfNum(2) ], [ "/Domain", PdfArray.fromNum([ 0, 1 ]) ], [ "/C0", PdfArray.fromNum(start) ], [ "/C1", PdfArray.fromNum(end) ], [ "/N", new PdfNum(1) ] ]);
-}
-
-class PdfBaseFunction {
-  static colorsAndStops(colors, stops = []) {
-    if (colors.length === 0) {
-      throw new RangeError("A gradient needs at least one colour");
-    }
-    if (stops.length > 0 && colors.length !== stops.length) {
-      throw new RangeError("The number of gradient colours must match the number of stops");
-    }
-    const normalizedColors = [ ...colors ];
-    const normalizedStops = stops.length === 0 ? normalizedColors.map((_, index) => normalizedColors.length === 1 ? 0 : index / (normalizedColors.length - 1)) : stops.map(value => Math.min(1, Math.max(0, value)));
-    if (normalizedColors.length === 1) {
-      normalizedColors.push(normalizedColors[0]);
-      normalizedStops.push(1);
-    }
-    for (let index = 1; index < normalizedStops.length; index++) {
-      normalizedStops[index] = Math.max(normalizedStops[index], normalizedStops[index - 1]);
-    }
-    if (normalizedStops[0] > 0) {
-      normalizedStops.unshift(0);
-      normalizedColors.unshift(normalizedColors[0]);
-    }
-    if (normalizedStops[normalizedStops.length - 1] < 1) {
-      normalizedStops.push(1);
-      normalizedColors.push(normalizedColors[normalizedColors.length - 1]);
-    }
-    if (normalizedColors.length === 2) {
-      return interpolation(normalizedColors[0], normalizedColors[1]);
-    }
-    const functions = [];
-    for (let index = 1; index < normalizedColors.length; index++) {
-      functions.push(interpolation(normalizedColors[index - 1], normalizedColors[index]));
-    }
-    const encode = [];
-    for (let index = 0; index < functions.length; index++) {
-      encode.push(0, 1);
-    }
-    return new PdfDict([ [ "/FunctionType", new PdfNum(3) ], [ "/Domain", PdfArray.fromNum([ 0, 1 ]) ], [ "/Functions", new PdfArray(functions) ], [ "/Bounds", PdfArray.fromNum(normalizedStops.slice(1, -1)) ], [ "/Encode", PdfArray.fromNum(encode) ] ]);
-  }
-}
-
-class PdfShadingPattern {
-  constructor({shading, matrix = null}) {
-    this.shading = shading;
-    this.matrix = matrix;
-  }
-  output() {
-    const result = new PdfDict([ [ "/PatternType", new PdfNum(2) ], [ "/Shading", this.shading.output() ] ]);
-    if (this.matrix !== null) {
-      result.set("/Matrix", PdfArray.fromNum(this.matrix));
-    }
-    return result;
-  }
-  get key() {
-    return this.output().toString();
-  }
-}
-
-class PdfBool extends PdfDataType {
-  constructor(value) {
-    super();
-    this.value = value;
-  }
-  output(s) {
-    s.putString(this.value ? "true" : "false");
-  }
-}
-
-class PdfShading {
-  constructor(options) {
-    this.options = options;
-    if (options.type === "radial" && (options.radius0 == null || options.radius1 == null)) {
-      throw new TypeError("A radial shading needs both radii");
-    }
-  }
-  output() {
-    const {options} = this;
-    const result = new PdfDict([ [ "/ShadingType", new PdfNum(options.type === "axial" ? 2 : 3) ] ]);
-    if (options.boundingBox !== null && options.boundingBox !== undefined) {
-      const box = options.boundingBox;
-      result.set("/BBox", PdfArray.fromNum([ box.x, box.y, box.x + box.width, box.y + box.height ]));
-    }
-    result.set("/AntiAlias", new PdfBool(true));
-    result.set("/ColorSpace", new PdfName("/DeviceRGB"));
-    result.set("/Coords", options.type === "axial" ? PdfArray.fromNum([ options.start.x, options.start.y, options.end.x, options.end.y ]) : PdfArray.fromNum([ options.start.x, options.start.y, options.radius0, options.end.x, options.end.y, options.radius1 ]));
-    if (options.extendStart === true || options.extendEnd === true) {
-      result.set("/Extend", new PdfArray([ new PdfBool(options.extendStart ?? false), new PdfBool(options.extendEnd ?? false) ]));
-    }
-    result.set("/Function", options.fn);
-    return result;
-  }
-}
 
 const TRANSFORM = /(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/g;
 
@@ -7020,13 +7570,11 @@ function normalizeTableBorder(input) {
 }
 
 function paintTableDecorationBackground(context, decoration, x, y, width, height) {
-  if (decoration?.color !== null && decoration?.color !== undefined) {
-    context.canvas.fillRect(x, y, width, height, decoration.color);
-  }
+  normalizeBoxDecoration(decoration)?.paint(context, x, y, width, height, "background");
 }
 
 function paintTableDecorationBorder(context, decoration, x, y, width, height) {
-  normalizeTableBorder(decoration?.border)?.paint(context, x, y, width, height);
+  normalizeBoxDecoration(decoration)?.paint(context, x, y, width, height, "foreground");
 }
 
 class TableRow {
@@ -7660,6 +8208,20 @@ const publicApi = Object.freeze({
   Flexible,
   Expanded,
   Container,
+  DecoratedBox,
+  BoxDecoration,
+  BoxShadow,
+  Gradient,
+  LinearGradient,
+  RadialGradient,
+  BoxBorder,
+  Border,
+  BorderSide,
+  BorderStyle,
+  BorderRadiusGeometry,
+  BorderRadius,
+  BorderRadiusDirectional,
+  Radius,
   Spacer,
   Vector,
   Padding,
@@ -7722,4 +8284,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AspectRatio, BoxConstraints, Builder, Center, Column, ConstrainedBox, Container, CustomPaint, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, Font, FractionColumnWidth, FullPage, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, SpanningWidget, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableRow, Text, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Center, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, Font, FractionColumnWidth, FullPage, Gradient, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, RadialGradient, Radius, Row, SizedBox, Spacer, SpanningWidget, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableRow, Text, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
