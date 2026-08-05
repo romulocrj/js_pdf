@@ -13,3 +13,4 @@ test/v8/
 # dist/js_pdf.min.mjs are committed.
 dist/js_pdf-*.mjs
 .claude/settings.json
+dart_pdf-master/
