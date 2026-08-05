@@ -1,9 +1,24 @@
 import type { ColorInput } from './color.ts';
 import type { PdfFont } from './font/font.ts';
-export interface TextStyle {
+/**
+ * What `PdfCanvas.text` needs to write one run of text. Named for the canvas
+ * rather than called `TextStyle`, which as of phase 1.4 is the widget-level
+ * value type in `widgets/text_style.ts`; this is its resolved, drawable form.
+ */
+export interface CanvasTextStyle {
     readonly fontSize: number;
     readonly color: ColorInput;
     readonly font?: PdfFont;
+    /** `Tc`, extra space per glyph. Omitted from the output when zero. */
+    readonly letterSpacing?: number;
+    /**
+     * `Tw`, extra space per space character. Omitted when zero.
+     *
+     * PORT GAP: `Tw` applies to single-byte code 32 only, so a reader ignores it
+     * for the two-byte CIDs an embedded TrueType font emits. Word spacing has no
+     * effect on TTF text until the port measures and inserts the space itself.
+     */
+    readonly wordSpacing?: number;
 }
 export interface CircleOptions {
     readonly fill?: ColorInput | null;
@@ -43,7 +58,7 @@ export declare class PdfCanvas {
     restore(): void;
     fillRect(x: number, top: number, width: number, height: number, color: ColorInput): void;
     strokeRect(x: number, top: number, width: number, height: number, color: ColorInput, lineWidth?: number): void;
-    text(text: string, x: number, baselineFromTop: number, style: TextStyle): void;
+    text(text: string, x: number, baselineFromTop: number, style: CanvasTextStyle): void;
     line(x1: number, top1: number, x2: number, top2: number, color?: ColorInput, lineWidth?: number): void;
     circle(cx: number, topCenter: number, radius: number, { fill, stroke, lineWidth }?: CircleOptions): void;
     output(): string;

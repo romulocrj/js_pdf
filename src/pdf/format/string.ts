@@ -14,9 +14,9 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/format/string.dart
  *
- * PORT GAP: only the literal `(...)` branch exists. Upstream also emits hex
- * `<...>` strings, UTF-16BE text and PDF dates. The hex branch arrives with TTF
- * embedding in roadmap phase 1.3, which is what needs it.
+ * PORT GAP: no UTF-16BE text and no PDF dates. Upstream emits both; the port has
+ * the literal `(...)` and hex `<...>` branches, which is what the standard fonts
+ * and an `/Identity-H` composite font need respectively.
  */
 
 import { PdfDataType } from './base.ts';
@@ -67,6 +67,23 @@ export function pdfLiteral(value: string): string {
   }
 
   return `(${output})`;
+}
+
+/**
+ * A PDF hex string `<...>`, written as fixed-width big-endian words.
+ *
+ * This is how text is emitted for a composite font: with `/Identity-H` the
+ * bytes between the angle brackets are two-byte CIDs, not characters, so the
+ * literal escaping rules above do not apply at all.
+ */
+export function pdfHexString(values: readonly number[], digits = 4): string {
+  let output = '';
+
+  for (const value of values) {
+    output += value.toString(16).padStart(digits, '0');
+  }
+
+  return `<${output}>`;
 }
 
 /** A PDF string object. */

@@ -164,7 +164,11 @@ test('Type1 font encoding and resource dictionary use the font seam', () => {
 });
 
 test('the namespace export exposes the same API as the named exports', () => {
-  for (const name of ['Document', 'Page', 'MultiPage', 'Text', 'Column', 'Row', 'Container', 'Spacer', 'Vector', 'PageFormat', 'PdfType1Font']) {
+  for (const name of [
+    'Document', 'Page', 'MultiPage', 'Text', 'Column', 'Row', 'Container', 'Spacer', 'Vector',
+    'PageFormat', 'PdfType1Font', 'PdfTtfFont', 'Font', 'TextStyle', 'Theme', 'ThemeData',
+    'DefaultTextStyle', 'PageTheme'
+  ]) {
     assert.equal(Pdf.js_pdf[name], Pdf[name], `js_pdf.${name} must match the named export`);
   }
   assert.equal(typeof Pdf.js_pdf.createPdf, 'function');
@@ -190,7 +194,8 @@ function layoutOnly(widget, constraints = { maxWidth: 200, maxHeight: 100 }) {
     document,
     canvas: null,
     pageFormat: { width: 200, height: 100 },
-    pageNumber: 1
+    pageNumber: 1,
+    theme: document.theme
   };
   return widget.layout(context, constraints);
 }

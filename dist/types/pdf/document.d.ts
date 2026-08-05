@@ -48,7 +48,13 @@ export declare class PdfDocument {
     get objects(): readonly PdfObjectBase<PdfDataType>[];
     genSerial(): number;
     register(object: PdfObjectBase<PdfDataType>): void;
-    /** The indirect object holding `font`'s dictionary, created once per document. */
+    /**
+     * The indirect object holding `font`'s dictionary, created once per document.
+     *
+     * An embedded font builds its subset, descriptor and `/ToUnicode` CMap inside
+     * `resourceDict`, so this must not run until every page has been rendered —
+     * which is exactly when `addPage` is called.
+     */
     fontObject(font: PdfFont): PdfObject<PdfDict>;
     /**
      * Append a page. Its fonts and content stream are created first so they are

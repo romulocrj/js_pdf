@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T18:40:16.383Z",
+  "generatedAt": "2026-08-05T19:15:08.110Z",
   "results": [
     {
       "name": "hello-world",
@@ -9,37 +9,37 @@
     {
       "name": "calendar",
       "status": "failed",
-      "error": "calendar requires unported js_pdf APIs: BoxDecoration, Border, BorderSide, Expanded, Font, FullPage, GridView, PageTheme, SvgImage, TextStyle, ThemeData"
+      "error": "calendar requires unported js_pdf APIs: BoxDecoration, Border, BorderSide, Expanded, FullPage, GridView, SvgImage"
     },
     {
       "name": "certificate",
       "status": "failed",
-      "error": "certificate requires unported js_pdf APIs: Border, BoxDecoration, Flexible, Font, FullPage, LoremText, PageTheme, Positioned, RichText, Stack, SvgImage, TextSpan, TextStyle, ThemeData, Transform"
+      "error": "certificate requires unported js_pdf APIs: Border, BoxDecoration, Flexible, FullPage, LoremText, Positioned, RichText, Stack, SvgImage, TextSpan, Transform"
     },
     {
       "name": "document",
       "status": "failed",
-      "error": "document requires unported js_pdf APIs: Border, BoxDecoration, Bullet, Font, Header, PageTheme, Paragraph, PdfLogo, RichText, SvgImage, TableHelper, TableOfContent, TextSpan, TextStyle, Theme, ThemeData, UrlLink"
+      "error": "document requires unported js_pdf APIs: Border, BoxDecoration, Bullet, Header, Paragraph, PdfLogo, RichText, SvgImage, TableHelper, TableOfContent, TextSpan, UrlLink"
     },
     {
       "name": "invoice",
       "status": "failed",
-      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, Border, BorderRadius, BoxDecoration, DefaultTextStyle, Expanded, FittedBox, Font, FullPage, GridView, LoremText, PageTheme, PdfLogo, RichText, SvgImage, TableHelper, TextSpan, TextStyle, ThemeData"
+      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, Border, BorderRadius, BoxDecoration, Expanded, FittedBox, FullPage, GridView, LoremText, PdfLogo, RichText, SvgImage, TableHelper, TextSpan"
     },
     {
       "name": "report",
       "status": "failed",
-      "error": "report requires unported js_pdf APIs: BarDataSet, CartesianGrid, Chart, ChartLegend, Expanded, FixedAxis, Flexible, Font, LineDataSet, PieDataSet, PieGrid, PointChartValue, TableHelper, TextStyle, ThemeData, Transform"
+      "error": "report requires unported js_pdf APIs: BarDataSet, CartesianGrid, Chart, ChartLegend, Expanded, FixedAxis, Flexible, LineDataSet, PieDataSet, PieGrid, PointChartValue, TableHelper, Transform"
     },
     {
       "name": "resume",
       "status": "failed",
-      "error": "resume requires unported js_pdf APIs: Barcode, BarcodeWidget, Border, BorderRadius, BoxDecoration, CircularProgressIndicator, ClipOval, Font, FullPage, Icon, IconData, Image, Lorem, MemoryImage, PageTheme, Partition, Partitions, Positioned, Stack, SvgImage, TextStyle, Theme, ThemeData, Transform, UrlLink"
+      "error": "resume requires unported js_pdf APIs: Barcode, BarcodeWidget, Border, BorderRadius, BoxDecoration, CircularProgressIndicator, ClipOval, FullPage, Icon, IconData, Image, Lorem, MemoryImage, Partition, Partitions, Positioned, Stack, SvgImage, Transform, UrlLink"
     },
     {
       "name": "server",
       "status": "failed",
-      "error": "server requires unported js_pdf APIs: AnnotationUrl, BarDataSet, Border, BorderRadius, BoxDecoration, CartesianGrid, Chart, Expanded, FixedAxis, Font, FullPage, PageTheme, PointChartValue, RichText, SvgImage, TableHelper, TextSpan, TextStyle, ThemeData, UrlLink"
+      "error": "server requires unported js_pdf APIs: AnnotationUrl, BarDataSet, Border, BorderRadius, BoxDecoration, CartesianGrid, Chart, Expanded, FixedAxis, FullPage, PointChartValue, RichText, SvgImage, TableHelper, TextSpan, UrlLink"
     }
   ]
 }

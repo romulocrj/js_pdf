@@ -23,16 +23,21 @@
 
 import { PageFormat } from './pdf/page_format.ts';
 import { PdfType1Font } from './pdf/font/type1_fonts.ts';
+import { PdfTtfFont } from './pdf/obj/ttf_font.ts';
 import { Align, Center, Divider, Padding, SizedBox } from './widgets/basic.ts';
 import { Container } from './widgets/container.ts';
 import { Document } from './widgets/document.ts';
 import { Column, Row, Spacer } from './widgets/flex.ts';
+import { Font } from './widgets/font.ts';
 import { Alignment, EdgeInsets } from './widgets/geometry.ts';
 import { MultiPage } from './widgets/multi_page.ts';
 import { Page } from './widgets/page.ts';
 import type { Section } from './widgets/page.ts';
+import { PageTheme } from './widgets/page_theme.ts';
 import { Vector } from './widgets/shape.ts';
 import { Text } from './widgets/text.ts';
+import { TextStyle } from './widgets/text_style.ts';
+import { DefaultTextStyle, Theme, ThemeData } from './widgets/theme.ts';
 import { StatelessWidget, Widget } from './widgets/widget.ts';
 import type { DocumentOptions } from './widgets/document.ts';
 
@@ -42,19 +47,26 @@ export {
   Center,
   Column,
   Container,
+  DefaultTextStyle,
   Divider,
   Document,
   EdgeInsets,
+  Font,
   MultiPage,
   Padding,
   Page,
   PageFormat,
+  PageTheme,
+  PdfTtfFont,
   PdfType1Font,
   Row,
   SizedBox,
   Spacer,
   StatelessWidget,
   Text,
+  TextStyle,
+  Theme,
+  ThemeData,
   Vector,
   Widget
 };
@@ -64,8 +76,29 @@ export type { PdfFont } from './pdf/font/font.ts';
 export type { PdfFontMetricsOptions } from './pdf/font/font_metrics.ts';
 export { PdfFontMetrics } from './pdf/font/font_metrics.ts';
 export type { PageSize } from './pdf/page_format.ts';
-export type { TextStyle } from './pdf/graphics.ts';
+export type { CanvasTextStyle } from './pdf/graphics.ts';
 export type { PdfCanvas } from './pdf/graphics.ts';
+export type { PdfTtfFontOptions } from './pdf/obj/ttf_font.ts';
+export type { Type1FontName } from './widgets/font.ts';
+export type {
+  FontStyle,
+  FontWeight,
+  TextDecoration,
+  TextDecorationStyle,
+  TextStyleOptions
+} from './widgets/text_style.ts';
+export type {
+  DefaultTextStyleOptions,
+  ThemeDataFields,
+  ThemeDataOptions,
+  ThemeOptions,
+  ThemeWithFontOptions
+} from './widgets/theme.ts';
+export type {
+  BuildCallback,
+  PageOrientation,
+  PageThemeOptions
+} from './widgets/page_theme.ts';
 export type { Insets, InsetsInput, Offset } from './widgets/geometry.ts';
 export type {
   AnyLayoutBox,
@@ -88,7 +121,7 @@ export type {
 } from './widgets/basic.ts';
 export type { ColumnOptions, RowOptions } from './widgets/flex.ts';
 export type { ContainerOptions } from './widgets/container.ts';
-export type { TextAlign, TextOptions } from './widgets/text.ts';
+export type { TextAlign, TextOptions, TextOverflow } from './widgets/text.ts';
 export type { VectorApi, VectorOptions } from './widgets/shape.ts';
 export type { PageOptions, Section } from './widgets/page.ts';
 export type { MultiPageOptions } from './widgets/multi_page.ts';
@@ -114,6 +147,13 @@ export interface PublicApi {
   readonly EdgeInsets: typeof EdgeInsets;
   readonly PageFormat: typeof PageFormat;
   readonly PdfType1Font: typeof PdfType1Font;
+  readonly PdfTtfFont: typeof PdfTtfFont;
+  readonly Font: typeof Font;
+  readonly TextStyle: typeof TextStyle;
+  readonly Theme: typeof Theme;
+  readonly ThemeData: typeof ThemeData;
+  readonly DefaultTextStyle: typeof DefaultTextStyle;
+  readonly PageTheme: typeof PageTheme;
 }
 
 const publicApi: PublicApi = Object.freeze({
@@ -134,7 +174,14 @@ const publicApi: PublicApi = Object.freeze({
   Alignment,
   EdgeInsets,
   PageFormat,
-  PdfType1Font
+  PdfType1Font,
+  PdfTtfFont,
+  Font,
+  TextStyle,
+  Theme,
+  ThemeData,
+  DefaultTextStyle,
+  PageTheme
 });
 
 /**

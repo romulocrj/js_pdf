@@ -10,13 +10,14 @@ Ordered plan for the port. Current coverage is in
 
 The MVP is restructured into a module tree that mirrors `dart_pdf`, written in
 TypeScript, with the runtime contract and attribution enforced by
-`npm run check`. Output is a valid PDF with selectable standard Type1 fonts and
-real AFM metrics, written through a real indirect-object model, and each page
-now declares its own resources — so a document can use as many fonts as it
-likes. Beyond that — TTF, SVG, tables, images — nothing is real yet.
+`npm run check`. Output is a valid PDF written through a real indirect-object
+model, with per-page resource dictionaries and **embedded TrueType fonts** —
+subset, written as Type0/CIDFontType2 composites, and selected through a theme.
+Beyond text, though, SVG, tables and images are still nothing.
 
-**Phase 0 is complete.** The foundations are in place; phase 1 is the next
-subsystem.
+**Phases 0 and 1 are complete.** The foundations are in place and the WinAnsi
+ceiling is gone; phase 2 (SVG) and phase 3 (layout) are what the examples now
+wait on.
 
 **Phase 0.0 — TypeScript migration — landed 2026-08-05.** Every module is `.ts`;
 `tsconfig.json` compiles against the ES2020 lib with no DOM and no host types,
@@ -47,25 +48,26 @@ neither. `Padding`, `Align`, `Center`, `SizedBox` and `Divider`, plus
 result — every one of the seven calls `Font.ttf`, so phase 1 remains on all their
 critical paths — but the missing-API total across them fell from 147 to 124.
 
-**Phase 1.1 — TTF parser — landed 2026-08-05.** `TtfParser` reads the table
-directory, `head`/`hhea`/`maxp`/`name`, `cmap` formats 0/4/6/12, `loca`/`glyf`
-bounds and composite glyph components. All eleven fonts in `examples/assets/`
-parse, and every glyph in `OpenSans-Regular` and `Roboto-Regular` reads back
-without overrunning its `loca` entry.
+**Phase 1 — TTF fonts — landed 2026-08-05.** 1.1 reads a font, 1.2 subsets it,
+1.3 embeds it, 1.4 selects it. Portuguese, Japanese and Arabic *characters* all
+draw from an embedded font with the font's own advance widths, and the
+`/ToUnicode` CMap round-trips them back to the source string, so selection and
+search still work. The missing-API total across the seven examples fell from 124
+to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
+`DefaultTextStyle` are gone from every list.
 
 ## Next step
 
-> **Phase 1.2 — TTF subsetting writer.** Port
-> `pdf/lib/src/pdf/font/ttf_writer.dart` into `src/pdf/font/ttf_writer.ts`:
-> build a font containing only the used glyphs plus the components their
-> composites pull in, rebuild `loca`, `glyf`, `hmtx` and `cmap`, and recompute
-> the table checksums.
+> **Phase 2.1 — graphics path operators.** Port the path and transform sections
+> of `pdf/lib/src/pdf/graphics.dart` into `src/pdf/graphics.ts`:
+> `moveTo`/`lineTo`/`curveTo`/`close`, the fill rules (`f`/`f*`/`B`/`B*`), the
+> CTM (`cm`), line join/cap/dash, and clipping (`W`/`W*`/`n`).
 
-`TtfParser.readGlyph` already returns each glyph's raw program and its
-`compounds` list, which is exactly the input the subsetter needs — the traversal
-to write is "seed with the used glyphs, follow `compounds` to a fixed point".
-**Test:** the subset re-parses with the 1.1 parser and still contains the
-requested glyphs.
+Everything else in phase 2 depends on it, and so do four items left open in
+phase 3.3 (`Transform`, `FittedBox`, `Opacity`, the clipping widgets) and
+`PageTheme`'s `mustRotate`, which currently swaps the paper's dimensions instead
+of rotating the content. **Test:** assert on the emitted operator sequence for a
+known path.
 
 ---
 
@@ -227,14 +229,14 @@ disagreed for any non-default font.
 
 ## Phase 1 — TTF fonts
 
-**The most technically important subsystem.** It removes the Latin-1 ceiling:
-without it, any text outside WinAnsi is silently replaced with `?`.
+**The most technically important subsystem.** It removed the Latin-1 ceiling:
+without it, any text outside WinAnsi was silently replaced with `?`.
 
-Depends on phases 0.1–0.3.
+Depended on phases 0.1–0.3.
 
-**Example gate:** 1.4 is the single biggest unblock in the roadmap — *every*
-failing example needs `Font`, `TextStyle` and `ThemeData`. None generates yet
-after this phase, but all seven move.
+**Example gate:** 1.4 was the single biggest unblock in the roadmap — *every*
+failing example needs `Font`, `TextStyle` and `ThemeData`. None generates as a
+result, but all seven moved: 124 missing APIs down to 94.
 
 ### 1.1 TTF parser ✅ *(landed 2026-08-05)*
 
@@ -269,7 +271,7 @@ are monotonic and in bounds; every glyph in `OpenSans-Regular` and
 glyphs inside the font; `MaterialIcons` resolves Private Use Area codepoints,
 which is what phase 5.4 needs.
 
-### 1.2 TTF subsetting writer
+### 1.2 TTF subsetting writer ✅ *(landed 2026-08-05)*
 
 - **Ports:** `pdf/lib/src/pdf/font/ttf_writer.dart` (399 lines)
 - **Into:** `src/pdf/font/ttf_writer.ts`
@@ -278,42 +280,127 @@ which is what phase 5.4 needs.
 - **Test:** the subset re-parses with the phase-1.1 parser and retains the
   requested glyphs.
 
-### 1.3 Embedding
+Landed as `TtfWriter.withChars(codePoints)`. All eleven fonts in
+`examples/assets/` subset and re-parse; `OpenSans-Regular` goes from 130 kB to
+under 4 kB for a typical page of text. The whole-file `checkSumAdjustment` is
+asserted, not just assumed.
+
+Divergences, each noted in the file:
+
+- **The CID-to-glyph identity is kept.** Glyph `i` of the subset is the glyph for
+  code point `i` of the input, always — that identity is what lets 1.3 declare
+  `/CIDToGIDMap /Identity`. Upstream breaks it twice: it drops a code point the
+  font has no glyph for, and it substitutes an arbitrary glyph when two code
+  points resolve to one. Either shifts every later CID onto the wrong glyph.
+  `MaterialIcons.ttf`, which phase 5.4 needs, has no space glyph and hits the
+  first case. The port emits a blank placeholder instead.
+- Upstream's compound-glyph rewriter advances 6 or 8 bytes per component and
+  never skips the optional scale or 2×2 transform, though its own reader does.
+  The port skips them; otherwise a composite with a scaled component has its
+  later component indices rewritten at the wrong offsets.
+- A font without `OS/2` or `post` is written anyway rather than throwing.
+- Glyph traversal is guarded against a composite that reaches itself.
+- The sfnt header's `searchRange`/`entrySelector`/`rangeShift` are upstream's
+  values, which do not follow the specified formulas. They are binary-search
+  hints no reader depends on, and matching upstream keeps the two
+  implementations byte-comparable.
+
+### 1.3 Embedding ✅ *(landed 2026-08-05)*
 
 - **Ports:** `pdf/lib/src/pdf/obj/ttffont.dart`, `unicode_cmap.dart`,
   `font_descriptor.dart`
-- **Into:** `src/pdf/obj/ttf_font.ts`, `src/pdf/obj/unicode_cmap.ts`
+- **Into:** `src/pdf/obj/ttf_font.ts`, `src/pdf/obj/unicode_cmap.ts`,
+  `src/pdf/obj/font_descriptor.ts`
 - Type0/CIDFontType2 composite font, `/Identity-H` encoding, `FontDescriptor`
   with the real bbox and flags, `FontFile2` stream, and a `/ToUnicode` CMap so
   the PDF stays searchable and copyable.
-- `pdfLiteral` gains a hex-string branch: with a TTF font, text is emitted as
+- `format/string.ts` gained `pdfHexString`: with a TTF font, text is emitted as
   `<glyph indices>` rather than WinAnsi bytes.
-- **Test:** a document with accented and CJK text; assert the `/ToUnicode`
-  stream round-trips back to the source string.
+- **Test:** a document with accented and CJK text; the `/ToUnicode` stream
+  round-trips back to the source string.
 
-### 1.4 Font selection and theming
+`PdfFont.resourceDict` grew a registry argument, which is the change that made
+this possible: a font can now create the objects its dictionary references.
+`PdfTtfFont` hands out CIDs from `encodeText` as pages are drawn and builds its
+subset, descriptor, widths array and CMap afterwards, in `resourceDict`. That
+ordering works because this port renders every page to operators before any
+document exists; upstream defers the same work to `prepare()`, since its fonts
+are indirect objects from birth.
+
+Divergences, each noted in the file:
+
+- No simple `/TrueType` branch. Upstream falls back to a WinAnsi single-byte
+  font, embedding the file whole, when the sfnt version is not `0x00010000`.
+  That branch reintroduces the ceiling phase 1 exists to remove, so the port
+  rejects such a font at construction instead — as it does a `CFF `-flavoured
+  OpenType, which has no `glyf`/`loca` to subset.
+- No Arabic or bidi coupling: upstream zeroes a diacritic's advance width when
+  its shaping options are on, and `font/arabic.dart` is unported.
+- `/ItalicAngle`, `/CapHeight` and `/StemV` are upstream's constants rather than
+  measurements. They are required entries no reader consults when the program is
+  embedded.
+
+### 1.4 Font selection and theming ✅ *(landed 2026-08-05)*
 
 - **Ports:** `pdf/lib/src/widgets/font.dart`, `theme.dart`, `text_style.dart`,
   `page_theme.dart`
 - **Into:** `src/widgets/font.ts`, `src/widgets/theme.ts`,
   `src/widgets/text_style.ts`, `src/widgets/page_theme.ts`
 - `Font`, `TextStyle`, `Theme`, `ThemeData`, `DefaultTextStyle`, `PageTheme`.
-  Requires adding inherited values to the render context.
 - **Test:** nested styles resolve to the expected font per text run.
-- **Example gate:** unblocks `Font`/`TextStyle`/`ThemeData`/`PageTheme` for
+- **Example gate:** unblocked `Font`/`TextStyle`/`ThemeData`/`PageTheme` for
   `calendar`, `certificate`, `document`, `invoice`, `report`, `resume`,
   `server` — all seven.
+
+Landed with the four font slots (`fontNormal`/`fontBold`/`fontItalic`/
+`fontBoldItalic`) that make `fontWeight` and `fontStyle` work, `TextStyle.merge`
+with upstream's `inherit` rule, and the full `ThemeData` style set.
+
+The port has no `InheritedWidget` and no `Context.dependsOn`. **Inherited values
+ride on the render context instead:** `RenderContext` gained a `theme` field, and
+`Theme` and `DefaultTextStyle` lay out and paint their child with a context
+carrying a different one. That is the same scoping with none of the machinery,
+and `Theme.of(context)` is a field read.
+
+Other divergences worth knowing:
+
+- `TextStyle.defaultStyle()` uses `height: 1.2`, not upstream's `1`. The port has
+  used 1.2 since before styles existed, and changing it would move every line of
+  every existing document. `letterSpacing` and `wordSpacing` default to `0`
+  rather than upstream's `0`/`1`, and are absolute PDF units — the `Tc` and `Tw`
+  operands, which `PdfCanvas.text` now emits when they are non-zero.
+- `PageTheme.mustRotate` swaps the paper's dimensions rather than rotating the
+  content through the CTM, which needs **2.1**. The page a reader sees is the
+  same; `/MediaBox` reports the rotated size.
+- `fontFallback` is stored and merged but never consulted, and `decoration` is
+  stored but not painted. Both need the real line breaker in **3.7**.
+- `justify` is accepted by `TextAlign` and painted as `left`, for the same
+  reason.
+- No `iconTheme` on `ThemeData` — `IconThemeData` belongs with `Icon` in **5.4**.
+- No `DefaultTextStyle.merge`, which upstream builds out of `Builder` — one of
+  the widgets **3.3** left open.
+- `Font` is a pure declaration; the built `PdfFont` is cached on the `Document`
+  rather than on the declaration, because an embedded font accumulates the code
+  points it has encoded and two documents must not share a subset.
+- `DocumentOptions.font` still works, as shorthand for a one-face theme.
+- `pdf/graphics.ts`'s exported `TextStyle` was renamed `CanvasTextStyle`, since
+  `TextStyle` is now the widget-level value type.
 
 **Done when:** a document renders Portuguese, Japanese and Arabic *characters*
 from an embedded TTF, with correct advance widths and working text selection.
 (Arabic *shaping* is separate — `font/arabic.dart` and `bidi_utils.dart`, later.)
 
+✅ **Done.** A code point the chosen font has no glyph for draws blank but still
+gets its own CID and its own `/ToUnicode` entry, so the text remains selectable
+and copyable either way; none of the fonts in `examples/assets/` carries CJK or
+Arabic outlines, which is a corpus limit rather than a port limit.
+
 ---
 
 ## Phase 2 — SVG
 
-Depends on phase 2.1 landing first; the rest can proceed in parallel with
-phase 1 once it does.
+Depends on phase 2.1 landing first; the rest can proceed in any order once it
+does. Phase 1 is complete, so nothing here is waiting on fonts.
 
 **Example gate:** `SvgImage` (2.7) is needed by six of the seven remaining
 examples. `report` is the exception, which makes it the useful probe while this

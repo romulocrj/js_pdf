@@ -1,15 +1,24 @@
 import type { PdfCanvas } from '../pdf/graphics.ts';
 import type { PageSize } from '../pdf/page_format.ts';
 import type { Document } from './document.ts';
+import type { ThemeData } from './theme.ts';
 /** The context before a page exists: everything a section needs to render. */
 export interface DocumentContext {
     readonly document: Document;
 }
-/** The context threaded through `layout` and `paint`. */
+/**
+ * The context threaded through `layout` and `paint`.
+ *
+ * `theme` is the port's stand-in for upstream's inherited values: a widget that
+ * scopes something for its subtree hands the child a context with that field
+ * replaced, instead of registering an `InheritedWidget` the child looks up. See
+ * `theme.ts`.
+ */
 export interface RenderContext extends DocumentContext {
     readonly canvas: PdfCanvas;
     readonly pageFormat: PageSize;
     readonly pageNumber: number;
+    readonly theme: ThemeData;
 }
 export interface Constraints {
     readonly maxWidth: number;

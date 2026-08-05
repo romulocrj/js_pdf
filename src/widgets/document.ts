@@ -22,10 +22,11 @@
 import { serializePdf } from '../pdf/document.ts';
 import type { DocumentMetadata, SerializedPage } from '../pdf/document.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
-import { defaultPdfFont } from '../pdf/font/type1_fonts.ts';
+import { Font } from './font.ts';
 import { MultiPage } from './multi_page.ts';
 import { Page } from './page.ts';
 import type { Section } from './page.ts';
+import { ThemeData } from './theme.ts';
 import type { DocumentContext } from './widget.ts';
 
 export interface DocumentOptions {
@@ -35,19 +36,32 @@ export interface DocumentOptions {
   readonly creator?: string | null;
   readonly producer?: string | null;
 
+  /** The styles pages inherit unless their own `PageTheme` names another. */
+  readonly theme?: ThemeData;
+
   /**
-   * The font a widget draws with when it names none of its own. As of phase 0.3
-   * this is a default rather than the document's only font — each page registers
-   * whatever its content stream actually used. Phase 1.4 replaces it with
-   * `ThemeData`, of which this is the one-field ancestor.
+   * The font a widget draws with when it names none of its own — the one-field
+   * ancestor of `theme`, kept because it predates it. Setting it is the same as
+   * passing `theme: ThemeData.withFont({ base: Font.fromPdfFont(font) })`, and
+   * `theme` wins if both are given.
    */
   readonly font?: PdfFont;
 }
 
 export class Document {
   readonly metadata: DocumentMetadata;
-  readonly font: PdfFont;
+  readonly theme: ThemeData;
   readonly sections: Section[] = [];
+
+  /**
+   * One `PdfFont` per declaration, for this document only. An embedded font
+   * accumulates the code points it is asked to encode, so the cache cannot be
+   * global — two documents sharing a `Font` must not share its subset.
+   */
+  private readonly fonts = new Map<Font, PdfFont>();
+
+  /** Used only if the theme's default style somehow names no font at all. */
+  private readonly fallbackFont = Font.helvetica();
 
   constructor({
     title = null,
@@ -55,10 +69,35 @@ export class Document {
     subject = null,
     creator = 'js_pdf',
     producer = 'js_pdf',
-    font = defaultPdfFont
+    theme = undefined,
+    font = undefined
   }: DocumentOptions = {}) {
     this.metadata = { title, author, subject, creator, producer };
-    this.font = font;
+    this.theme = theme
+      ?? (font === undefined
+        ? ThemeData.base()
+        : ThemeData.withFont({ base: Font.fromPdfFont(font) }));
+  }
+
+  /** The `PdfFont` `declaration` stands for here, built once. */
+  resolveFont(declaration: Font): PdfFont {
+    const existing = this.fonts.get(declaration);
+    if (existing !== undefined) {
+      return existing;
+    }
+
+    const font = declaration.build();
+    this.fonts.set(declaration, font);
+    return font;
+  }
+
+  /**
+   * The font a widget falls back to when neither it nor the theme resolved one.
+   * Reads through the theme so a `Vector` and a `Text` on the same page agree,
+   * and therefore share a single `/Font` entry.
+   */
+  get font(): PdfFont {
+    return this.resolveFont(this.theme.defaultTextStyle.font ?? this.fallbackFont);
   }
 
   addPage(page: Section): this {

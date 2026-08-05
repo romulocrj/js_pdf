@@ -46,6 +46,8 @@ export declare class PdfType1Font implements PdfFont {
      * Upstream emits those for PDF 1.5 and up. They are optional for the 14
      * standard fonts, whose metrics every reader already has built in — which is
      * exactly the set this class covers.
+     *
+     * The registry argument is unused here: a standard font references nothing.
      */
     resourceDict(): PdfDict;
 }

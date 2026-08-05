@@ -283,6 +283,14 @@ function pdfLiteral(value) {
   return `(${output})`;
 }
 
+function pdfHexString(values, digits = 4) {
+  let output = "";
+  for (const value of values) {
+    output += value.toString(16).padStart(digits, "0");
+  }
+  return `<${output}>`;
+}
+
 class PdfString extends PdfDataType {
   constructor(value) {
     super();
@@ -455,15 +463,708 @@ class PdfType1Font {
 
 const defaultPdfFont = PdfType1Font.helvetica();
 
-function assertFiniteNumber(value, name) {
-  if (!Number.isFinite(value)) {
-    throw new TypeError(`${name} must be a finite number`);
+const TtfParserName = Object.freeze({
+  copyright: 0,
+  fontFamily: 1,
+  fontSubfamily: 2,
+  uniqueID: 3,
+  fullName: 4,
+  version: 5,
+  postScriptName: 6,
+  trademark: 7,
+  manufacturer: 8,
+  designer: 9,
+  description: 10,
+  manufacturerURL: 11,
+  designerURL: 12,
+  license: 13,
+  licenseURL: 14,
+  reserved: 15,
+  preferredFamily: 16,
+  preferredSubfamily: 17,
+  compatibleFullName: 18,
+  sampleText: 19,
+  postScriptFindFontName: 20,
+  wwsFamily: 21,
+  wwsSubfamily: 22
+});
+
+const TtfTable = Object.freeze({
+  head: "head",
+  name: "name",
+  hmtx: "hmtx",
+  hhea: "hhea",
+  cmap: "cmap",
+  maxp: "maxp",
+  loca: "loca",
+  glyf: "glyf",
+  post: "post",
+  os2: "OS/2",
+  cff: "CFF "
+});
+
+const REQUIRED_TABLES = [ TtfTable.head, TtfTable.name, TtfTable.hmtx, TtfTable.hhea, TtfTable.cmap, TtfTable.maxp ];
+
+class TtfParser {
+  constructor(bytes) {
+    this.tableOffsets = new Map;
+    this.tableSize = new Map;
+    this.charToGlyphIndexMap = new Map;
+    this.glyphOffsets = [];
+    this.glyphSizes = [];
+    this.glyphInfoMap = new Map;
+    this.bytes = bytes;
+    this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const numTables = this.view.getUint16(4);
+    for (let i = 0; i < numTables; i++) {
+      const name = this.readTag(i * 16 + 12);
+      this.tableOffsets.set(name, this.view.getUint32(i * 16 + 20));
+      this.tableSize.set(name, this.view.getUint32(i * 16 + 24));
+    }
+    for (const table of REQUIRED_TABLES) {
+      if (!this.tableOffsets.has(table)) {
+        throw new TypeError(`Unable to find the \`${table}\` table. This file is not a supported TTF font`);
+      }
+    }
+    this.parseCMap();
+    if (this.tableOffsets.has(TtfTable.loca) && this.tableOffsets.has(TtfTable.glyf)) {
+      this.parseIndexes();
+      this.parseGlyphs();
+    }
   }
-  return value;
+  readTag(offset) {
+    let tag = "";
+    for (let i = 0; i < 4; i++) {
+      tag += String.fromCharCode(this.bytes[offset + i] ?? 0);
+    }
+    return tag;
+  }
+  tableOffset(name) {
+    const offset = this.tableOffsets.get(name);
+    if (offset === undefined) {
+      throw new TypeError(`This font has no \`${name}\` table`);
+    }
+    return offset;
+  }
+  get unitsPerEm() {
+    return this.view.getUint16(this.tableOffset(TtfTable.head) + 18);
+  }
+  get xMin() {
+    return this.view.getInt16(this.tableOffset(TtfTable.head) + 36);
+  }
+  get yMin() {
+    return this.view.getInt16(this.tableOffset(TtfTable.head) + 38);
+  }
+  get xMax() {
+    return this.view.getInt16(this.tableOffset(TtfTable.head) + 40);
+  }
+  get yMax() {
+    return this.view.getInt16(this.tableOffset(TtfTable.head) + 42);
+  }
+  get indexToLocFormat() {
+    return this.view.getInt16(this.tableOffset(TtfTable.head) + 50);
+  }
+  get ascent() {
+    return this.view.getInt16(this.tableOffset(TtfTable.hhea) + 4);
+  }
+  get descent() {
+    return this.view.getInt16(this.tableOffset(TtfTable.hhea) + 6);
+  }
+  get lineGap() {
+    return this.view.getInt16(this.tableOffset(TtfTable.hhea) + 8);
+  }
+  get numOfLongHorMetrics() {
+    return this.view.getUint16(this.tableOffset(TtfTable.hhea) + 34);
+  }
+  get numGlyphs() {
+    return this.view.getUint16(this.tableOffset(TtfTable.maxp) + 4);
+  }
+  get fontName() {
+    return this.getNameID(TtfParserName.postScriptName) ?? "UnnamedFont";
+  }
+  get unicode() {
+    return this.view.getUint32(0) === 65536;
+  }
+  get hasCff() {
+    return this.tableOffsets.has(TtfTable.cff);
+  }
+  getNameID(nameID) {
+    const basePosition = this.tableOffsets.get(TtfTable.name);
+    if (basePosition === undefined) {
+      return null;
+    }
+    const count = this.view.getUint16(basePosition + 2);
+    const stringOffset = this.view.getUint16(basePosition + 4);
+    let pos = basePosition + 6;
+    let macintoshName = null;
+    for (let i = 0; i < count; i++) {
+      const platformID = this.view.getUint16(pos);
+      const id = this.view.getUint16(pos + 6);
+      const length = this.view.getUint16(pos + 8);
+      const offset = this.view.getUint16(pos + 10);
+      pos += 12;
+      if (id !== nameID) {
+        continue;
+      }
+      const start = basePosition + stringOffset + offset;
+      if (start + length > this.bytes.length) {
+        continue;
+      }
+      if (platformID === 3) {
+        return decodeUtf16Be(this.bytes.subarray(start, start + length));
+      }
+      if (platformID === 1) {
+        macintoshName = decodeLatin1(this.bytes.subarray(start, start + length));
+      }
+    }
+    return macintoshName;
+  }
+  parseCMap() {
+    const basePosition = this.tableOffset(TtfTable.cmap);
+    const numSubTables = this.view.getUint16(basePosition + 2);
+    for (let i = 0; i < numSubTables; i++) {
+      const offset = this.view.getUint32(basePosition + i * 8 + 8);
+      const format = this.view.getUint16(basePosition + offset);
+      switch (format) {
+       case 0:
+        this.parseCMapFormat0(basePosition + offset + 2);
+        break;
+
+       case 4:
+        this.parseCMapFormat4(basePosition + offset + 2);
+        break;
+
+       case 6:
+        this.parseCMapFormat6(basePosition + offset + 2);
+        break;
+
+       case 12:
+        this.parseCMapFormat12(basePosition + offset + 2);
+        break;
+      }
+    }
+  }
+  parseCMapFormat0(basePosition) {
+    for (let i = 0; i < 256; i++) {
+      const glyphIndex = this.view.getUint8(basePosition + i + 2);
+      if (glyphIndex > 0) {
+        this.charToGlyphIndexMap.set(i, glyphIndex);
+      }
+    }
+  }
+  parseCMapFormat4(basePosition) {
+    const segCount = Math.floor(this.view.getUint16(basePosition + 4) / 2);
+    const endCodes = [];
+    for (let i = 0; i < segCount; i++) {
+      endCodes.push(this.view.getUint16(basePosition + i * 2 + 12));
+    }
+    const startCodes = [];
+    for (let i = 0; i < segCount; i++) {
+      startCodes.push(this.view.getUint16(basePosition + (segCount + i) * 2 + 14));
+    }
+    const idDeltas = [];
+    for (let i = 0; i < segCount; i++) {
+      idDeltas.push(this.view.getUint16(basePosition + (segCount * 2 + i) * 2 + 14));
+    }
+    const idRangeOffsetBasePos = basePosition + segCount * 6 + 14;
+    const idRangeOffsets = [];
+    for (let i = 0; i < segCount; i++) {
+      idRangeOffsets.push(this.view.getUint16(idRangeOffsetBasePos + i * 2));
+    }
+    for (let s = 0; s < segCount - 1; s++) {
+      const startCode = startCodes[s];
+      const endCode = endCodes[s];
+      const idDelta = idDeltas[s];
+      const idRangeOffset = idRangeOffsets[s];
+      const idRangeOffsetAddress = idRangeOffsetBasePos + s * 2;
+      for (let c = startCode; c <= endCode; c++) {
+        let glyphIndex;
+        if (idRangeOffset === 0) {
+          glyphIndex = (idDelta + c) % 65536;
+        } else {
+          const glyphIndexAddress = idRangeOffset + 2 * (c - startCode) + idRangeOffsetAddress;
+          if (glyphIndexAddress + 1 >= this.bytes.length) {
+            continue;
+          }
+          glyphIndex = this.view.getUint16(glyphIndexAddress);
+        }
+        this.charToGlyphIndexMap.set(c, glyphIndex);
+      }
+    }
+  }
+  parseCMapFormat6(basePosition) {
+    const firstCode = this.view.getUint16(basePosition + 4);
+    const entryCount = this.view.getUint16(basePosition + 6);
+    for (let i = 0; i < entryCount; i++) {
+      const glyphIndex = this.view.getUint16(basePosition + i * 2 + 8);
+      if (glyphIndex > 0) {
+        this.charToGlyphIndexMap.set(firstCode + i, glyphIndex);
+      }
+    }
+  }
+  parseCMapFormat12(basePosition) {
+    const numGroups = this.view.getUint32(basePosition + 10);
+    for (let i = 0; i < numGroups; i++) {
+      const startCharCode = this.view.getUint32(basePosition + i * 12 + 14);
+      const endCharCode = this.view.getUint32(basePosition + i * 12 + 18);
+      const startGlyphID = this.view.getUint32(basePosition + i * 12 + 22);
+      for (let j = startCharCode; j <= endCharCode; j++) {
+        this.charToGlyphIndexMap.set(j, startGlyphID + j - startCharCode);
+      }
+    }
+  }
+  parseIndexes() {
+    const basePosition = this.tableOffset(TtfTable.loca);
+    const shortFormat = this.indexToLocFormat === 0;
+    let prevOffset = shortFormat ? this.view.getUint16(basePosition) * 2 : this.view.getUint32(basePosition);
+    for (let i = 1; i < this.numGlyphs + 1; i++) {
+      const offset = shortFormat ? this.view.getUint16(basePosition + i * 2) * 2 : this.view.getUint32(basePosition + i * 4);
+      this.glyphOffsets.push(prevOffset);
+      this.glyphSizes.push(offset - prevOffset);
+      prevOffset = offset;
+    }
+  }
+  parseGlyphs() {
+    const baseOffset = this.tableOffset(TtfTable.glyf);
+    const hmtxOffset = this.tableOffset(TtfTable.hmtx);
+    const unitsPerEm = this.unitsPerEm;
+    const numOfLongHorMetrics = this.numOfLongHorMetrics;
+    const ascent = this.ascent;
+    const descent = this.descent;
+    const defaultAdvanceWidth = this.view.getUint16(hmtxOffset + (numOfLongHorMetrics - 1) * 4);
+    for (let glyphIndex = 0; glyphIndex < this.numGlyphs; glyphIndex++) {
+      const advanceWidth = glyphIndex < numOfLongHorMetrics ? this.view.getUint16(hmtxOffset + glyphIndex * 4) : defaultAdvanceWidth;
+      const leftBearing = glyphIndex < numOfLongHorMetrics ? this.view.getInt16(hmtxOffset + glyphIndex * 4 + 2) : this.view.getInt16(hmtxOffset + numOfLongHorMetrics * 4 + (glyphIndex - numOfLongHorMetrics) * 2);
+      if (this.glyphSizes[glyphIndex] === 0) {
+        this.glyphInfoMap.set(glyphIndex, new PdfFontMetrics({
+          left: 0,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          ascent: 0,
+          descent: 0,
+          advanceWidth: advanceWidth / unitsPerEm,
+          leftBearing: leftBearing / unitsPerEm
+        }));
+        continue;
+      }
+      const offset = baseOffset + this.glyphOffsets[glyphIndex];
+      this.glyphInfoMap.set(glyphIndex, new PdfFontMetrics({
+        left: this.view.getInt16(offset + 2) / unitsPerEm,
+        top: this.view.getInt16(offset + 4) / unitsPerEm,
+        right: this.view.getInt16(offset + 6) / unitsPerEm,
+        bottom: this.view.getInt16(offset + 8) / unitsPerEm,
+        ascent: ascent / unitsPerEm,
+        descent: descent / unitsPerEm,
+        advanceWidth: advanceWidth / unitsPerEm,
+        leftBearing: leftBearing / unitsPerEm
+      }));
+    }
+  }
+  readGlyph(index) {
+    if (index < 0 || index >= this.glyphOffsets.length) {
+      throw new RangeError(`Glyph ${index} is outside this font's ${this.glyphOffsets.length} glyphs`);
+    }
+    const glyfOffset = this.tableOffset(TtfTable.glyf);
+    const start = glyfOffset + this.glyphOffsets[index];
+    const glyfEnd = glyfOffset + (this.tableSize.get(TtfTable.glyf) ?? 0);
+    if (start >= glyfEnd || start === 0 || this.glyphSizes[index] === 0) {
+      return {
+        index,
+        data: new Uint8Array(0),
+        compounds: []
+      };
+    }
+    const numberOfContours = this.view.getInt16(start);
+    return numberOfContours === -1 ? this.readCompoundGlyph(index, start, start + 10) : this.readSimpleGlyph(index, start, start + 10, numberOfContours);
+  }
+  readSimpleGlyph(glyph, start, offset, numberOfContours) {
+    const xIsByte = 2;
+    const yIsByte = 4;
+    const repeat = 8;
+    const xDelta = 16;
+    const yDelta = 32;
+    let numPoints = 1;
+    for (let i = 0; i < numberOfContours; i++) {
+      numPoints = Math.max(numPoints, this.view.getUint16(offset) + 1);
+      offset += 2;
+    }
+    offset += this.view.getUint16(offset) + 2;
+    if (numberOfContours === 0) {
+      return {
+        index: glyph,
+        data: this.bytes.subarray(start, offset),
+        compounds: []
+      };
+    }
+    const flags = [];
+    for (let i = 0; i < numPoints; i++) {
+      const flag = this.view.getUint8(offset++);
+      flags.push(flag);
+      if ((flag & repeat) !== 0) {
+        let repeatCount = this.view.getUint8(offset++);
+        i += repeatCount;
+        while (repeatCount-- > 0) {
+          flags.push(flag);
+        }
+      }
+    }
+    let byteFlag = xIsByte;
+    let deltaFlag = xDelta;
+    for (let a = 0; a < 2; a++) {
+      for (let i = 0; i < numPoints; i++) {
+        const flag = flags[i];
+        if ((flag & byteFlag) !== 0) {
+          offset++;
+        } else if ((~flag & deltaFlag) !== 0) {
+          offset += 2;
+        }
+      }
+      byteFlag = yIsByte;
+      deltaFlag = yDelta;
+    }
+    return {
+      index: glyph,
+      data: this.bytes.subarray(start, offset),
+      compounds: []
+    };
+  }
+  readCompoundGlyph(glyph, start, offset) {
+    const arg1And2AreWords = 1;
+    const hasScale = 8;
+    const moreComponents = 32;
+    const hasXYScale = 64;
+    const hasTransformationMatrix = 128;
+    const weHaveInstructions = 256;
+    const components = [];
+    let hasInstructions = false;
+    let flags = moreComponents;
+    while ((flags & moreComponents) !== 0) {
+      flags = this.view.getUint16(offset);
+      components.push(this.view.getUint16(offset + 2));
+      offset += (flags & arg1And2AreWords) !== 0 ? 8 : 6;
+      if ((flags & hasScale) !== 0) {
+        offset += 2;
+      } else if ((flags & hasXYScale) !== 0) {
+        offset += 4;
+      } else if ((flags & hasTransformationMatrix) !== 0) {
+        offset += 8;
+      }
+      if ((flags & weHaveInstructions) !== 0) {
+        hasInstructions = true;
+      }
+    }
+    if (hasInstructions) {
+      offset += this.view.getUint16(offset) + 2;
+    }
+    return {
+      index: glyph,
+      data: this.bytes.subarray(start, offset),
+      compounds: components
+    };
+  }
 }
 
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
+function decodeUtf16Be(bytes) {
+  let text = "";
+  for (let i = 0; i + 1 < bytes.length; i += 2) {
+    text += String.fromCharCode(bytes[i] << 8 | bytes[i + 1]);
+  }
+  return text;
+}
+
+function decodeLatin1(bytes) {
+  let text = "";
+  for (const byte of bytes) {
+    text += String.fromCharCode(byte);
+  }
+  return text;
+}
+
+function wordAlign(offset, align = 4) {
+  return offset + (align - offset % align) % align;
+}
+
+function calcTableChecksum(table) {
+  const view = new DataView(table.buffer, table.byteOffset, table.byteLength);
+  let sum = 0;
+  for (let i = 0; i < table.byteLength - 3; i += 4) {
+    sum = sum + view.getUint32(i) >>> 0;
+  }
+  return sum;
+}
+
+function viewOf(bytes) {
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}
+
+function updateCompoundGlyph(glyph, compoundMap) {
+  const arg1And2AreWords = 1;
+  const hasScale = 8;
+  const moreComponents = 32;
+  const hasXYScale = 64;
+  const hasTransformationMatrix = 128;
+  const view = viewOf(glyph.data);
+  let offset = 10;
+  let flags = moreComponents;
+  while ((flags & moreComponents) !== 0) {
+    flags = view.getUint16(offset);
+    const glyphIndex = view.getUint16(offset + 2);
+    const mapped = compoundMap.get(glyphIndex);
+    if (mapped === undefined || mapped < 0) {
+      throw new TypeError(`Composite glyph ${glyph.index} refers to glyph ${glyphIndex}, which is not in the subset`);
+    }
+    view.setUint16(offset + 2, mapped);
+    offset += (flags & arg1And2AreWords) !== 0 ? 8 : 6;
+    if ((flags & hasScale) !== 0) {
+      offset += 2;
+    } else if ((flags & hasXYScale) !== 0) {
+      offset += 4;
+    } else if ((flags & hasTransformationMatrix) !== 0) {
+      offset += 8;
+    }
+  }
+}
+
+class TtfWriter {
+  constructor(ttf) {
+    this.ttf = ttf;
+  }
+  withChars(chars) {
+    const ttf = this.ttf;
+    const source = viewOf(ttf.bytes);
+    const tables = new Map;
+    const tablesLength = new Map;
+    const glyphsMap = new Map;
+    const compounds = new Map;
+    const visited = new Set;
+    const addGlyph = glyphIndex => {
+      if (visited.has(glyphIndex)) {
+        return;
+      }
+      visited.add(glyphIndex);
+      const glyph = ttf.readGlyph(glyphIndex);
+      for (const component of glyph.compounds) {
+        compounds.set(component, -1);
+        addGlyph(component);
+      }
+      glyphsMap.set(glyphIndex, {
+        index: glyphIndex,
+        data: glyph.data.slice(),
+        compounds: glyph.compounds
+      });
+    };
+    const glyphsInfo = [];
+    const placed = new Set;
+    const place = glyph => {
+      glyphsInfo.push(glyph);
+      placed.add(glyph);
+    };
+    for (const char of chars) {
+      if (char === 32) {
+        const spaceIndex = ttf.charToGlyphIndexMap.get(32);
+        place(spaceIndex === undefined ? {
+          index: 0,
+          data: new Uint8Array(0),
+          compounds: [],
+          placeholder: true
+        } : {
+          index: spaceIndex,
+          data: new Uint8Array(0),
+          compounds: []
+        });
+        continue;
+      }
+      const glyphIndex = ttf.charToGlyphIndexMap.get(char) ?? 0;
+      if (glyphIndex >= ttf.glyphOffsets.length) {
+        place({
+          index: 0,
+          data: new Uint8Array(0),
+          compounds: [],
+          placeholder: true
+        });
+        continue;
+      }
+      addGlyph(glyphIndex);
+      const glyph = glyphsMap.get(glyphIndex);
+      place(glyph ?? {
+        index: glyphIndex,
+        data: new Uint8Array(0),
+        compounds: [],
+        placeholder: true
+      });
+    }
+    for (const glyph of glyphsMap.values()) {
+      if (!placed.has(glyph)) {
+        place(glyph);
+      }
+    }
+    for (const compound of compounds.keys()) {
+      const position = glyphsInfo.findIndex(glyph => !glyph.placeholder && glyph.index === compound);
+      if (position < 0) {
+        throw new TypeError(`Unable to find glyph ${compound} in the subset`);
+      }
+      compounds.set(compound, position);
+    }
+    const rewritten = new Set;
+    for (const glyph of glyphsInfo) {
+      if (glyph.compounds.length > 0 && !rewritten.has(glyph)) {
+        rewritten.add(glyph);
+        updateCompoundGlyph(glyph, compounds);
+      }
+    }
+    let glyphsTableLength = 0;
+    for (const glyph of glyphsInfo) {
+      glyphsTableLength = wordAlign(glyphsTableLength + glyph.data.length);
+    }
+    const glyphsTable = new Uint8Array(wordAlign(glyphsTableLength));
+    tables.set(TtfTable.glyf, glyphsTable);
+    tablesLength.set(TtfTable.glyf, glyphsTableLength);
+    const shortLoca = ttf.indexToLocFormat === 0;
+    const locaLength = (glyphsInfo.length + 1) * (shortLoca ? 2 : 4);
+    const locaTable = new Uint8Array(wordAlign(locaLength));
+    const locaView = viewOf(locaTable);
+    tables.set(TtfTable.loca, locaTable);
+    tablesLength.set(TtfTable.loca, locaLength);
+    let glyphOffset = 0;
+    let locaIndex = 0;
+    for (const glyph of glyphsInfo) {
+      if (shortLoca) {
+        locaView.setUint16(locaIndex, glyphOffset / 2);
+        locaIndex += 2;
+      } else {
+        locaView.setUint32(locaIndex, glyphOffset);
+        locaIndex += 4;
+      }
+      glyphsTable.set(glyph.data, glyphOffset);
+      glyphOffset = wordAlign(glyphOffset + glyph.data.length);
+    }
+    if (shortLoca) {
+      locaView.setUint16(locaIndex, glyphOffset / 2);
+    } else {
+      locaView.setUint32(locaIndex, glyphOffset);
+    }
+    for (const name of [ TtfTable.head, TtfTable.maxp, TtfTable.hhea, TtfTable.os2 ]) {
+      const start = ttf.tableOffsets.get(name);
+      if (start === undefined) {
+        continue;
+      }
+      const length = ttf.tableSize.get(name) ?? 0;
+      const data = new Uint8Array(wordAlign(length));
+      data.set(ttf.bytes.subarray(start, Math.min(start + data.length, ttf.bytes.length)));
+      tables.set(name, data);
+      tablesLength.set(name, length);
+    }
+    const head = tables.get(TtfTable.head);
+    const maxp = tables.get(TtfTable.maxp);
+    const hhea = tables.get(TtfTable.hhea);
+    if (head === undefined || maxp === undefined || hhea === undefined) {
+      throw new TypeError("This font has no `head`, `maxp` or `hhea` table and cannot be subset");
+    }
+    viewOf(head).setUint32(8, 0);
+    viewOf(maxp).setUint16(4, glyphsInfo.length);
+    viewOf(hhea).setUint16(34, glyphsInfo.length);
+    {
+      const length = 32;
+      const data = new Uint8Array(wordAlign(length));
+      const start = ttf.tableOffsets.get(TtfTable.post);
+      if (start !== undefined) {
+        data.set(ttf.bytes.subarray(start, Math.min(start + data.length, ttf.bytes.length)));
+      }
+      viewOf(data).setUint32(0, 196608);
+      tables.set(TtfTable.post, data);
+      tablesLength.set(TtfTable.post, length);
+    }
+    {
+      const length = 4 * glyphsInfo.length;
+      const hmtx = new Uint8Array(wordAlign(length));
+      const hmtxView = viewOf(hmtx);
+      const hmtxOffset = ttf.tableOffsets.get(TtfTable.hmtx) ?? 0;
+      const numOfLongHorMetrics = ttf.numOfLongHorMetrics;
+      const defaultAdvanceWidth = source.getUint16(hmtxOffset + (numOfLongHorMetrics - 1) * 4);
+      let index = 0;
+      for (const glyph of glyphsInfo) {
+        const advanceWidth = glyph.index < numOfLongHorMetrics ? source.getUint16(hmtxOffset + glyph.index * 4) : defaultAdvanceWidth;
+        const leftBearing = glyph.index < numOfLongHorMetrics ? source.getInt16(hmtxOffset + glyph.index * 4 + 2) : source.getInt16(hmtxOffset + numOfLongHorMetrics * 4 + (glyph.index - numOfLongHorMetrics) * 2);
+        hmtxView.setUint16(index, advanceWidth);
+        hmtxView.setInt16(index + 2, leftBearing);
+        index += 4;
+      }
+      tables.set(TtfTable.hmtx, hmtx);
+      tablesLength.set(TtfTable.hmtx, length);
+    }
+    {
+      const length = 40;
+      const cmap = new Uint8Array(wordAlign(length));
+      const cmapView = viewOf(cmap);
+      cmapView.setUint16(0, 0);
+      cmapView.setUint16(2, 1);
+      cmapView.setUint16(4, 3);
+      cmapView.setUint16(6, 10);
+      cmapView.setUint32(8, 12);
+      cmapView.setUint16(12, 12);
+      cmapView.setUint32(16, 28);
+      cmapView.setUint32(20, 1);
+      cmapView.setUint32(24, 1);
+      cmapView.setUint32(28, 32);
+      cmapView.setUint32(32, chars.length + 31);
+      cmapView.setUint32(36, 0);
+      tables.set(TtfTable.cmap, cmap);
+      tablesLength.set(TtfTable.cmap, length);
+    }
+    {
+      const length = 18;
+      const nameTable = new Uint8Array(wordAlign(length));
+      const nameView = viewOf(nameTable);
+      nameView.setUint16(0, 0);
+      nameView.setUint16(2, 0);
+      nameView.setUint16(4, 6);
+      tables.set(TtfTable.name, nameTable);
+      tablesLength.set(TtfTable.name, length);
+    }
+    return this.writeFile(tables, tablesLength);
+  }
+  writeFile(tables, tablesLength) {
+    const tableKeys = [ TtfTable.head, TtfTable.hhea, TtfTable.maxp, TtfTable.os2, TtfTable.hmtx, TtfTable.cmap, TtfTable.loca, TtfTable.glyf, TtfTable.name, TtfTable.post ].filter(name => tables.has(name));
+    const numTables = tableKeys.length;
+    const directoryLength = 12 + numTables * 16;
+    let total = directoryLength;
+    for (const name of tableKeys) {
+      total += tables.get(name).length;
+    }
+    const output = new Uint8Array(total);
+    const view = viewOf(output);
+    view.setUint32(0, 65536);
+    view.setUint16(4, numTables);
+    let pot = numTables;
+    while ((pot & pot - 1) !== 0) {
+      pot++;
+    }
+    view.setUint16(6, pot * 16);
+    view.setUint16(8, Math.trunc(Math.log(pot)));
+    view.setUint16(10, pot * 16 - numTables * 16);
+    let offset = directoryLength;
+    let headOffset = 0;
+    let count = 0;
+    for (const name of tableKeys) {
+      const data = tables.get(name);
+      const entry = 12 + count * 16;
+      for (let i = 0; i < 4; i++) {
+        output[entry + i] = name.charCodeAt(i);
+      }
+      view.setUint32(entry + 4, calcTableChecksum(data));
+      view.setUint32(entry + 8, offset);
+      view.setUint32(entry + 12, tablesLength.get(name) ?? data.length);
+      if (name === TtfTable.head) {
+        headOffset = offset;
+      }
+      output.set(data, offset);
+      offset += data.length;
+      count++;
+    }
+    view.setUint32(headOffset + 8, 2981146554 - calcTableChecksum(output) >>> 0);
+    return output;
+  }
 }
 
 function formatNumber(value) {
@@ -479,6 +1180,215 @@ class PdfNum extends PdfDataType {
   output(s) {
     s.putString(formatNumber(this.value));
   }
+}
+
+class PdfArray extends PdfDataType {
+  constructor(values = []) {
+    super();
+    this.values = [ ...values ];
+  }
+  static fromNum(values) {
+    return new PdfArray(values.map(value => new PdfNum(value)));
+  }
+  static fromObjects(objects) {
+    return new PdfArray(objects.map(object => object.ref()));
+  }
+  get length() {
+    return this.values.length;
+  }
+  add(value) {
+    this.values.push(value);
+  }
+  output(s) {
+    s.putString("[");
+    for (let index = 0; index < this.values.length; index++) {
+      if (index > 0) {
+        s.putByte(32);
+      }
+      this.values[index]?.output(s);
+    }
+    s.putString("]");
+  }
+}
+
+class PdfIndirect extends PdfDataType {
+  constructor(ser, gen) {
+    super();
+    this.ser = ser;
+    this.gen = gen;
+  }
+  equals(other) {
+    return this.ser === other.ser && this.gen === other.gen;
+  }
+  output(s) {
+    s.putString(`${this.ser} ${this.gen} R`);
+  }
+}
+
+class PdfObjectBase {
+  constructor(objser, params, objgen = 0) {
+    this.objser = objser;
+    this.objgen = objgen;
+    this.params = params;
+  }
+  ref() {
+    return new PdfIndirect(this.objser, this.objgen);
+  }
+  prepare() {}
+  output(s) {
+    const offset = s.offset;
+    s.putString(`${this.objser} ${this.objgen} obj\n`);
+    this.writeContent(s);
+    s.putString("endobj\n");
+    return offset;
+  }
+  writeContent(s) {
+    this.params.output(s);
+    s.putByte(10);
+  }
+}
+
+class PdfObject extends PdfObjectBase {
+  constructor(document, params, objser) {
+    super(objser ?? document.genSerial(), params);
+    document.register(this);
+  }
+}
+
+class PdfFontDescriptor extends PdfObject {
+  constructor(document, options) {
+    super(document, new PdfDict([ [ "/Type", new PdfName("/FontDescriptor") ], [ "/FontName", new PdfName(`/${options.fontName}`) ], [ "/FontFile2", options.file.ref() ], [ "/Flags", new PdfNum(options.flags) ], [ "/FontBBox", PdfArray.fromNum([ ...options.fontBBox ]) ], [ "/Ascent", new PdfNum(Math.trunc(options.ascent * 1e3)) ], [ "/Descent", new PdfNum(Math.trunc(options.descent * 1e3)) ], [ "/ItalicAngle", new PdfNum(0) ], [ "/CapHeight", new PdfNum(10) ], [ "/StemV", new PdfNum(79) ] ]));
+  }
+}
+
+class PdfDictStream extends PdfDict {
+  constructor(data = new Uint8Array(0), values) {
+    super(values);
+    this.data = data;
+  }
+  output(s) {
+    this.set("/Length", new PdfNum(this.data.length));
+    super.output(s);
+    s.putString("\nstream\n");
+    s.putBytes(this.data);
+    if (this.data.length === 0 || this.data[this.data.length - 1] !== 10) {
+      s.putByte(10);
+    }
+    s.putString("endstream");
+  }
+}
+
+class PdfObjectStream extends PdfObject {
+  constructor(document, data) {
+    super(document, new PdfDictStream(data));
+  }
+}
+
+function hex4(value) {
+  return value.toString(16).toUpperCase().padStart(4, "0");
+}
+
+function unicodeCmapStream(cmap, protect = false) {
+  const values = protect ? cmap.map((value, index) => index === 0 ? value : 32) : cmap;
+  let output = "/CIDInit/ProcSet\nfindresource begin\n" + "12 dict begin\n" + "begincmap\n" + "/CIDSystemInfo<<\n" + "/Registry (Adobe)\n" + "/Ordering (UCS)\n" + "/Supplement 0\n" + ">> def\n" + "/CMapName/Adobe-Identity-UCS def\n" + "/CMapType 2 def\n" + "1 begincodespacerange\n" + "<0000> <FFFF>\n" + "endcodespacerange\n" + `${values.length} beginbfchar\n`;
+  for (let key = 0; key < values.length; key++) {
+    output += `<${hex4(key)}> <${hex4(values[key] ?? 0)}>\n`;
+  }
+  output += "endbfchar\n" + "endcmap\n" + "CMapName currentdict /CMap defineresource pop\n" + "end\n" + "end";
+  return output;
+}
+
+class PdfUnicodeCmap extends PdfObjectStream {
+  constructor(document, cmap, protect = false) {
+    super(document, encodeLatin1(unicodeCmapStream(cmap, protect)));
+  }
+}
+
+class PdfTtfFont {
+  constructor(bytes, {protect = false} = {}) {
+    this.cmap = [ 0 ];
+    this.cidByRune = new Map([ [ 0, 0 ] ]);
+    this.font = new TtfParser(bytes);
+    this.protect = protect;
+    if (this.font.hasCff) {
+      throw new TypeError(`\`${this.font.fontName}\` has PostScript (CFF) outlines, which this port cannot subset`);
+    }
+    if (!this.font.unicode) {
+      throw new TypeError(`\`${this.font.fontName}\` is not a 0x00010000 TrueType font, which this port requires to embed`);
+    }
+  }
+  get fontName() {
+    return this.font.fontName;
+  }
+  get ascent() {
+    return this.font.ascent / this.font.unitsPerEm;
+  }
+  get descent() {
+    return this.font.descent / this.font.unitsPerEm;
+  }
+  get unitsPerEm() {
+    return this.font.unitsPerEm;
+  }
+  isRuneSupported(codePoint) {
+    return this.font.charToGlyphIndexMap.has(codePoint);
+  }
+  glyphMetrics(codePoint) {
+    const glyph = this.font.charToGlyphIndexMap.get(codePoint);
+    if (glyph === undefined) {
+      return PdfFontMetrics.zero;
+    }
+    return this.font.glyphInfoMap.get(glyph) ?? PdfFontMetrics.zero;
+  }
+  stringMetrics(text, size, letterSpacing = 0) {
+    const metrics = [];
+    for (const character of String(text)) {
+      metrics.push(this.glyphMetrics(character.codePointAt(0) ?? 0).scale(size));
+    }
+    return PdfFontMetrics.append(metrics, letterSpacing);
+  }
+  encodeText(text) {
+    const cids = [];
+    for (const character of String(text)) {
+      const rune = character.codePointAt(0) ?? 0;
+      let cid = this.cidByRune.get(rune);
+      if (cid === undefined) {
+        cid = this.cmap.length;
+        this.cmap.push(rune);
+        this.cidByRune.set(rune, cid);
+      }
+      cids.push(cid);
+    }
+    return pdfHexString(cids);
+  }
+  resourceDict(document) {
+    const subset = new TtfWriter(this.font).withChars(this.cmap);
+    const file = new PdfObjectStream(document, subset);
+    file.params.set("/Length1", new PdfNum(subset.length));
+    const unitsPerEm = this.font.unitsPerEm;
+    const descriptor = new PdfFontDescriptor(document, {
+      fontName: this.fontName,
+      file,
+      flags: 4,
+      fontBBox: [ Math.trunc(this.font.xMin / unitsPerEm * 1e3), Math.trunc(this.font.yMin / unitsPerEm * 1e3), Math.trunc(this.font.xMax / unitsPerEm * 1e3), Math.trunc(this.font.yMax / unitsPerEm * 1e3) ],
+      ascent: this.ascent,
+      descent: this.descent
+    });
+    const widths = new PdfObject(document, PdfArray.fromNum(this.cmap.map(rune => Math.trunc(this.glyphMetrics(rune).advanceWidth * 1e3))));
+    const unicodeCmap = new PdfUnicodeCmap(document, this.cmap, this.protect);
+    const descendant = new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/FontFile2", file.ref() ], [ "/FontDescriptor", descriptor.ref() ], [ "/W", new PdfArray([ new PdfNum(0), widths.ref() ]) ], [ "/CIDToGIDMap", new PdfName("/Identity") ], [ "/DW", new PdfNum(1e3) ], [ "/Subtype", new PdfName("/CIDFontType2") ], [ "/CIDSystemInfo", new PdfDict([ [ "/Supplement", new PdfNum(0) ], [ "/Registry", new PdfString("Adobe") ], [ "/Ordering", new PdfString("Identity-H") ] ]) ] ]);
+    return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/Type0") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfName("/Identity-H") ], [ "/DescendantFonts", new PdfArray([ descendant ]) ], [ "/ToUnicode", unicodeCmap.ref() ] ]);
+  }
+}
+
+function assertFiniteNumber(value, name) {
+  if (!Number.isFinite(value)) {
+    throw new TypeError(`${name} must be a finite number`);
+  }
+  return value;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function normalizeColor(value, fallback = [ 0, 0, 0 ]) {
@@ -920,50 +1830,6 @@ class PdfXrefTable {
   }
 }
 
-class PdfIndirect extends PdfDataType {
-  constructor(ser, gen) {
-    super();
-    this.ser = ser;
-    this.gen = gen;
-  }
-  equals(other) {
-    return this.ser === other.ser && this.gen === other.gen;
-  }
-  output(s) {
-    s.putString(`${this.ser} ${this.gen} R`);
-  }
-}
-
-class PdfObjectBase {
-  constructor(objser, params, objgen = 0) {
-    this.objser = objser;
-    this.objgen = objgen;
-    this.params = params;
-  }
-  ref() {
-    return new PdfIndirect(this.objser, this.objgen);
-  }
-  prepare() {}
-  output(s) {
-    const offset = s.offset;
-    s.putString(`${this.objser} ${this.objgen} obj\n`);
-    this.writeContent(s);
-    s.putString("endobj\n");
-    return offset;
-  }
-  writeContent(s) {
-    this.params.output(s);
-    s.putByte(10);
-  }
-}
-
-class PdfObject extends PdfObjectBase {
-  constructor(document, params, objser) {
-    super(objser ?? document.genSerial(), params);
-    document.register(this);
-  }
-}
-
 class PdfCatalog extends PdfObject {
   constructor(document, pageList, objser) {
     super(document, new PdfDict([ [ "/Type", new PdfName("/Catalog") ] ]), objser);
@@ -983,58 +1849,6 @@ class PdfInfo extends PdfObject {
         this.params.set(key, new PdfString(value));
       }
     }
-  }
-}
-
-class PdfDictStream extends PdfDict {
-  constructor(data = new Uint8Array(0), values) {
-    super(values);
-    this.data = data;
-  }
-  output(s) {
-    this.set("/Length", new PdfNum(this.data.length));
-    super.output(s);
-    s.putString("\nstream\n");
-    s.putBytes(this.data);
-    if (this.data.length === 0 || this.data[this.data.length - 1] !== 10) {
-      s.putByte(10);
-    }
-    s.putString("endstream");
-  }
-}
-
-class PdfObjectStream extends PdfObject {
-  constructor(document, data) {
-    super(document, new PdfDictStream(data));
-  }
-}
-
-class PdfArray extends PdfDataType {
-  constructor(values = []) {
-    super();
-    this.values = [ ...values ];
-  }
-  static fromNum(values) {
-    return new PdfArray(values.map(value => new PdfNum(value)));
-  }
-  static fromObjects(objects) {
-    return new PdfArray(objects.map(object => object.ref()));
-  }
-  get length() {
-    return this.values.length;
-  }
-  add(value) {
-    this.values.push(value);
-  }
-  output(s) {
-    s.putString("[");
-    for (let index = 0; index < this.values.length; index++) {
-      if (index > 0) {
-        s.putByte(32);
-      }
-      this.values[index]?.output(s);
-    }
-    s.putString("]");
   }
 }
 
@@ -1136,7 +1950,7 @@ class PdfDocument {
     if (existing !== undefined) {
       return existing;
     }
-    const object = new PdfObject(this, font.resourceDict());
+    const object = new PdfObject(this, font.resourceDict(this));
     this.fontObjects.set(font, object);
     return object;
   }
@@ -1171,6 +1985,93 @@ function serializePdf(pages, metadata) {
     document.addPage(page.format, page.content, page.fonts);
   }
   return document.save();
+}
+
+const TYPE1_FACES = Object.freeze({
+  courier: PdfType1Font.courier,
+  courierBold: PdfType1Font.courierBold,
+  courierBoldOblique: PdfType1Font.courierBoldOblique,
+  courierOblique: PdfType1Font.courierOblique,
+  helvetica: PdfType1Font.helvetica,
+  helveticaBold: PdfType1Font.helveticaBold,
+  helveticaBoldOblique: PdfType1Font.helveticaBoldOblique,
+  helveticaOblique: PdfType1Font.helveticaOblique,
+  times: PdfType1Font.times,
+  timesBold: PdfType1Font.timesBold,
+  timesBoldItalic: PdfType1Font.timesBoldItalic,
+  timesItalic: PdfType1Font.timesItalic,
+  symbol: PdfType1Font.symbol,
+  zapfDingbats: PdfType1Font.zapfDingbats
+});
+
+class Font {
+  constructor(create) {
+    this.create = create;
+  }
+  static type1(face) {
+    const factory = TYPE1_FACES[face];
+    if (factory === undefined) {
+      throw new TypeError(`\`${face}\` is not one of the 14 standard Type1 fonts`);
+    }
+    return new Font(factory);
+  }
+  static courier() {
+    return Font.type1("courier");
+  }
+  static courierBold() {
+    return Font.type1("courierBold");
+  }
+  static courierBoldOblique() {
+    return Font.type1("courierBoldOblique");
+  }
+  static courierOblique() {
+    return Font.type1("courierOblique");
+  }
+  static helvetica() {
+    return Font.type1("helvetica");
+  }
+  static helveticaBold() {
+    return Font.type1("helveticaBold");
+  }
+  static helveticaBoldOblique() {
+    return Font.type1("helveticaBoldOblique");
+  }
+  static helveticaOblique() {
+    return Font.type1("helveticaOblique");
+  }
+  static times() {
+    return Font.type1("times");
+  }
+  static timesBold() {
+    return Font.type1("timesBold");
+  }
+  static timesBoldItalic() {
+    return Font.type1("timesBoldItalic");
+  }
+  static timesItalic() {
+    return Font.type1("timesItalic");
+  }
+  static symbol() {
+    return Font.type1("symbol");
+  }
+  static zapfDingbats() {
+    return Font.type1("zapfDingbats");
+  }
+  static ttf(data, options) {
+    if (!(data instanceof Uint8Array)) {
+      throw new TypeError("Font.ttf expects the font file as a Uint8Array");
+    }
+    return new Font(() => new PdfTtfFont(data, options));
+  }
+  static fromPdfFont(font) {
+    return new Font(() => font);
+  }
+  build() {
+    return this.create();
+  }
+  getFont(context) {
+    return context.document.resolveFont(this);
+  }
 }
 
 class PdfCanvas {
@@ -1212,7 +2113,9 @@ class PdfCanvas {
     const baseline = this.pageHeight - baselineFromTop;
     const fontSize = style.fontSize;
     const font = style.font ?? defaultPdfFont;
-    const command = [ "BT", this.addFont(font), formatNumber(fontSize), "Tf", colorOperator(style.color), "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", font.encodeText(text), "Tj", "ET" ].join(" ");
+    const letterSpacing = style.letterSpacing ?? 0;
+    const wordSpacing = style.wordSpacing ?? 0;
+    const command = [ "BT", this.addFont(font), formatNumber(fontSize), "Tf", colorOperator(style.color), ...letterSpacing !== 0 ? [ formatNumber(letterSpacing), "Tc" ] : [], ...wordSpacing !== 0 ? [ formatNumber(wordSpacing), "Tw" ] : [], "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", font.encodeText(text), "Tj", "ET" ].join(" ");
     this.push(command);
   }
   line(x1, top1, x2, top2, color = "#000000", lineWidth = 1) {
@@ -1240,13 +2143,15 @@ class PdfCanvas {
 }
 
 class MultiPage {
-  constructor({format = PageFormat.A4, margin = DEFAULT_MARGIN, gap = 8, build, header = null, footer = null, background = null}) {
+  constructor({format = undefined, pageFormat = undefined, margin = DEFAULT_MARGIN, gap = 8, theme = undefined, build, header = null, footer = null, background = null}) {
     if (typeof build !== "function") throw new TypeError("MultiPage.build must be a function");
+    const size = pageFormat ?? format ?? PageFormat.A4;
     this.format = {
-      width: Number(format.width),
-      height: Number(format.height)
+      width: Number(size.width),
+      height: Number(size.height)
     };
     this.margin = normalizeInsets(margin);
+    this.theme = theme ?? null;
     this.gap = Number(gap);
     this.build = build;
     this.header = header;
@@ -1265,7 +2170,8 @@ class MultiPage {
         ...documentContext,
         canvas,
         pageFormat: this.format,
-        pageNumber
+        pageNumber,
+        theme: this.theme ?? documentContext.document.theme
       };
       const maxWidth = this.format.width - this.margin.left - this.margin.right;
       let top = this.margin.top;
@@ -1337,29 +2243,81 @@ class MultiPage {
   }
 }
 
-class Page {
-  constructor({format = PageFormat.A4, margin = DEFAULT_MARGIN, build, background = null}) {
-    if (typeof build !== "function") throw new TypeError("Page.build must be a function");
-    this.format = {
-      width: Number(format.width),
-      height: Number(format.height)
+class PageTheme {
+  constructor({pageFormat = PageFormat.A4, buildBackground = null, buildForeground = null, theme = null, orientation = "natural", margin = null, clip = false} = {}) {
+    this.pageFormat = {
+      width: Number(pageFormat.width),
+      height: Number(pageFormat.height)
     };
-    this.margin = normalizeInsets(margin);
+    this.orientation = orientation;
+    this.buildBackground = buildBackground;
+    this.buildForeground = buildForeground;
+    this.theme = theme;
+    this.clip = clip;
+    this.declaredMargin = margin == null ? null : normalizeInsets(margin);
+  }
+  get mustRotate() {
+    return this.orientation === "landscape" && this.pageFormat.height > this.pageFormat.width || this.orientation === "portrait" && this.pageFormat.width > this.pageFormat.height;
+  }
+  get resolvedFormat() {
+    return this.mustRotate ? {
+      width: this.pageFormat.height,
+      height: this.pageFormat.width
+    } : this.pageFormat;
+  }
+  get margin() {
+    const declared = this.declaredMargin ?? normalizeInsets(DEFAULT_MARGIN);
+    return this.mustRotate ? {
+      left: declared.bottom,
+      top: declared.left,
+      right: declared.top,
+      bottom: declared.right
+    } : declared;
+  }
+  copyWith(options = {}) {
+    return new PageTheme({
+      pageFormat: options.pageFormat ?? this.pageFormat,
+      buildBackground: options.buildBackground ?? this.buildBackground,
+      buildForeground: options.buildForeground ?? this.buildForeground,
+      theme: options.theme ?? this.theme,
+      orientation: options.orientation ?? this.orientation,
+      margin: options.margin ?? this.declaredMargin,
+      clip: options.clip ?? this.clip
+    });
+  }
+}
+
+class Page {
+  constructor({pageTheme = undefined, pageFormat = undefined, format = undefined, margin = undefined, theme = undefined, build, background = null}) {
+    if (typeof build !== "function") throw new TypeError("Page.build must be a function");
+    const base = pageTheme ?? new PageTheme;
+    this.pageTheme = base.copyWith({
+      pageFormat: pageFormat ?? format,
+      margin,
+      theme
+    });
     this.build = build;
     this.background = background;
   }
+  get format() {
+    return this.pageTheme.resolvedFormat;
+  }
   render(documentContext) {
-    const canvas = new PdfCanvas(this.format.height);
-    if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
+    const format = this.pageTheme.resolvedFormat;
+    const margin = this.pageTheme.margin;
+    const canvas = new PdfCanvas(format.height);
+    if (this.background) canvas.fillRect(0, 0, format.width, format.height, this.background);
     const context = {
       ...documentContext,
       canvas,
-      pageFormat: this.format,
-      pageNumber: 1
+      pageFormat: format,
+      pageNumber: 1,
+      theme: this.pageTheme.theme ?? documentContext.document.theme
     };
+    const maxWidth = format.width - margin.left - margin.right;
+    const maxHeight = format.height - margin.top - margin.bottom;
+    this.paintLayer(this.pageTheme.buildBackground, context, format);
     const widget = this.build(context);
-    const maxWidth = this.format.width - this.margin.left - this.margin.right;
-    const maxHeight = this.format.height - this.margin.top - this.margin.bottom;
     const box = widget.layout(context, {
       maxWidth,
       maxHeight
@@ -1369,20 +2327,309 @@ class Page {
     }
     widget.paint(context, {
       ...box,
-      x: this.margin.left,
-      y: this.margin.top
+      x: margin.left,
+      y: margin.top
     });
+    this.paintLayer(this.pageTheme.buildForeground, context, format);
     return [ {
-      format: this.format,
+      format,
       content: canvas.output(),
       fonts: canvas.fonts
     } ];
   }
+  paintLayer(build, context, format) {
+    if (build === null) {
+      return;
+    }
+    const widget = build(context);
+    const box = widget.layout(context, {
+      maxWidth: format.width,
+      maxHeight: format.height
+    });
+    widget.paint(context, {
+      ...box,
+      x: 0,
+      y: 0
+    });
+  }
+}
+
+const DEFAULT_FONT_SIZE = 12;
+
+const DEFAULT_LINE_HEIGHT = 1.2;
+
+class TextStyle {
+  constructor({inherit = true, color = null, font = null, fontNormal = null, fontBold = null, fontItalic = null, fontBoldItalic = null, fontFallback = null, fontSize = null, fontWeight = null, fontStyle = null, letterSpacing = null, wordSpacing = null, lineSpacing = null, height = null, decoration = null, decorationColor = null, decorationStyle = null, decorationThickness = null} = {}) {
+    const isItalic = fontStyle === "italic";
+    const isBold = fontWeight === "bold";
+    this.inherit = inherit;
+    this.color = color == null ? null : normalizeColor(color);
+    this.fontNormal = fontNormal ?? (!isItalic && !isBold ? font : null);
+    this.fontBold = fontBold ?? (!isItalic && isBold ? font : null);
+    this.fontItalic = fontItalic ?? (isItalic && !isBold ? font : null);
+    this.fontBoldItalic = fontBoldItalic ?? (isItalic && isBold ? font : null);
+    this.fontFallback = fontFallback ?? [];
+    this.fontSize = fontSize;
+    this.fontWeight = fontWeight;
+    this.fontStyle = fontStyle;
+    this.letterSpacing = letterSpacing;
+    this.wordSpacing = wordSpacing;
+    this.lineSpacing = lineSpacing;
+    this.height = height;
+    this.decoration = decoration;
+    this.decorationColor = decorationColor == null ? null : normalizeColor(decorationColor);
+    this.decorationStyle = decorationStyle;
+    this.decorationThickness = decorationThickness;
+  }
+  static defaultStyle() {
+    return new TextStyle({
+      inherit: false,
+      color: "#000000",
+      fontNormal: Font.helvetica(),
+      fontBold: Font.helveticaBold(),
+      fontItalic: Font.helveticaOblique(),
+      fontBoldItalic: Font.helveticaBoldOblique(),
+      fontSize: DEFAULT_FONT_SIZE,
+      fontWeight: "normal",
+      fontStyle: "normal",
+      letterSpacing: 0,
+      wordSpacing: 0,
+      lineSpacing: 0,
+      height: DEFAULT_LINE_HEIGHT,
+      decoration: "none",
+      decorationStyle: "solid",
+      decorationThickness: 1
+    });
+  }
+  get font() {
+    if (this.fontWeight !== "bold") {
+      if (this.fontStyle !== "italic") {
+        return this.fontNormal ?? this.fontBold ?? this.fontItalic ?? this.fontBoldItalic;
+      }
+      return this.fontItalic ?? this.fontNormal ?? this.fontBold ?? this.fontBoldItalic;
+    }
+    if (this.fontStyle !== "italic") {
+      return this.fontBold ?? this.fontNormal ?? this.fontItalic ?? this.fontBoldItalic;
+    }
+    return this.fontBoldItalic ?? this.fontBold ?? this.fontItalic ?? this.fontNormal;
+  }
+  copyWith(options = {}) {
+    return new TextStyle({
+      inherit: this.inherit,
+      color: options.color ?? this.color,
+      font: options.font ?? this.font,
+      fontNormal: options.fontNormal ?? this.fontNormal,
+      fontBold: options.fontBold ?? this.fontBold,
+      fontItalic: options.fontItalic ?? this.fontItalic,
+      fontBoldItalic: options.fontBoldItalic ?? this.fontBoldItalic,
+      fontFallback: options.fontFallback ?? this.fontFallback,
+      fontSize: options.fontSize ?? this.fontSize,
+      fontWeight: options.fontWeight ?? this.fontWeight,
+      fontStyle: options.fontStyle ?? this.fontStyle,
+      letterSpacing: options.letterSpacing ?? this.letterSpacing,
+      wordSpacing: options.wordSpacing ?? this.wordSpacing,
+      lineSpacing: options.lineSpacing ?? this.lineSpacing,
+      height: options.height ?? this.height,
+      decoration: options.decoration ?? this.decoration,
+      decorationColor: options.decorationColor ?? this.decorationColor,
+      decorationStyle: options.decorationStyle ?? this.decorationStyle,
+      decorationThickness: options.decorationThickness ?? this.decorationThickness
+    });
+  }
+  merge(other) {
+    if (other == null) {
+      return this;
+    }
+    if (!other.inherit) {
+      return other;
+    }
+    return this.copyWith({
+      color: other.color,
+      font: other.font,
+      fontNormal: other.fontNormal,
+      fontBold: other.fontBold,
+      fontItalic: other.fontItalic,
+      fontBoldItalic: other.fontBoldItalic,
+      fontFallback: [ ...other.fontFallback, ...this.fontFallback ],
+      fontSize: other.fontSize,
+      fontWeight: other.fontWeight,
+      fontStyle: other.fontStyle,
+      letterSpacing: other.letterSpacing,
+      wordSpacing: other.wordSpacing,
+      lineSpacing: other.lineSpacing,
+      height: other.height,
+      decoration: other.decoration,
+      decorationColor: other.decorationColor,
+      decorationStyle: other.decorationStyle,
+      decorationThickness: other.decorationThickness
+    });
+  }
+}
+
+class ThemeData {
+  constructor(fields) {
+    this.defaultTextStyle = fields.defaultTextStyle;
+    this.paragraphStyle = fields.paragraphStyle;
+    this.header0 = fields.header0;
+    this.header1 = fields.header1;
+    this.header2 = fields.header2;
+    this.header3 = fields.header3;
+    this.header4 = fields.header4;
+    this.header5 = fields.header5;
+    this.bulletStyle = fields.bulletStyle;
+    this.tableHeader = fields.tableHeader;
+    this.tableCell = fields.tableCell;
+    this.softWrap = fields.softWrap;
+    this.overflow = fields.overflow;
+    this.textAlign = fields.textAlign;
+    this.maxLines = fields.maxLines;
+  }
+  static withFont({base = null, bold = null, italic = null, boldItalic = null, fontFallback = null} = {}) {
+    const defaultStyle = TextStyle.defaultStyle().copyWith({
+      font: base,
+      fontNormal: base,
+      fontBold: bold,
+      fontItalic: italic,
+      fontBoldItalic: boldItalic,
+      fontFallback
+    });
+    const fontSize = defaultStyle.fontSize ?? 12;
+    return new ThemeData({
+      defaultTextStyle: defaultStyle,
+      paragraphStyle: defaultStyle.copyWith({
+        lineSpacing: 5
+      }),
+      bulletStyle: defaultStyle.copyWith({
+        lineSpacing: 5
+      }),
+      header0: defaultStyle.copyWith({
+        fontSize: fontSize * 2
+      }),
+      header1: defaultStyle.copyWith({
+        fontSize: fontSize * 1.5
+      }),
+      header2: defaultStyle.copyWith({
+        fontSize: fontSize * 1.4
+      }),
+      header3: defaultStyle.copyWith({
+        fontSize: fontSize * 1.3
+      }),
+      header4: defaultStyle.copyWith({
+        fontSize: fontSize * 1.2
+      }),
+      header5: defaultStyle.copyWith({
+        fontSize: fontSize * 1.1
+      }),
+      tableHeader: defaultStyle.copyWith({
+        fontSize: fontSize * .8,
+        fontWeight: "bold"
+      }),
+      tableCell: defaultStyle.copyWith({
+        fontSize: fontSize * .8
+      }),
+      softWrap: true,
+      overflow: "visible",
+      textAlign: null,
+      maxLines: null
+    });
+  }
+  static base() {
+    return ThemeData.withFont();
+  }
+  static create(options = {}) {
+    return ThemeData.base().copyWith(options);
+  }
+  copyWith(options = {}) {
+    return new ThemeData({
+      defaultTextStyle: this.defaultTextStyle.merge(options.defaultTextStyle),
+      paragraphStyle: this.paragraphStyle.merge(options.paragraphStyle),
+      bulletStyle: this.bulletStyle.merge(options.bulletStyle),
+      header0: this.header0.merge(options.header0),
+      header1: this.header1.merge(options.header1),
+      header2: this.header2.merge(options.header2),
+      header3: this.header3.merge(options.header3),
+      header4: this.header4.merge(options.header4),
+      header5: this.header5.merge(options.header5),
+      tableHeader: this.tableHeader.merge(options.tableHeader),
+      tableCell: this.tableCell.merge(options.tableCell),
+      softWrap: options.softWrap ?? this.softWrap,
+      overflow: options.overflow ?? this.overflow,
+      textAlign: options.textAlign ?? this.textAlign,
+      maxLines: options.maxLines ?? this.maxLines
+    });
+  }
+}
+
+class InheritedTheme extends Widget {
+  constructor(child) {
+    super();
+    this.child = child;
+  }
+  scope(context) {
+    return {
+      ...context,
+      theme: this.themeFor(context)
+    };
+  }
+  layout(context, constraints) {
+    const childBox = this.child.layout(this.scope(context), constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox.widget.paint(this.scope(context), {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class Theme extends InheritedTheme {
+  constructor({data, child}) {
+    super(child);
+    this.data = data;
+  }
+  static of(context) {
+    return context.theme;
+  }
+  themeFor() {
+    return this.data;
+  }
+}
+
+class DefaultTextStyle extends InheritedTheme {
+  constructor({style, child, textAlign = null, softWrap = true, overflow = null, maxLines = null}) {
+    super(child);
+    this.style = style;
+    this.textAlign = textAlign;
+    this.softWrap = softWrap;
+    this.overflow = overflow;
+    this.maxLines = maxLines;
+  }
+  themeFor(context) {
+    return context.theme.copyWith({
+      defaultTextStyle: this.style,
+      textAlign: this.textAlign,
+      softWrap: this.softWrap,
+      overflow: this.overflow ?? undefined,
+      maxLines: this.maxLines
+    });
+  }
 }
 
 class Document {
-  constructor({title = null, author = null, subject = null, creator = "js_pdf", producer = "js_pdf", font = defaultPdfFont} = {}) {
+  constructor({title = null, author = null, subject = null, creator = "js_pdf", producer = "js_pdf", theme = undefined, font = undefined} = {}) {
     this.sections = [];
+    this.fonts = new Map;
+    this.fallbackFont = Font.helvetica();
     this.metadata = {
       title,
       author,
@@ -1390,7 +2637,21 @@ class Document {
       creator,
       producer
     };
-    this.font = font;
+    this.theme = theme ?? (font === undefined ? ThemeData.base() : ThemeData.withFont({
+      base: Font.fromPdfFont(font)
+    }));
+  }
+  resolveFont(declaration) {
+    const existing = this.fonts.get(declaration);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const font = declaration.build();
+    this.fonts.set(declaration, font);
+    return font;
+  }
+  get font() {
+    return this.resolveFont(this.theme.defaultTextStyle.font ?? this.fallbackFont);
   }
   addPage(page) {
     if (!(page instanceof Page) && !(page instanceof MultiPage)) {
@@ -1571,12 +2832,8 @@ class Vector extends Widget {
   }
 }
 
-const DEFAULT_FONT_SIZE = 12;
-
-const DEFAULT_LINE_HEIGHT = 1.2;
-
-function textWidth(font, text, fontSize) {
-  return font.stringMetrics(text, fontSize).advanceWidth;
+function textWidth(font, text, fontSize, letterSpacing = 0) {
+  return font.stringMetrics(text, fontSize, letterSpacing).advanceWidth;
 }
 
 function breakLongWord(word, maxWidth, fontSize, font) {
@@ -1623,51 +2880,69 @@ function wrapText(value, maxWidth, fontSize, font = defaultPdfFont) {
 }
 
 class Text extends Widget {
-  constructor(value, {fontSize = DEFAULT_FONT_SIZE, lineHeight = DEFAULT_LINE_HEIGHT, color = "#000000", align = "left", margin = 0, font = undefined} = {}) {
+  constructor(value, {style = undefined, fontSize = undefined, lineHeight = undefined, color = undefined, align = undefined, margin = 0, maxLines = undefined, font = undefined} = {}) {
     super();
     this.value = String(value);
-    this.fontSize = assertFiniteNumber(Number(fontSize), "fontSize");
-    this.lineHeight = assertFiniteNumber(Number(lineHeight), "lineHeight");
-    this.color = normalizeColor(color);
-    this.align = align;
+    this.style = style ?? null;
+    this.fontSize = fontSize === undefined ? null : assertFiniteNumber(Number(fontSize), "fontSize");
+    this.lineHeight = lineHeight === undefined ? null : assertFiniteNumber(Number(lineHeight), "lineHeight");
+    this.color = color === undefined ? null : normalizeColor(color);
+    this.align = align ?? null;
     this.margin = normalizeInsets(margin);
+    this.maxLines = maxLines ?? null;
     this.font = font ?? null;
   }
-  resolveFont(context) {
-    return this.font ?? context.document.font;
+  resolveStyle(context) {
+    const theme = context.theme;
+    const merged = theme.defaultTextStyle.merge(this.style);
+    const fontSize = this.fontSize ?? merged.fontSize ?? DEFAULT_FONT_SIZE;
+    const declaredFont = merged.font;
+    return {
+      font: this.font ?? (declaredFont === null ? context.document.font : declaredFont.getFont(context)),
+      fontSize,
+      color: this.color ?? merged.color ?? [ 0, 0, 0 ],
+      align: this.align ?? theme.textAlign ?? "left",
+      lineAdvance: fontSize * (this.lineHeight ?? merged.height ?? DEFAULT_LINE_HEIGHT) + (merged.lineSpacing ?? 0),
+      letterSpacing: merged.letterSpacing ?? 0,
+      wordSpacing: merged.wordSpacing ?? 0,
+      maxLines: this.maxLines ?? theme.maxLines
+    };
   }
   layout(context, constraints) {
-    const font = this.resolveFont(context);
+    const style = this.resolveStyle(context);
     const contentWidth = Math.max(1, constraints.maxWidth - this.margin.left - this.margin.right);
-    const lines = wrapText(this.value, contentWidth, this.fontSize, font);
-    const lineAdvance = this.fontSize * this.lineHeight;
-    const contentHeight = lines.length * lineAdvance;
+    const wrapped = wrapText(this.value, contentWidth, style.fontSize, style.font);
+    const lines = style.maxLines === null ? wrapped : wrapped.slice(0, Math.max(1, style.maxLines));
+    const contentHeight = lines.length * style.lineAdvance;
+    const widest = Math.max(...lines.map(line => textWidth(style.font, line, style.fontSize, style.letterSpacing)), 0);
     return {
       widget: this,
-      width: Math.min(constraints.maxWidth, Math.max(...lines.map(line => textWidth(font, line, this.fontSize)), 0) + this.margin.left + this.margin.right),
+      width: Math.min(constraints.maxWidth, widest + this.margin.left + this.margin.right),
       height: contentHeight + this.margin.top + this.margin.bottom,
       data: {
         lines,
-        lineAdvance,
-        contentWidth
+        lineAdvance: style.lineAdvance,
+        contentWidth,
+        style
       }
     };
   }
   paint(context, box) {
     const {canvas} = context;
-    const font = this.resolveFont(context);
-    const {lines, lineAdvance, contentWidth} = box.data;
+    const {lines, lineAdvance, contentWidth, style} = box.data;
     const xStart = box.x + this.margin.left;
-    let baseline = box.y + this.margin.top + this.fontSize;
+    let baseline = box.y + this.margin.top + style.fontSize;
     for (const line of lines) {
-      const lineWidth = textWidth(font, line, this.fontSize);
+      const lineWidth = textWidth(style.font, line, style.fontSize, style.letterSpacing);
       let x = xStart;
-      if (this.align === "center") x += (contentWidth - lineWidth) / 2;
-      if (this.align === "right") x += contentWidth - lineWidth;
+      if (style.align === "center") x += (contentWidth - lineWidth) / 2;
+      if (style.align === "right") x += contentWidth - lineWidth;
       canvas.text(line, x, baseline, {
-        fontSize: this.fontSize,
-        color: this.color,
-        font
+        fontSize: style.fontSize,
+        color: style.color,
+        font: style.font,
+        letterSpacing: style.letterSpacing,
+        wordSpacing: style.wordSpacing
       });
       baseline += lineAdvance;
     }
@@ -1692,7 +2967,14 @@ const publicApi = Object.freeze({
   Alignment,
   EdgeInsets,
   PageFormat,
-  PdfType1Font
+  PdfType1Font,
+  PdfTtfFont,
+  Font,
+  TextStyle,
+  Theme,
+  ThemeData,
+  DefaultTextStyle,
+  PageTheme
 });
 
 function createPdf(options, build) {
@@ -1713,4 +2995,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Center, Column, Container, Divider, Document, EdgeInsets, MultiPage, Padding, Page, PageFormat, PdfFontMetrics, PdfType1Font, Row, SizedBox, Spacer, StatelessWidget, Text, Vector, Widget, createPdf, js_pdf };
+export { Align, Alignment, Center, Column, Container, DefaultTextStyle, Divider, Document, EdgeInsets, Font, MultiPage, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, StatelessWidget, Text, TextStyle, Theme, ThemeData, Vector, Widget, createPdf, js_pdf };

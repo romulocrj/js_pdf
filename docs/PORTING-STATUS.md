@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 40 `.ts` files, ~4,690 lines (TypeScript)
+**Ported:** 48 `.ts` files, ~6,590 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -23,16 +23,19 @@ table. Run `npm run examples`; current state, from
 | Example | Status | Missing APIs | Unlocks at |
 |---|---|---:|---|
 | `hello-world` | ✅ generated (740 bytes) | 0 | — |
-| `calendar` | failed | 11 | 3.6 |
-| `certificate` | failed | 15 | 3.9 |
-| `report` | failed | 16 | 5.1 |
-| `invoice` | failed | 20 | 5.2 |
-| `document` | failed | 17 | 5.3 |
-| `server` | failed | 20 | 5.3 |
-| `resume` | failed | 25 | 5.5 |
+| `calendar` | failed | 7 | 3.6 |
+| `certificate` | failed | 11 | 3.9 |
+| `report` | failed | 13 | 5.1 |
+| `invoice` | failed | 15 | 5.2 |
+| `document` | failed | 12 | 5.3 |
+| `server` | failed | 16 | 5.3 |
+| `resume` | failed | 20 | 5.5 |
 
-**1 of 8.** See [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which
-phase clears each one.
+**1 of 8**, with the missing-API total down from 124 to 94 — phase 1.4 cleared
+`Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
+from every one of the seven. See
+[ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which phase clears
+each one.
 
 ---
 
@@ -48,7 +51,7 @@ phase clears each one.
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
 | `format/num.dart` | 96 | `src/pdf/format/num.ts` | done — `PdfNum`, `PdfNumList`; 4-decimal precision vs. upstream's 5 |
-| `format/string.dart` | 204 | `src/pdf/format/string.ts` | partial — `PdfString`, literal + WinAnsi; no hex, no UTF-16BE, no PDF-date |
+| `format/string.dart` | 204 | `src/pdf/format/string.ts` | partial — `PdfString`, literal + WinAnsi, hex strings for CIDs; no UTF-16BE, no PDF-date |
 | `format/stream.dart` | 83 | `src/pdf/format/stream.ts` | done — growable `PdfStream` byte buffer |
 | `format/base.dart` | 50 | `src/pdf/format/base.ts` | done — `PdfDataType`; `output(stream)` only, no settings or indent |
 | `format/object_base.dart` | 118 | `src/pdf/format/object_base.ts` | partial — `PdfObjectBase`, `ref()`, `prepare()`; no `PdfSettings` |
@@ -69,7 +72,7 @@ phase clears each one.
 | `page_format.dart` | 171 | `src/pdf/page_format.ts` | partial — A4 and Letter only |
 | `color.dart` | 725 | `src/pdf/color.ts` | partial — RGB / DeviceRGB only |
 | `colors.dart` | 406 | — | — named color constants |
-| `graphics.dart` | 1415 | `src/pdf/graphics.ts` | partial — fill/stroke rect, line, circle, text, per-page font registration; no paths, transforms, clipping, alpha, shading |
+| `graphics.dart` | 1415 | `src/pdf/graphics.ts` | partial — fill/stroke rect, line, circle, text with `Tc`/`Tw`, per-page font registration; no paths, transforms, clipping, alpha, shading |
 | `graphic_state.dart` | 194 | folded into `src/pdf/graphics.ts` | stub — `q`/`Q` only; no ExtGState objects |
 | `document.dart` | 289 | `src/pdf/document.ts` | partial — `PdfDocument` object registry; one font object per distinct font, created on first use |
 | `point.dart`, `rect.dart` | 159 | folded into `src/widgets/geometry.ts` | partial |
@@ -95,9 +98,9 @@ on: an object registers itself with the document, hands out references through
 | `obj/page.dart` | 164 | `src/pdf/obj/page.ts` | partial — `/Resources` inherited from `PdfGraphicStream`; no `/Rotate`, no `/Annots` |
 | `obj/info.dart` | 69 | `src/pdf/obj/info.ts` | partial — no `/CreationDate` (no clock) and no `/Keywords` |
 | `obj/array.dart` | 30 | — | — |
-| `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; `resourceDict()` returns a `PdfDict`; any number per document as of 0.3 |
-| `obj/font_descriptor.dart` | 139 | — | — needed for embedded TTF in **phase 1.3** |
-| `obj/ttffont.dart`, `unicode_cmap.dart` | 278 | — | — **phase 1.3** |
+| `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; `resourceDict(registry)` returns a `PdfDict` and may create the objects it references |
+| `obj/font_descriptor.dart` | 139 | `src/pdf/obj/font_descriptor.ts` | partial — bbox, flags, ascent/descent, `/FontFile2`; `/ItalicAngle`, `/CapHeight` and `/StemV` are upstream's constants |
+| `obj/ttffont.dart`, `unicode_cmap.dart` | 278 | `src/pdf/obj/ttf_font.ts`, `src/pdf/obj/unicode_cmap.ts` | partial — Type0/CIDFontType2, `/Identity-H`, `/ToUnicode`; no simple `/TrueType` branch, no Arabic or bidi coupling |
 | `obj/graphic_stream.dart` | 156 | `src/pdf/obj/graphic_stream.ts` | partial — `/Font`, `/XObject`, `/ExtGState`; base class rather than a mixin, no `/ProcSet`, `/Shading` or `/Pattern` |
 | `obj/xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 206 | — | — form XObjects, **phase 4** |
 | `obj/image.dart`, `smask.dart` | 347 | — | — **phase 4.1–4.2** |
@@ -114,7 +117,7 @@ on: an object registers itself with the document, hands out references through
 | `font/font_metrics.dart` | 184 | `src/pdf/font/font_metrics.ts` | done — bounding box, bearings, ascent/descent and advance width |
 | `font/type1_fonts.dart` | 304 | `src/pdf/font/type1_fonts.ts` | done — complete AFM widths for the 14 standard fonts |
 | `font/ttf_parser.dart` | 693 | `src/pdf/font/ttf_parser.ts` | partial — tables, `cmap` 0/4/6/12, `loca`/`glyf`, composite glyphs, `CFF ` detection; no `CBLC`/`CBDT` bitmaps, no bidi isolated-form mapping |
-| `font/ttf_writer.dart` | 399 | — | — **phase 1.2** |
+| `font/ttf_writer.dart` | 399 | `src/pdf/font/ttf_writer.ts` | done — glyph subset, rebuilt `loca`/`glyf`/`hmtx`/`cmap`, recomputed checksums; keeps the CID-to-glyph identity upstream loses |
 | `font/bidi_utils.dart`, `arabic.dart` | 502 | — | — |
 
 ## `src/svg/` — SVG subsystem
@@ -141,18 +144,18 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
-| `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | partial — layout protocol and `StatelessWidget`; no `Context` inheritance, `InheritedWidget`, `SpanningWidget` (**3.2**) |
+| `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | partial — layout protocol, `StatelessWidget`, `theme` on the render context; no `InheritedWidget`, no `SpanningWidget` (**3.2**) |
 | `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — `EdgeInsets`, `Alignment`, `inscribe`; no `BoxConstraints` value type (**3.4**) |
-| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts` | partial — single style, greedy wrap, per-widget `font`; no `TextStyle` (**1.4**), `RichText`/`TextSpan` (**3.7**) |
+| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts` | partial — `TextStyle` with merge and the four font slots, greedy wrap, `maxLines`; no `RichText`/`TextSpan`, no justification, no painted decorations, no `fontFallback` (**3.7**) |
 | `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — `Column`, `Row`, `Spacer`; no alignment, `Expanded`, `Flexible` (**phase 3.4**) |
 | `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts` | partial — fill, single border; no `BoxDecoration`, `Border`, `BorderSide` (**phase 3.5**) |
-| `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts` | partial — no `PageTheme` (**phase 1.4**) |
+| `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground; orientation swaps the paper instead of rotating the content (**2.1**), no `clip` |
 | `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — header/footer and page breaks; no `SpanningWidget` (**phase 3.2**) |
-| `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`; `font` is the default a widget falls back to, not the document's only font |
+| `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`; owns the theme and the per-document font cache |
 | `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts` | partial — imperative `Vector`; no `SvgImage` (**phase 2.7**) |
 | `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | partial — `Padding`, `Align`, `Center`, `SizedBox`, `Divider`; no `Transform`/`Opacity`/`FittedBox` (blocked on **2.1** and `/ExtGState`), no `ConstrainedBox`/`AspectRatio`/`FullPage` |
 | `widgets/table.dart`, `table_helper.dart` | 834 | — | — **phase 3.1** |
-| `widgets/theme.dart`, `font.dart` | 461 | — | — `Theme`, `ThemeData`, `DefaultTextStyle`, `Font` — **phase 1.4** |
+| `widgets/theme.dart`, `font.dart` | 461 | `src/widgets/theme.ts`, `src/widgets/font.ts` | partial — `Font`, `ThemeData`, `Theme`, `DefaultTextStyle`; no `iconTheme` (**5.4**), no `DefaultTextStyle.merge` (needs `Builder`) |
 | `widgets/image.dart`, `image_provider.dart` | 423 | — | — `Image`, `MemoryImage` — **phase 4.3** |
 | `widgets/border_radius.dart` | 466 | — | — `BorderRadius` — **phase 3.5** |
 | `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | — | — `Stack`, `Positioned`, `GridView`, `Partitions` — **phase 3.6** |
@@ -174,14 +177,17 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 |---|---:|---|
 | Object syntax / serialization | ~1,700 | self-serializing value types; no filters, no xref streams |
 | Graphics | ~1,600 | ~15% of the operator surface |
-| Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources |
-| Fonts | ~2,100 | Type1 AFM metrics done, any number per document; TTF parsing done, no subsetting or embedding |
+| Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
+| Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
 | SVG | ~2,800 | not started |
-| Widgets | ~14,000 | ~15 widgets of ~60 |
+| Widgets | ~14,000 | ~18 widgets of ~60, plus styles and themes |
 
-**Phase 0 is complete**, and phase 1 is under way. The object model landed in 0.2
-and the per-page resource dictionary in 0.3, so neither the object graph nor the
-single-font limit is a blocker any more. Phase 1.1 reads a TTF; **1.2–1.4 are
-what actually lift the WinAnsi ceiling** — until a font can be subset, embedded
-and selected, any text outside WinAnsi is still replaced with `?`. See
+**Phases 0 and 1 are complete.** The WinAnsi ceiling is gone: a TrueType font is
+parsed, subset to the glyphs a document used, embedded as a Type0/CIDFontType2
+composite with `/Identity-H`, and selected through `Font`, `TextStyle` and
+`ThemeData`. Text outside Latin-1 is no longer replaced with `?` — it is drawn
+from the embedded font and stays searchable through the `/ToUnicode` CMap.
+
+What still limits the port is layout, not text: **SVG (phase 2) and the widget
+set (phase 3)** are what the seven remaining examples are waiting on. See
 [ROADMAP.md](ROADMAP.md).

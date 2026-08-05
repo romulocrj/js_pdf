@@ -98,14 +98,20 @@ export class PdfDocument {
     this.xref.add(object);
   }
 
-  /** The indirect object holding `font`'s dictionary, created once per document. */
+  /**
+   * The indirect object holding `font`'s dictionary, created once per document.
+   *
+   * An embedded font builds its subset, descriptor and `/ToUnicode` CMap inside
+   * `resourceDict`, so this must not run until every page has been rendered —
+   * which is exactly when `addPage` is called.
+   */
   fontObject(font: PdfFont): PdfObject<PdfDict> {
     const existing = this.fontObjects.get(font);
     if (existing !== undefined) {
       return existing;
     }
 
-    const object = new PdfObject(this, font.resourceDict());
+    const object = new PdfObject(this, font.resourceDict(this));
     this.fontObjects.set(font, object);
     return object;
   }

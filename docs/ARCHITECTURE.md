@@ -75,12 +75,13 @@ below it.
   │  src/index.ts            public API, createPdf()           │
   ├────────────────────────────────────────────────────────────┤
   │  src/widgets/            layout tree: measure, then paint  │
-  │    widget · geometry · text · flex · container · shape     │
-  │    page · multi_page · document                            │
+  │    widget · geometry · text · text_style · theme · font    │
+  │    flex · container · basic · shape                        │
+  │    page · page_theme · multi_page · document               │
   ├────────────────────────────────────────────────────────────┤
   │  src/pdf/                PDF model: operators and objects  │
   │    graphics · document · color · page_format               │
-  │    format/{num,string,stream} · font/font_metrics          │
+  │    format/… · font/… · obj/…                               │
   ├────────────────────────────────────────────────────────────┤
   │  src/base/               port-level primitives             │
   └────────────────────────────────────────────────────────────┘
@@ -100,9 +101,8 @@ safety) and that JavaScript has to check by hand.
 
 - **`format/num.ts`** — number serialization for content-stream operators: no
   exponent form, no trailing zeros, no negative zero.
-- **`format/string.ts`** — PDF literal strings, plus the Unicode→WinAnsi
-  (CP1252) down-conversion. This is the layer that will grow a hex/CID branch
-  when TTF embedding lands.
+- **`format/string.ts`** — PDF literal strings with the Unicode→WinAnsi (CP1252)
+  down-conversion, and the hex strings an embedded font's CIDs are written as.
 - **`format/stream.ts`** — byte helpers. Content is assembled as Latin-1
   strings and encoded once at the end, which is why no text-encoding host API
   is needed.
@@ -113,10 +113,17 @@ safety) and that JavaScript has to check by hand.
   ascent, descent, bearings and advance width.
 - **`font/font.ts` / `font/type1_fonts.ts`** — the common font seam and AFM
   widths for all 14 standard Type1 fonts. A document may use any number.
+- **`font/ttf_parser.ts` / `font/ttf_writer.ts`** — read a TrueType file, and
+  write one back holding only the glyphs a document used.
+- **`obj/ttf_font.ts`, `unicode_cmap.ts`, `font_descriptor.ts`** — the embedded
+  form of that subset: a Type0/CIDFontType2 composite with `/Identity-H` and a
+  `/ToUnicode` CMap.
 - **`obj/graphic_stream.ts`** — the `/Resources` dictionary: `/Font`,
   `/XObject` and `/ExtGState` registered per page.
 - **`obj/page.ts`, `page_list.ts`, `catalog.ts`, `info.ts`, `object.ts`,
-  `object_stream.ts`** — the indirect objects a document is made of.
+  `object_stream.ts`** — the indirect objects a document is made of. Each one
+  registers itself with the document on construction and resolves its
+  cross-object entries in `prepare()`, so a forward reference is safe.
 - **`graphics.ts`** — `PdfCanvas`, the content-stream builder. It owns the
   coordinate flip (see §4) and appends operator strings to a buffer it never
   re-reads. It also allocates the `/F1`, `/F2`, … names it writes, because the
@@ -127,14 +134,20 @@ safety) and that JavaScript has to check by hand.
 ### `src/widgets/` — the layout tree
 
 - **`widget.ts`** — the `Widget` base class and the layout protocol (§3).
-- **`geometry.ts`** — inset normalization (upstream `EdgeInsets`).
+- **`geometry.ts`** — `EdgeInsets`, `Alignment`, and inset normalization.
 - **`text.ts`** — greedy line breaker plus the `Text` widget.
+- **`text_style.ts` / `theme.ts` / `font.ts`** — `TextStyle` and its four font
+  slots, `ThemeData` and the widgets that scope it, and the lazy `Font`
+  declaration a style names.
 - **`flex.ts`** — `Column`, `Row`, `Spacer`.
 - **`container.ts`** — `Container`: padding, margin, fill, border.
+- **`basic.ts`** — `Padding`, `Align`, `Center`, `SizedBox`, `Divider`.
 - **`shape.ts`** — `Vector`, the imperative drawing surface.
-- **`page.ts`** — one physical page; overflow is an error.
+- **`page.ts` / `page_theme.ts`** — one physical page, and everything about it
+  but its body; overflow is an error.
 - **`multi_page.ts`** — pagination with per-page header and footer.
-- **`document.ts`** — `Document`, which renders sections and serializes.
+- **`document.ts`** — `Document`, which renders sections and serializes. It also
+  owns the theme and the per-document `Font` → `PdfFont` cache.
 
 ## 3. The layout protocol
 
@@ -181,12 +194,20 @@ interface RenderContext {
   canvas: PdfCanvas;
   pageFormat: PageSize;
   pageNumber: number;
+  theme: ThemeData;
 }
 ```
 
 A section builds this from a `DocumentContext` (`{ document }`) once it has a
-canvas. Upstream's `Context` also carries an inherited-widget map for `Theme`
-and `Font`; the port has no theming yet, so the context stays flat.
+canvas.
+
+Upstream carries inherited values in an `InheritedWidget` map a child looks up
+with `Context.dependsOn`. **The port puts them on the context directly:** a
+widget that scopes something for its subtree lays out and paints its child with
+a copy of the context carrying the new value. `Theme` and `DefaultTextStyle`
+(phase 1.4) are the first two, which is why `theme` is a field rather than a
+lookup and `Theme.of(context)` is a field read. Adding another inherited value
+means adding another field, not another mechanism.
 
 ## 4. Coordinates
 
@@ -208,17 +229,22 @@ roadmap phase lands.
 
 | Area | dart_pdf | js_pdf |
 |---|---|---|
-| Font metrics | Real AFM tables for the 14 standard fonts; `hmtx` for TTF | Real Type1 AFM tables; no TTF metrics until phase 1.1 |
-| Text encoding | WinAnsi *or* hex-encoded CID strings for TTF | WinAnsi only; anything outside becomes `?` |
-| Object model | One `PdfObject` subclass per indirect object, each self-serializing | Flat object table in `pdf/document.ts` |
+| Embedded TTF | Type0 for `0x00010000` fonts, WinAnsi `/TrueType` otherwise | Type0 only; a non-`0x00010000` or `CFF ` font is rejected at construction |
+| Inherited values | `InheritedWidget` plus `Context.dependsOn` | Fields on `RenderContext`, replaced for the subtree (§3) |
+| Text layout | Full breaker: rich text, bidi, justification, decorations | Single-style greedy wrap with `maxLines`; `justify` paints as `left` |
+| Page orientation | Content rotated through the CTM, paper size unchanged | Paper dimensions swapped; needs the `cm` operator (phase 2.1) |
+| Object serialization | A value consults its owning object for compression, encryption and a verbose pretty-printer | `output(stream)` only, no `PdfSettings`; dictionaries and arrays keep the port's `<< /Type /Page >>` spacing |
+| Font naming | `/F$objser`, derived from the font object's serial | Page-local `/F1`, `/F2`, … allocated as the content stream is written |
 | Colors | `PdfColor` value type with CMYK and HSL variants | RGB triple, DeviceRGB only |
 | Flex | Full Flutter flex: alignments, `Expanded`, `FlexFit`, `mainAxisSize` | `gap`, and fixed ratio `widths` on `Row` |
 | Pagination | `SpanningWidget` splits a tall widget across pages | Tall widget throws `RangeError` |
 | Decoration | `BoxDecoration`: gradients, shapes, radii, shadows, per-side borders | Flat `background` / `borderColor` / `borderWidth` |
 | Async | `save()` returns a `Future` | `save()` returns `Uint8Array` |
 
-Type1 line breaks and alignment now match dart_pdf's AFM inputs. The remaining
-font-metrics divergence belongs to embedded TTF, which starts in phase 1.1.
+Two rows left this table rather than moving: font metrics and text encoding.
+Phase 0.1 brought the real AFM tables and phase 1 the embedded-TrueType path, so
+line breaks, alignment and encoding now match dart_pdf's own inputs for both the
+standard fonts and an embedded one.
 
 ## 6. Build
 

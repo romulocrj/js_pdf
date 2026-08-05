@@ -8,6 +8,14 @@ export declare function toWinAnsiByte(codePoint: number): number;
  * be emitted as hex-encoded CID glyph indices instead.
  */
 export declare function pdfLiteral(value: string): string;
+/**
+ * A PDF hex string `<...>`, written as fixed-width big-endian words.
+ *
+ * This is how text is emitted for a composite font: with `/Identity-H` the
+ * bytes between the angle brackets are two-byte CIDs, not characters, so the
+ * literal escaping rules above do not apply at all.
+ */
+export declare function pdfHexString(values: readonly number[], digits?: number): string;
 /** A PDF string object. */
 export declare class PdfString extends PdfDataType {
     readonly value: string;

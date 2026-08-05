@@ -22,10 +22,27 @@ import type { PdfFont } from './font/font.ts';
 import { defaultPdfFont } from './font/type1_fonts.ts';
 import { formatNumber } from './format/num.ts';
 
-export interface TextStyle {
+/**
+ * What `PdfCanvas.text` needs to write one run of text. Named for the canvas
+ * rather than called `TextStyle`, which as of phase 1.4 is the widget-level
+ * value type in `widgets/text_style.ts`; this is its resolved, drawable form.
+ */
+export interface CanvasTextStyle {
   readonly fontSize: number;
   readonly color: ColorInput;
   readonly font?: PdfFont;
+
+  /** `Tc`, extra space per glyph. Omitted from the output when zero. */
+  readonly letterSpacing?: number;
+
+  /**
+   * `Tw`, extra space per space character. Omitted when zero.
+   *
+   * PORT GAP: `Tw` applies to single-byte code 32 only, so a reader ignores it
+   * for the two-byte CIDs an embedded TrueType font emits. Word spacing has no
+   * effect on TTF text until the port measures and inserts the space itself.
+   */
+  readonly wordSpacing?: number;
 }
 
 export interface CircleOptions {
@@ -101,14 +118,22 @@ export class PdfCanvas {
     this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re S`);
   }
 
-  text(text: string, x: number, baselineFromTop: number, style: TextStyle): void {
+  text(text: string, x: number, baselineFromTop: number, style: CanvasTextStyle): void {
     const baseline = this.pageHeight - baselineFromTop;
     const fontSize = style.fontSize;
     const font = style.font ?? defaultPdfFont;
+    const letterSpacing = style.letterSpacing ?? 0;
+    const wordSpacing = style.wordSpacing ?? 0;
+
     const command = [
       'BT',
       this.addFont(font), formatNumber(fontSize), 'Tf',
       colorOperator(style.color),
+      // Only written when asked for: the spacing operators are sticky within a
+      // text object, and emitting `0 Tc` on every run would move every byte of
+      // every document that never sets them.
+      ...(letterSpacing !== 0 ? [formatNumber(letterSpacing), 'Tc'] : []),
+      ...(wordSpacing !== 0 ? [formatNumber(wordSpacing), 'Tw'] : []),
       '1 0 0 1', formatNumber(x), formatNumber(baseline), 'Tm',
       font.encodeText(text), 'Tj',
       'ET'
