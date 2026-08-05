@@ -31,3 +31,15 @@ export const PageFormat: Readonly<Record<'A4' | 'LETTER', PageSize>> = Object.fr
 });
 
 export const DEFAULT_MARGIN = 40;
+
+/**
+ * One physical unit in PDF points. Upstream holds these as statics on
+ * `PdfPageFormat`; SVG needs them because a length may be written `10mm`.
+ */
+export const PageUnit = Object.freeze({
+  point: 1,
+  inch: 72,
+  cm: 72 / 2.54,
+  mm: 72 / 25.4,
+  pica: 12
+});

@@ -48,6 +48,11 @@ neither. `Padding`, `Align`, `Center`, `SizedBox` and `Divider`, plus
 result — every one of the seven calls `Font.ttf`, so phase 1 remains on all their
 critical paths — but the missing-API total across them fell from 147 to 124.
 
+**Phase 2.4 — SVG transforms and units — landed 2026-08-05.**
+`src/svg/transform.ts` reads the `transform` attribute and `src/svg/parser.ts`
+the numeric half of upstream's parser — `SvgNumeric` with its length units,
+`splitDoubles`, `convertStyle`.
+
 **Phase 2.3 — XML reader — landed 2026-08-05.** `src/svg/xml.ts` reads
 elements, attributes, text, CDATA, comments, entities and namespaces. Every SVG
 in `examples/assets/` and the inline markup in `server-assets.json` parse.
@@ -73,12 +78,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 2.4 — SVG transforms and viewBox.** Port
-> `pdf/lib/src/svg/transform.dart` into `src/svg/transform.ts` and the numeric
-> half of `svg/parser.dart` into `src/svg/parser.ts`: `matrix translate scale
-> rotate skewX skewY`, and the length units an SVG attribute may carry.
+> **Phase 2.5 — SVG painter, shapes and groups.** Port `svg/painter.dart`,
+> `operation.dart`, `group.dart`, `use.dart`, `symbol.dart`, `brush.dart`,
+> `color.dart` and `colors.dart`, plus the shape-to-`d` factories in
+> `svg/path.dart`. This is the phase that actually paints.
 
-A path and a tree both parse; what is missing is the space they are drawn in.
+Everything an SVG element is made of now parses; nothing yet draws one.
 
 ---
 
@@ -526,13 +531,39 @@ The tree is **mutable by design** — `setAttribute` exists because upstream's
 `SvgParser.convertStyle` flattens a `style` attribute into real attributes on
 the element it found it on.
 
-### 2.4 Transforms and viewBox
+### 2.4 Transforms and viewBox ✅ *(landed 2026-08-05)*
 
-- **Ports:** `pdf/lib/src/svg/transform.dart`
-- **Into:** `src/svg/transform.ts`
+- **Ports:** `pdf/lib/src/svg/transform.dart`, the numeric half of
+  `pdf/lib/src/svg/parser.dart`
+- **Into:** `src/svg/transform.ts`, `src/svg/parser.ts`
 - `matrix translate scale rotate skewX skewY`, composed left-to-right, plus
   `viewBox` + `preserveAspectRatio` → the outer CTM.
 - **Test:** composed transform matrices; each `preserveAspectRatio` alignment.
+
+Landed with 19 tests. `src/svg/parser.ts` carries the pieces transforms need
+now — `SvgNumeric` and its units (`px pt em cm mm in %`), `splitDoubles`,
+`splitNumeric`, `getDouble`, `getNumeric` and `convertStyle`; the `SvgParser`
+class itself, with the viewBox and `findById`, lands with the rest of the file
+in 2.7. `PageUnit` was added to `src/pdf/page_format.ts` for the physical units.
+
+Divergences:
+
+- **`SvgTransform.none` is distinct from the identity matrix.** Upstream writes
+  no `cm` operator at all for an element with no `transform` attribute, and the
+  emitted content stream stays comparable only if the port does the same.
+- **No `preserveAspectRatio`, in either implementation.** Upstream fits the
+  viewBox into the widget's box with `BoxFit` and `Alignment`, which covers
+  every alignment the attribute can express but is stated by the caller instead
+  of read from the document. That fitting is **2.7**.
+- **`sizeValue` returns `value / 100` for a percentage**, which is upstream's
+  behaviour and wrong in the general case — a percentage is relative to the
+  viewport. Kept, because changing it would silently move every SVG that has
+  one; fixing it needs the viewport threaded down to every attribute lookup.
+- `convertStyle` lets a `style` declaration **overwrite** the presentation
+  attribute of the same name, as CSS specificity requires and as upstream does.
+- A malformed number throws `SyntaxError` where upstream's `double.parse`
+  throws `FormatException`; an unrecognized `transform()` function is ignored
+  rather than fatal, matching upstream's switch with no default.
 
 ### 2.5 Painter, shapes, groups
 
