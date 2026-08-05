@@ -71,6 +71,13 @@ public through every API surface. `Container` and table row/cell decoration now
 share the same painter. Nine tests plus a retained Node/V8 PDF proof cover the
 phase, and the missing-API total fell 69 → 53.
 
+**Phase 3.6 — stack, wrap, grid and partitions — landed 2026-08-05.** Public
+`Stack`/`Positioned`, multi-run `Wrap`, fixed-track `GridView` and parallel
+`Partition`/`Partitions` use pure layout data and immutable continuation state.
+The original constructor spelling `new EdgeInsets(...)` now works alongside
+its factories. Ten focused tests and a retained V8 proof cover the phase;
+`calendar.pdf` generates end to end and the missing-API total fell 53 → 45.
+
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
 option on `Page` and `MultiPage` as well as on `PageTheme`, and every physical
@@ -140,12 +147,11 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 3.6 — stack, wrap and grid.** Port `Stack`, `Positioned`, `Wrap`,
-> `GridView` and `Partitions`; this is the phase that makes the calendar example
-> generate end to end.
+> **Phase 3.7 — rich text.** Port `RichText`, `TextSpan`, per-span styles,
+> justification and painted text decorations.
 
-Decoration is complete. `GridView` is now the calendar's only missing API, while
-stack/positioned also advance certificate and resume.
+The calendar now generates. Rich text is the largest shared blocker remaining,
+appearing in certificate, document, invoice and server.
 
 ---
 
@@ -891,13 +897,32 @@ Two deliberate corrections/divergences:
   spread, blur extent, colour and opacity remain represented without adding a
   host dependency.
 
-### 3.6 Stack, Wrap, Grid ⇒ `calendar`
+### 3.6 Stack, Wrap, Grid ⇒ `calendar` ✅ *(landed 2026-08-05)*
 
 - **Ports:** `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`,
   `partitions.dart`
 - `Stack`, `Positioned`, `Wrap`, `GridView`, `Partitions`.
 - **Example gate:** ⇒ **`calendar` generates end to end here.** Also advances
   `certificate`, `invoice`, `resume`.
+
+`Stack` measures normal children according to loose/expand/passthrough fit,
+resolves every positioned edge and scopes clipping around overflow. `Wrap`
+forms aligned horizontal or vertical runs. `GridView` divides fixed cross-axis
+tracks and continues by complete runs, while `Partitions` advances several
+fixed/flexible columns in parallel. Their fragment cursors are immutable, so a
+page never overwrites measurements retained by an earlier page.
+
+The phase also restores the upstream-compatible `new EdgeInsets({...})`
+constructor while keeping the existing static factories and plain structural
+return values. Ten tests cover offsets, clipping, run formation, continuation
+and uneven partitions. The example gate removes eight API occurrences,
+reducing the total 53 → 45; `calendar.pdf` generates 20,805 bytes under both
+Node and V8. `examples/layout-phase-3.6.mjs` is the retained visual/V8 proof.
+
+Four original defects corrected while porting are recorded with reproduction
+steps in [ORIGINAL-BUG.md](../ORIGINAL-BUG.md): stale `Positioned` dimensions,
+the grid's unconditional continuation and aspect-ratio compression, and early
+termination of uneven partitions.
 
 ### 3.7 Rich text
 

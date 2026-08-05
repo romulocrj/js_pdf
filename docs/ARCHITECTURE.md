@@ -76,7 +76,7 @@ below it.
   ├────────────────────────────────────────────────────────────┤
   │  src/widgets/            layout tree: measure, then paint  │
   │    widget · geometry · text · text_style · theme · font    │
-  │    flex · container · decoration · borders · basic · shape │
+  │    flex · stack · wrap · grid · container · decoration     │
   │    page · page_theme · multi_page · document               │
   ├────────────────────────────────────────────────────────────┤
   │  src/pdf/                PDF model: operators and objects  │
@@ -142,6 +142,9 @@ safety) and that JavaScript has to check by hand.
   declaration a style names.
 - **`flex.ts`** — full `Flex` allocation, `Column`, `Row`, `Expanded`,
   `Flexible`, proportional `Spacer`, plus `gap` and weighted row tracks.
+- **`stack.ts` / `wrap.ts` / `grid_view.ts` / `partitions.ts`** — overlays,
+  positioned children, wrapping runs, fixed-track grids and parallel columns;
+  the latter three paginate through immutable continuation cursors.
 - **`container.ts` / `decoration.ts` / `box_border.ts` /
   `border_radius.ts`** — `Container` and `DecoratedBox`, background/foreground
   fills, PDF shading gradients, vector shadows, per-side rules and rounded

@@ -70,6 +70,7 @@ export interface Insets {
  * number, a `{vertical, horizontal}` pair, or explicit sides.
  */
 export type InsetsInput = number | (Partial<Insets> & {
+    readonly all?: number;
     readonly vertical?: number;
     readonly horizontal?: number;
 });
@@ -82,16 +83,18 @@ export declare function normalizeInsets(value?: InsetsInput): Insets;
  * reads the same in both languages. A `class` with static methods would work
  * too; a frozen object matches how `PageFormat` is exposed and stays erasable.
  */
-export declare const EdgeInsets: Readonly<{
-    zero: Insets;
+export interface EdgeInsetsConstructor {
+    new (value?: InsetsInput): Insets;
+    readonly zero: Insets;
     all(value: number): Insets;
-    symmetric({ vertical, horizontal }: {
-        vertical?: number;
-        horizontal?: number;
+    symmetric(options?: {
+        readonly vertical?: number;
+        readonly horizontal?: number;
     }): Insets;
-    only({ top, right, bottom, left }?: Partial<Insets>): Insets;
+    only(options?: Partial<Insets>): Insets;
     fromLTRB(left: number, top: number, right: number, bottom: number): Insets;
-}>;
+}
+export declare const EdgeInsets: EdgeInsetsConstructor;
 /** Total inset along each axis, upstream's `horizontal` / `vertical` getters. */
 export declare function insetsHorizontal(insets: Insets): number;
 export declare function insetsVertical(insets: Insets): number;

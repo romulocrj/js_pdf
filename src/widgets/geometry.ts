@@ -272,18 +272,23 @@ export interface Insets {
  */
 export type InsetsInput =
   | number
-  | Partial<Insets> & { readonly vertical?: number; readonly horizontal?: number };
+  | Partial<Insets> & {
+    readonly all?: number;
+    readonly vertical?: number;
+    readonly horizontal?: number;
+  };
 
 export function normalizeInsets(value: InsetsInput = 0): Insets {
   if (typeof value === 'number') {
     return { top: value, right: value, bottom: value, left: value };
   }
 
+  const all = value.all;
   return {
-    top: Number(value.top ?? value.vertical ?? 0),
-    right: Number(value.right ?? value.horizontal ?? 0),
-    bottom: Number(value.bottom ?? value.vertical ?? 0),
-    left: Number(value.left ?? value.horizontal ?? 0)
+    top: Number(value.top ?? value.vertical ?? all ?? 0),
+    right: Number(value.right ?? value.horizontal ?? all ?? 0),
+    bottom: Number(value.bottom ?? value.vertical ?? all ?? 0),
+    left: Number(value.left ?? value.horizontal ?? all ?? 0)
   };
 }
 
@@ -295,7 +300,20 @@ export function normalizeInsets(value: InsetsInput = 0): Insets {
  * reads the same in both languages. A `class` with static methods would work
  * too; a frozen object matches how `PageFormat` is exposed and stays erasable.
  */
-export const EdgeInsets = Object.freeze({
+export interface EdgeInsetsConstructor {
+  new(value?: InsetsInput): Insets;
+  readonly zero: Insets;
+  all(value: number): Insets;
+  symmetric(options?: { readonly vertical?: number; readonly horizontal?: number }): Insets;
+  only(options?: Partial<Insets>): Insets;
+  fromLTRB(left: number, top: number, right: number, bottom: number): Insets;
+}
+
+function edgeInsetsConstructor(value: InsetsInput = 0): Insets {
+  return normalizeInsets(value);
+}
+
+export const EdgeInsets = Object.freeze(Object.assign(edgeInsetsConstructor, {
   zero: Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 }) as Insets,
 
   all(value: number): Insets {
@@ -313,7 +331,7 @@ export const EdgeInsets = Object.freeze({
   fromLTRB(left: number, top: number, right: number, bottom: number): Insets {
     return { top, right, bottom, left };
   }
-});
+})) as unknown as EdgeInsetsConstructor;
 
 /** Total inset along each axis, upstream's `horizontal` / `vertical` getters. */
 export function insetsHorizontal(insets: Insets): number {

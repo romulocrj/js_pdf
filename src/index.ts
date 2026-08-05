@@ -52,10 +52,13 @@ import { Column, Expanded, Flex, Flexible, Row, Spacer } from './widgets/flex.ts
 import { Font } from './widgets/font.ts';
 import { Alignment, BoxConstraints, EdgeInsets } from './widgets/geometry.ts';
 import { MultiPage } from './widgets/multi_page.ts';
+import { GridView } from './widgets/grid_view.ts';
+import { Partition, Partitions } from './widgets/partitions.ts';
 import { Page } from './widgets/page.ts';
 import type { Section } from './widgets/page.ts';
 import { PageTheme } from './widgets/page_theme.ts';
 import { Vector } from './widgets/shape.ts';
+import { Positioned, PositionedDirectional, Stack } from './widgets/stack.ts';
 import { SvgImage } from './widgets/svg.ts';
 import {
   FixedColumnWidth,
@@ -72,6 +75,7 @@ import { Text } from './widgets/text.ts';
 import { TextStyle } from './widgets/text_style.ts';
 import { DefaultTextStyle, Theme, ThemeData } from './widgets/theme.ts';
 import { SpanningWidget, StatelessWidget, Widget } from './widgets/widget.ts';
+import { Wrap } from './widgets/wrap.ts';
 import type { DocumentOptions } from './widgets/document.ts';
 
 export {
@@ -109,6 +113,7 @@ export {
   FractionColumnWidth,
   FullPage,
   Gradient,
+  GridView,
   IntrinsicColumnWidth,
   LayoutBuilder,
   LimitedBox,
@@ -120,13 +125,18 @@ export {
   Page,
   PageFormat,
   PageTheme,
+  Partition,
+  Partitions,
   PdfTtfFont,
   PdfType1Font,
   RadialGradient,
   Radius,
+  Positioned,
+  PositionedDirectional,
   Row,
   SizedBox,
   Spacer,
+  Stack,
   SpanningWidget,
   StatelessWidget,
   SvgImage,
@@ -142,7 +152,8 @@ export {
   Transform,
   Vector,
   VerticalDivider,
-  Widget
+  Widget,
+  Wrap
 };
 
 export type { ColorInput, Rgb } from './pdf/color.ts';
@@ -201,6 +212,7 @@ export type {
 export type {
   BoxConstraintsInput,
   ConstraintSize,
+  EdgeInsetsConstructor,
   Insets,
   InsetsInput,
   Offset
@@ -292,6 +304,39 @@ export type {
   TileMode
 } from './widgets/decoration.ts';
 export type {
+  GridChildLayout,
+  GridViewLayoutData,
+  GridViewOptions,
+  GridViewState
+} from './widgets/grid_view.ts';
+export type {
+  PartitionChildLayout,
+  PartitionLayoutData,
+  PartitionOptions,
+  PartitionsLayoutData,
+  PartitionsOptions,
+  PartitionsState,
+  PartitionState
+} from './widgets/partitions.ts';
+export type {
+  PositionedDirectionalOptions,
+  PositionedLayoutData,
+  PositionedOptions,
+  StackChildLayout,
+  StackFit,
+  StackLayoutData,
+  StackOptions,
+  StackOverflow
+} from './widgets/stack.ts';
+export type {
+  WrapAlignment,
+  WrapChildLayout,
+  WrapCrossAlignment,
+  WrapLayoutData,
+  WrapOptions,
+  WrapState
+} from './widgets/wrap.ts';
+export type {
   ColumnLayout,
   TableBorderInput,
   TableBorderOptions,
@@ -358,6 +403,13 @@ export interface PublicApi {
   readonly BorderRadius: typeof BorderRadius;
   readonly BorderRadiusDirectional: typeof BorderRadiusDirectional;
   readonly Radius: typeof Radius;
+  readonly GridView: typeof GridView;
+  readonly Stack: typeof Stack;
+  readonly Positioned: typeof Positioned;
+  readonly PositionedDirectional: typeof PositionedDirectional;
+  readonly Wrap: typeof Wrap;
+  readonly Partition: typeof Partition;
+  readonly Partitions: typeof Partitions;
   readonly Spacer: typeof Spacer;
   readonly Vector: typeof Vector;
   readonly Padding: typeof Padding;
@@ -427,6 +479,13 @@ const publicApi: PublicApi = Object.freeze({
   BorderRadius,
   BorderRadiusDirectional,
   Radius,
+  GridView,
+  Stack,
+  Positioned,
+  PositionedDirectional,
+  Wrap,
+  Partition,
+  Partitions,
   Spacer,
   Vector,
   Padding,

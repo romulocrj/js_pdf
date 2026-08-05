@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T20:59:12.773Z",
+  "generatedAt": "2026-08-05T21:08:42.404Z",
   "results": [
     {
       "name": "hello-world",
@@ -8,13 +8,13 @@
     },
     {
       "name": "calendar",
-      "status": "failed",
-      "error": "calendar requires unported js_pdf APIs: GridView"
+      "status": "generated",
+      "bytes": 20805
     },
     {
       "name": "certificate",
       "status": "failed",
-      "error": "certificate requires unported js_pdf APIs: LoremText, Positioned, RichText, Stack, TextSpan"
+      "error": "certificate requires unported js_pdf APIs: LoremText, RichText, TextSpan"
     },
     {
       "name": "document",
@@ -24,7 +24,7 @@
     {
       "name": "invoice",
       "status": "failed",
-      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, GridView, LoremText, PdfLogo, RichText, TextSpan"
+      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, LoremText, PdfLogo, RichText, TextSpan"
     },
     {
       "name": "report",
@@ -34,7 +34,7 @@
     {
       "name": "resume",
       "status": "failed",
-      "error": "resume requires unported js_pdf APIs: Barcode, BarcodeWidget, CircularProgressIndicator, ClipOval, Icon, IconData, Image, Lorem, MemoryImage, Partition, Partitions, Positioned, Stack, UrlLink"
+      "error": "resume requires unported js_pdf APIs: Barcode, BarcodeWidget, CircularProgressIndicator, ClipOval, Icon, IconData, Image, Lorem, MemoryImage, UrlLink"
     },
     {
       "name": "server",

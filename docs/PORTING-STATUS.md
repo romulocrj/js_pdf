@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 74 `.ts` files, ~15,200 lines (TypeScript)
+**Ported:** 78 `.ts` files, ~16,300 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -23,22 +23,23 @@ table. Run `npm run examples`; current state, from
 | Example | Status | Missing APIs | Unlocks at |
 |---|---|---:|---|
 | `hello-world` | ✅ generated (736 bytes) | 0 | — |
-| `calendar` | failed | 1 | 3.6 |
-| `certificate` | failed | 5 | 3.9 |
+| `calendar` | ✅ generated (20,805 bytes) | 0 | 3.6 |
+| `certificate` | failed | 3 | 3.9 |
 | `report` | failed | 9 | 5.1 |
-| `invoice` | failed | 7 | 5.2 |
+| `invoice` | failed | 6 | 5.2 |
 | `document` | failed | 8 | 5.3 |
 | `server` | failed | 9 | 5.3 |
-| `resume` | failed | 14 | 5.5 |
+| `resume` | failed | 10 | 5.5 |
 
-**1 of 8**, with the missing-API total down from 124 to 53 — phase 1.4 cleared
+**2 of 8**, with the missing-API total down from 124 to 45 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
 from every one of the seven, phase 2.7 cleared `SvgImage` from six, and phase
 3.1 cleared `TableHelper` from four. Phase 3.3 then cleared the composition
 primitives `Transform`, `Opacity`, `FittedBox`, `AspectRatio`, `FullPage`,
 `Builder` and `LayoutBuilder` wherever they occurred. Phase 3.4 cleared
-`Expanded`/`Flexible` from five examples, and phase 3.5 cleared decoration,
-borders and radii from six. See
+`Expanded`/`Flexible` from five examples, phase 3.5 cleared decoration, borders
+and radii from six, and phase 3.6 cleared stack/grid/partitions from four and
+made the calendar generate. See
 [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which phase clears
 each one.
 
@@ -164,12 +165,12 @@ both, and will grow the shape factories in 2.5.
 | `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — header/footer, atomic page breaks, direct spanning children, `maxPages` and per-section `orientation` |
 | `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`; owns the theme and the per-document font cache |
 | `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts`, `src/widgets/svg.ts` | partial — imperative `Vector`; public `SvgImage` with all `BoxFit` modes, alignment, clipping and colour filter; no SVG text or embedded raster content |
-| `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | done — all upstream public classes, including tight `SizedBox`, `ConstrainedBox`, minimum-preserving `LimitedBox` and aligned `OverflowBox`; dividers paint the equivalent rule directly until decoration lands |
+| `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | done — all upstream public classes, including tight `SizedBox`, `ConstrainedBox`, minimum-preserving `LimitedBox` and aligned `OverflowBox`; dividers paint the equivalent rule directly |
 | `widgets/table.dart`, `table_helper.dart` | 834 | `src/widgets/table.ts`, `table_helper.ts` | partial — fixed/flex/intrinsic/fraction tracks, alignment, decorations, borders, `TableHelper`, page spanning and repeatable headers; no bidi direction |
 | `widgets/theme.dart`, `font.dart` | 461 | `src/widgets/theme.ts`, `src/widgets/font.ts` | partial — `Font`, `ThemeData`, `Theme`, `DefaultTextStyle`; no `iconTheme` (**5.4**) or `DefaultTextStyle.merge` |
 | `widgets/image.dart`, `image_provider.dart` | 423 | — | — `Image`, `MemoryImage` — **phase 4.3** |
 | `widgets/border_radius.dart` | 466 | `src/widgets/border_radius.ts` | done — physical/directional circular or elliptical radii, with oversized radii scaled to a valid path |
-| `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | — | — `Stack`, `Positioned`, `GridView`, `Partitions` — **phase 3.6** |
+| `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | `src/widgets/stack.ts`, `wrap.ts`, `grid_view.ts`, `partitions.ts` | done — positioned overlays/clipping, multi-run wrap, fixed-track grid and parallel partitions; immutable continuation for wrap/grid/partitions |
 | `widgets/clip.dart` | 134 | — | — `ClipOval`, `ClipRect`, `ClipRRect` — **phase 3.10** |
 | `widgets/chart/*.dart` | 1989 | — | — `Chart`, grids, data sets — **phase 5.1** |
 | `widgets/annotations.dart`, `forms.dart` | 1244 | — | — `UrlLink`, `AnnotationUrl` — **phase 5.3**; forms 5.6 |
@@ -191,7 +192,7 @@ both, and will grow the shape factories in 2.5.
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
 | SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping and gradients done; SVG text and embedded raster content remain |
-| Widgets | ~14,000 | ~50 public widget/value constructors, plus tables, styles and themes |
+| Widgets | ~14,000 | ~57 public widget/value constructors, plus tables, styles and themes |
 
 **Phases 0, 1 and 2 are complete.** The WinAnsi ceiling is gone: a TrueType font
 is parsed, subset to the glyphs a document used, embedded as a
@@ -201,5 +202,5 @@ Type0/CIDFontType2 composite with `/Identity-H`, and selected through `Font`,
 `/ToUnicode` CMap. The public SVG pipeline now reaches PDF shading patterns.
 
 What now limits the port is layout, not text or vector art: **the widget set
-(phase 3)** is what the seven remaining examples are waiting on. See
+(phase 3)** is what the six remaining examples are waiting on. See
 [ROADMAP.md](ROADMAP.md).

@@ -16,7 +16,7 @@ const months = [
 
 export function generateCalendar(pageFormat = pw.PageFormat.A4, resources = {}) {
   requireFeatures(pw, 'calendar', [
-    'EdgeInsets', 'Font', 'GridView', 'Padding', 'PageTheme', 'StatelessWidget',
+    'EdgeInsets', 'Font', 'Padding', 'PageTheme', 'StatelessWidget',
     'SvgImage', 'TextStyle', 'ThemeData'
   ]);
 
