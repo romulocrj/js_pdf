@@ -6121,232 +6121,6 @@ class Partitions extends SpanningWidget {
   }
 }
 
-class Vector extends Widget {
-  constructor({width, height, draw}) {
-    super();
-    this.width = Number(width);
-    this.height = Number(height);
-    this.draw = draw;
-  }
-  layout(_context, constraints) {
-    const parent = BoxConstraints.from(constraints);
-    const scale = Math.min(1, parent.maxWidth / this.width, parent.maxHeight / this.height);
-    const size = parent.constrain({
-      width: this.width * scale,
-      height: this.height * scale
-    });
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: {
-        scale
-      }
-    };
-  }
-  paint(context, box) {
-    const scale = box.data.scale;
-    const api = {
-      rect: ({x, y, width, height, fill = null, stroke = null, lineWidth = 1}) => {
-        if (fill) context.canvas.fillRect(box.x + x * scale, box.y + y * scale, width * scale, height * scale, fill);
-        if (stroke) context.canvas.strokeRect(box.x + x * scale, box.y + y * scale, width * scale, height * scale, stroke, lineWidth * scale);
-      },
-      line: ({x1, y1, x2, y2, color = "#000000", lineWidth = 1}) => {
-        context.canvas.line(box.x + x1 * scale, box.y + y1 * scale, box.x + x2 * scale, box.y + y2 * scale, color, lineWidth * scale);
-      },
-      circle: ({cx, cy, radius, fill = null, stroke = null, lineWidth = 1}) => {
-        context.canvas.circle(box.x + cx * scale, box.y + cy * scale, radius * scale, {
-          fill,
-          stroke,
-          lineWidth: lineWidth * scale
-        });
-      },
-      text: ({value, x, y, fontSize = 12, color = "#000000", font}) => {
-        context.canvas.text(String(value), box.x + x * scale, box.y + y * scale, {
-          fontSize: fontSize * scale,
-          color: normalizeColor(color),
-          font: font ?? context.document.font
-        });
-      }
-    };
-    this.draw(api);
-  }
-}
-
-class Positioned extends Widget {
-  constructor({left = null, top = null, right = null, bottom = null, width = null, height = null, child}) {
-    super();
-    this.left = left === null ? null : Number(left);
-    this.top = top === null ? null : Number(top);
-    this.right = right === null ? null : Number(right);
-    this.bottom = bottom === null ? null : Number(bottom);
-    this.width = width === null ? null : Math.max(0, Number(width));
-    this.height = height === null ? null : Math.max(0, Number(height));
-    this.child = child;
-  }
-  static fill({left = 0, top = 0, right = 0, bottom = 0, child}) {
-    return new Positioned({
-      left,
-      top,
-      right,
-      bottom,
-      child
-    });
-  }
-  static directional({textDirection, start = null, top = null, end = null, bottom = null, width = null, height = null, child}) {
-    return new Positioned({
-      left: textDirection === "rtl" ? end : start,
-      right: textDirection === "rtl" ? start : end,
-      top,
-      bottom,
-      width,
-      height,
-      child
-    });
-  }
-  layout(context, constraints) {
-    const parent = BoxConstraints.from(constraints).tighten({
-      width: this.width,
-      height: this.height
-    });
-    const childBox = this.child.layout(context, parent);
-    return {
-      widget: this,
-      width: childBox.width,
-      height: childBox.height,
-      data: {
-        childBox
-      }
-    };
-  }
-  paint(context, box) {
-    const {childBox} = box.data;
-    childBox.widget.paint(context, {
-      ...childBox,
-      x: box.x,
-      y: box.y
-    });
-  }
-}
-
-class PositionedDirectional extends Positioned {
-  constructor({start = null, top = null, end = null, bottom = null, width = null, height = null, child, textDirection = "ltr"}) {
-    super({
-      left: textDirection === "rtl" ? end : start,
-      right: textDirection === "rtl" ? start : end,
-      top,
-      bottom,
-      width,
-      height,
-      child
-    });
-    this.start = start;
-    this.end = end;
-    this.textDirection = textDirection;
-  }
-  static fill({start = 0, top = 0, end = 0, bottom = 0, child, textDirection = "ltr"}) {
-    return new PositionedDirectional({
-      start,
-      top,
-      end,
-      bottom,
-      child,
-      textDirection
-    });
-  }
-}
-
-class Stack extends Widget {
-  constructor({alignment = Alignment.topLeft, fit = "loose", overflow = "clip", children = []} = {}) {
-    super();
-    this.alignment = resolveBasicAlignment(alignment);
-    if (![ "loose", "expand", "passthrough" ].includes(fit)) {
-      throw new TypeError(`Unknown StackFit: ${fit}`);
-    }
-    if (overflow !== "visible" && overflow !== "clip") {
-      throw new TypeError(`Unknown Stack overflow: ${overflow}`);
-    }
-    this.fit = fit;
-    this.overflow = overflow;
-    this.children = children;
-  }
-  layout(context, incoming) {
-    const constraints = BoxConstraints.from(incoming);
-    const measured = new Map;
-    let width = constraints.minWidth;
-    let height = constraints.minHeight;
-    let hasNonPositioned = false;
-    const nonPositionedConstraints = this.fit === "loose" ? constraints.loosen() : this.fit === "expand" ? BoxConstraints.tight(constraints.biggest) : constraints;
-    for (const child of this.children) {
-      if (child instanceof Positioned) continue;
-      hasNonPositioned = true;
-      const childBox = child.layout(context, nonPositionedConstraints);
-      measured.set(child, childBox);
-      width = Math.max(width, childBox.width);
-      height = Math.max(height, childBox.height);
-    }
-    const size = hasNonPositioned ? constraints.constrain({
-      width,
-      height
-    }) : constraints.constrain({
-      width: constraints.hasBoundedWidth ? constraints.maxWidth : 0,
-      height: constraints.hasBoundedHeight ? constraints.maxHeight : 0
-    });
-    const placed = [];
-    for (const child of this.children) {
-      if (!(child instanceof Positioned)) {
-        const childBox = measured.get(child);
-        const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
-        placed.push({
-          box: childBox,
-          dx: offset.dx,
-          dy: offset.dy
-        });
-        continue;
-      }
-      let positionedConstraints = new BoxConstraints;
-      const tightWidth = child.left !== null && child.right !== null ? Math.max(0, size.width - child.left - child.right) : child.width;
-      const tightHeight = child.top !== null && child.bottom !== null ? Math.max(0, size.height - child.top - child.bottom) : child.height;
-      positionedConstraints = positionedConstraints.tighten({
-        width: tightWidth,
-        height: tightHeight
-      });
-      const childBox = child.layout(context, positionedConstraints);
-      const aligned = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
-      const dx = child.left !== null ? child.left : child.right !== null ? size.width - child.right - childBox.width : aligned.dx;
-      const dy = child.top !== null ? child.top : child.bottom !== null ? size.height - child.bottom - childBox.height : aligned.dy;
-      placed.push({
-        box: childBox,
-        dx,
-        dy
-      });
-    }
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: {
-        children: placed
-      }
-    };
-  }
-  paint(context, box) {
-    if (this.overflow === "clip") {
-      context.canvas.saveContext();
-      context.canvas.drawRect(box.x, context.canvas.pageHeight - box.y - box.height, box.width, box.height);
-      context.canvas.clipPath();
-    }
-    for (const child of box.data.children) {
-      child.box.widget.paint(context, {
-        ...child.box,
-        x: box.x + child.dx,
-        y: box.y + child.dy
-      });
-    }
-    if (this.overflow === "clip") context.canvas.restoreContext();
-  }
-}
-
 const svgColors = Object.freeze({
   indigo: "#4b0082",
   gold: "#ffd700",
@@ -8862,6 +8636,367 @@ class SvgImage extends Widget {
   }
 }
 
+class Placeholder extends Widget {
+  constructor({color = "#455a64", strokeWidth = 2, fallbackWidth = 400, fallbackHeight = 400} = {}) {
+    super();
+    this.color = normalizeColor(color);
+    this.strokeWidth = Number(strokeWidth);
+    this.fallbackWidth = Number(fallbackWidth);
+    this.fallbackHeight = Number(fallbackHeight);
+  }
+  layout(_context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const size = parent.constrain({
+      width: parent.hasBoundedWidth ? parent.maxWidth : this.fallbackWidth,
+      height: parent.hasBoundedHeight ? parent.maxHeight : this.fallbackHeight
+    });
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: null
+    };
+  }
+  paint(context, box) {
+    context.canvas.strokeRect(box.x, box.y, box.width, box.height, this.color, this.strokeWidth);
+    context.canvas.line(box.x, box.y, box.x + box.width, box.y + box.height, this.color, this.strokeWidth);
+    context.canvas.line(box.x, box.y + box.height, box.x + box.width, box.y, this.color, this.strokeWidth);
+  }
+}
+
+const PDF_LOGO_PATH = "M 2.424 26.712 L 2.424 26.712 C 2.076 26.712 1.742 26.599 1.457 26.386 C 0.416 25.605 0.276 24.736 0.342 24.144 C 0.524 22.516 2.537 20.812 6.327 19.076 C 7.831 15.78 9.262 11.719 10.115 8.326 C 9.117 6.154 8.147 3.336 8.854 1.683 C 9.102 1.104 9.411 0.66 9.988 0.468 C 10.216 0.392 10.792 0.296 11.004 0.296 C 11.508 0.296 11.951 0.945 12.265 1.345 C 12.56 1.721 13.229 2.518 11.892 8.147 C 13.24 10.931 15.15 13.767 16.98 15.709 C 18.291 15.472 19.419 15.351 20.338 15.351 C 21.904 15.351 22.853 15.716 23.24 16.468 C 23.56 17.09 23.429 17.817 22.85 18.628 C 22.293 19.407 21.525 19.819 20.63 19.819 C 19.414 19.819 17.998 19.051 16.419 17.534 C 13.582 18.127 10.269 19.185 7.591 20.356 C 6.755 22.13 5.954 23.559 5.208 24.607 C 4.183 26.042 3.299 26.712 2.424 26.712 Z M 5.086 21.586 C 2.949 22.787 2.078 23.774 2.015 24.33 C 2.005 24.422 1.978 24.664 2.446 25.022 C 2.595 24.975 3.465 24.578 5.086 21.586 Z M 18.723 17.144 C 19.538 17.771 19.737 18.088 20.27 18.088 C 20.504 18.088 21.171 18.078 21.48 17.647 C 21.629 17.438 21.687 17.304 21.71 17.232 C 21.587 17.167 21.424 17.035 20.535 17.035 C 20.03 17.036 19.395 17.058 18.723 17.144 Z M 11.253 10.562 C 10.538 13.036 9.594 15.707 8.579 18.126 C 10.669 17.315 12.941 16.607 15.075 16.106 C 13.725 14.538 12.376 12.58 11.253 10.562 Z M 10.646 2.1 C 10.548 2.133 9.316 3.857 10.742 5.316 C 11.691 3.201 10.689 2.086 10.646 2.1 Z";
+
+class PdfLogo extends StatelessWidget {
+  constructor({color = "#ff0000", fit = "contain"} = {}) {
+    super();
+    this.color = normalizeColor(color);
+    this.fit = fit;
+  }
+  build() {
+    return new SvgImage({
+      svg: `<svg viewBox="0 0 24 27"><path d="${PDF_LOGO_PATH}" fill="#000000"/></svg>`,
+      width: 24,
+      height: 27,
+      fit: this.fit,
+      colorFilter: this.color
+    });
+  }
+}
+
+const FLUTTER_LOGO = '<?xml version="1.0" encoding="UTF-8"?><svg version="1.1" viewBox="0 0 256 317"><defs><linearGradient id="a" x1="10%" x2="67%" y1="40%" y2="35%"><stop stop-color="#1a237e" stop-opacity=".4" offset="0"/><stop stop-color="#1a237e" stop-opacity="0" offset="1"/></linearGradient></defs><polygon points="157.67 0 0 157.67 48.801 206.47 255.27 0" fill="#54c5f8"/><polygon points="156.57 145.4 72.149 229.82 121.13 279.53 169.84 230.82 255.27 145.4" fill="#54c5f8"/><polygon points="121.13 279.53 158.21 316.61 255.27 316.61 169.84 230.82" fill="#01579b"/><polygon points="71.6 230.36 120.4 181.56 169.84 230.82 121.13 279.53" fill="#29b6f6"/><polygon points="121.13 279.53 189.44 253.83 167.85 233.75" fill="url(#a)" fill-opacity=".8"/></svg>';
+
+class FlutterLogo extends StatelessWidget {
+  constructor({fit = "contain"} = {}) {
+    super();
+    this.fit = fit;
+  }
+  build() {
+    return new SvgImage({
+      svg: FLUTTER_LOGO,
+      fit: this.fit
+    });
+  }
+}
+
+class SeededLoremRandom {
+  constructor(seed) {
+    this.state = seed >>> 0;
+  }
+  nextInt(maximum) {
+    if (!Number.isInteger(maximum) || maximum <= 0) {
+      throw new RangeError("LoremRandom.nextInt maximum must be a positive integer");
+    }
+    this.state = Math.imul(this.state, 1664525) + 1013904223 >>> 0;
+    return Math.floor(this.state / 4294967296 * maximum);
+  }
+}
+
+class LoremText {
+  constructor({random = null} = {}) {
+    this.random = random ?? new SeededLoremRandom(978);
+  }
+  word() {
+    return LoremText.words[this.random.nextInt(LoremText.words.length)];
+  }
+  sentence(length) {
+    const count = Math.max(0, Math.floor(length));
+    if (count === 0) return "";
+    const words = [];
+    for (let index = 0; index < count; index++) {
+      let word = this.word();
+      if (index + 1 < count && this.random.nextInt(10) === 0) word += ",";
+      words.push(word);
+    }
+    const value = `${words.join(" ")}.`;
+    return value[0].toUpperCase() + value.slice(1);
+  }
+  paragraph(length) {
+    const target = Math.max(0, Math.floor(length));
+    const sentences = [];
+    let remaining = target;
+    while (remaining > 0) {
+      const maximum = Math.min(10, remaining);
+      const minimum = Math.min(3, maximum);
+      const count = minimum + (maximum === minimum ? 0 : this.random.nextInt(maximum - minimum + 1));
+      sentences.push(this.sentence(count));
+      remaining -= count;
+    }
+    return sentences.join(" ");
+  }
+}
+
+LoremText.words = Object.freeze("ad adipiscing aliqua aliquip amet anim aute cillum commodo consectetur consequat culpa cupidatat deserunt do dolor dolore duis ea eiusmod elit enim esse est et eu ex excepteur exercitation fugiat id in incididunt ipsum irure labore laboris laborum lorem magna minim mollit nisi non nostrud nulla occaecat officia pariatur proident qui quis reprehenderit sed sint sit sunt tempor ullamco ut velit veniam voluptate".split(" "));
+
+class Lorem extends StatelessWidget {
+  constructor({length = 50, random = null, style = null, textAlign = "left", softWrap = true, textScaleFactor = 1, maxLines = null} = {}) {
+    super();
+    this.length = Math.max(0, Math.floor(length));
+    this.value = new LoremText({
+      random
+    }).paragraph(this.length);
+    this.style = style;
+    this.textAlign = textAlign;
+    this.softWrap = softWrap;
+    this.textScaleFactor = Number(textScaleFactor);
+    this.maxLines = maxLines;
+  }
+  build() {
+    return new Text(this.value, {
+      style: this.style ?? undefined,
+      textAlign: this.textAlign,
+      softWrap: this.softWrap,
+      textScaleFactor: this.textScaleFactor,
+      maxLines: this.maxLines ?? undefined
+    });
+  }
+}
+
+class Vector extends Widget {
+  constructor({width, height, draw}) {
+    super();
+    this.width = Number(width);
+    this.height = Number(height);
+    this.draw = draw;
+  }
+  layout(_context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const scale = Math.min(1, parent.maxWidth / this.width, parent.maxHeight / this.height);
+    const size = parent.constrain({
+      width: this.width * scale,
+      height: this.height * scale
+    });
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        scale
+      }
+    };
+  }
+  paint(context, box) {
+    const scale = box.data.scale;
+    const api = {
+      rect: ({x, y, width, height, fill = null, stroke = null, lineWidth = 1}) => {
+        if (fill) context.canvas.fillRect(box.x + x * scale, box.y + y * scale, width * scale, height * scale, fill);
+        if (stroke) context.canvas.strokeRect(box.x + x * scale, box.y + y * scale, width * scale, height * scale, stroke, lineWidth * scale);
+      },
+      line: ({x1, y1, x2, y2, color = "#000000", lineWidth = 1}) => {
+        context.canvas.line(box.x + x1 * scale, box.y + y1 * scale, box.x + x2 * scale, box.y + y2 * scale, color, lineWidth * scale);
+      },
+      circle: ({cx, cy, radius, fill = null, stroke = null, lineWidth = 1}) => {
+        context.canvas.circle(box.x + cx * scale, box.y + cy * scale, radius * scale, {
+          fill,
+          stroke,
+          lineWidth: lineWidth * scale
+        });
+      },
+      text: ({value, x, y, fontSize = 12, color = "#000000", font}) => {
+        context.canvas.text(String(value), box.x + x * scale, box.y + y * scale, {
+          fontSize: fontSize * scale,
+          color: normalizeColor(color),
+          font: font ?? context.document.font
+        });
+      }
+    };
+    this.draw(api);
+  }
+}
+
+class Positioned extends Widget {
+  constructor({left = null, top = null, right = null, bottom = null, width = null, height = null, child}) {
+    super();
+    this.left = left === null ? null : Number(left);
+    this.top = top === null ? null : Number(top);
+    this.right = right === null ? null : Number(right);
+    this.bottom = bottom === null ? null : Number(bottom);
+    this.width = width === null ? null : Math.max(0, Number(width));
+    this.height = height === null ? null : Math.max(0, Number(height));
+    this.child = child;
+  }
+  static fill({left = 0, top = 0, right = 0, bottom = 0, child}) {
+    return new Positioned({
+      left,
+      top,
+      right,
+      bottom,
+      child
+    });
+  }
+  static directional({textDirection, start = null, top = null, end = null, bottom = null, width = null, height = null, child}) {
+    return new Positioned({
+      left: textDirection === "rtl" ? end : start,
+      right: textDirection === "rtl" ? start : end,
+      top,
+      bottom,
+      width,
+      height,
+      child
+    });
+  }
+  layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints).tighten({
+      width: this.width,
+      height: this.height
+    });
+    const childBox = this.child.layout(context, parent);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class PositionedDirectional extends Positioned {
+  constructor({start = null, top = null, end = null, bottom = null, width = null, height = null, child, textDirection = "ltr"}) {
+    super({
+      left: textDirection === "rtl" ? end : start,
+      right: textDirection === "rtl" ? start : end,
+      top,
+      bottom,
+      width,
+      height,
+      child
+    });
+    this.start = start;
+    this.end = end;
+    this.textDirection = textDirection;
+  }
+  static fill({start = 0, top = 0, end = 0, bottom = 0, child, textDirection = "ltr"}) {
+    return new PositionedDirectional({
+      start,
+      top,
+      end,
+      bottom,
+      child,
+      textDirection
+    });
+  }
+}
+
+class Stack extends Widget {
+  constructor({alignment = Alignment.topLeft, fit = "loose", overflow = "clip", children = []} = {}) {
+    super();
+    this.alignment = resolveBasicAlignment(alignment);
+    if (![ "loose", "expand", "passthrough" ].includes(fit)) {
+      throw new TypeError(`Unknown StackFit: ${fit}`);
+    }
+    if (overflow !== "visible" && overflow !== "clip") {
+      throw new TypeError(`Unknown Stack overflow: ${overflow}`);
+    }
+    this.fit = fit;
+    this.overflow = overflow;
+    this.children = children;
+  }
+  layout(context, incoming) {
+    const constraints = BoxConstraints.from(incoming);
+    const measured = new Map;
+    let width = constraints.minWidth;
+    let height = constraints.minHeight;
+    let hasNonPositioned = false;
+    const nonPositionedConstraints = this.fit === "loose" ? constraints.loosen() : this.fit === "expand" ? BoxConstraints.tight(constraints.biggest) : constraints;
+    for (const child of this.children) {
+      if (child instanceof Positioned) continue;
+      hasNonPositioned = true;
+      const childBox = child.layout(context, nonPositionedConstraints);
+      measured.set(child, childBox);
+      width = Math.max(width, childBox.width);
+      height = Math.max(height, childBox.height);
+    }
+    const size = hasNonPositioned ? constraints.constrain({
+      width,
+      height
+    }) : constraints.constrain({
+      width: constraints.hasBoundedWidth ? constraints.maxWidth : 0,
+      height: constraints.hasBoundedHeight ? constraints.maxHeight : 0
+    });
+    const placed = [];
+    for (const child of this.children) {
+      if (!(child instanceof Positioned)) {
+        const childBox = measured.get(child);
+        const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+        placed.push({
+          box: childBox,
+          dx: offset.dx,
+          dy: offset.dy
+        });
+        continue;
+      }
+      let positionedConstraints = new BoxConstraints;
+      const tightWidth = child.left !== null && child.right !== null ? Math.max(0, size.width - child.left - child.right) : child.width;
+      const tightHeight = child.top !== null && child.bottom !== null ? Math.max(0, size.height - child.top - child.bottom) : child.height;
+      positionedConstraints = positionedConstraints.tighten({
+        width: tightWidth,
+        height: tightHeight
+      });
+      const childBox = child.layout(context, positionedConstraints);
+      const aligned = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+      const dx = child.left !== null ? child.left : child.right !== null ? size.width - child.right - childBox.width : aligned.dx;
+      const dy = child.top !== null ? child.top : child.bottom !== null ? size.height - child.bottom - childBox.height : aligned.dy;
+      placed.push({
+        box: childBox,
+        dx,
+        dy
+      });
+    }
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        children: placed
+      }
+    };
+  }
+  paint(context, box) {
+    if (this.overflow === "clip") {
+      context.canvas.saveContext();
+      context.canvas.drawRect(box.x, context.canvas.pageHeight - box.y - box.height, box.width, box.height);
+      context.canvas.clipPath();
+    }
+    for (const child of box.data.children) {
+      child.box.widget.paint(context, {
+        ...child.box,
+        x: box.x + child.dx,
+        y: box.y + child.dy
+      });
+    }
+    if (this.overflow === "clip") context.canvas.restoreContext();
+  }
+}
+
 function side(input) {
   if (input === null || input === undefined) {
     return null;
@@ -9645,6 +9780,11 @@ const publicApi = Object.freeze({
   Paragraph,
   Bullet,
   TableOfContent,
+  Placeholder,
+  PdfLogo,
+  FlutterLogo,
+  LoremText,
+  Lorem,
   Column,
   Row,
   Flex,
@@ -9734,4 +9874,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, Center, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, Font, FractionColumnWidth, FullPage, Gradient, GridView, Header, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Positioned, PositionedDirectional, RadialGradient, Radius, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, Center, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridView, Header, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, Lorem, LoremText, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Placeholder, Positioned, PositionedDirectional, RadialGradient, Radius, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

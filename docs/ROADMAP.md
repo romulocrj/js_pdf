@@ -92,6 +92,12 @@ requests one deterministic collection replay. Five tests and a retained V8
 proof cover the phase; document's blockers fell from six to two and the global
 missing-API total fell 37 → 33.
 
+**Phase 3.9 — placeholders — landed 2026-08-05.** `Placeholder`, `PdfLogo`,
+`FlutterLogo`, deterministic `LoremText` and the stable `Lorem` widget port the
+complete upstream file. Six tests and a retained V8 proof cover the phase;
+`certificate.pdf` now generates 126,786 bytes in both runtimes, the gate reaches
+3/8 examples and the missing-API total falls 33 → 28.
+
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
 option on `Page` and `MultiPage` as well as on `PageTheme`, and every physical
@@ -161,11 +167,11 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 3.9 — placeholders.** Port `PdfLogo`, `Lorem` and `LoremText`; this
-> makes `certificate` the third upstream example to generate end to end.
+> **Phase 3.10 — clipping widgets.** Port `ClipRect`, `ClipOval` and `ClipRRect`
+> on the existing phase-2.1 path/clip operators.
 
-Certificate has only `LoremText` left, while document now waits only for
-`PdfLogo` and `UrlLink`.
+Certificate now generates. Resume is the only example still waiting on phase 3,
+through `ClipOval`; document now waits only for `UrlLink`.
 
 ---
 
@@ -988,12 +994,27 @@ Node and bare V8.
 The original destination collision for repeated/child-only headers is recorded
 in [ORIGINAL-BUG.md](../ORIGINAL-BUG.md).
 
-### 3.9 Placeholders ⇒ `certificate`
+### 3.9 Placeholders ⇒ `certificate` ✅ *(landed 2026-08-05)*
 
 - **Ports:** `widgets/placeholders.dart`
 - `PdfLogo`, `Lorem`, `LoremText`. Small, but four examples use them as filler.
 - **Example gate:** ⇒ **`certificate` generates end to end here.** Also advances
   `document`, `invoice`, `resume`.
+
+The whole upstream file is public: `Placeholder` paints a finite crossed box,
+`PdfLogo` draws the original Bézier mark through the SVG/path pipeline,
+`FlutterLogo` retains its vector gradients, and `LoremText` supplies seeded,
+host-independent filler. `Lorem` generates its value once in the constructor so
+repeated layout and the table-of-content replay cannot mutate page geometry.
+
+Six tests cover API surfaces, exact word counts, access to the complete word
+dictionary, repeatable layout, logo operators and placeholder bounds. The four
+example gates lose five API occurrences, reducing the total 33 → 28.
+`certificate.pdf` generates 126,786 bytes in Node and bare V8;
+`examples/placeholders-phase-3.9.mjs` is the retained 9,206-byte proof.
+
+The original off-by-one word selection and overlong paragraph defects are
+recorded in [ORIGINAL-BUG.md](../ORIGINAL-BUG.md).
 
 ### 3.10 Clipping widgets
 

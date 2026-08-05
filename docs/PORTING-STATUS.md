@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 81 `.ts` files, ~17,600 lines (TypeScript)
+**Ported:** 82 `.ts` files, ~17,900 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -24,14 +24,14 @@ table. Run `npm run examples`; current state, from
 |---|---|---:|---|
 | `hello-world` | ✅ generated (736 bytes) | 0 | — |
 | `calendar` | ✅ generated (21,030 bytes) | 0 | 3.6 |
-| `certificate` | failed | 1 | 3.9 |
+| `certificate` | ✅ generated (126,786 bytes) | 0 | 3.9 |
 | `report` | failed | 9 | 5.1 |
-| `invoice` | failed | 4 | 5.2 |
-| `document` | failed | 2 | 5.3 |
+| `invoice` | failed | 2 | 5.2 |
+| `document` | failed | 1 | 5.3 |
 | `server` | failed | 7 | 5.3 |
-| `resume` | failed | 10 | 5.5 |
+| `resume` | failed | 9 | 5.5 |
 
-**2 of 8**, with the missing-API total down from 124 to 33 — phase 1.4 cleared
+**3 of 8**, with the missing-API total down from 124 to 28 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
 from every one of the seven, phase 2.7 cleared `SvgImage` from six, and phase
 3.1 cleared `TableHelper` from four. Phase 3.3 then cleared the composition
@@ -40,7 +40,8 @@ primitives `Transform`, `Opacity`, `FittedBox`, `AspectRatio`, `FullPage`,
 `Expanded`/`Flexible` from five examples, phase 3.5 cleared decoration, borders
 and radii from six, phase 3.6 cleared stack/grid/partitions from four and made
 the calendar generate, phase 3.7 cleared rich text from four, and phase 3.8
-cleared all four content widgets from document. See
+cleared all four content widgets from document. Phase 3.9 then supplied the
+placeholders used by four examples and made certificate generate. See
 [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which phase clears
 each one.
 
@@ -178,7 +179,7 @@ both, and will grow the shape factories in 2.5.
 | `widgets/annotations.dart`, `forms.dart` | 1244 | — | — `UrlLink`, `AnnotationUrl` — **phase 5.3**; forms 5.6 |
 | `widgets/barcode.dart` | 298 | — | — `Barcode`, `BarcodeWidget` — **phase 5.2** |
 | `widgets/content.dart` | 360 | `src/widgets/content.ts` | partial — `Header`, `Paragraph`, `Bullet`, `TableOfContent`, named destinations and conditional two-pass TOC; no `Watermark` or `Footer` |
-| `widgets/placeholders.dart` | 187 | — | — `PdfLogo`, `Lorem`, `LoremText` — **phase 3.9** |
+| `widgets/placeholders.dart` | 187 | `src/widgets/placeholders.ts` | done — `Placeholder`, vector `PdfLogo`, SVG `FlutterLogo`, deterministic `LoremText` and stable `Lorem` widget |
 | `widgets/icon.dart` | 146 | — | — `Icon`, `IconData` — **phase 5.4** |
 | `widgets/progress.dart` | 202 | — | — `CircularProgressIndicator` — **phase 5.5** |
 | `widgets/grid_paper.dart` | 338 | — | — no example depends on it |
@@ -204,5 +205,6 @@ Type0/CIDFontType2 composite with `/Identity-H`, and selected through `Font`,
 `/ToUnicode` CMap. The public SVG pipeline now reaches PDF shading patterns.
 
 What now limits the port is layout, not text or vector art: **the widget set
-(phase 3)** is what the six remaining examples are waiting on. See
+(phase 3)** still limits resume through clipping; the other four remaining
+examples now wait on their phase-5 document features. See
 [ROADMAP.md](ROADMAP.md).

@@ -76,3 +76,22 @@ mesmo hash nulo, fazendo uma entrada sobrescrever a outra em `PdfNames`.
 **Correção no port:** cada cabeçalho pintado recebe uma âncora sequencial única
 na ordem do documento (`outline-1`, `outline-2`, ...). O replay usado pelo índice
 reutiliza essas âncoras sem criar duplicatas.
+
+## A última palavra lorem nunca é escolhida (`placeholders.dart`)
+
+**Como reproduzir:** force o gerador a devolver o maior índice permitido em
+`LoremText.word()`. O original chama `nextInt(words.length - 1)`, cujo limite é
+exclusivo, portanto a última entrada (`voluptate`) nunca pode aparecer.
+
+**Correção no port:** o limite é o comprimento completo da lista; um teste com
+gerador controlado confirma que `voluptate` é selecionável.
+
+## Parágrafos lorem ultrapassam o tamanho solicitado (`placeholders.dart`)
+
+**Como reproduzir:** chame `LoremText().paragraph(15)`. A expressão original
+aplica `max(10, min(3, ...))`, que resulta sempre em pelo menos 10, e ainda limita
+pelo comprimento total em vez das palavras restantes; duas sentenças podem
+produzir 20 palavras para uma solicitação de 15.
+
+**Correção no port:** cada sentença recebe de 3 a 10 palavras, limitada pelo
+total restante. O laço termina com exatamente o número solicitado.

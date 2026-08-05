@@ -58,6 +58,7 @@ import { Partition, Partitions } from './widgets/partitions.ts';
 import { Page } from './widgets/page.ts';
 import type { Section } from './widgets/page.ts';
 import { PageTheme } from './widgets/page_theme.ts';
+import { FlutterLogo, Lorem, LoremText, PdfLogo, Placeholder } from './widgets/placeholders.ts';
 import { Vector } from './widgets/shape.ts';
 import { Positioned, PositionedDirectional, Stack } from './widgets/stack.ts';
 import { SvgImage } from './widgets/svg.ts';
@@ -112,6 +113,7 @@ export {
   Flex,
   Flexible,
   Font,
+  FlutterLogo,
   FractionColumnWidth,
   FullPage,
   Gradient,
@@ -121,6 +123,8 @@ export {
   LayoutBuilder,
   LimitedBox,
   LinearGradient,
+  Lorem,
+  LoremText,
   MultiPage,
   Opacity,
   OverflowBox,
@@ -131,12 +135,14 @@ export {
   PageTheme,
   Partition,
   Partitions,
+  PdfLogo,
   PdfTtfFont,
   PdfType1Font,
   RadialGradient,
   Radius,
   Positioned,
   PositionedDirectional,
+  Placeholder,
   Row,
   SizedBox,
   Spacer,
@@ -405,6 +411,14 @@ export type {
 } from './widgets/svg.ts';
 export type { PageOptions, Section } from './widgets/page.ts';
 export type { MultiPageOptions } from './widgets/multi_page.ts';
+export type {
+  FlutterLogoOptions,
+  LoremOptions,
+  LoremRandom,
+  LoremTextOptions,
+  PdfLogoOptions,
+  PlaceholderOptions
+} from './widgets/placeholders.ts';
 export type { DocumentOptions } from './widgets/document.ts';
 export type { DocumentOutlineEntry } from './widgets/document.ts';
 export type { PdfPageMode, SerializedOutline } from './pdf/document.ts';
@@ -424,6 +438,11 @@ export interface PublicApi {
   readonly Paragraph: typeof Paragraph;
   readonly Bullet: typeof Bullet;
   readonly TableOfContent: typeof TableOfContent;
+  readonly Placeholder: typeof Placeholder;
+  readonly PdfLogo: typeof PdfLogo;
+  readonly FlutterLogo: typeof FlutterLogo;
+  readonly LoremText: typeof LoremText;
+  readonly Lorem: typeof Lorem;
   readonly Column: typeof Column;
   readonly Row: typeof Row;
   readonly Flex: typeof Flex;
@@ -508,6 +527,11 @@ const publicApi: PublicApi = Object.freeze({
   Paragraph,
   Bullet,
   TableOfContent,
+  Placeholder,
+  PdfLogo,
+  FlutterLogo,
+  LoremText,
+  Lorem,
   Column,
   Row,
   Flex,

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T21:21:48.511Z",
+  "generatedAt": "2026-08-05T21:24:59.326Z",
   "results": [
     {
       "name": "hello-world",
@@ -13,18 +13,18 @@
     },
     {
       "name": "certificate",
-      "status": "failed",
-      "error": "certificate requires unported js_pdf APIs: LoremText"
+      "status": "generated",
+      "bytes": 126786
     },
     {
       "name": "document",
       "status": "failed",
-      "error": "document requires unported js_pdf APIs: PdfLogo, UrlLink"
+      "error": "document requires unported js_pdf APIs: UrlLink"
     },
     {
       "name": "invoice",
       "status": "failed",
-      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, LoremText, PdfLogo"
+      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget"
     },
     {
       "name": "report",
@@ -34,7 +34,7 @@
     {
       "name": "resume",
       "status": "failed",
-      "error": "resume requires unported js_pdf APIs: Barcode, BarcodeWidget, CircularProgressIndicator, ClipOval, Icon, IconData, Image, Lorem, MemoryImage, UrlLink"
+      "error": "resume requires unported js_pdf APIs: Barcode, BarcodeWidget, CircularProgressIndicator, ClipOval, Icon, IconData, Image, MemoryImage, UrlLink"
     },
     {
       "name": "server",
