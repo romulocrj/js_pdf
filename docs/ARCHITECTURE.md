@@ -141,7 +141,8 @@ safety) and that JavaScript has to check by hand.
   declaration a style names.
 - **`flex.ts`** — `Column`, `Row`, `Spacer`.
 - **`container.ts`** — `Container`: padding, margin, fill, border.
-- **`basic.ts`** — `Padding`, `Align`, `Center`, `SizedBox`, `Divider`.
+- **`basic.ts`** — composition, fitting, transforms, opacity, builders,
+  custom painting and basic sizing widgets.
 - **`shape.ts`** — `Vector`, the imperative drawing surface.
 - **`table.ts` / `table_helper.ts`** — shared column tracks, table painting and
   the scalar-array convenience builder; tables span pages through immutable

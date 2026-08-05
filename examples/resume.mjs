@@ -15,11 +15,10 @@ const separatorWidth = 120;
 export function generateResume(format = pw.PageFormat.A4, _data = customData, resources = {}) {
   requireFeatures(pw, 'resume', [
     'Barcode', 'BarcodeWidget', 'Border', 'BorderRadius', 'BoxDecoration',
-    'CircularProgressIndicator', 'ClipOval', 'EdgeInsets', 'Font', 'FullPage', 'Icon',
+    'CircularProgressIndicator', 'ClipOval', 'EdgeInsets', 'Font', 'Icon',
     'IconData', 'Image', 'Lorem', 'MemoryImage', 'PageTheme', 'Padding',
     'Partition', 'Partitions', 'Positioned', 'SizedBox', 'Stack',
-    'StatelessWidget', 'SvgImage', 'TextStyle', 'Theme', 'ThemeData',
-    'Transform', 'UrlLink'
+    'StatelessWidget', 'SvgImage', 'TextStyle', 'Theme', 'ThemeData', 'UrlLink'
   ]);
 
   class UrlText extends pw.StatelessWidget {

@@ -1419,6 +1419,108 @@ function colorOperator(color, stroke = false) {
   return `${formatNumber(r)} ${formatNumber(g)} ${formatNumber(b)} ${stroke ? "RG" : "rg"}`;
 }
 
+const BLEND_MODE_NAMES = Object.freeze({
+  normal: "/Normal",
+  multiply: "/Multiply",
+  screen: "/Screen",
+  overlay: "/Overlay",
+  darken: "/Darken",
+  lighten: "/Lighten",
+  colorDodge: "/ColorDodge",
+  colorBurn: "/ColorBurn",
+  hardLight: "/HardLight",
+  softLight: "/SoftLight",
+  difference: "/Difference",
+  exclusion: "/Exclusion",
+  hue: "/Hue",
+  saturation: "/Saturation",
+  color: "/Color",
+  luminosity: "/Luminosity"
+});
+
+class PdfGraphicState {
+  constructor({opacity = null, fillOpacity = null, strokeOpacity = null, blendMode = null} = {}) {
+    this.fillOpacity = fillOpacity ?? opacity;
+    this.strokeOpacity = strokeOpacity ?? opacity;
+    this.blendMode = blendMode;
+  }
+  get isEmpty() {
+    return this.fillOpacity === null && this.strokeOpacity === null && this.blendMode === null;
+  }
+  get key() {
+    return `${this.fillOpacity}|${this.strokeOpacity}|${this.blendMode}`;
+  }
+  output() {
+    const params = new PdfDict;
+    if (this.strokeOpacity !== null) {
+      params.set("/CA", new PdfNum(this.strokeOpacity));
+    }
+    if (this.fillOpacity !== null) {
+      params.set("/ca", new PdfNum(this.fillOpacity));
+    }
+    if (this.blendMode !== null) {
+      params.set("/BM", new PdfName(BLEND_MODE_NAMES[this.blendMode]));
+    }
+    return params;
+  }
+}
+
+const identityMatrix = Object.freeze([ 1, 0, 0, 1, 0, 0 ]);
+
+function multiplyMatrix(first, second) {
+  const [a1, b1, c1, d1, e1, f1] = first;
+  const [a2, b2, c2, d2, e2, f2] = second;
+  return [ a1 * a2 + c1 * b2, b1 * a2 + d1 * b2, a1 * c2 + c1 * d2, b1 * c2 + d1 * d2, a1 * e2 + c1 * f2 + e1, b1 * e2 + d1 * f2 + f1 ];
+}
+
+function composeMatrices(matrices) {
+  let result = identityMatrix;
+  for (const matrix of matrices) {
+    result = multiplyMatrix(result, matrix);
+  }
+  return result;
+}
+
+function translationMatrix(tx, ty) {
+  return [ 1, 0, 0, 1, tx, ty ];
+}
+
+function scaleMatrix(sx, sy = sx) {
+  return [ sx, 0, 0, sy, 0, 0 ];
+}
+
+function rotationMatrix(radians) {
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return [ cos, sin, -sin, cos, 0, 0 ];
+}
+
+function skewMatrix(alpha, beta) {
+  return [ 1, Math.tan(beta), Math.tan(alpha), 1, 0, 0 ];
+}
+
+function transformPoint(matrix, x, y) {
+  const [a, b, c, d, e, f] = matrix;
+  return {
+    x: a * x + c * y + e,
+    y: b * x + d * y + f
+  };
+}
+
+function invertMatrix(matrix) {
+  const [a, b, c, d, e, f] = matrix;
+  const determinant = a * d - b * c;
+  if (determinant === 0 || !Number.isFinite(determinant)) {
+    return null;
+  }
+  return [ d / determinant, -b / determinant, -c / determinant, a / determinant, (c * f - d * e) / determinant, (b * e - a * f) / determinant ];
+}
+
+function flipMatrix(matrix, height) {
+  const flip = [ 1, 0, 0, -1, 0, height ];
+  return multiplyMatrix(flip, multiplyMatrix(matrix, flip));
+}
+
 function normalizeInsets(value = 0) {
   if (typeof value === "number") {
     return {
@@ -1724,6 +1826,534 @@ class Divider extends Widget {
     const width = Math.max(0, box.width - this.indent - this.endIndent);
     if (width === 0 || this.thickness === 0) return;
     context.canvas.fillRect(box.x + this.indent, box.y + (box.height - this.thickness) / 2, width, this.thickness, this.color);
+  }
+}
+
+function resolveBasicAlignment(value) {
+  if (typeof value !== "string") return value;
+  const result = Alignment[value];
+  if (result === undefined) throw new TypeError(`Unknown alignment: ${value}`);
+  return result;
+}
+
+function finiteMatrix(value) {
+  const values = value.map((entry, index) => assertFiniteNumber(Number(entry), `transform[${index}]`));
+  if (values.length !== 6) throw new TypeError("transform must contain six numbers");
+  return [ values[0], values[1], values[2], values[3], values[4], values[5] ];
+}
+
+function pointCoordinates(value) {
+  if (value === null) return {
+    x: 0,
+    y: 0
+  };
+  if ("dx" in value) return {
+    x: value.dx,
+    y: value.dy
+  };
+  return value;
+}
+
+class Transform extends Widget {
+  constructor({transform = null, rotate = null, rotateBox = null, translate = null, scale = null, origin = null, alignment = undefined, adjustLayout = false, unconstrained = false, child = null} = {}) {
+    super();
+    const transformCount = [ transform, rotate, rotateBox, translate, scale ].filter(value => value !== null).length;
+    if (transformCount > 1) {
+      throw new TypeError("Transform accepts one transform, rotate, rotateBox, translate or scale");
+    }
+    if (transform !== null) {
+      this.transform = finiteMatrix(transform);
+    } else if (rotateBox !== null) {
+      this.transform = rotationMatrix(-assertFiniteNumber(Number(rotateBox), "rotateBox"));
+    } else if (rotate !== null) {
+      this.transform = rotationMatrix(-assertFiniteNumber(Number(rotate), "rotate"));
+    } else if (translate !== null) {
+      const offset = pointCoordinates(translate);
+      this.transform = translationMatrix(offset.x, offset.y);
+    } else if (scale !== null) {
+      this.transform = scaleMatrix(assertFiniteNumber(Number(scale), "scale"));
+    } else {
+      this.transform = identityMatrix;
+    }
+    this.origin = pointCoordinates(origin);
+    const defaultAlignment = rotate !== null || scale !== null ? Alignment.center : null;
+    this.alignment = alignment === undefined ? defaultAlignment : alignment === null ? null : resolveBasicAlignment(alignment);
+    this.adjustLayout = rotateBox !== null ? true : Boolean(adjustLayout);
+    this.unconstrained = Boolean(unconstrained);
+    this.child = child;
+  }
+  layout(context, constraints) {
+    if (this.child === null) {
+      return {
+        widget: this,
+        width: 0,
+        height: 0,
+        data: {
+          childBox: null,
+          layoutDx: 0,
+          layoutDy: 0
+        }
+      };
+    }
+    const childBox = this.child.layout(context, constraints);
+    if (!this.adjustLayout) {
+      return {
+        widget: this,
+        width: childBox.width,
+        height: childBox.height,
+        data: {
+          childBox,
+          layoutDx: 0,
+          layoutDy: 0
+        }
+      };
+    }
+    const corners = [ transformPoint(this.transform, 0, 0), transformPoint(this.transform, childBox.width, 0), transformPoint(this.transform, childBox.width, childBox.height), transformPoint(this.transform, 0, childBox.height) ];
+    const minimumX = Math.min(...corners.map(point => point.x));
+    const maximumX = Math.max(...corners.map(point => point.x));
+    const minimumY = Math.min(...corners.map(point => point.y));
+    const maximumY = Math.max(...corners.map(point => point.y));
+    return {
+      widget: this,
+      width: maximumX - minimumX,
+      height: maximumY - minimumY,
+      data: {
+        childBox,
+        layoutDx: -minimumX,
+        layoutDy: -minimumY
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox, layoutDx, layoutDy} = box.data;
+    if (childBox === null) return;
+    let widgetMatrix;
+    if (this.adjustLayout) {
+      widgetMatrix = multiplyMatrix(translationMatrix(box.x + layoutDx, box.y + layoutDy), multiplyMatrix(this.transform, translationMatrix(-box.x, -box.y)));
+    } else {
+      const alignedX = this.alignment === null ? 0 : (this.alignment.x + 1) * box.width / 2;
+      const alignedY = this.alignment === null ? 0 : (1 - this.alignment.y) * box.height / 2;
+      const anchorX = box.x + alignedX + this.origin.x;
+      const anchorY = box.y + alignedY + this.origin.y;
+      widgetMatrix = multiplyMatrix(translationMatrix(anchorX, anchorY), multiplyMatrix(this.transform, translationMatrix(-anchorX, -anchorY)));
+    }
+    context.canvas.saveContext();
+    context.canvas.setTransform(flipMatrix(widgetMatrix, context.canvas.pageHeight));
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+    context.canvas.restoreContext();
+  }
+}
+
+class Opacity extends Widget {
+  constructor({opacity, child = null}) {
+    super();
+    const value = assertFiniteNumber(Number(opacity), "opacity");
+    if (value < 0 || value > 1) throw new RangeError("opacity must be between 0 and 1");
+    this.opacity = value;
+    this.child = child;
+  }
+  layout(context, constraints) {
+    const childBox = this.child?.layout(context, constraints) ?? null;
+    return {
+      widget: this,
+      width: childBox?.width ?? 0,
+      height: childBox?.height ?? 0,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    if (childBox === null || this.opacity === 0 && childBox.width === 0 && childBox.height === 0) return;
+    context.canvas.saveContext();
+    context.canvas.setGraphicState(new PdfGraphicState({
+      opacity: this.opacity
+    }));
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+    context.canvas.restoreContext();
+  }
+}
+
+function applyFit(fit, input, output) {
+  const {width: iw, height: ih} = input;
+  const {width: ow, height: oh} = output;
+  if (iw <= 0 || ih <= 0 || ow <= 0 || oh <= 0) {
+    const zero = {
+      width: 0,
+      height: 0
+    };
+    return {
+      source: zero,
+      destination: zero
+    };
+  }
+  if (fit === "fill") return {
+    source: input,
+    destination: output
+  };
+  if (fit === "contain" || fit === "scaleDown") {
+    const factor = Math.min(fit === "scaleDown" ? 1 : Number.POSITIVE_INFINITY, ow / iw, oh / ih);
+    return {
+      source: input,
+      destination: {
+        width: iw * factor,
+        height: ih * factor
+      }
+    };
+  }
+  if (fit === "cover") {
+    const factor = Math.max(ow / iw, oh / ih);
+    return {
+      source: {
+        width: ow / factor,
+        height: oh / factor
+      },
+      destination: output
+    };
+  }
+  if (fit === "fitWidth") {
+    const factor = ow / iw;
+    const height = ih * factor;
+    return height > oh ? {
+      source: {
+        width: iw,
+        height: oh / factor
+      },
+      destination: output
+    } : {
+      source: input,
+      destination: {
+        width: ow,
+        height
+      }
+    };
+  }
+  if (fit === "fitHeight") {
+    const factor = oh / ih;
+    const width = iw * factor;
+    return width > ow ? {
+      source: {
+        width: ow / factor,
+        height: ih
+      },
+      destination: output
+    } : {
+      source: input,
+      destination: {
+        width,
+        height: oh
+      }
+    };
+  }
+  if (fit === "none") {
+    const value = {
+      width: Math.min(iw, ow),
+      height: Math.min(ih, oh)
+    };
+    return {
+      source: value,
+      destination: value
+    };
+  }
+  throw new TypeError(`Unknown BoxFit: ${fit}`);
+}
+
+class FittedBox extends Widget {
+  constructor({fit = "contain", alignment = "center", child = null} = {}) {
+    super();
+    applyFit(fit, {
+      width: 1,
+      height: 1
+    }, {
+      width: 1,
+      height: 1
+    });
+    this.fit = fit;
+    this.alignment = resolveBasicAlignment(alignment);
+    this.child = child;
+  }
+  layout(context, constraints) {
+    if (this.child === null) {
+      return {
+        widget: this,
+        width: 0,
+        height: 0,
+        data: {
+          childBox: null
+        }
+      };
+    }
+    const childBox = this.child.layout(context, constraints);
+    const factor = childBox.width <= 0 || childBox.height <= 0 ? 0 : Math.min(1, constraints.maxWidth / childBox.width, constraints.maxHeight / childBox.height);
+    return {
+      widget: this,
+      width: childBox.width * factor,
+      height: childBox.height * factor,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    if (childBox === null || childBox.width <= 0 || childBox.height <= 0) return;
+    const fitted = applyFit(this.fit, {
+      width: childBox.width,
+      height: childBox.height
+    }, {
+      width: box.width,
+      height: box.height
+    });
+    if (fitted.source.width <= 0 || fitted.source.height <= 0) return;
+    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, childBox.width, childBox.height);
+    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, box.width, box.height);
+    const scaleX = fitted.destination.width / fitted.source.width;
+    const scaleY = fitted.destination.height / fitted.source.height;
+    const widgetMatrix = multiplyMatrix(translationMatrix(box.x + destinationOffset.dx, box.y + destinationOffset.dy), multiplyMatrix(scaleMatrix(scaleX, scaleY), translationMatrix(-box.x - sourceOffset.dx, -box.y - sourceOffset.dy)));
+    context.canvas.saveContext();
+    context.canvas.drawRect(box.x, context.canvas.pageHeight - box.y - box.height, box.width, box.height);
+    context.canvas.clipPath();
+    context.canvas.setTransform(flipMatrix(widgetMatrix, context.canvas.pageHeight));
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+    context.canvas.restoreContext();
+  }
+}
+
+class AspectRatio extends Widget {
+  constructor({aspectRatio, child = null}) {
+    super();
+    const value = assertFiniteNumber(Number(aspectRatio), "aspectRatio");
+    if (value <= 0) throw new RangeError("aspectRatio must be greater than zero");
+    this.aspectRatio = value;
+    this.child = child;
+  }
+  layout(context, constraints) {
+    let width = constraints.maxWidth;
+    let height = width / this.aspectRatio;
+    if (height > constraints.maxHeight) {
+      height = constraints.maxHeight;
+      width = height * this.aspectRatio;
+    }
+    const childBox = this.child?.layout(context, {
+      maxWidth: width,
+      maxHeight: height
+    }) ?? null;
+    return {
+      widget: this,
+      width,
+      height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox?.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class Builder extends StatelessWidget {
+  constructor({builder}) {
+    super();
+    if (typeof builder !== "function") throw new TypeError("Builder.builder must be a function");
+    this.builder = builder;
+  }
+  build(context) {
+    return this.builder(context);
+  }
+}
+
+class LayoutBuilder extends Widget {
+  constructor({builder}) {
+    super();
+    if (typeof builder !== "function") throw new TypeError("LayoutBuilder.builder must be a function");
+    this.builder = builder;
+  }
+  layout(context, constraints) {
+    const childBox = this.builder(context, constraints).layout(context, constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class CustomPaint extends Widget {
+  constructor({painter = null, foregroundPainter = null, size = {
+    x: 0,
+    y: 0
+  }, child = null} = {}) {
+    super();
+    this.painter = painter;
+    this.foregroundPainter = foregroundPainter;
+    this.size = size;
+    this.child = child;
+  }
+  layout(context, constraints) {
+    const childBox = this.child?.layout(context, constraints) ?? null;
+    return {
+      widget: this,
+      width: childBox?.width ?? Math.min(constraints.maxWidth, Math.max(0, this.size.x)),
+      height: childBox?.height ?? Math.min(constraints.maxHeight, Math.max(0, this.size.y)),
+      data: {
+        childBox
+      }
+    };
+  }
+  paintWithLocalCanvas(context, box, painter) {
+    context.canvas.saveContext();
+    context.canvas.setTransform([ 1, 0, 0, 1, box.x, context.canvas.pageHeight - box.y - box.height ]);
+    painter(context.canvas, {
+      x: box.width,
+      y: box.height
+    });
+    context.canvas.restoreContext();
+  }
+  paint(context, box) {
+    if (this.painter !== null) this.paintWithLocalCanvas(context, box, this.painter);
+    const {childBox} = box.data;
+    childBox?.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+    if (this.foregroundPainter !== null) {
+      this.paintWithLocalCanvas(context, box, this.foregroundPainter);
+    }
+  }
+}
+
+class FullPage extends Widget {
+  constructor({ignoreMargins, child = null}) {
+    super();
+    this.ignoreMargins = Boolean(ignoreMargins);
+    this.child = child;
+  }
+  layout(context, constraints) {
+    const width = this.ignoreMargins ? context.pageFormat.width : constraints.maxWidth;
+    const height = this.ignoreMargins ? context.pageFormat.height : constraints.maxHeight;
+    const childBox = this.child?.layout(context, {
+      maxWidth: width,
+      maxHeight: height
+    }) ?? null;
+    return {
+      widget: this,
+      width,
+      height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    if (childBox === null) return;
+    const inverse = this.ignoreMargins ? context.canvas.getTransform() : identityMatrix;
+    context.canvas.saveContext();
+    if (this.ignoreMargins) {
+      const determinant = inverse[0] * inverse[3] - inverse[1] * inverse[2];
+      if (determinant !== 0) {
+        context.canvas.setTransform([ inverse[3] / determinant, -inverse[1] / determinant, -inverse[2] / determinant, inverse[0] / determinant, (inverse[2] * inverse[5] - inverse[3] * inverse[4]) / determinant, (inverse[1] * inverse[4] - inverse[0] * inverse[5]) / determinant ]);
+      }
+    }
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: this.ignoreMargins ? 0 : box.x,
+      y: this.ignoreMargins ? 0 : box.y,
+      width: box.width,
+      height: box.height
+    });
+    context.canvas.restoreContext();
+  }
+}
+
+class LimitedBox extends Widget {
+  constructor({maxWidth = Number.POSITIVE_INFINITY, maxHeight = Number.POSITIVE_INFINITY, child = null} = {}) {
+    super();
+    this.maxWidth = Number(maxWidth);
+    this.maxHeight = Number(maxHeight);
+    if (this.maxWidth < 0 || this.maxHeight < 0 || Number.isNaN(this.maxWidth) || Number.isNaN(this.maxHeight)) {
+      throw new RangeError("LimitedBox maxima must be non-negative numbers");
+    }
+    this.child = child;
+  }
+  layout(context, constraints) {
+    const maxWidth = Number.isFinite(constraints.maxWidth) ? constraints.maxWidth : this.maxWidth;
+    const maxHeight = Number.isFinite(constraints.maxHeight) ? constraints.maxHeight : this.maxHeight;
+    const childBox = this.child?.layout(context, {
+      maxWidth,
+      maxHeight
+    }) ?? null;
+    return {
+      widget: this,
+      width: Math.min(maxWidth, childBox?.width ?? 0),
+      height: Math.min(maxHeight, childBox?.height ?? 0),
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox?.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class VerticalDivider extends Widget {
+  constructor({width = DEFAULT_DIVIDER_HEIGHT, thickness = DEFAULT_DIVIDER_THICKNESS, indent = 0, endIndent = 0, color = "#000000"} = {}) {
+    super();
+    this.width = Math.max(0, assertFiniteNumber(Number(width), "divider width"));
+    this.thickness = Math.max(0, assertFiniteNumber(Number(thickness), "divider thickness"));
+    this.indent = Math.max(0, assertFiniteNumber(Number(indent), "divider indent"));
+    this.endIndent = Math.max(0, assertFiniteNumber(Number(endIndent), "divider endIndent"));
+    this.color = normalizeColor(color);
+  }
+  layout(_context, constraints) {
+    return {
+      widget: this,
+      width: Math.min(constraints.maxWidth, this.width),
+      height: constraints.maxHeight,
+      data: null
+    };
+  }
+  paint(context, box) {
+    const height = Math.max(0, box.height - this.indent - this.endIndent);
+    if (height === 0 || this.thickness === 0) return;
+    context.canvas.fillRect(box.x + (box.width - this.thickness) / 2, box.y + this.indent, this.thickness, height, this.color);
   }
 }
 
@@ -2102,62 +2732,6 @@ class Font {
   getFont(context) {
     return context.document.resolveFont(this);
   }
-}
-
-const identityMatrix = Object.freeze([ 1, 0, 0, 1, 0, 0 ]);
-
-function multiplyMatrix(first, second) {
-  const [a1, b1, c1, d1, e1, f1] = first;
-  const [a2, b2, c2, d2, e2, f2] = second;
-  return [ a1 * a2 + c1 * b2, b1 * a2 + d1 * b2, a1 * c2 + c1 * d2, b1 * c2 + d1 * d2, a1 * e2 + c1 * f2 + e1, b1 * e2 + d1 * f2 + f1 ];
-}
-
-function composeMatrices(matrices) {
-  let result = identityMatrix;
-  for (const matrix of matrices) {
-    result = multiplyMatrix(result, matrix);
-  }
-  return result;
-}
-
-function translationMatrix(tx, ty) {
-  return [ 1, 0, 0, 1, tx, ty ];
-}
-
-function scaleMatrix(sx, sy = sx) {
-  return [ sx, 0, 0, sy, 0, 0 ];
-}
-
-function rotationMatrix(radians) {
-  const cos = Math.cos(radians);
-  const sin = Math.sin(radians);
-  return [ cos, sin, -sin, cos, 0, 0 ];
-}
-
-function skewMatrix(alpha, beta) {
-  return [ 1, Math.tan(beta), Math.tan(alpha), 1, 0, 0 ];
-}
-
-function transformPoint(matrix, x, y) {
-  const [a, b, c, d, e, f] = matrix;
-  return {
-    x: a * x + c * y + e,
-    y: b * x + d * y + f
-  };
-}
-
-function invertMatrix(matrix) {
-  const [a, b, c, d, e, f] = matrix;
-  const determinant = a * d - b * c;
-  if (determinant === 0 || !Number.isFinite(determinant)) {
-    return null;
-  }
-  return [ d / determinant, -b / determinant, -c / determinant, a / determinant, (c * f - d * e) / determinant, (b * e - a * f) / determinant ];
-}
-
-function flipMatrix(matrix, height) {
-  const flip = [ 1, 0, 0, -1, 0, height ];
-  return multiplyMatrix(flip, multiplyMatrix(matrix, flip));
 }
 
 const LINE_CAP_OPERAND = Object.freeze({
@@ -4342,52 +4916,6 @@ class SvgClipPath {
 }
 
 SvgClipPath.empty = new SvgClipPath([]);
-
-const BLEND_MODE_NAMES = Object.freeze({
-  normal: "/Normal",
-  multiply: "/Multiply",
-  screen: "/Screen",
-  overlay: "/Overlay",
-  darken: "/Darken",
-  lighten: "/Lighten",
-  colorDodge: "/ColorDodge",
-  colorBurn: "/ColorBurn",
-  hardLight: "/HardLight",
-  softLight: "/SoftLight",
-  difference: "/Difference",
-  exclusion: "/Exclusion",
-  hue: "/Hue",
-  saturation: "/Saturation",
-  color: "/Color",
-  luminosity: "/Luminosity"
-});
-
-class PdfGraphicState {
-  constructor({opacity = null, fillOpacity = null, strokeOpacity = null, blendMode = null} = {}) {
-    this.fillOpacity = fillOpacity ?? opacity;
-    this.strokeOpacity = strokeOpacity ?? opacity;
-    this.blendMode = blendMode;
-  }
-  get isEmpty() {
-    return this.fillOpacity === null && this.strokeOpacity === null && this.blendMode === null;
-  }
-  get key() {
-    return `${this.fillOpacity}|${this.strokeOpacity}|${this.blendMode}`;
-  }
-  output() {
-    const params = new PdfDict;
-    if (this.strokeOpacity !== null) {
-      params.set("/CA", new PdfNum(this.strokeOpacity));
-    }
-    if (this.fillOpacity !== null) {
-      params.set("/ca", new PdfNum(this.fillOpacity));
-    }
-    if (this.blendMode !== null) {
-      params.set("/BM", new PdfName(BLEND_MODE_NAMES[this.blendMode]));
-    }
-    return params;
-  }
-}
 
 class SvgOperation {
   constructor(brush, clip, transform, painter) {
@@ -6612,6 +7140,16 @@ const publicApi = Object.freeze({
   Center,
   SizedBox,
   Divider,
+  Transform,
+  Opacity,
+  FittedBox,
+  AspectRatio,
+  FullPage,
+  Builder,
+  LayoutBuilder,
+  CustomPaint,
+  LimitedBox,
+  VerticalDivider,
   SvgImage,
   Table,
   TableRow,
@@ -6654,4 +7192,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Center, Column, Container, DefaultTextStyle, Divider, Document, EdgeInsets, FixedColumnWidth, FlexColumnWidth, Font, FractionColumnWidth, IntrinsicColumnWidth, MultiPage, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, SpanningWidget, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableRow, Text, TextStyle, Theme, ThemeData, Vector, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AspectRatio, Builder, Center, Column, Container, CustomPaint, DefaultTextStyle, Divider, Document, EdgeInsets, FittedBox, FixedColumnWidth, FlexColumnWidth, Font, FractionColumnWidth, FullPage, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, MultiPage, Opacity, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, SpanningWidget, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableRow, Text, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

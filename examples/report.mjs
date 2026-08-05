@@ -12,7 +12,7 @@ export function generateReport(pageFormat = pw.PageFormat.A4, _data = customData
   requireFeatures(pw, 'report', [
     'BarDataSet', 'CartesianGrid', 'Chart', 'ChartLegend', 'Divider', 'Expanded',
     'FixedAxis', 'Flexible', 'Font', 'LineDataSet', 'PieDataSet', 'PieGrid', 'PointChartValue',
-    'SizedBox', 'TextStyle', 'ThemeData', 'Transform'
+    'SizedBox', 'TextStyle', 'ThemeData'
   ]);
 
   const tableHeaders = ['Category', 'Budget', 'Expense', 'Result'];

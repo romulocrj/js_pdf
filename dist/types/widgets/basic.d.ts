@@ -1,8 +1,12 @@
 import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { PdfCanvas } from '../pdf/graphics.ts';
+import type { PdfMatrix } from '../pdf/matrix.ts';
+import type { PdfPoint } from '../pdf/rect.ts';
 import { Alignment } from './geometry.ts';
-import type { Insets, InsetsInput } from './geometry.ts';
-import { Widget } from './widget.ts';
-import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
+import type { Insets, InsetsInput, Offset } from './geometry.ts';
+import type { BoxFit } from './svg.ts';
+import { StatelessWidget, Widget } from './widget.ts';
+import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext, StatelessLayoutData } from './widget.ts';
 /** What a widget with one optional child hands from `layout` to `paint`. */
 export interface SingleChildLayoutData {
     readonly childBox: AnyLayoutBox | null;
@@ -114,6 +118,153 @@ export declare class Divider extends Widget<null> {
     readonly endIndent: number;
     readonly color: Rgb;
     constructor({ height, thickness, indent, endIndent, color }?: DividerOptions);
+    layout(_context: RenderContext, constraints: Constraints): LayoutBox<null>;
+    paint(context: RenderContext, box: PositionedBox<null>): void;
+}
+export type BasicAlignmentName = 'topLeft' | 'topCenter' | 'topRight' | 'centerLeft' | 'center' | 'centerRight' | 'bottomLeft' | 'bottomCenter' | 'bottomRight';
+export type BasicAlignmentInput = Alignment | BasicAlignmentName;
+export interface TransformOptions {
+    readonly transform?: PdfMatrix | null;
+    readonly rotate?: number | null;
+    readonly rotateBox?: number | null;
+    readonly translate?: PdfPoint | Offset | null;
+    readonly scale?: number | null;
+    readonly origin?: PdfPoint | Offset | null;
+    readonly alignment?: BasicAlignmentInput | null;
+    readonly adjustLayout?: boolean;
+    readonly unconstrained?: boolean;
+    readonly child?: AnyWidget | null;
+}
+export interface TransformLayoutData extends SingleChildLayoutData {
+    readonly layoutDx: number;
+    readonly layoutDy: number;
+}
+/** Paints its child through a six-cell affine transform. */
+export declare class Transform extends Widget<TransformLayoutData> {
+    readonly transform: PdfMatrix;
+    readonly origin: {
+        readonly x: number;
+        readonly y: number;
+    };
+    readonly alignment: Alignment | null;
+    readonly adjustLayout: boolean;
+    readonly unconstrained: boolean;
+    readonly child: AnyWidget | null;
+    constructor({ transform, rotate, rotateBox, translate, scale, origin, alignment, adjustLayout, unconstrained, child }?: TransformOptions);
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<TransformLayoutData>;
+    paint(context: RenderContext, box: PositionedBox<TransformLayoutData>): void;
+}
+export interface OpacityOptions {
+    readonly opacity: number;
+    readonly child?: AnyWidget | null;
+}
+export declare class Opacity extends Widget<SingleChildLayoutData> {
+    readonly opacity: number;
+    readonly child: AnyWidget | null;
+    constructor({ opacity, child }: OpacityOptions);
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData>;
+    paint(context: RenderContext, box: PositionedBox<SingleChildLayoutData>): void;
+}
+export interface FittedBoxOptions {
+    readonly fit?: BoxFit;
+    readonly alignment?: BasicAlignmentInput;
+    readonly child?: AnyWidget | null;
+}
+export interface FittedBoxLayoutData extends SingleChildLayoutData {
+}
+export declare class FittedBox extends Widget<FittedBoxLayoutData> {
+    readonly fit: BoxFit;
+    readonly alignment: Alignment;
+    readonly child: AnyWidget | null;
+    constructor({ fit, alignment, child }?: FittedBoxOptions);
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<FittedBoxLayoutData>;
+    paint(context: RenderContext, box: PositionedBox<FittedBoxLayoutData>): void;
+}
+export interface AspectRatioOptions {
+    readonly aspectRatio: number;
+    readonly child?: AnyWidget | null;
+}
+export declare class AspectRatio extends Widget<SingleChildLayoutData> {
+    readonly aspectRatio: number;
+    readonly child: AnyWidget | null;
+    constructor({ aspectRatio, child }: AspectRatioOptions);
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData>;
+    paint(context: RenderContext, box: PositionedBox<SingleChildLayoutData>): void;
+}
+export type WidgetBuilder = (context: RenderContext) => AnyWidget;
+export interface BuilderOptions {
+    readonly builder: WidgetBuilder;
+}
+export declare class Builder extends StatelessWidget {
+    readonly builder: WidgetBuilder;
+    constructor({ builder }: BuilderOptions);
+    build(context: RenderContext): AnyWidget;
+}
+export type LayoutWidgetBuilder = (context: RenderContext, constraints: Constraints) => AnyWidget;
+export interface LayoutBuilderOptions {
+    readonly builder: LayoutWidgetBuilder;
+}
+export declare class LayoutBuilder extends Widget<StatelessLayoutData> {
+    readonly builder: LayoutWidgetBuilder;
+    constructor({ builder }: LayoutBuilderOptions);
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<StatelessLayoutData>;
+    paint(context: RenderContext, box: PositionedBox<StatelessLayoutData>): void;
+}
+export type CustomPainter = (canvas: PdfCanvas, size: PdfPoint) => void;
+export interface CustomPaintOptions {
+    readonly painter?: CustomPainter | null;
+    readonly foregroundPainter?: CustomPainter | null;
+    readonly size?: PdfPoint;
+    readonly child?: AnyWidget | null;
+}
+export declare class CustomPaint extends Widget<SingleChildLayoutData> {
+    readonly painter: CustomPainter | null;
+    readonly foregroundPainter: CustomPainter | null;
+    readonly size: PdfPoint;
+    readonly child: AnyWidget | null;
+    constructor({ painter, foregroundPainter, size, child }?: CustomPaintOptions);
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData>;
+    private paintWithLocalCanvas;
+    paint(context: RenderContext, box: PositionedBox<SingleChildLayoutData>): void;
+}
+export interface FullPageOptions {
+    readonly ignoreMargins: boolean;
+    readonly child?: AnyWidget | null;
+}
+export declare class FullPage extends Widget<SingleChildLayoutData> {
+    readonly ignoreMargins: boolean;
+    readonly child: AnyWidget | null;
+    constructor({ ignoreMargins, child }: FullPageOptions);
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData>;
+    paint(context: RenderContext, box: PositionedBox<SingleChildLayoutData>): void;
+}
+export interface LimitedBoxOptions {
+    readonly maxWidth?: number;
+    readonly maxHeight?: number;
+    readonly child?: AnyWidget | null;
+}
+export declare class LimitedBox extends Widget<SingleChildLayoutData> {
+    readonly maxWidth: number;
+    readonly maxHeight: number;
+    readonly child: AnyWidget | null;
+    constructor({ maxWidth, maxHeight, child }?: LimitedBoxOptions);
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData>;
+    paint(context: RenderContext, box: PositionedBox<SingleChildLayoutData>): void;
+}
+export interface VerticalDividerOptions {
+    readonly width?: number;
+    readonly thickness?: number;
+    readonly indent?: number;
+    readonly endIndent?: number;
+    readonly color?: ColorInput;
+}
+export declare class VerticalDivider extends Widget<null> {
+    readonly width: number;
+    readonly thickness: number;
+    readonly indent: number;
+    readonly endIndent: number;
+    readonly color: Rgb;
+    constructor({ width, thickness, indent, endIndent, color }?: VerticalDividerOptions);
     layout(_context: RenderContext, constraints: Constraints): LayoutBox<null>;
     paint(context: RenderContext, box: PositionedBox<null>): void;
 }

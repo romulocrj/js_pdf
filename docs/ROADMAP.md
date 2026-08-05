@@ -44,12 +44,14 @@ collects `/Font`, `/XObject` and `/ExtGState` per page; `PdfCanvas` allocates
 `/F1`, `/F2`, … as it writes, and `PdfDocument` binds those names to one font
 object per distinct font. The single-font limit is gone.
 
-**Phase 3.3 — basic widgets — landed 2026-08-05, out of order.** Taken ahead of
-phases 1 and 2 because it is the only large piece of the roadmap that depends on
-neither. `Padding`, `Align`, `Center`, `SizedBox` and `Divider`, plus
-`EdgeInsets`, `Alignment` and `StatelessWidget`. No example generates as a
-result — every one of the seven calls `Font.ttf`, so phase 1 remains on all their
-critical paths — but the missing-API total across them fell from 147 to 124.
+**Phase 3.3 — basic widgets — completed 2026-08-05.** Its foundation landed
+early: `Padding`, `Align`, `Center`, `SizedBox`, `Divider`, `EdgeInsets`,
+`Alignment` and `StatelessWidget`. Once graphics and `/ExtGState` were ready,
+the phase closed with `Transform`, `Opacity`, `FittedBox`, `AspectRatio`,
+`FullPage`, builder/custom-paint primitives, `LimitedBox` and `VerticalDivider`.
+The two widgets that fundamentally need minimum constraints move into 3.4. The
+phase reduced the example missing-API total first from 147 to 124, then 84 to
+75.
 
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
@@ -120,12 +122,13 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 3.3 — remaining basic widgets.** Land the transform/opacity/fitting
-> group unblocked by 2.1, plus the remaining size and builder primitives that do
-> not require phase 3.4's minimum constraints.
+> **Phase 3.4 — full flex and constraints.** Replace the max-only constraint
+> protocol with real `BoxConstraints`, then port flex allocation, alignment,
+> `Expanded`, `Flexible`, `FlexFit`, `mainAxisSize`, `ConstrainedBox` and
+> `OverflowBox`.
 
-Tables now paginate. The next layout blockers are the composition primitives
-shared by every example, before the full flex and decoration phases.
+Tables paginate and the basic composition set is complete. The next blockers
+are minimum constraints and the full flex algorithm shared by five examples.
 
 ---
 
@@ -191,6 +194,12 @@ Every phase below carries an **Example gate** line naming the examples it
 advances, and the phases marked ⇒ are the ones where an example first generates
 end to end. When a phase lands, run `npm run examples` and check the PDFs it
 was supposed to unlock.
+
+Completed implementation phases also keep a synchronous, host-free proof
+generator named `examples/*-phase-X.Y.mjs`. The module returns PDF bytes without
+performing I/O, so the same file can be imported by the local runner and by
+`test/v8/run.sh`; the latter writes its copy to `test/v8/out/` and proves the
+shipped bundle works under bare ClearScript V8.
 
 | Example | Upstream source | Unlocks at | What it proves |
 |---|---|---|---|
@@ -714,6 +723,7 @@ for longer stop lists. `gradientUnits`, `gradientTransform`, object bounding
 boxes, `href`/namespaced inheritance, fill, stroke, group inheritance and
 colour filtering all work. Ten tests bring the SVG suite to 117 and render both
 `invoice.svg` and `document.svg` through the complete serializer.
+`examples/svg-gradients-phase-2.8.mjs` is the retained visual/V8 proof.
 
 Two fidelity limits stay explicit in `src/svg/gradient.ts`. Different opacity
 at each stop requires the luminosity soft mask coupled to phase 4's form
@@ -754,6 +764,7 @@ data rows, repeat markers, theme table styles, per-column alignment, padding,
 minimum heights, format/build/style/decoration callbacks and odd-row variants.
 Ten tests assert layout numbers and emitted operators. Repeat markers are part
 of the layout data consumed by 3.2's continuation protocol.
+`examples/table-phase-3.1.mjs` is the retained visual/V8 proof.
 
 ### 3.2 Spanning widgets ✅ *(landed 2026-08-05)*
 
@@ -777,8 +788,9 @@ guards the loop with upstream's `maxPages` option. `Table` keeps column widths
 stable across fragments, resumes at the next row and includes every `repeat`
 row on continuations. Four tests cover immutable replay, three-page output,
 headers/footers, repeated table headers, page limits and an indivisible row.
+`examples/table-spanning-phase-3.2.mjs` is the retained visual/V8 proof.
 
-### 3.3 Basic widgets ⚠️ *(partial — landed 2026-08-05)*
+### 3.3 Basic widgets ✅ *(completed 2026-08-05)*
 
 - **Ports:** `widgets/basic.dart`, `widgets/geometry.dart`, `widgets/widget.dart`
 - **Into:** `src/widgets/basic.ts`
@@ -788,38 +800,39 @@ headers/footers, repeated table headers, page limits and an indivisible row.
   composition.
 - **Example gate:** the second-largest unblock after 1.4 — all seven examples.
 
-Landed: `Padding`, `Align`, `Center`, `SizedBox`, `Divider`, `EdgeInsets`,
-`Alignment` + `inscribe`, and `StatelessWidget`. Missing-API total across the
-seven examples fell 147 → 124; none generates, since all seven need phase 1.
+The first batch landed `Padding`, `Align`, `Center`, `SizedBox`, `Divider`,
+`EdgeInsets`, `Alignment` + `inscribe`, and `StatelessWidget`; it reduced the
+missing-API total 147 → 124. The closing batch ports `Transform` (including
+origin/alignment and layout-adjusting transforms), alpha/blend graphic-state
+scoping through `Opacity`, every `BoxFit` mode in `FittedBox`, `AspectRatio`,
+`FullPage`, `Builder`, `LayoutBuilder`, `CustomPaint`, `LimitedBox` and
+`VerticalDivider`. Ten focused tests cover public surfaces, pure layout data and
+emitted transform, clip, alpha and paint-order operators. It removes nine more
+feature occurrences from the examples, taking the total 84 → 75.
+`examples/basic-widgets-phase-3.3.mjs` is the retained visual/V8 proof.
 
-**Still open, and why** — reopen this sub-phase when the blockers clear:
-
-- `Transform`, `FittedBox` and `Opacity` are unblocked as of **2.1** — the `cm`
-  operator and `/ExtGState` both exist now. They are the next thing to land
-  here.
-- `ConstrainedBox` needs a `BoxConstraints` value type with minimums. The port's
-  `Constraints` carries maxima only, which was enough for everything above —
-  `SizedBox` states its size outright instead of tightening a constraint. **3.4**
-  needs minimums for `Expanded`/`Flexible` and should introduce them.
-- `AspectRatio`, `FullPage`, `LimitedBox`, `OverflowBox`, `CustomPaint`,
-  `Builder`, `LayoutBuilder` are simply not done yet.
+`ConstrainedBox` and `OverflowBox` move to **3.4** because faithfully porting
+them requires minimum constraints. `LimitedBox` currently contributes its
+max-only useful branch; 3.4 will complete its minimum-preserving behaviour.
 
 Two divergences worth knowing:
 
 - `Align` fills an axis unless given a factor, which is upstream's rule under
   finite constraints. But upstream's `Flex` hands children an *infinite*
   main-axis constraint, so an `Align` inside a `Column` shrink-wraps there and
-  here it does not — it claims the remaining page height until **3.4** brings the
-  real flex algorithm. `heightFactor: 1` is the workaround.
+  here it does not — it claims the remaining page height until **3.4** replaces
+  the flex algorithm. `heightFactor: 1` is the workaround.
 - `Divider` fills its rule directly rather than composing `SizedBox` + `Center` +
   `Container` + `BoxDecoration` + `Border` + `BorderSide`, since decoration is
   **3.5**. The emitted `re f` is what upstream's bottom border produces anyway.
 
-### 3.4 Full flex
+### 3.4 Full flex and constraints
 
-- **Ports:** `widgets/flex.dart`
+- **Ports:** `widgets/flex.dart`, the constraint-dependent pieces of
+  `widgets/basic.dart` and `widgets/geometry.dart`
 - `mainAxisAlignment`, `crossAxisAlignment`, `Expanded`, `Flexible`, `FlexFit`,
-  `mainAxisSize`.
+  `mainAxisSize`, `BoxConstraints`, `ConstrainedBox`, `OverflowBox`; complete
+  `LimitedBox`.
 - **Example gate:** `Expanded`/`Flexible` for `calendar`, `certificate`,
   `invoice`, `report`, `server`.
 

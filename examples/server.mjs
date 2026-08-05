@@ -40,7 +40,7 @@ function parsePlans(pricingJson) {
 export function generateServer(pageFormat = pw.PageFormat.A4, _data = customData, resources = {}) {
   requireFeatures(pw, 'server', [
     'AnnotationUrl', 'BarDataSet', 'Border', 'BorderRadius', 'BoxDecoration',
-    'CartesianGrid', 'Chart', 'EdgeInsets', 'Expanded', 'FixedAxis', 'Font', 'FullPage',
+    'CartesianGrid', 'Chart', 'EdgeInsets', 'Expanded', 'FixedAxis', 'Font',
     'PageTheme', 'PointChartValue', 'RichText', 'SizedBox', 'SvgImage',
     'TextSpan', 'TextStyle', 'ThemeData', 'UrlLink'
   ]);

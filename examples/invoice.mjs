@@ -274,8 +274,8 @@ class Invoice {
 export function generateInvoice(pageFormat = pw.PageFormat.A4, _data = customData, resources = {}) {
   requireFeatures(pw, 'invoice', [
     'Barcode', 'BarcodeWidget', 'Border', 'BorderRadius', 'BoxDecoration',
-    'DefaultTextStyle', 'Divider', 'EdgeInsets', 'Expanded', 'FittedBox', 'Font',
-    'FullPage', 'GridView', 'LoremText', 'PageTheme', 'PdfLogo', 'RichText', 'SizedBox',
+    'DefaultTextStyle', 'Divider', 'EdgeInsets', 'Expanded', 'Font', 'GridView',
+    'LoremText', 'PageTheme', 'PdfLogo', 'RichText', 'SizedBox',
     'SvgImage', 'TextSpan', 'TextStyle', 'ThemeData'
   ]);
 

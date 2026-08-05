@@ -24,7 +24,23 @@
 import { PageFormat } from './pdf/page_format.ts';
 import { PdfType1Font } from './pdf/font/type1_fonts.ts';
 import { PdfTtfFont } from './pdf/obj/ttf_font.ts';
-import { Align, Center, Divider, Padding, SizedBox } from './widgets/basic.ts';
+import {
+  Align,
+  AspectRatio,
+  Builder,
+  Center,
+  CustomPaint,
+  Divider,
+  FittedBox,
+  FullPage,
+  LayoutBuilder,
+  LimitedBox,
+  Opacity,
+  Padding,
+  SizedBox,
+  Transform,
+  VerticalDivider
+} from './widgets/basic.ts';
 import { Container } from './widgets/container.ts';
 import { Document } from './widgets/document.ts';
 import { Column, Row, Spacer } from './widgets/flex.ts';
@@ -56,19 +72,27 @@ import type { DocumentOptions } from './widgets/document.ts';
 export {
   Align,
   Alignment,
+  AspectRatio,
+  Builder,
   Center,
   Column,
   Container,
+  CustomPaint,
   DefaultTextStyle,
   Divider,
   Document,
   EdgeInsets,
   FixedColumnWidth,
   FlexColumnWidth,
+  FittedBox,
   Font,
   FractionColumnWidth,
+  FullPage,
   IntrinsicColumnWidth,
+  LayoutBuilder,
+  LimitedBox,
   MultiPage,
+  Opacity,
   Padding,
   Page,
   PageFormat,
@@ -90,7 +114,9 @@ export {
   TextStyle,
   Theme,
   ThemeData,
+  Transform,
   Vector,
+  VerticalDivider,
   Widget
 };
 
@@ -162,11 +188,28 @@ export type {
 export type {
   AlignLayoutData,
   AlignOptions,
+  AspectRatioOptions,
+  BasicAlignmentInput,
+  BasicAlignmentName,
+  BuilderOptions,
   CenterOptions,
+  CustomPaintOptions,
+  CustomPainter,
   DividerOptions,
+  FittedBoxLayoutData,
+  FittedBoxOptions,
+  FullPageOptions,
+  LayoutBuilderOptions,
+  LayoutWidgetBuilder,
+  LimitedBoxOptions,
+  OpacityOptions,
   PaddingOptions,
   SingleChildLayoutData,
-  SizedBoxOptions
+  SizedBoxOptions,
+  TransformLayoutData,
+  TransformOptions,
+  VerticalDividerOptions,
+  WidgetBuilder
 } from './widgets/basic.ts';
 export type { ColumnOptions, RowOptions } from './widgets/flex.ts';
 export type { ContainerOptions } from './widgets/container.ts';
@@ -227,6 +270,16 @@ export interface PublicApi {
   readonly Center: typeof Center;
   readonly SizedBox: typeof SizedBox;
   readonly Divider: typeof Divider;
+  readonly Transform: typeof Transform;
+  readonly Opacity: typeof Opacity;
+  readonly FittedBox: typeof FittedBox;
+  readonly AspectRatio: typeof AspectRatio;
+  readonly FullPage: typeof FullPage;
+  readonly Builder: typeof Builder;
+  readonly LayoutBuilder: typeof LayoutBuilder;
+  readonly CustomPaint: typeof CustomPaint;
+  readonly LimitedBox: typeof LimitedBox;
+  readonly VerticalDivider: typeof VerticalDivider;
   readonly SvgImage: typeof SvgImage;
   readonly Table: typeof Table;
   readonly TableRow: typeof TableRow;
@@ -266,6 +319,16 @@ const publicApi: PublicApi = Object.freeze({
   Center,
   SizedBox,
   Divider,
+  Transform,
+  Opacity,
+  FittedBox,
+  AspectRatio,
+  FullPage,
+  Builder,
+  LayoutBuilder,
+  CustomPaint,
+  LimitedBox,
+  VerticalDivider,
   SvgImage,
   Table,
   TableRow,
