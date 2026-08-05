@@ -14,11 +14,14 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/svg/parser.dart
  *
- * How an SVG attribute becomes a number.
+ * How an SVG attribute becomes a number, and how a document reports its own
+ * size.
  *
- * This is the numeric half of upstream's `parser.dart`, landed in phase 2.4
- * because transforms need it; the `SvgParser` class itself — the document, its
- * viewBox and `findById` — arrives with the rest of the file in 2.7.
+ * The numeric half landed in phase 2.4 because transforms needed it. The
+ * `SvgParser` class — intrinsic size, viewBox and `findById` — followed in 2.5
+ * rather than 2.7 as the roadmap had it, because no paint module can be written
+ * without `findById` and `colorFilter`. What 2.7 still owes is the `SvgImage`
+ * widget that drives this.
  *
  * PORT GAP: `sizeValue` returns `value / 100` for a percentage, which is
  * upstream's behaviour and is wrong in the general case — a percentage is
@@ -28,8 +31,10 @@
  * needs the viewport threaded down to every attribute lookup.
  */
 
+import type { Rgb } from '../pdf/color.ts';
 import { PageUnit } from '../pdf/page_format.ts';
-import type { XmlElement } from './xml.ts';
+import { PdfRect } from '../pdf/rect.ts';
+import type { XmlDocument, XmlElement } from './xml.ts';
 
 export type SvgUnit =
   | 'pixels'
@@ -212,5 +217,85 @@ export function convertStyle(element: XmlElement): void {
       continue;
     }
     element.setAttribute(match[1]!, match[2]!.trim());
+  }
+}
+
+export interface SvgParserOptions {
+  readonly xml: XmlDocument;
+
+  /**
+   * Overrides every colour in the document. Upstream's way of tinting a
+   * monochrome icon without editing its markup.
+   */
+  readonly colorFilter?: Rgb | null;
+}
+
+/**
+ * The document as a whole: its intrinsic size, its viewBox and the lookup by
+ * `id` that `<use>`, `clip-path` and gradient references all need.
+ *
+ * Landed in phase 2.5 rather than 2.7 as the roadmap had it, because the paint
+ * modules could not be written without `findById` and `colorFilter`. What 2.7
+ * still owes is the `SvgImage` widget that drives this.
+ */
+export class SvgParser {
+  readonly viewBox: PdfRect;
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly root: XmlElement;
+  readonly colorFilter: Rgb | null;
+
+  private constructor(
+    width: number | null,
+    height: number | null,
+    viewBox: PdfRect,
+    root: XmlElement,
+    colorFilter: Rgb | null
+  ) {
+    this.width = width;
+    this.height = height;
+    this.viewBox = viewBox;
+    this.root = root;
+    this.colorFilter = colorFilter;
+  }
+
+  static fromXml({ xml, colorFilter = null }: SvgParserOptions): SvgParser {
+    const root = xml.rootElement;
+    const viewBoxAttribute = root.getAttribute('viewBox');
+
+    const width = getNumeric(root, 'width', null)?.sizeValue ?? null;
+    const height = getNumeric(root, 'height', null)?.sizeValue ?? null;
+
+    // With no viewBox the document's own size is the coordinate system, and
+    // 1000 is upstream's stand-in when it states neither.
+    const parsed = viewBoxAttribute === null
+      ? [0, 0, width ?? 1000, height ?? 1000]
+      : splitDoubles(viewBoxAttribute);
+
+    if (parsed.length === 0 || parsed.length > 4) {
+      throw new SyntaxError('viewBox must contain 1..4 parameters');
+    }
+
+    // A short viewBox is left-padded with zeros, which is upstream's reading of
+    // an under-specified attribute rather than the specification's.
+    const box = [...new Array<number>(4 - parsed.length).fill(0), ...parsed];
+
+    return new SvgParser(
+      width,
+      height,
+      { x: box[0]!, y: box[1]!, width: box[2]!, height: box[3]! },
+      root,
+      colorFilter
+    );
+  }
+
+  /** The first element anywhere in the document carrying `id`, or null. */
+  findById(id: string): XmlElement | null {
+    for (const element of this.root.descendants) {
+      if (element.getAttribute('id') === id) {
+        return element;
+      }
+    }
+    return this.root.getAttribute('id') === id ? this.root : null;
   }
 }

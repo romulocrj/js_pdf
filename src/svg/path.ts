@@ -19,7 +19,7 @@
  * renderer can draw — move, line, cubic, close.
  *
  * Upstream does not implement this itself. `svg/path.dart` holds the *shapes*
- * (a `<rect>` written out as a `d` string, and so on, which is phase 2.5 here)
+ * (a `<rect>` written out as a `d` string, and so on, landed in phase 2.5 here)
  * and delegates the grammar to `writeSvgPathDataToPath` from the `path_parsing`
  * package, which is in turn a translation of Chromium's SVG path parser. The
  * port has no runtime dependencies, so the grammar is translated here, keeping
@@ -34,6 +34,7 @@
  * because `path_parsing` is an external package to it.
  */
 
+import { PdfGraphicState } from '../pdf/graphic_state.ts';
 import { PdfCanvas } from '../pdf/graphics.ts';
 import {
   multiplyMatrix,
@@ -42,6 +43,12 @@ import {
   transformPoint
 } from '../pdf/matrix.ts';
 import { PdfRect } from '../pdf/rect.ts';
+import { SvgBrush } from './brush.ts';
+import { SvgOperation } from './operation.ts';
+import type { SvgPainter } from './painter.ts';
+import { getNumeric } from './parser.ts';
+import { SvgTransform } from './transform.ts';
+import type { XmlElement } from './xml.ts';
 
 /** Receives the normalized path. Upstream's `PathProxy`. */
 export interface PathProxy {
@@ -843,4 +850,145 @@ export function shapeBoundingBox(d: string): PdfRect {
   const proxy = new BoundingBoxPathProxy();
   writeSvgPathDataToPath(d, proxy);
   return proxy.box;
+}
+
+/** A basic SVG shape normalized to path data, then painted with its brush. */
+export class SvgPath extends SvgOperation {
+  readonly d: string;
+
+  constructor(d: string, brush: SvgBrush, transform: SvgTransform, painter: SvgPainter) {
+    super(brush, transform, painter);
+    this.d = d;
+  }
+
+  static fromXmlElement(element: XmlElement, painter: SvgPainter, parent: SvgBrush): SvgPath {
+    const brush = SvgBrush.fromXml(element, parent, painter.parser);
+    let d: string;
+
+    switch (element.name.local) {
+      case 'path': {
+        const attribute = element.getAttribute('d');
+        if (attribute === null) {
+          throw new SyntaxError('Path element must contain a d attribute');
+        }
+        d = attribute;
+        break;
+      }
+
+      case 'rect':
+        d = SvgPath.rectData(element, brush);
+        break;
+
+      case 'circle': {
+        const cx = SvgPath.numeric(element, 'cx', brush);
+        const cy = SvgPath.numeric(element, 'cy', brush);
+        const r = SvgPath.numeric(element, 'r', brush);
+        d = `M${cx - r},${cy}A${r},${r} 0,0,0 ${cx + r},${cy}`
+          + `A${r},${r} 0,0,0 ${cx - r},${cy}z`;
+        break;
+      }
+
+      case 'ellipse': {
+        const cx = SvgPath.numeric(element, 'cx', brush);
+        const cy = SvgPath.numeric(element, 'cy', brush);
+        const rx = SvgPath.numeric(element, 'rx', brush);
+        const ry = SvgPath.numeric(element, 'ry', brush);
+        d = `M${cx - rx},${cy}A${rx},${ry} 0,0,0 ${cx + rx},${cy}`
+          + `A${rx},${ry} 0,0,0 ${cx - rx},${cy}z`;
+        break;
+      }
+
+      case 'line': {
+        const x1 = SvgPath.numeric(element, 'x1', brush);
+        const y1 = SvgPath.numeric(element, 'y1', brush);
+        const x2 = SvgPath.numeric(element, 'x2', brush);
+        const y2 = SvgPath.numeric(element, 'y2', brush);
+        d = `M${x1} ${y1} ${x2} ${y2}`;
+        break;
+      }
+
+      case 'polyline':
+        d = `M${element.getAttribute('points') ?? '0, 0'}`;
+        break;
+
+      case 'polygon':
+        d = `M${element.getAttribute('points') ?? '0, 0'}z`;
+        break;
+
+      default:
+        throw new SyntaxError(`Unsupported SVG shape: ${element.name.local}`);
+    }
+
+    return new SvgPath(d, brush, SvgTransform.fromXml(element), painter);
+  }
+
+  private static numeric(element: XmlElement, name: string, brush: SvgBrush): number {
+    return getNumeric(element, name, brush, { defaultValue: 0 })!.sizeValue;
+  }
+
+  private static rectData(element: XmlElement, brush: SvgBrush): string {
+    const x = SvgPath.numeric(element, 'x', brush);
+    const y = SvgPath.numeric(element, 'y', brush);
+    const width = SvgPath.numeric(element, 'width', brush);
+    const height = SvgPath.numeric(element, 'height', brush);
+
+    let rx = getNumeric(element, 'rx', brush)?.sizeValue ?? null;
+    let ry = getNumeric(element, 'ry', brush)?.sizeValue ?? null;
+    ry = ry ?? rx ?? 0;
+    rx = rx ?? ry;
+
+    const topRight = rx !== 0 || ry !== 0 ? `a ${rx} ${ry} 0 0 1 ${rx} ${ry}` : '';
+    const bottomRight = rx !== 0 || ry !== 0 ? `a ${rx} ${ry} 0 0 1 ${-rx} ${ry}` : '';
+    const bottomLeft = rx !== 0 || ry !== 0 ? `a ${rx} ${ry} 0 0 1 ${-rx} ${-ry}` : '';
+    const topLeft = rx !== 0 || ry !== 0 ? `a ${rx} ${ry} 0 0 1 ${rx} ${-ry}` : '';
+
+    return `M${x + rx} ${y}h${width - rx * 2}${topRight}`
+      + `v${height - ry * 2}${bottomRight}`
+      + `h${-(width - rx * 2)}${bottomLeft}`
+      + `v${-(height - ry * 2)}${topLeft}z`;
+  }
+
+  protected paintShape(canvas: PdfCanvas): void {
+    const fill = this.brush.fill;
+    if (fill?.isNotEmpty === true) {
+      fill.setFillColor(canvas);
+      const opacity = (this.brush.fillOpacity ?? 1) * fill.opacity;
+      if (opacity < 1) {
+        canvas.saveContext();
+        canvas.setGraphicState(new PdfGraphicState({ opacity }));
+      }
+      drawShape(canvas, this.d);
+      canvas.fillPath({ evenOdd: this.brush.fillEvenOdd ?? false });
+      if (opacity < 1) {
+        canvas.restoreContext();
+      }
+    }
+
+    const stroke = this.brush.stroke;
+    if (stroke?.isNotEmpty === true) {
+      stroke.setStrokeColor(canvas);
+      const opacity = (this.brush.strokeOpacity ?? 1) * stroke.opacity;
+      if (opacity < 1) {
+        canvas.setGraphicState(new PdfGraphicState({ opacity }));
+      }
+      drawShape(canvas, this.d);
+      canvas.setLineCap(this.brush.strokeLineCap ?? 'butt');
+      canvas.setLineJoin(this.brush.strokeLineJoin ?? 'miter');
+      canvas.setMiterLimit(Math.max(1, this.brush.strokeMiterLimit ?? 4));
+      canvas.setLineDashPattern(
+        this.brush.strokeDashArray ?? [],
+        this.brush.strokeDashOffset ?? 0
+      );
+      canvas.setLineWidth(this.brush.strokeWidth?.sizeValue ?? 1);
+      canvas.strokePath();
+    }
+  }
+
+  protected drawShape(canvas: PdfCanvas): void {
+    drawShape(canvas, this.d);
+  }
+
+  boundingBox(): PdfRect {
+    return shapeBoundingBox(this.d);
+  }
 }

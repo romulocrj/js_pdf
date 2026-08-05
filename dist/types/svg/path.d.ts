@@ -1,5 +1,10 @@
 import { PdfCanvas } from '../pdf/graphics.ts';
 import { PdfRect } from '../pdf/rect.ts';
+import { SvgBrush } from './brush.ts';
+import { SvgOperation } from './operation.ts';
+import type { SvgPainter } from './painter.ts';
+import { SvgTransform } from './transform.ts';
+import type { XmlElement } from './xml.ts';
 /** Receives the normalized path. Upstream's `PathProxy`. */
 export interface PathProxy {
     moveTo(x: number, y: number): void;
@@ -123,4 +128,15 @@ export declare class BoundingBoxPathProxy implements PathProxy {
 }
 /** The tight bounding box of `d`. Upstream's `PdfGraphics.shapeBoundingBox`. */
 export declare function shapeBoundingBox(d: string): PdfRect;
+/** A basic SVG shape normalized to path data, then painted with its brush. */
+export declare class SvgPath extends SvgOperation {
+    readonly d: string;
+    constructor(d: string, brush: SvgBrush, transform: SvgTransform, painter: SvgPainter);
+    static fromXmlElement(element: XmlElement, painter: SvgPainter, parent: SvgBrush): SvgPath;
+    private static numeric;
+    private static rectData;
+    protected paintShape(canvas: PdfCanvas): void;
+    protected drawShape(canvas: PdfCanvas): void;
+    boundingBox(): PdfRect;
+}
 export {};

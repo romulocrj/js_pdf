@@ -13,7 +13,8 @@ TypeScript, with the runtime contract and attribution enforced by
 `npm run check`. Output is a valid PDF written through a real indirect-object
 model, with per-page resource dictionaries and **embedded TrueType fonts** —
 subset, written as Type0/CIDFontType2 composites, and selected through a theme.
-Beyond text, though, SVG, tables and images are still nothing.
+Beyond text, the internal SVG painter now handles basic shapes and groups;
+tables, images and the public `SvgImage` widget are still absent.
 
 **Phases 0 and 1 are complete.** The foundations are in place and the WinAnsi
 ceiling is gone; phase 2 (SVG) and phase 3 (layout) are what the examples now
@@ -59,6 +60,12 @@ get this to work in dart_pdf. See the dedicated section below.
 the numeric half of upstream's parser — `SvgNumeric` with its length units,
 `splitDoubles`, `convertStyle`.
 
+**Phase 2.5 — SVG painter, shapes and groups — landed 2026-08-05.**
+`rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon` and `path` paint with
+inherited fill/stroke state; groups scope transforms and opacity; `<use>`
+resolves both `href` forms and symbols. Every SVG asset used by the examples
+now produces operators, although no public widget drives the painter until 2.7.
+
 **Phase 2.3 — XML reader — landed 2026-08-05.** `src/svg/xml.ts` reads
 elements, attributes, text, CDATA, comments, entities and namespaces. Every SVG
 in `examples/assets/` and the inline markup in `server-assets.json` parse.
@@ -84,12 +91,13 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 2.5 — SVG painter, shapes and groups.** Port `svg/painter.dart`,
-> `operation.dart`, `group.dart`, `use.dart`, `symbol.dart`, `brush.dart`,
-> `color.dart` and `colors.dart`, plus the shape-to-`d` factories in
-> `svg/path.dart`. This is the phase that actually paints.
+> **Phase 2.6 — SVG clipping and masks.** Port `svg/clip_path.dart` and the
+> clip half of `operation.dart`: `clipPath`, `clipPathUnits`, nested clips and
+> the correctly scoped `W n` operators. Soft masks remain blocked on phase 4's
+> form XObjects.
 
-Everything an SVG element is made of now parses; nothing yet draws one.
+Basic SVG content now draws; clipping is the last paint-stage prerequisite
+before `SvgImage` can expose it publicly.
 
 ---
 
@@ -612,7 +620,7 @@ Divergences:
   throws `FormatException`; an unrecognized `transform()` function is ignored
   rather than fatal, matching upstream's switch with no default.
 
-### 2.5 Painter, shapes, groups
+### 2.5 Painter, shapes, groups ✅ *(landed 2026-08-05)*
 
 - **Ports:** `pdf/lib/src/svg/painter.dart`, `operation.dart`, `shape` handling,
   `group.dart`, `use.dart`, `symbol.dart`, `brush.dart`, `color.dart`,
@@ -623,6 +631,13 @@ Divergences:
   resolution including `currentColor`, `none`, opacity and stroke properties.
 - **Test:** per-element operator assertions; attribute inheritance through
   nested groups.
+
+Landed with the full named-colour table, hex/RGB/RGBA/HSL and `currentColor`,
+all seven basic shape elements, inherited presentation state, scoped transforms,
+opacity/blend modes, visibility, groups, symbols and both `href` spellings.
+Ninety-four SVG tests cover the individual operator streams and paint every
+asset in the examples corpus. The document-level half of `SvgParser` moved here
+from 2.7 because `<use>` needs `findById`; only the widget remains there.
 
 ### 2.6 Clipping and masks
 

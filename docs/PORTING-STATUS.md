@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 55 `.ts` files, ~8,900 lines (TypeScript)
+**Ported:** 63 `.ts` files, ~10,500 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -72,7 +72,7 @@ each one.
 | `page_format.dart` | 171 | `src/pdf/page_format.ts` | partial — A4 and Letter, plus the physical-unit constants SVG lengths need |
 | `color.dart` | 725 | `src/pdf/color.ts` | partial — RGB / DeviceRGB only |
 | `colors.dart` | 406 | — | — named color constants |
-| `graphics.dart` | 1415 | `src/pdf/graphics.ts` | partial — full path API (`m`/`l`/`c`/`h`/`re`, ellipses, rounded rects, elliptical arcs), fill rules, clipping, CTM, cap/join/miter/dash, colors, `gs`; no `drawImage` (**4**), no `drawShape` (**2.2**), no shading or patterns (**2.8**) |
+| `graphics.dart` | 1415 | `src/pdf/graphics.ts`, `src/svg/path.ts` | partial — full path API (`m`/`l`/`c`/`h`/`re`, ellipses, rounded rects, elliptical arcs), SVG path drawing, fill rules, clipping, CTM, cap/join/miter/dash, colors, `gs`; no `drawImage` (**4**), shading or patterns (**2.8**) |
 | `graphic_state.dart` | 194 | `src/pdf/graphic_state.ts` | partial — `/ca`, `/CA`, `/BM`, deduplicated per page; no `PdfGraphicStates` document object, no `/SMask`, no `/TR` |
 | *(no upstream file — `vector_math`)* | — | `src/pdf/matrix.ts` | done — the 2×3 affine `cm` operand, composition, inversion and the y-down conjugation |
 | `document.dart` | 289 | `src/pdf/document.ts` | partial — `PdfDocument` object registry; one font object per distinct font, created on first use |
@@ -134,12 +134,12 @@ both, and will grow the shape factories in 2.5.
 
 | Upstream | Lines | Port / status |
 |---|---:|---|
-| `svg/parser.dart` | 219 | `src/svg/parser.ts` — partial: `SvgNumeric` and its units, `splitDoubles`/`splitNumeric`, `getDouble`/`getNumeric`, `convertStyle`; the `SvgParser` class itself is **phase 2.7**. The XML reader it depends on landed in 2.3 as `src/svg/xml.ts` |
-| `svg/path.dart` | 320 | `src/svg/path.ts` — partial: the full `d` grammar, `drawShape`, `shapeBoundingBox`; the shape-to-`d` factories are **phase 2.5** |
-| `svg/painter.dart`, `operation.dart` | 251 | — **phase 2.5** |
+| `svg/parser.dart` | 219 | `src/svg/parser.ts` — partial: `SvgNumeric` and units, attribute helpers, `SvgParser` with intrinsic size, viewBox, colour filter and `findById`; the `SvgImage` driver is **phase 2.7** |
+| `svg/path.dart` | 320 | `src/svg/path.ts` — done: full `d` grammar, `drawShape`, tight bounding boxes, basic shape factories and fill/stroke paint |
+| `svg/painter.dart`, `operation.dart` | 251 | `src/svg/painter.ts`, `operation.ts` — partial: scoped transforms, opacity/blend states, visibility and operation dispatch; clipping follows in **2.6**, text/image later |
 | `svg/transform.dart` | 124 | `src/svg/transform.ts` — done: `matrix translate scale rotate skewX skewY`, composed left to right |
-| `svg/group.dart`, `use.dart`, `symbol.dart` | 287 | — **phase 2.5** |
-| `svg/brush.dart`, `color.dart`, `colors.dart` | 609 | — **phase 2.5** |
+| `svg/group.dart`, `use.dart`, `symbol.dart` | 287 | `src/svg/group.ts`, `use.ts`, `symbol.ts` — done: inherited groups and local or namespaced references |
+| `svg/brush.dart`, `color.dart`, `colors.dart` | 609 | `src/svg/brush.ts`, `color.ts`, `colors.ts` — partial: complete named table, functional/hex colours, `currentColor`, inherited paint and stroke state; gradient references wait for **2.8** |
 | `svg/clip_path.dart`, `mask_path.dart` | 148 | — **phase 2.6** |
 | `svg/gradient.dart` | 436 | — **phase 2.8**, optional |
 | `svg/text.dart` | 221 | — |
@@ -185,7 +185,7 @@ both, and will grow the shape factories in 2.5.
 | Graphics | ~1,600 | paths, transforms, clipping and graphic states done; images, shading and patterns not |
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
-| SVG | ~2,800 | paths, XML, transforms and attribute units done; painting pending |
+| SVG | ~2,800 | paths, XML, transforms, units, basic shapes, groups and references paint; clipping and the public widget remain |
 | Widgets | ~14,000 | ~18 widgets of ~60, plus styles and themes |
 
 **Phases 0 and 1 are complete.** The WinAnsi ceiling is gone: a TrueType font is

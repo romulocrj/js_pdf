@@ -1,4 +1,6 @@
-import type { XmlElement } from './xml.ts';
+import type { Rgb } from '../pdf/color.ts';
+import { PdfRect } from '../pdf/rect.ts';
+import type { XmlDocument, XmlElement } from './xml.ts';
 export type SvgUnit = 'pixels' | 'millimeters' | 'centimeters' | 'inch' | 'em' | 'percent' | 'points' | 'direct';
 /**
  * What an `em` length needs to resolve against. Declared structurally rather
@@ -43,3 +45,30 @@ export declare function getNumeric(element: XmlElement, name: string, brush: Svg
  * what CSS specificity requires.
  */
 export declare function convertStyle(element: XmlElement): void;
+export interface SvgParserOptions {
+    readonly xml: XmlDocument;
+    /**
+     * Overrides every colour in the document. Upstream's way of tinting a
+     * monochrome icon without editing its markup.
+     */
+    readonly colorFilter?: Rgb | null;
+}
+/**
+ * The document as a whole: its intrinsic size, its viewBox and the lookup by
+ * `id` that `<use>`, `clip-path` and gradient references all need.
+ *
+ * Landed in phase 2.5 rather than 2.7 as the roadmap had it, because the paint
+ * modules could not be written without `findById` and `colorFilter`. What 2.7
+ * still owes is the `SvgImage` widget that drives this.
+ */
+export declare class SvgParser {
+    readonly viewBox: PdfRect;
+    readonly width: number | null;
+    readonly height: number | null;
+    readonly root: XmlElement;
+    readonly colorFilter: Rgb | null;
+    private constructor();
+    static fromXml({ xml, colorFilter }: SvgParserOptions): SvgParser;
+    /** The first element anywhere in the document carrying `id`, or null. */
+    findById(id: string): XmlElement | null;
+}
