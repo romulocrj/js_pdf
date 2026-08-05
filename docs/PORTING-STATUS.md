@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 37 `.ts` files, ~3,420 lines (TypeScript)
+**Ported:** 38 `.ts` files, ~3,610 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -69,9 +69,9 @@ phase clears each one.
 | `page_format.dart` | 171 | `src/pdf/page_format.ts` | partial — A4 and Letter only |
 | `color.dart` | 725 | `src/pdf/color.ts` | partial — RGB / DeviceRGB only |
 | `colors.dart` | 406 | — | — named color constants |
-| `graphics.dart` | 1415 | `src/pdf/graphics.ts` | partial — fill/stroke rect, line, circle, text; no paths, transforms, clipping, alpha, shading |
+| `graphics.dart` | 1415 | `src/pdf/graphics.ts` | partial — fill/stroke rect, line, circle, text, per-page font registration; no paths, transforms, clipping, alpha, shading |
 | `graphic_state.dart` | 194 | folded into `src/pdf/graphics.ts` | stub — `q`/`Q` only; no ExtGState objects |
-| `document.dart` | 289 | `src/pdf/document.ts` | partial — `PdfDocument` object registry; one Type1 font until **phase 0.3** |
+| `document.dart` | 289 | `src/pdf/document.ts` | partial — `PdfDocument` object registry; one font object per distinct font, created on first use |
 | `point.dart`, `rect.dart` | 159 | folded into `src/widgets/geometry.ts` | partial |
 | `options.dart` | 8 | — | — |
 | `document_parser.dart` | 40 | — | — reading existing PDFs is out of scope |
@@ -92,13 +92,14 @@ on: an object registers itself with the document, hands out references through
 | `obj/object_stream.dart` | 51 | `src/pdf/obj/object_stream.ts` | partial — no Ascii85 flag, no deflate |
 | `obj/catalog.dart` | 178 | `src/pdf/obj/catalog.ts` | partial — `/Type`, `/Pages`; no outlines, names, page labels, `/AcroForm` |
 | `obj/page_list.dart` | 46 | `src/pdf/obj/page_list.ts` | done — flat page tree |
-| `obj/page.dart` | 164 | `src/pdf/obj/page.ts` | partial — hardcoded single-font `/Resources` until **phase 0.3**; no `/Rotate`, no `/Annots` |
+| `obj/page.dart` | 164 | `src/pdf/obj/page.ts` | partial — `/Resources` inherited from `PdfGraphicStream`; no `/Rotate`, no `/Annots` |
 | `obj/info.dart` | 69 | `src/pdf/obj/info.ts` | partial — no `/CreationDate` (no clock) and no `/Keywords` |
 | `obj/array.dart` | 30 | — | — |
-| `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; `resourceDict()` returns a `PdfDict` as of 0.2; one font per document until phase 0.3 |
+| `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; `resourceDict()` returns a `PdfDict`; any number per document as of 0.3 |
 | `obj/font_descriptor.dart` | 139 | — | — needed for embedded TTF in **phase 1.3** |
 | `obj/ttffont.dart`, `unicode_cmap.dart` | 278 | — | — **phase 1.3** |
-| `obj/graphic_stream.dart`, `xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 362 | — | — resource dictionary is **phase 0.3**, the next step |
+| `obj/graphic_stream.dart` | 156 | `src/pdf/obj/graphic_stream.ts` | partial — `/Font`, `/XObject`, `/ExtGState`; base class rather than a mixin, no `/ProcSet`, `/Shading` or `/Pattern` |
+| `obj/xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 206 | — | — form XObjects, **phase 4** |
 | `obj/image.dart`, `smask.dart` | 347 | — | — **phase 4.1–4.2** |
 | `obj/shading.dart`, `pattern.dart`, `function.dart` | 349 | — | — SVG gradients, **phase 2.8** |
 | `obj/annotation.dart`, `border.dart`, `names.dart`, `outline.dart` | 1366 | — | — links **phase 5.3**; names/outlines needed by `TableOfContent` in **3.8** |
@@ -142,12 +143,12 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 |---|---:|---|---|
 | `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | partial — layout protocol; no `Context` inheritance, `InheritedWidget`, `StatelessWidget` (**phase 3.3**) |
 | `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — inset normalization; no exported `EdgeInsets` (**phase 3.3**) |
-| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts` | partial — single style, greedy wrap; no `TextStyle` (**1.4**), `RichText`/`TextSpan` (**3.7**) |
+| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts` | partial — single style, greedy wrap, per-widget `font`; no `TextStyle` (**1.4**), `RichText`/`TextSpan` (**3.7**) |
 | `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — `Column`, `Row`, `Spacer`; no alignment, `Expanded`, `Flexible` (**phase 3.4**) |
 | `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts` | partial — fill, single border; no `BoxDecoration`, `Border`, `BorderSide` (**phase 3.5**) |
 | `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts` | partial — no `PageTheme` (**phase 1.4**) |
 | `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — header/footer and page breaks; no `SpanningWidget` (**phase 3.2**) |
-| `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()` |
+| `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`; `font` is the default a widget falls back to, not the document's only font |
 | `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts` | partial — imperative `Vector`; no `SvgImage` (**phase 2.7**) |
 | `widgets/basic.dart` | 1090 | — | — `Align`, `Padding`, `SizedBox`, `Transform`, `FittedBox`, `Divider`, `FullPage` — **phase 3.3** |
 | `widgets/table.dart`, `table_helper.dart` | 834 | — | — **phase 3.1** |
@@ -173,12 +174,13 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 |---|---:|---|
 | Object syntax / serialization | ~1,700 | self-serializing value types; no filters, no xref streams |
 | Graphics | ~1,600 | ~15% of the operator surface |
-| Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams |
-| Fonts | ~2,100 | Type1 AFM metrics done; no TTF parsing or embedding |
+| Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources |
+| Fonts | ~2,100 | Type1 AFM metrics done, any number per document; no TTF parsing or embedding |
 | SVG | ~2,800 | not started |
 | Widgets | ~14,000 | ~10 widgets of ~60 |
 
-The object model landed in phase 0.2, so the structural blocker is gone. The next
-gate is the **per-page resource dictionary** (phase 0.3), which ends the
-single-font limit; embedded TTF remains the major font milestone. See
+**Phase 0 is complete.** The object model landed in 0.2 and the per-page resource
+dictionary in 0.3, so neither the object graph nor the single-font limit is a
+blocker any more. The next gate is **phase 1**, embedded TTF — until it lands,
+any text outside WinAnsi is silently replaced with `?`. See
 [ROADMAP.md](ROADMAP.md).

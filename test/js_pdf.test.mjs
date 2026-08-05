@@ -107,6 +107,50 @@ test('all 14 standard Type1 fonts can be selected for a document', () => {
   }
 });
 
+test('two fonts on one page get their own /Font entries and Tf operators', () => {
+  const times = Pdf.PdfType1Font.timesBoldItalic();
+  const courier = Pdf.PdfType1Font.courier();
+
+  const bytes = Pdf.createPdf({ font: times }, () => new Pdf.Page({
+    build: () => new Pdf.Column({
+      children: [
+        new Pdf.Text('document default'),
+        new Pdf.Text('override', { font: courier, fontSize: 10 })
+      ]
+    })
+  }));
+
+  const source = latin1(bytes);
+  assert.match(source, /\/BaseFont \/Times-BoldItalic\b/);
+  assert.match(source, /\/BaseFont \/Courier\b/);
+  assert.match(source, /\/Resources << \/Font << \/F1 \d+ 0 R \/F2 \d+ 0 R >> >>/);
+  assert.match(source, /BT \/F1 12 Tf/);
+  assert.match(source, /BT \/F2 10 Tf/);
+});
+
+test('a font used on several pages is written once and named per page', () => {
+  const bytes = Pdf.createPdf({}, () => new Pdf.MultiPage({
+    margin: 40,
+    build: () => Array.from({ length: 60 }, (_, index) => new Pdf.Text(`Linha ${index + 1}`))
+  }));
+
+  const source = latin1(bytes);
+  assert.ok((source.match(/\/Type \/Page\b/g) ?? []).length >= 2);
+  assert.equal((source.match(/\/BaseFont \/Helvetica\b/g) ?? []).length, 1);
+  assert.equal(
+    (source.match(/\/Resources << \/Font << \/F1 \d+ 0 R >> >>/g) ?? []).length,
+    (source.match(/\/Type \/Page\b/g) ?? []).length
+  );
+});
+
+test('a page that draws no text carries no /Resources', () => {
+  const bytes = Pdf.createPdf({}, () => new Pdf.Page({
+    build: () => new Pdf.Container({ width: 100, height: 100, background: '#ff0000' })
+  }));
+
+  assert.ok(!latin1(bytes).includes('/Resources'));
+});
+
 test('Type1 font encoding and resource dictionary use the font seam', () => {
   const font = Pdf.PdfType1Font.timesBoldItalic();
 

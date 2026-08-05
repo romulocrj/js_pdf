@@ -15,6 +15,11 @@ export type { DocumentMetadata } from './obj/info.ts';
 export interface SerializedPage {
     readonly format: PageSize;
     readonly content: string;
+    /**
+     * The fonts `content` drew with, mapped to the `/F…` names it wrote for them.
+     * `PdfCanvas` chose the names; this is what turns them into `/Resources`.
+     */
+    readonly fonts: ReadonlyMap<PdfFont, string>;
 }
 /**
  * Owns the objects that make up a file, and writes them.
@@ -33,20 +38,29 @@ export declare class PdfDocument {
     readonly catalog: PdfCatalog;
     readonly info: PdfInfo;
     /**
-     * The document's single font object. Phase 0.3 replaces this with per-page
-     * resource registration over a set of fonts.
+     * One indirect object per distinct font, created on first use. Keyed by
+     * identity, matching upstream: two `PdfType1Font.helvetica()` instances are
+     * two fonts, and phase 1 will need that — two subsets of the same TTF are not
+     * interchangeable either.
      */
-    readonly fontObject: PdfObject<PdfDict>;
-    constructor(metadata: DocumentMetadata, font?: PdfFont);
+    private readonly fontObjects;
+    constructor(metadata: DocumentMetadata);
     get objects(): readonly PdfObjectBase<PdfDataType>[];
     genSerial(): number;
     register(object: PdfObjectBase<PdfDataType>): void;
+    /** The indirect object holding `font`'s dictionary, created once per document. */
+    fontObject(font: PdfFont): PdfObject<PdfDict>;
     /**
-     * Append a page. The content stream is created first so it is numbered before
-     * the page that references it, keeping the file in dependency order.
+     * Append a page. Its fonts and content stream are created first so they are
+     * numbered before the page that references them, keeping the file in
+     * dependency order.
+     *
+     * `fonts` maps each font the content stream drew with to the resource name it
+     * wrote for that font — see `PdfCanvas.addFont`. A page that drew no text
+     * passes nothing and gets no `/Resources` at all, as upstream does.
      */
-    addPage(format: PageSize, content: string): PdfPage;
+    addPage(format: PageSize, content: string, fonts?: ReadonlyMap<PdfFont, string>): PdfPage;
     save(): Uint8Array;
 }
 /** Build a document from already-rendered pages and write it. */
-export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata, font?: PdfFont): Uint8Array;
+export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata): Uint8Array;

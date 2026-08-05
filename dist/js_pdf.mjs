@@ -756,19 +756,61 @@ class PdfArray extends PdfDataType {
   }
 }
 
-class PdfPage extends PdfObject {
-  constructor(document, pageList, pageFormat, font) {
+class PdfGraphicStream extends PdfObject {
+  constructor() {
+    super(...arguments);
+    this.fonts = new Map;
+    this.xObjects = new Map;
+    this.graphicStates = new Map;
+  }
+  addFont(name, font) {
+    if (!this.fonts.has(name)) {
+      this.fonts.set(name, font);
+    }
+  }
+  addXObject(name, xObject) {
+    if (!this.xObjects.has(name)) {
+      this.xObjects.set(name, xObject);
+    }
+  }
+  addGraphicState(name, state) {
+    if (!this.graphicStates.has(name)) {
+      this.graphicStates.set(name, state);
+    }
+  }
+  resources() {
+    const resources = new PdfDict;
+    if (this.fonts.size > 0) {
+      resources.set("/Font", PdfDict.fromObjectMap(this.fonts));
+    }
+    if (this.xObjects.size > 0) {
+      resources.set("/XObject", PdfDict.fromObjectMap(this.xObjects));
+    }
+    if (this.graphicStates.size > 0) {
+      resources.set("/ExtGState", PdfDict.fromObjectMap(this.graphicStates));
+    }
+    return resources.isEmpty ? null : resources;
+  }
+  prepare() {
+    const resources = this.resources();
+    if (resources !== null) {
+      this.params.set("/Resources", resources);
+    }
+  }
+}
+
+class PdfPage extends PdfGraphicStream {
+  constructor(document, pageList, pageFormat) {
     super(document, new PdfDict([ [ "/Type", new PdfName("/Page") ] ]));
     this.contents = [];
     this.pageFormat = pageFormat;
     this.pageList = pageList;
-    this.font = font;
     pageList.pages.push(this);
   }
   prepare() {
     this.params.set("/Parent", this.pageList.ref());
     this.params.set("/MediaBox", PdfArray.fromNum([ 0, 0, this.pageFormat.width, this.pageFormat.height ]));
-    this.params.set("/Resources", new PdfDict([ [ "/Font", PdfDict.fromObjectMap([ [ "/F1", this.font ] ]) ] ]));
+    super.prepare();
     if (this.contents.length === 1) {
       this.params.set("/Contents", this.contents[0].ref());
     } else if (this.contents.length > 1) {
@@ -789,13 +831,13 @@ class PdfPageList extends PdfObject {
 }
 
 class PdfDocument {
-  constructor(metadata, font = defaultPdfFont) {
+  constructor(metadata) {
     this.serial = 0;
     this.xref = new PdfXrefTable;
+    this.fontObjects = new Map;
     const catalogSerial = this.genSerial();
     this.pageList = new PdfPageList(this);
     this.catalog = new PdfCatalog(this, this.pageList, catalogSerial);
-    this.fontObject = new PdfObject(this, font.resourceDict());
     this.info = new PdfInfo(this, metadata);
   }
   get objects() {
@@ -807,9 +849,25 @@ class PdfDocument {
   register(object) {
     this.xref.add(object);
   }
-  addPage(format, content) {
+  fontObject(font) {
+    const existing = this.fontObjects.get(font);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const object = new PdfObject(this, font.resourceDict());
+    this.fontObjects.set(font, object);
+    return object;
+  }
+  addPage(format, content, fonts = new Map) {
+    const resources = [];
+    for (const [font, name] of fonts) {
+      resources.push([ name, this.fontObject(font) ]);
+    }
     const stream = new PdfObjectStream(this, encodeLatin1(content));
-    const page = new PdfPage(this, this.pageList, format, this.fontObject);
+    const page = new PdfPage(this, this.pageList, format);
+    for (const [name, object] of resources) {
+      page.addFont(name, object);
+    }
     page.contents.push(stream);
     return page;
   }
@@ -825,10 +883,10 @@ class PdfDocument {
   }
 }
 
-function serializePdf(pages, metadata, font = defaultPdfFont) {
-  const document = new PdfDocument(metadata, font);
+function serializePdf(pages, metadata) {
+  const document = new PdfDocument(metadata);
   for (const page of pages) {
-    document.addPage(page.format, page.content);
+    document.addPage(page.format, page.content, page.fonts);
   }
   return document.save();
 }
@@ -836,10 +894,23 @@ function serializePdf(pages, metadata, font = defaultPdfFont) {
 class PdfCanvas {
   constructor(pageHeight) {
     this.commands = [];
+    this.fontNames = new Map;
     this.pageHeight = pageHeight;
   }
   push(command) {
     this.commands.push(command);
+  }
+  addFont(font) {
+    const existing = this.fontNames.get(font);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const name = `/F${this.fontNames.size + 1}`;
+    this.fontNames.set(font, name);
+    return name;
+  }
+  get fonts() {
+    return this.fontNames;
   }
   save() {
     this.push("q");
@@ -859,7 +930,7 @@ class PdfCanvas {
     const baseline = this.pageHeight - baselineFromTop;
     const fontSize = style.fontSize;
     const font = style.font ?? defaultPdfFont;
-    const command = [ "BT", "/F1", formatNumber(fontSize), "Tf", colorOperator(style.color), "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", font.encodeText(text), "Tj", "ET" ].join(" ");
+    const command = [ "BT", this.addFont(font), formatNumber(fontSize), "Tf", colorOperator(style.color), "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", font.encodeText(text), "Tj", "ET" ].join(" ");
     this.push(command);
   }
   line(x1, top1, x2, top2, color = "#000000", lineWidth = 1) {
@@ -978,7 +1049,8 @@ class MultiPage {
     }
     return canvases.map(canvas => ({
       format: this.format,
-      content: canvas.output()
+      content: canvas.output(),
+      fonts: canvas.fonts
     }));
   }
 }
@@ -1020,7 +1092,8 @@ class Page {
     });
     return [ {
       format: this.format,
-      content: canvas.output()
+      content: canvas.output(),
+      fonts: canvas.fonts
     } ];
   }
 }
@@ -1055,7 +1128,7 @@ class Document {
     if (pages.length === 0) {
       throw new Error("Document must contain at least one page");
     }
-    return serializePdf(pages, this.metadata, this.font);
+    return serializePdf(pages, this.metadata);
   }
 }
 
@@ -1204,10 +1277,11 @@ class Vector extends Widget {
           lineWidth: lineWidth * scale
         });
       },
-      text: ({value, x, y, fontSize = 12, color = "#000000"}) => {
+      text: ({value, x, y, fontSize = 12, color = "#000000", font}) => {
         context.canvas.text(String(value), box.x + x * scale, box.y + y * scale, {
           fontSize: fontSize * scale,
-          color: normalizeColor(color)
+          color: normalizeColor(color),
+          font: font ?? context.document.font
         });
       }
     };
@@ -1267,7 +1341,7 @@ function wrapText(value, maxWidth, fontSize, font = defaultPdfFont) {
 }
 
 class Text extends Widget {
-  constructor(value, {fontSize = DEFAULT_FONT_SIZE, lineHeight = DEFAULT_LINE_HEIGHT, color = "#000000", align = "left", margin = 0} = {}) {
+  constructor(value, {fontSize = DEFAULT_FONT_SIZE, lineHeight = DEFAULT_LINE_HEIGHT, color = "#000000", align = "left", margin = 0, font = undefined} = {}) {
     super();
     this.value = String(value);
     this.fontSize = assertFiniteNumber(Number(fontSize), "fontSize");
@@ -1275,9 +1349,13 @@ class Text extends Widget {
     this.color = normalizeColor(color);
     this.align = align;
     this.margin = normalizeInsets(margin);
+    this.font = font ?? null;
+  }
+  resolveFont(context) {
+    return this.font ?? context.document.font;
   }
   layout(context, constraints) {
-    const font = context.document.font;
+    const font = this.resolveFont(context);
     const contentWidth = Math.max(1, constraints.maxWidth - this.margin.left - this.margin.right);
     const lines = wrapText(this.value, contentWidth, this.fontSize, font);
     const lineAdvance = this.fontSize * this.lineHeight;
@@ -1295,7 +1373,7 @@ class Text extends Widget {
   }
   paint(context, box) {
     const {canvas} = context;
-    const font = context.document.font;
+    const font = this.resolveFont(context);
     const {lines, lineAdvance, contentWidth} = box.data;
     const xStart = box.x + this.margin.left;
     let baseline = box.y + this.margin.top + this.fontSize;

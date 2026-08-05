@@ -1,4 +1,5 @@
 import type { ColorInput } from '../pdf/color.ts';
+import type { PdfFont } from '../pdf/font/font.ts';
 import { Widget } from './widget.ts';
 import type { Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
 export interface VectorRect {
@@ -32,6 +33,8 @@ export interface VectorText {
     readonly y: number;
     readonly fontSize?: number;
     readonly color?: ColorInput;
+    /** Defaults to the document's font, matching `Text`. */
+    readonly font?: PdfFont;
 }
 /** The drawing surface handed to `Vector`'s `draw` callback. */
 export interface VectorApi {

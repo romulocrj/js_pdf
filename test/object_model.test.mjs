@@ -25,6 +25,9 @@ import { PdfObjectBase } from '../src/pdf/format/object_base.ts';
 import { PdfStream, encodeLatin1 } from '../src/pdf/format/stream.ts';
 import { PdfString } from '../src/pdf/format/string.ts';
 import { PdfDocument } from '../src/pdf/document.ts';
+import { PdfCanvas } from '../src/pdf/graphics.ts';
+import { PdfType1Font } from '../src/pdf/font/type1_fonts.ts';
+import { PdfGraphicStream } from '../src/pdf/obj/graphic_stream.ts';
 import { PageFormat } from '../src/pdf/page_format.ts';
 
 function latin1(bytes) {
@@ -163,16 +166,17 @@ test('PdfDocument numbers the catalog first and content before its page', () => 
 
   assert.equal(document.catalog.objser, 1);
   assert.equal(document.pageList.objser, 2);
-  assert.equal(document.fontObject.objser, 3);
-  assert.equal(document.info.objser, 4);
+  assert.equal(document.info.objser, 3);
 
+  // No font object is preallocated as of phase 0.3 — a page that draws no text
+  // needs none, and one that does gets its fonts numbered at addPage time.
   const first = document.addPage(PageFormat.A4, 'BT ET\n');
-  assert.equal(first.contents[0].objser, 5, 'content stream precedes its page');
-  assert.equal(first.objser, 6);
+  assert.equal(first.contents[0].objser, 4, 'content stream precedes its page');
+  assert.equal(first.objser, 5);
 
   const second = document.addPage(PageFormat.A4, 'BT ET\n');
-  assert.equal(second.contents[0].objser, 7);
-  assert.equal(second.objser, 8);
+  assert.equal(second.contents[0].objser, 6);
+  assert.equal(second.objser, 7);
 });
 
 test('prepare resolves forward references and the xref table stays contiguous', () => {
@@ -182,13 +186,13 @@ test('prepare resolves forward references and the xref table stays contiguous', 
 
   // The catalog points at a page list created after it.
   assert.match(source, /1 0 obj\n<< \/Type \/Catalog \/Pages 2 0 R >>\nendobj/);
-  assert.match(source, /2 0 obj\n<< \/Type \/Pages \/Count 1 \/Kids \[6 0 R\] >>\nendobj/);
+  assert.match(source, /2 0 obj\n<< \/Type \/Pages \/Count 1 \/Kids \[5 0 R\] >>\nendobj/);
   assert.match(source, /\/Type \/Page \/Parent 2 0 R \/MediaBox \[0 0 595\.28 841\.89\]/);
 
-  // One block covering object 0 through 6, then the trailer.
-  assert.match(source, /xref\n0 7\n0000000000 65535 f \n/);
-  assert.equal((source.match(/ 00000 n \n/g) ?? []).length, 6);
-  assert.match(source, /trailer\n<< \/Size 7 \/Root 1 0 R \/Info 4 0 R >>\n/);
+  // One block covering object 0 through 5, then the trailer.
+  assert.match(source, /xref\n0 6\n0000000000 65535 f \n/);
+  assert.equal((source.match(/ 00000 n \n/g) ?? []).length, 5);
+  assert.match(source, /trailer\n<< \/Size 6 \/Root 1 0 R \/Info 3 0 R >>\n/);
 });
 
 test('startxref points at the byte offset of the xref keyword', () => {
@@ -208,7 +212,7 @@ test('every xref offset lands on its own object header', () => {
   const source = latin1(document.save());
 
   const offsets = Array.from(source.matchAll(/^(\d{10}) 00000 n $/gm), m => Number(m[1]));
-  assert.equal(offsets.length, 8);
+  assert.equal(offsets.length, 7);
 
   offsets.forEach((offset, index) => {
     assert.equal(
@@ -230,5 +234,104 @@ test('a page with several content streams references them as an array', () => {
   document.pageList.pages.splice(1, 1);
 
   const source = latin1(document.save());
-  assert.match(source, /\/Contents \[5 0 R 7 0 R\]/);
+  assert.match(source, /\/Contents \[4 0 R 6 0 R\]/);
+});
+
+// ---------------------------------------------------------------------------
+// Phase 0.3 — the per-page resource dictionary.
+// ---------------------------------------------------------------------------
+
+test('PdfCanvas names fonts /F1, /F2, … in first-use order', () => {
+  const canvas = new PdfCanvas(841.89);
+  const helvetica = PdfType1Font.helvetica();
+  const times = PdfType1Font.times();
+
+  assert.equal(canvas.addFont(helvetica), '/F1');
+  assert.equal(canvas.addFont(times), '/F2');
+  assert.equal(canvas.addFont(helvetica), '/F1', 'the same font keeps its name');
+
+  assert.deepEqual([...canvas.fonts], [[helvetica, '/F1'], [times, '/F2']]);
+});
+
+test('PdfCanvas.text registers the font it drew with', () => {
+  const canvas = new PdfCanvas(841.89);
+  const times = PdfType1Font.times();
+
+  canvas.text('a', 10, 20, { fontSize: 12, color: '#000000', font: times });
+  canvas.text('b', 10, 40, { fontSize: 12, color: '#000000' });
+
+  assert.match(canvas.output(), /BT \/F1 12 Tf/);
+  assert.match(canvas.output(), /BT \/F2 12 Tf/);
+  assert.equal(canvas.fonts.get(times), '/F1');
+  assert.equal(canvas.fonts.size, 2);
+});
+
+test('a page using two fonts emits two /Font entries pointing at both objects', () => {
+  const document = new PdfDocument({ creator: 'js_pdf' });
+  const helvetica = PdfType1Font.helvetica();
+  const times = PdfType1Font.times();
+
+  document.addPage(
+    PageFormat.A4,
+    'BT /F1 12 Tf (a) Tj ET\nBT /F2 12 Tf (b) Tj ET\n',
+    new Map([[helvetica, '/F1'], [times, '/F2']])
+  );
+
+  const source = latin1(document.save());
+  const helveticaSerial = document.fontObject(helvetica).objser;
+  const timesSerial = document.fontObject(times).objser;
+
+  assert.notEqual(helveticaSerial, timesSerial);
+  assert.match(source, /\/Type \/Font \/Subtype \/Type1 \/BaseFont \/Helvetica\b/);
+  assert.match(source, /\/Type \/Font \/Subtype \/Type1 \/BaseFont \/Times-Roman\b/);
+  assert.match(
+    source,
+    new RegExp(
+      `/Resources << /Font << /F1 ${helveticaSerial} 0 R /F2 ${timesSerial} 0 R >> >>`
+    )
+  );
+});
+
+test('one font object is shared by every page that uses it', () => {
+  const document = new PdfDocument({ creator: 'js_pdf' });
+  const helvetica = PdfType1Font.helvetica();
+  const fonts = new Map([[helvetica, '/F1']]);
+
+  document.addPage(PageFormat.A4, 'BT /F1 12 Tf (a) Tj ET\n', fonts);
+  document.addPage(PageFormat.A4, 'BT /F1 12 Tf (b) Tj ET\n', fonts);
+
+  const source = latin1(document.save());
+  assert.equal((source.match(/\/BaseFont \/Helvetica\b/g) ?? []).length, 1);
+  assert.equal((source.match(/\/Font << \/F1 4 0 R >>/g) ?? []).length, 2);
+});
+
+test('a page that drew nothing gets no /Resources at all', () => {
+  const document = new PdfDocument({ creator: 'js_pdf' });
+  document.addPage(PageFormat.A4, 'q Q\n');
+
+  const source = latin1(document.save());
+  assert.ok(!source.includes('/Resources'), 'an empty resource dict is omitted');
+});
+
+test('PdfGraphicStream collects /Font, /XObject and /ExtGState', () => {
+  const document = new PdfDocument({ creator: 'js_pdf' });
+  const stream = new PdfGraphicStream(document, new PdfDict());
+
+  assert.equal(write(stream.params), '<<  >>', 'nothing registered yet');
+
+  const font = new PdfObjectBase(11, new PdfDict());
+  const image = new PdfObjectBase(12, new PdfDict());
+  const state = new PdfObjectBase(13, new PdfDict());
+
+  stream.addFont('/F1', font);
+  stream.addFont('/F1', new PdfObjectBase(99, new PdfDict()));
+  stream.addXObject('/X1', image);
+  stream.addGraphicState('/a0', state);
+  stream.prepare();
+
+  assert.equal(
+    write(stream.params),
+    '<< /Resources << /Font << /F1 11 0 R >> /XObject << /X1 12 0 R >>'
+      + ' /ExtGState << /a0 13 0 R >> >> >>'
+  );
 });

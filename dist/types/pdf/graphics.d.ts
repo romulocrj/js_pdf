@@ -21,8 +21,24 @@ export interface CircleOptions {
 export declare class PdfCanvas {
     readonly pageHeight: number;
     private readonly commands;
+    private readonly fontNames;
     constructor(pageHeight: number);
     push(command: string): void;
+    /**
+     * Register `font` on this page and return the name a `Tf` operator should
+     * use. Names are allocated in first-use order — `/F1`, `/F2`, … — and repeat
+     * for the same font, so a page's `/Font` dictionary has one entry per font.
+     *
+     * Upstream derives the name from the font object's serial number instead
+     * (`/F$objser`), which it can do because its `PdfFont` is an indirect object
+     * from the moment it is created. Here a page is rendered to operators before
+     * any document exists, so the name has to be page-local; `PdfDocument.addPage`
+     * is what binds it to the font object. Consequence: two pages using the same
+     * font both call it `/F1` and share one font object.
+     */
+    addFont(font: PdfFont): string;
+    /** The fonts this page drew with, mapped to the names it wrote for them. */
+    get fonts(): ReadonlyMap<PdfFont, string>;
     save(): void;
     restore(): void;
     fillRect(x: number, top: number, width: number, height: number, color: ColorInput): void;

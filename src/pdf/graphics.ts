@@ -45,6 +45,7 @@ export interface CircleOptions {
 export class PdfCanvas {
   readonly pageHeight: number;
   private readonly commands: string[] = [];
+  private readonly fontNames = new Map<PdfFont, string>();
 
   constructor(pageHeight: number) {
     this.pageHeight = pageHeight;
@@ -52,6 +53,34 @@ export class PdfCanvas {
 
   push(command: string): void {
     this.commands.push(command);
+  }
+
+  /**
+   * Register `font` on this page and return the name a `Tf` operator should
+   * use. Names are allocated in first-use order — `/F1`, `/F2`, … — and repeat
+   * for the same font, so a page's `/Font` dictionary has one entry per font.
+   *
+   * Upstream derives the name from the font object's serial number instead
+   * (`/F$objser`), which it can do because its `PdfFont` is an indirect object
+   * from the moment it is created. Here a page is rendered to operators before
+   * any document exists, so the name has to be page-local; `PdfDocument.addPage`
+   * is what binds it to the font object. Consequence: two pages using the same
+   * font both call it `/F1` and share one font object.
+   */
+  addFont(font: PdfFont): string {
+    const existing = this.fontNames.get(font);
+    if (existing !== undefined) {
+      return existing;
+    }
+
+    const name = `/F${this.fontNames.size + 1}`;
+    this.fontNames.set(font, name);
+    return name;
+  }
+
+  /** The fonts this page drew with, mapped to the names it wrote for them. */
+  get fonts(): ReadonlyMap<PdfFont, string> {
+    return this.fontNames;
   }
 
   save(): void {
@@ -78,7 +107,7 @@ export class PdfCanvas {
     const font = style.font ?? defaultPdfFont;
     const command = [
       'BT',
-      '/F1', formatNumber(fontSize), 'Tf',
+      this.addFont(font), formatNumber(fontSize), 'Tf',
       colorOperator(style.color),
       '1 0 0 1', formatNumber(x), formatNumber(baseline), 'Tm',
       font.encodeText(text), 'Tj',

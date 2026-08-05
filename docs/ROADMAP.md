@@ -10,9 +10,13 @@ Ordered plan for the port. Current coverage is in
 
 The MVP is restructured into a module tree that mirrors `dart_pdf`, written in
 TypeScript, with the runtime contract and attribution enforced by
-`npm run check`. Output is a valid single-font PDF with selectable standard
-Type1 fonts and real AFM metrics, written through a real indirect-object model.
-Beyond that — TTF, SVG, tables, images — nothing is real yet.
+`npm run check`. Output is a valid PDF with selectable standard Type1 fonts and
+real AFM metrics, written through a real indirect-object model, and each page
+now declares its own resources — so a document can use as many fonts as it
+likes. Beyond that — TTF, SVG, tables, images — nothing is real yet.
+
+**Phase 0 is complete.** The foundations are in place; phase 1 is the next
+subsystem.
 
 **Phase 0.0 — TypeScript migration — landed 2026-08-05.** Every module is `.ts`;
 `tsconfig.json` compiles against the ES2020 lib with no DOM and no host types,
@@ -31,17 +35,21 @@ PDF value types and `src/pdf/obj/` the indirect objects; `document.ts` is a
 registry that assigns serial numbers and writes the file. Output is
 byte-identical to the string builder it replaced.
 
+**Phase 0.3 — resource dictionary — landed 2026-08-05.** `PdfGraphicStream`
+collects `/Font`, `/XObject` and `/ExtGState` per page; `PdfCanvas` allocates
+`/F1`, `/F2`, … as it writes, and `PdfDocument` binds those names to one font
+object per distinct font. The single-font limit is gone.
+
 ## Next step
 
-> **Phase 0.3 — resource dictionary.** Replace the hardcoded single-font
-> `/Resources` in `src/pdf/obj/page.ts` with per-page registration of `/Font`,
-> `/XObject` and `/ExtGState`, naming entries `/F1`, `/F2`, … automatically.
+> **Phase 1.1 — TTF parser.** Port `pdf/lib/src/pdf/font/ttf_parser.dart` into
+> `src/pdf/font/ttf_parser.ts`: table directory, `head`/`hhea`/`hmtx`/`maxp`/
+> `name`/`post`/`OS/2`, `cmap` formats 4, 6 and 12, `loca`/`glyf` bounds.
 
-This is the last thing standing between the port and more than one font per
-document, so it gates all of phase 1. `PdfPage` already owns its `/Resources`
-dictionary as of 0.2 — the work is a `PdfGraphicStream` equivalent that allocates
-names, plus threading the chosen font from `PdfCanvas.text` through to the page
-instead of the fixed `/F1`.
+Phase 0 is finished, so nothing structural is in the way. Read the fixtures
+already sitting in `examples/assets/` with `DataView` over a `Uint8Array` — no
+host buffer API — and assert unitsPerEm, a known advance width and a known
+codepoint→glyph mapping against `OpenSans-Regular` and `Roboto-Regular`.
 
 ---
 
@@ -89,8 +97,9 @@ Prerequisites that phases 1–3 all depend on. Do these before the big
 subsystems, not alongside them.
 
 **Example gate:** none — phase 0 unlocks no API requested by the upstream
-examples. `hello-world` must keep generating through 0.3; its metrics-dependent
-positions changed in 0.1 to match the AFM tables, and 0.2 left every byte alone.
+examples. `hello-world` kept generating throughout: its metrics-dependent
+positions changed in 0.1 to match the AFM tables, 0.2 left every byte alone, and
+0.3 renumbered its objects without changing its length (740 bytes).
 
 ### 0.0 TypeScript migration ✅ *(landed 2026-08-05)*
 
@@ -160,7 +169,7 @@ Divergences worth knowing, each noted in the file that makes it:
   seam TTF embedding needs in 1.3 — a descriptor and a `FontFile2` stream are
   references, and a reference cannot be spliced into text.
 
-### 0.3 Resource dictionary ← **next**
+### 0.3 Resource dictionary ✅ *(landed 2026-08-05)*
 
 - **Ports:** `pdf/lib/src/pdf/obj/graphic_stream.dart`, `page.dart`
 - **Into:** `src/pdf/obj/graphic_stream.ts`
@@ -169,6 +178,34 @@ Divergences worth knowing, each noted in the file that makes it:
   dict.
 - **Test:** a page using two fonts emits two `/Font` entries and the right `Tf`
   operators.
+
+Landed as `PdfGraphicStream`, which `PdfPage` extends. Names are allocated by
+`PdfCanvas.addFont` in first-use order as the content stream is written, and
+`PdfDocument.addPage` binds each one to a font object created on first use, so a
+font shared by twenty pages is written once. A page that drew no text gets no
+`/Resources` key at all.
+
+Divergences worth knowing, each noted in the file that makes it:
+
+- Upstream is a `mixin ... on PdfObject<PdfDict>` so `PdfGraphicXObject` can
+  take it too. TypeScript has no mixin that survives `strict` without an `any`,
+  so this is a base class; when form XObjects land in phase 4, lift
+  `resources()` into a free function rather than duplicating it.
+- Names are **page-local**, not `/F$objser` as upstream derives them. A canvas
+  renders to operators before any document exists, so the serial is not
+  available at the point the name is written. Consequence: two pages using the
+  same font both call it `/F1` and share one font object.
+- No `/ProcSet`. Upstream emits it for readers predating PDF 1.4, gated on an
+  `altered` flag the port does not have.
+- `/Shading` and `/Pattern` are absent until phase 2.8, and `/ExtGState` entries
+  are per page rather than pointing at one document-wide states object.
+
+Two consequences outside `obj/`. `Text` and `Vector`'s `text()` accept a `font`,
+the minimal ancestor of upstream's `TextStyle.font` — a per-page resource dict is
+pointless if nothing can ask for a second font, and phase 1.4 folds the option
+into a real `TextStyle`. `Vector`'s text also stopped encoding with the library
+default while the page's one `/Font` entry named the document's font; the two
+disagreed for any non-default font.
 
 ---
 

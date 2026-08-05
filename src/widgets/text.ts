@@ -41,6 +41,14 @@ export interface TextOptions {
   readonly color?: ColorInput;
   readonly align?: TextAlign;
   readonly margin?: InsetsInput;
+
+  /**
+   * Draw with this font instead of the document's default. The minimal form of
+   * upstream's `TextStyle.font`, added in phase 0.3 because a per-page resource
+   * dictionary is pointless if nothing can ask for a second font; phase 1.4
+   * folds it into a real `TextStyle`.
+   */
+  readonly font?: PdfFont;
 }
 
 export interface TextLayoutData {
@@ -120,13 +128,15 @@ export class Text extends Widget<TextLayoutData> {
   readonly color: Rgb;
   readonly align: TextAlign;
   readonly margin: Insets;
+  readonly font: PdfFont | null;
 
   constructor(value: string, {
     fontSize = DEFAULT_FONT_SIZE,
     lineHeight = DEFAULT_LINE_HEIGHT,
     color = '#000000',
     align = 'left',
-    margin = 0
+    margin = 0,
+    font = undefined
   }: TextOptions = {}) {
     super();
     this.value = String(value);
@@ -135,10 +145,19 @@ export class Text extends Widget<TextLayoutData> {
     this.color = normalizeColor(color);
     this.align = align;
     this.margin = normalizeInsets(margin);
+    this.font = font ?? null;
+  }
+
+  /**
+   * Resolved per call rather than in the constructor: the document's default is
+   * not known until render time, and `layout()` must stay free of cached state.
+   */
+  private resolveFont(context: RenderContext): PdfFont {
+    return this.font ?? context.document.font;
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<TextLayoutData> {
-    const font = context.document.font;
+    const font = this.resolveFont(context);
     const contentWidth = Math.max(1, constraints.maxWidth - this.margin.left - this.margin.right);
     const lines = wrapText(this.value, contentWidth, this.fontSize, font);
     const lineAdvance = this.fontSize * this.lineHeight;
@@ -154,7 +173,7 @@ export class Text extends Widget<TextLayoutData> {
 
   override paint(context: RenderContext, box: PositionedBox<TextLayoutData>): void {
     const { canvas } = context;
-    const font = context.document.font;
+    const font = this.resolveFont(context);
     const { lines, lineAdvance, contentWidth } = box.data;
     const xStart = box.x + this.margin.left;
     let baseline = box.y + this.margin.top + this.fontSize;

@@ -112,12 +112,17 @@ safety) and that JavaScript has to check by hand.
 - **`font/font_metrics.ts`** — glyph and string bounding metrics, including
   ascent, descent, bearings and advance width.
 - **`font/font.ts` / `font/type1_fonts.ts`** — the common font seam and AFM
-  widths for all 14 standard Type1 fonts. A document currently selects one.
+  widths for all 14 standard Type1 fonts. A document may use any number.
+- **`obj/graphic_stream.ts`** — the `/Resources` dictionary: `/Font`,
+  `/XObject` and `/ExtGState` registered per page.
+- **`obj/page.ts`, `page_list.ts`, `catalog.ts`, `info.ts`, `object.ts`,
+  `object_stream.ts`** — the indirect objects a document is made of.
 - **`graphics.ts`** — `PdfCanvas`, the content-stream builder. It owns the
   coordinate flip (see §4) and appends operator strings to a buffer it never
-  re-reads.
-- **`document.ts`** — object table, xref table, trailer. Produces the final
-  `Uint8Array`.
+  re-reads. It also allocates the `/F1`, `/F2`, … names it writes, because the
+  resource dictionary has to agree with the operators.
+- **`document.ts`** — the object registry, xref table and trailer. Produces the
+  final `Uint8Array`.
 
 ### `src/widgets/` — the layout tree
 

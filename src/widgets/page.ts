@@ -81,6 +81,6 @@ export class Page implements Section {
     }
 
     widget.paint(context, { ...box, x: this.margin.left, y: this.margin.top });
-    return [{ format: this.format, content: canvas.output() }];
+    return [{ format: this.format, content: canvas.output(), fonts: canvas.fonts }];
   }
 }

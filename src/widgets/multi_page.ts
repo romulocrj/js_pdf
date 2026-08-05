@@ -146,6 +146,10 @@ export class MultiPage implements Section {
       page.cursor += box.height + this.gap;
     }
 
-    return canvases.map(canvas => ({ format: this.format, content: canvas.output() }));
+    return canvases.map(canvas => ({
+      format: this.format,
+      content: canvas.output(),
+      fonts: canvas.fonts
+    }));
   }
 }

@@ -23,6 +23,7 @@
 
 import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput } from '../pdf/color.ts';
+import type { PdfFont } from '../pdf/font/font.ts';
 import { Widget } from './widget.ts';
 import type { Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
 
@@ -60,6 +61,9 @@ export interface VectorText {
   readonly y: number;
   readonly fontSize?: number;
   readonly color?: ColorInput;
+
+  /** Defaults to the document's font, matching `Text`. */
+  readonly font?: PdfFont;
 }
 
 /** The drawing surface handed to `Vector`'s `draw` callback. */
@@ -115,10 +119,14 @@ export class Vector extends Widget<VectorLayoutData> {
       circle: ({ cx, cy, radius, fill = null, stroke = null, lineWidth = 1 }) => {
         context.canvas.circle(box.x + cx * scale, box.y + cy * scale, radius * scale, { fill, stroke, lineWidth: lineWidth * scale });
       },
-      text: ({ value, x, y, fontSize = 12, color = '#000000' }) => {
+      // Before phase 0.3 this passed no font, so the text was encoded with the
+      // library default while the page's one `/Font` entry named whatever the
+      // document had asked for — the two disagreed for any non-default font.
+      text: ({ value, x, y, fontSize = 12, color = '#000000', font }) => {
         context.canvas.text(String(value), box.x + x * scale, box.y + y * scale, {
           fontSize: fontSize * scale,
-          color: normalizeColor(color)
+          color: normalizeColor(color),
+          font: font ?? context.document.font
         });
       }
     };
