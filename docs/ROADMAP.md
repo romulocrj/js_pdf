@@ -66,6 +66,11 @@ inherited fill/stroke state; groups scope transforms and opacity; `<use>`
 resolves both `href` forms and symbols. Every SVG asset used by the examples
 now produces operators, although no public widget drives the painter until 2.7.
 
+**Phase 2.6 — SVG clipping — landed 2026-08-05.** Referenced clip paths emit
+`W n` or `W* n` in the target operation's saved graphics scope, including
+`objectBoundingBox` units and nesting. Soft masks remain explicitly coupled to
+phase 4's form XObjects and `/SMask`; upstream cannot create one without them.
+
 **Phase 2.3 — XML reader — landed 2026-08-05.** `src/svg/xml.ts` reads
 elements, attributes, text, CDATA, comments, entities and namespaces. Every SVG
 in `examples/assets/` and the inline markup in `server-assets.json` parse.
@@ -91,13 +96,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 2.6 — SVG clipping and masks.** Port `svg/clip_path.dart` and the
-> clip half of `operation.dart`: `clipPath`, `clipPathUnits`, nested clips and
-> the correctly scoped `W n` operators. Soft masks remain blocked on phase 4's
-> form XObjects.
+> **Phase 2.7 — SVG parser and widget.** Add the public `SvgImage` widget,
+> size it from intrinsic dimensions/viewBox, fit and align it in its layout box,
+> and drive the painter through the widget canvas.
 
-Basic SVG content now draws; clipping is the last paint-stage prerequisite
-before `SvgImage` can expose it publicly.
+The internal SVG pipeline is ready; this is the phase that exposes it to six
+ported examples.
 
 ---
 
@@ -639,12 +643,18 @@ Ninety-four SVG tests cover the individual operator streams and paint every
 asset in the examples corpus. The document-level half of `SvgParser` moved here
 from 2.7 because `<use>` needs `findById`; only the widget remains there.
 
-### 2.6 Clipping and masks
+### 2.6 Clipping and masks ✅ *(clipping landed 2026-08-05)*
 
 - **Ports:** `pdf/lib/src/svg/clip_path.dart`, `mask_path.dart`
 - **Into:** `src/svg/clip_path.ts`
 - `clipPath` via `W n`; `clipPathUnits`; nested clips.
 - **Test:** clip operators appear in the right `q`/`Q` scope.
+
+Landed with referenced paths, even-odd clipping, `userSpaceOnUse`,
+`objectBoundingBox`, missing-reference fallback and nested target scopes.
+Four operator-level tests bring the SVG suite to 98 tests. `mask_path.dart` is
+deferred intact to phase 4: its first executable line constructs a form XObject
+and its result is a `/SMask` graphic state, neither of which exists earlier.
 
 ### 2.7 Parser and widget
 

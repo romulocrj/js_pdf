@@ -16,30 +16,39 @@
  *
  * The common paint scope for every SVG operation.
  *
- * PORT GAP: clipping joins this scope in phase 2.6; masks wait for form
- * XObjects in phase 4.
+ * PORT GAP: masks wait for form XObjects in phase 4.
  */
 
 import { PdfGraphicState } from '../pdf/graphic_state.ts';
 import type { PdfCanvas } from '../pdf/graphics.ts';
 import type { PdfRect } from '../pdf/rect.ts';
 import type { SvgBrush } from './brush.ts';
+import type { SvgClipPath } from './clip_path.ts';
 import type { SvgPainter } from './painter.ts';
 import type { SvgTransform } from './transform.ts';
 
 export abstract class SvgOperation {
   readonly brush: SvgBrush;
+  readonly clip: SvgClipPath;
   readonly transform: SvgTransform;
   readonly painter: SvgPainter;
 
-  constructor(brush: SvgBrush, transform: SvgTransform, painter: SvgPainter) {
+  constructor(
+    brush: SvgBrush,
+    clip: SvgClipPath,
+    transform: SvgTransform,
+    painter: SvgPainter
+  ) {
     this.brush = brush;
+    this.clip = clip;
     this.transform = transform;
     this.painter = painter;
   }
 
   paint(canvas: PdfCanvas): void {
     canvas.saveContext();
+
+    this.clip.apply(canvas, this.boundingBox());
 
     if (this.transform.matrix !== null) {
       canvas.setTransform(this.transform.matrix);

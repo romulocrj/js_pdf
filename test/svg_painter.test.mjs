@@ -131,6 +131,67 @@ test('a missing reference is ignored and an unknown element does not abort sibli
   assert.ok(output.includes('f'));
 });
 
+test('clipPath builds a path and consumes it before the target paints', () => {
+  const { output } = paint(`
+    <svg viewBox="0 0 100 100">
+      <defs><clipPath id="cut"><rect x="10" y="20" width="30" height="40"/></clipPath></defs>
+      <rect clip-path="url(#cut)" width="100" height="100" fill="red"/>
+    </svg>
+  `);
+
+  const clip = output.indexOf('W n');
+  const fill = output.lastIndexOf('f');
+  assert.ok(clip > 0, 'clip operator was not emitted');
+  assert.ok(fill > clip, 'the target must paint after clipping is installed');
+  assert.equal(output.filter(line => line === 'W n').length, 1);
+  assert.ok(output.slice(0, clip).includes('10 20 m'));
+});
+
+test('clipPathUnits=objectBoundingBox maps unit coordinates onto the target box', () => {
+  const { output } = paint(`
+    <svg viewBox="0 0 100 100">
+      <defs>
+        <clipPath id="half" clipPathUnits="objectBoundingBox">
+          <rect width="0.5" height="1"/>
+        </clipPath>
+      </defs>
+      <rect x="10" y="20" width="30" height="40" clip-path="url(#half)"/>
+    </svg>
+  `);
+
+  assert.ok(output.includes('30 0 0 40 10 20 cm'));
+  assert.ok(output.includes('W n'));
+});
+
+test('clip-rule selects even-odd clipping and a missing clip is a no-op', () => {
+  const evenOdd = paint(`
+    <svg><defs><clipPath id="cut" clip-rule="evenodd"><path d="M0 0H10V10H0Z"/></clipPath></defs>
+      <rect width="10" height="10" clip-path="url(#cut)"/></svg>
+  `).output;
+  const missing = paint('<svg><rect width="10" height="10" clip-path="url(#missing)"/></svg>').output;
+
+  assert.ok(evenOdd.includes('W* n'));
+  assert.equal(missing.some(line => line.startsWith('W')), false);
+});
+
+test('nested clipped groups keep every clip inside its own q/Q scope', () => {
+  const { output } = paint(`
+    <svg>
+      <defs>
+        <clipPath id="outer"><rect width="50" height="50"/></clipPath>
+        <clipPath id="inner"><circle cx="20" cy="20" r="10"/></clipPath>
+      </defs>
+      <g clip-path="url(#outer)">
+        <rect width="100" height="100" clip-path="url(#inner)"/>
+      </g>
+    </svg>
+  `);
+
+  assert.equal(output.filter(line => line === 'W n').length, 2);
+  assert.equal(output.filter(line => line === 'q').length, output.filter(line => line === 'Q').length);
+  assert.ok(output.indexOf('W n') < output.lastIndexOf('W n'));
+});
+
 test('operation bounding boxes are available before the widget phase', () => {
   const parser = SvgParser.fromXml({ xml: parseXml(`
     <svg viewBox="0 0 100 100"><g><rect x="10" y="20" width="30" height="40"/></g></svg>

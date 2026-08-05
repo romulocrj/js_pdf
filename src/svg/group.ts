@@ -18,6 +18,7 @@
 import type { PdfCanvas } from '../pdf/graphics.ts';
 import { PdfRect } from '../pdf/rect.ts';
 import { SvgBrush } from './brush.ts';
+import { SvgClipPath } from './clip_path.ts';
 import { SvgOperation } from './operation.ts';
 import type { SvgPainter } from './painter.ts';
 import { SvgTransform } from './transform.ts';
@@ -29,10 +30,11 @@ export class SvgGroup extends SvgOperation {
   constructor(
     children: readonly SvgOperation[],
     brush: SvgBrush,
+    clip: SvgClipPath,
     transform: SvgTransform,
     painter: SvgPainter
   ) {
-    super(brush, transform, painter);
+    super(brush, clip, transform, painter);
     this.children = children;
   }
 
@@ -50,7 +52,13 @@ export class SvgGroup extends SvgOperation {
       }
     }
 
-    return new SvgGroup(children, brush, SvgTransform.fromXml(element), painter);
+    return new SvgGroup(
+      children,
+      brush,
+      SvgClipPath.fromXml(element, painter, brush),
+      SvgTransform.fromXml(element),
+      painter
+    );
   }
 
   protected paintShape(canvas: PdfCanvas): void {

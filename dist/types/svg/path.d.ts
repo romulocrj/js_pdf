@@ -1,6 +1,7 @@
 import { PdfCanvas } from '../pdf/graphics.ts';
 import { PdfRect } from '../pdf/rect.ts';
 import { SvgBrush } from './brush.ts';
+import { SvgClipPath } from './clip_path.ts';
 import { SvgOperation } from './operation.ts';
 import type { SvgPainter } from './painter.ts';
 import { SvgTransform } from './transform.ts';
@@ -131,7 +132,7 @@ export declare function shapeBoundingBox(d: string): PdfRect;
 /** A basic SVG shape normalized to path data, then painted with its brush. */
 export declare class SvgPath extends SvgOperation {
     readonly d: string;
-    constructor(d: string, brush: SvgBrush, transform: SvgTransform, painter: SvgPainter);
+    constructor(d: string, brush: SvgBrush, clip: SvgClipPath, transform: SvgTransform, painter: SvgPainter);
     static fromXmlElement(element: XmlElement, painter: SvgPainter, parent: SvgBrush): SvgPath;
     private static numeric;
     private static rectData;

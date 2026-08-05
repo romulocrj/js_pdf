@@ -44,6 +44,7 @@ import {
 } from '../pdf/matrix.ts';
 import { PdfRect } from '../pdf/rect.ts';
 import { SvgBrush } from './brush.ts';
+import { SvgClipPath } from './clip_path.ts';
 import { SvgOperation } from './operation.ts';
 import type { SvgPainter } from './painter.ts';
 import { getNumeric } from './parser.ts';
@@ -856,8 +857,14 @@ export function shapeBoundingBox(d: string): PdfRect {
 export class SvgPath extends SvgOperation {
   readonly d: string;
 
-  constructor(d: string, brush: SvgBrush, transform: SvgTransform, painter: SvgPainter) {
-    super(brush, transform, painter);
+  constructor(
+    d: string,
+    brush: SvgBrush,
+    clip: SvgClipPath,
+    transform: SvgTransform,
+    painter: SvgPainter
+  ) {
+    super(brush, clip, transform, painter);
     this.d = d;
   }
 
@@ -919,7 +926,13 @@ export class SvgPath extends SvgOperation {
         throw new SyntaxError(`Unsupported SVG shape: ${element.name.local}`);
     }
 
-    return new SvgPath(d, brush, SvgTransform.fromXml(element), painter);
+    return new SvgPath(
+      d,
+      brush,
+      SvgClipPath.fromXml(element, painter, brush),
+      SvgTransform.fromXml(element),
+      painter
+    );
   }
 
   private static numeric(element: XmlElement, name: string, brush: SvgBrush): number {

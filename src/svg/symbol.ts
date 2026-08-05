@@ -16,6 +16,7 @@
  */
 
 import type { SvgBrush } from './brush.ts';
+import { SvgClipPath } from './clip_path.ts';
 import { SvgGroup } from './group.ts';
 import type { SvgOperation } from './operation.ts';
 import type { SvgPainter } from './painter.ts';
@@ -34,6 +35,12 @@ export class SvgSymbol extends SvgGroup {
       }
     }
 
-    return new SvgSymbol(children, brush, SvgTransform.fromXml(element), painter);
+    return new SvgSymbol(
+      children,
+      brush,
+      SvgClipPath.fromXml(element, painter, brush),
+      SvgTransform.fromXml(element),
+      painter
+    );
   }
 }
