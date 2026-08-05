@@ -40,6 +40,13 @@ collects `/Font`, `/XObject` and `/ExtGState` per page; `PdfCanvas` allocates
 `/F1`, `/F2`, … as it writes, and `PdfDocument` binds those names to one font
 object per distinct font. The single-font limit is gone.
 
+**Phase 3.3 — basic widgets — landed 2026-08-05, out of order.** Taken ahead of
+phases 1 and 2 because it is the only large piece of the roadmap that depends on
+neither. `Padding`, `Align`, `Center`, `SizedBox` and `Divider`, plus
+`EdgeInsets`, `Alignment` and `StatelessWidget`. No example generates as a
+result — every one of the seven calls `Font.ttf`, so phase 1 remains on all their
+critical paths — but the missing-API total across them fell from 147 to 124.
+
 ## Next step
 
 > **Phase 1.1 — TTF parser.** Port `pdf/lib/src/pdf/font/ttf_parser.dart` into
@@ -381,14 +388,41 @@ produces the first two fully generated examples.
   overflow a page — without this they will throw `RangeError` even once their
   widgets exist.
 
-### 3.3 Basic widgets
+### 3.3 Basic widgets ⚠️ *(partial — landed 2026-08-05)*
 
 - **Ports:** `widgets/basic.dart`, `widgets/geometry.dart`, `widgets/widget.dart`
+- **Into:** `src/widgets/basic.ts`
 - `Align`, `Center`, `Padding`, `SizedBox`, `AspectRatio`, `Transform`,
   `Opacity`, `FittedBox`, `Divider`, `FullPage`; `EdgeInsets` as a real exported
   type rather than the internal `normalizeInsets`; `StatelessWidget` for
   composition.
 - **Example gate:** the second-largest unblock after 1.4 — all seven examples.
+
+Landed: `Padding`, `Align`, `Center`, `SizedBox`, `Divider`, `EdgeInsets`,
+`Alignment` + `inscribe`, and `StatelessWidget`. Missing-API total across the
+seven examples fell 147 → 124; none generates, since all seven need phase 1.
+
+**Still open, and why** — reopen this sub-phase when the blockers clear:
+
+- `Transform` needs the `cm` operator (**2.1**); `FittedBox` needs `Transform`;
+  `Opacity` needs real `/ExtGState` graphic states. None is a small omission.
+- `ConstrainedBox` needs a `BoxConstraints` value type with minimums. The port's
+  `Constraints` carries maxima only, which was enough for everything above —
+  `SizedBox` states its size outright instead of tightening a constraint. **3.4**
+  needs minimums for `Expanded`/`Flexible` and should introduce them.
+- `AspectRatio`, `FullPage`, `LimitedBox`, `OverflowBox`, `CustomPaint`,
+  `Builder`, `LayoutBuilder` are simply not done yet.
+
+Two divergences worth knowing:
+
+- `Align` fills an axis unless given a factor, which is upstream's rule under
+  finite constraints. But upstream's `Flex` hands children an *infinite*
+  main-axis constraint, so an `Align` inside a `Column` shrink-wraps there and
+  here it does not — it claims the remaining page height until **3.4** brings the
+  real flex algorithm. `heightFactor: 1` is the workaround.
+- `Divider` fills its rule directly rather than composing `SizedBox` + `Center` +
+  `Container` + `BoxDecoration` + `Border` + `BorderSide`, since decoration is
+  **3.5**. The emitted `re f` is what upstream's bottom border produces anyway.
 
 ### 3.4 Full flex
 

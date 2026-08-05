@@ -12,3 +12,4 @@ test/v8/
 # and published in the npm tarball. Only the canonical dist/js_pdf.mjs and
 # dist/js_pdf.min.mjs are committed.
 dist/js_pdf-*.mjs
+.claude/settings.json

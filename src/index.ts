@@ -23,27 +23,37 @@
 
 import { PageFormat } from './pdf/page_format.ts';
 import { PdfType1Font } from './pdf/font/type1_fonts.ts';
+import { Align, Center, Divider, Padding, SizedBox } from './widgets/basic.ts';
 import { Container } from './widgets/container.ts';
 import { Document } from './widgets/document.ts';
 import { Column, Row, Spacer } from './widgets/flex.ts';
+import { Alignment, EdgeInsets } from './widgets/geometry.ts';
 import { MultiPage } from './widgets/multi_page.ts';
 import { Page } from './widgets/page.ts';
 import type { Section } from './widgets/page.ts';
 import { Vector } from './widgets/shape.ts';
 import { Text } from './widgets/text.ts';
-import { Widget } from './widgets/widget.ts';
+import { StatelessWidget, Widget } from './widgets/widget.ts';
 import type { DocumentOptions } from './widgets/document.ts';
 
 export {
+  Align,
+  Alignment,
+  Center,
   Column,
   Container,
+  Divider,
   Document,
+  EdgeInsets,
   MultiPage,
+  Padding,
   Page,
   PageFormat,
   PdfType1Font,
   Row,
+  SizedBox,
   Spacer,
+  StatelessWidget,
   Text,
   Vector,
   Widget
@@ -56,7 +66,7 @@ export { PdfFontMetrics } from './pdf/font/font_metrics.ts';
 export type { PageSize } from './pdf/page_format.ts';
 export type { TextStyle } from './pdf/graphics.ts';
 export type { PdfCanvas } from './pdf/graphics.ts';
-export type { Insets, InsetsInput } from './widgets/geometry.ts';
+export type { Insets, InsetsInput, Offset } from './widgets/geometry.ts';
 export type {
   AnyLayoutBox,
   AnyWidget,
@@ -64,8 +74,18 @@ export type {
   DocumentContext,
   LayoutBox,
   PositionedBox,
-  RenderContext
+  RenderContext,
+  StatelessLayoutData
 } from './widgets/widget.ts';
+export type {
+  AlignLayoutData,
+  AlignOptions,
+  CenterOptions,
+  DividerOptions,
+  PaddingOptions,
+  SingleChildLayoutData,
+  SizedBoxOptions
+} from './widgets/basic.ts';
 export type { ColumnOptions, RowOptions } from './widgets/flex.ts';
 export type { ContainerOptions } from './widgets/container.ts';
 export type { TextAlign, TextOptions } from './widgets/text.ts';
@@ -85,6 +105,13 @@ export interface PublicApi {
   readonly Container: typeof Container;
   readonly Spacer: typeof Spacer;
   readonly Vector: typeof Vector;
+  readonly Padding: typeof Padding;
+  readonly Align: typeof Align;
+  readonly Center: typeof Center;
+  readonly SizedBox: typeof SizedBox;
+  readonly Divider: typeof Divider;
+  readonly Alignment: typeof Alignment;
+  readonly EdgeInsets: typeof EdgeInsets;
   readonly PageFormat: typeof PageFormat;
   readonly PdfType1Font: typeof PdfType1Font;
 }
@@ -99,6 +126,13 @@ const publicApi: PublicApi = Object.freeze({
   Container,
   Spacer,
   Vector,
+  Padding,
+  Align,
+  Center,
+  SizedBox,
+  Divider,
+  Alignment,
+  EdgeInsets,
   PageFormat,
   PdfType1Font
 });

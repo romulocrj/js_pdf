@@ -56,3 +56,25 @@ export declare abstract class Widget<TData = unknown> {
     abstract layout(context: RenderContext, constraints: Constraints): LayoutBox<TData>;
     abstract paint(context: RenderContext, box: PositionedBox<TData>): void;
 }
+/** What a `StatelessWidget` hands from `layout` to `paint`: the built subtree. */
+export interface StatelessLayoutData {
+    readonly childBox: AnyLayoutBox;
+}
+/**
+ * A widget defined by composition: `build()` returns the subtree that does the
+ * real work, and layout and paint delegate to it.
+ *
+ * `build()` runs during `layout()`, and the widget it returns is carried to
+ * `paint()` in `data` rather than stored on `this` — the layout protocol forbids
+ * cached state, and `MultiPage` re-lays the same instance after a page break.
+ * Upstream can keep the built child in a field because it re-builds on every
+ * layout pass; here the pure protocol makes the hand-off explicit.
+ *
+ * PORT GAP: upstream mixes in `SpanningWidget` so a stateless widget can split
+ * across pages. Spanning is phase 3.2.
+ */
+export declare abstract class StatelessWidget extends Widget<StatelessLayoutData> {
+    abstract build(context: RenderContext): AnyWidget;
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<StatelessLayoutData>;
+    paint(context: RenderContext, box: PositionedBox<StatelessLayoutData>): void;
+}

@@ -518,7 +518,289 @@ function normalizeInsets(value = 0) {
   };
 }
 
+const EdgeInsets = Object.freeze({
+  zero: Object.freeze({
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0
+  }),
+  all(value) {
+    return {
+      top: value,
+      right: value,
+      bottom: value,
+      left: value
+    };
+  },
+  symmetric({vertical = 0, horizontal = 0}) {
+    return {
+      top: vertical,
+      right: horizontal,
+      bottom: vertical,
+      left: horizontal
+    };
+  },
+  only({top = 0, right = 0, bottom = 0, left = 0} = {}) {
+    return {
+      top,
+      right,
+      bottom,
+      left
+    };
+  },
+  fromLTRB(left, top, right, bottom) {
+    return {
+      top,
+      right,
+      bottom,
+      left
+    };
+  }
+});
+
+function insetsHorizontal(insets) {
+  return insets.left + insets.right;
+}
+
+function insetsVertical(insets) {
+  return insets.top + insets.bottom;
+}
+
+const Alignment = Object.freeze({
+  topLeft: Object.freeze({
+    x: -1,
+    y: 1
+  }),
+  topCenter: Object.freeze({
+    x: 0,
+    y: 1
+  }),
+  topRight: Object.freeze({
+    x: 1,
+    y: 1
+  }),
+  centerLeft: Object.freeze({
+    x: -1,
+    y: 0
+  }),
+  center: Object.freeze({
+    x: 0,
+    y: 0
+  }),
+  centerRight: Object.freeze({
+    x: 1,
+    y: 0
+  }),
+  bottomLeft: Object.freeze({
+    x: -1,
+    y: -1
+  }),
+  bottomCenter: Object.freeze({
+    x: 0,
+    y: -1
+  }),
+  bottomRight: Object.freeze({
+    x: 1,
+    y: -1
+  })
+});
+
+function inscribe(alignment, childWidth, childHeight, boxWidth, boxHeight) {
+  const halfWidthDelta = (boxWidth - childWidth) / 2;
+  const halfHeightDelta = (boxHeight - childHeight) / 2;
+  return {
+    dx: halfWidthDelta + alignment.x * halfWidthDelta,
+    dy: halfHeightDelta - alignment.y * halfHeightDelta
+  };
+}
+
 class Widget {}
+
+class StatelessWidget extends Widget {
+  layout(context, constraints) {
+    const childBox = this.build(context).layout(context, constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class Padding extends Widget {
+  constructor({padding = 0, child = null} = {}) {
+    super();
+    this.padding = normalizeInsets(padding);
+    this.child = child;
+  }
+  layout(context, constraints) {
+    const horizontal = insetsHorizontal(this.padding);
+    const vertical = insetsVertical(this.padding);
+    if (this.child === null) {
+      return {
+        widget: this,
+        width: Math.min(constraints.maxWidth, horizontal),
+        height: Math.min(constraints.maxHeight, vertical),
+        data: {
+          childBox: null
+        }
+      };
+    }
+    const childBox = this.child.layout(context, {
+      maxWidth: Math.max(0, constraints.maxWidth - horizontal),
+      maxHeight: Math.max(0, constraints.maxHeight - vertical)
+    });
+    return {
+      widget: this,
+      width: Math.min(constraints.maxWidth, childBox.width + horizontal),
+      height: childBox.height + vertical,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    if (childBox === null) return;
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x + this.padding.left,
+      y: box.y + this.padding.top
+    });
+  }
+}
+
+class Align extends Widget {
+  constructor({alignment = Alignment.center, widthFactor = null, heightFactor = null, child = null} = {}) {
+    super();
+    this.alignment = alignment;
+    this.widthFactor = widthFactor;
+    this.heightFactor = heightFactor;
+    this.child = child;
+  }
+  layout(context, constraints) {
+    if (this.child === null) {
+      return {
+        widget: this,
+        width: this.widthFactor === null ? constraints.maxWidth : 0,
+        height: this.heightFactor === null ? constraints.maxHeight : 0,
+        data: {
+          childBox: null,
+          dx: 0,
+          dy: 0
+        }
+      };
+    }
+    const childBox = this.child.layout(context, constraints);
+    const width = this.widthFactor === null ? constraints.maxWidth : Math.min(constraints.maxWidth, childBox.width * this.widthFactor);
+    const height = this.heightFactor === null ? constraints.maxHeight : Math.min(constraints.maxHeight, childBox.height * this.heightFactor);
+    const offset = inscribe(this.alignment, childBox.width, childBox.height, width, height);
+    return {
+      widget: this,
+      width,
+      height,
+      data: {
+        childBox,
+        dx: offset.dx,
+        dy: offset.dy
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox, dx, dy} = box.data;
+    if (childBox === null) return;
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x + dx,
+      y: box.y + dy
+    });
+  }
+}
+
+class Center extends Align {
+  constructor({widthFactor = null, heightFactor = null, child = null} = {}) {
+    super({
+      alignment: Alignment.center,
+      widthFactor,
+      heightFactor,
+      child
+    });
+  }
+}
+
+class SizedBox extends Widget {
+  constructor({width = null, height = null, child = null} = {}) {
+    super();
+    this.width = width === null ? null : Number(width);
+    this.height = height === null ? null : Number(height);
+    this.child = child;
+  }
+  layout(context, constraints) {
+    const maxWidth = Math.min(constraints.maxWidth, this.width ?? constraints.maxWidth);
+    const maxHeight = Math.min(constraints.maxHeight, this.height ?? constraints.maxHeight);
+    const childBox = this.child === null ? null : this.child.layout(context, {
+      maxWidth,
+      maxHeight
+    });
+    return {
+      widget: this,
+      width: this.width ?? childBox?.width ?? 0,
+      height: this.height ?? childBox?.height ?? 0,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    if (childBox === null) return;
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+const DEFAULT_DIVIDER_HEIGHT = 16;
+
+const DEFAULT_DIVIDER_THICKNESS = 1;
+
+class Divider extends Widget {
+  constructor({height = DEFAULT_DIVIDER_HEIGHT, thickness = DEFAULT_DIVIDER_THICKNESS, indent = 0, endIndent = 0, color = "#000000"} = {}) {
+    super();
+    this.height = Math.max(0, Number(height));
+    this.thickness = Math.max(0, Number(thickness));
+    this.indent = Math.max(0, Number(indent));
+    this.endIndent = Math.max(0, Number(endIndent));
+    this.color = normalizeColor(color);
+  }
+  layout(_context, constraints) {
+    return {
+      widget: this,
+      width: constraints.maxWidth,
+      height: Math.min(constraints.maxHeight, this.height),
+      data: null
+    };
+  }
+  paint(context, box) {
+    const width = Math.max(0, box.width - this.indent - this.endIndent);
+    if (width === 0 || this.thickness === 0) return;
+    context.canvas.fillRect(box.x + this.indent, box.y + (box.height - this.thickness) / 2, width, this.thickness, this.color);
+  }
+}
 
 class Container extends Widget {
   constructor({child = null, width = null, height = null, padding = 0, margin = 0, background = null, borderColor = null, borderWidth = 1} = {}) {
@@ -1402,6 +1684,13 @@ const publicApi = Object.freeze({
   Container,
   Spacer,
   Vector,
+  Padding,
+  Align,
+  Center,
+  SizedBox,
+  Divider,
+  Alignment,
+  EdgeInsets,
   PageFormat,
   PdfType1Font
 });
@@ -1424,4 +1713,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Column, Container, Document, MultiPage, Page, PageFormat, PdfFontMetrics, PdfType1Font, Row, Spacer, Text, Vector, Widget, createPdf, js_pdf };
+export { Align, Alignment, Center, Column, Container, Divider, Document, EdgeInsets, MultiPage, Padding, Page, PageFormat, PdfFontMetrics, PdfType1Font, Row, SizedBox, Spacer, StatelessWidget, Text, Vector, Widget, createPdf, js_pdf };

@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 38 `.ts` files, ~3,610 lines (TypeScript)
+**Ported:** 39 `.ts` files, ~3,930 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -23,13 +23,13 @@ table. Run `npm run examples`; current state, from
 | Example | Status | Missing APIs | Unlocks at |
 |---|---|---:|---|
 | `hello-world` | ✅ generated (740 bytes) | 0 | — |
-| `calendar` | failed | 14 | 3.6 |
-| `certificate` | failed | 19 | 3.9 |
-| `report` | failed | 18 | 5.1 |
-| `invoice` | failed | 23 | 5.2 |
-| `document` | failed | 22 | 5.3 |
-| `server` | failed | 22 | 5.3 |
-| `resume` | failed | 29 | 5.5 |
+| `calendar` | failed | 11 | 3.6 |
+| `certificate` | failed | 15 | 3.9 |
+| `report` | failed | 16 | 5.1 |
+| `invoice` | failed | 20 | 5.2 |
+| `document` | failed | 17 | 5.3 |
+| `server` | failed | 20 | 5.3 |
+| `resume` | failed | 25 | 5.5 |
 
 **1 of 8.** See [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which
 phase clears each one.
@@ -141,8 +141,8 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
-| `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | partial — layout protocol; no `Context` inheritance, `InheritedWidget`, `StatelessWidget` (**phase 3.3**) |
-| `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — inset normalization; no exported `EdgeInsets` (**phase 3.3**) |
+| `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | partial — layout protocol and `StatelessWidget`; no `Context` inheritance, `InheritedWidget`, `SpanningWidget` (**3.2**) |
+| `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — `EdgeInsets`, `Alignment`, `inscribe`; no `BoxConstraints` value type (**3.4**) |
 | `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts` | partial — single style, greedy wrap, per-widget `font`; no `TextStyle` (**1.4**), `RichText`/`TextSpan` (**3.7**) |
 | `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — `Column`, `Row`, `Spacer`; no alignment, `Expanded`, `Flexible` (**phase 3.4**) |
 | `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts` | partial — fill, single border; no `BoxDecoration`, `Border`, `BorderSide` (**phase 3.5**) |
@@ -150,7 +150,7 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 | `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — header/footer and page breaks; no `SpanningWidget` (**phase 3.2**) |
 | `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`; `font` is the default a widget falls back to, not the document's only font |
 | `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts` | partial — imperative `Vector`; no `SvgImage` (**phase 2.7**) |
-| `widgets/basic.dart` | 1090 | — | — `Align`, `Padding`, `SizedBox`, `Transform`, `FittedBox`, `Divider`, `FullPage` — **phase 3.3** |
+| `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | partial — `Padding`, `Align`, `Center`, `SizedBox`, `Divider`; no `Transform`/`Opacity`/`FittedBox` (blocked on **2.1** and `/ExtGState`), no `ConstrainedBox`/`AspectRatio`/`FullPage` |
 | `widgets/table.dart`, `table_helper.dart` | 834 | — | — **phase 3.1** |
 | `widgets/theme.dart`, `font.dart` | 461 | — | — `Theme`, `ThemeData`, `DefaultTextStyle`, `Font` — **phase 1.4** |
 | `widgets/image.dart`, `image_provider.dart` | 423 | — | — `Image`, `MemoryImage` — **phase 4.3** |
@@ -177,7 +177,7 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources |
 | Fonts | ~2,100 | Type1 AFM metrics done, any number per document; no TTF parsing or embedding |
 | SVG | ~2,800 | not started |
-| Widgets | ~14,000 | ~10 widgets of ~60 |
+| Widgets | ~14,000 | ~15 widgets of ~60 |
 
 **Phase 0 is complete.** The object model landed in 0.2 and the per-page resource
 dictionary in 0.3, so neither the object graph nor the single-font limit is a
