@@ -46,6 +46,7 @@ import {
 import { BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, Radius } from './widgets/border_radius.ts';
 import { Border, BorderSide, BorderStyle, BoxBorder } from './widgets/box_border.ts';
 import { Container, DecoratedBox } from './widgets/container.ts';
+import { ClipOval, ClipRect, ClipRRect } from './widgets/clip.ts';
 import { Bullet, Header, Paragraph, TableOfContent } from './widgets/content.ts';
 import { BoxDecoration, BoxShadow, Gradient, LinearGradient, RadialGradient } from './widgets/decoration.ts';
 import { Document } from './widgets/document.ts';
@@ -97,6 +98,9 @@ export {
   Bullet,
   Builder,
   Center,
+  ClipOval,
+  ClipRect,
+  ClipRRect,
   Column,
   ConstrainedBox,
   Container,
@@ -290,6 +294,7 @@ export type {
   VerticalDirection
 } from './widgets/flex.ts';
 export type { ContainerLayoutData, ContainerOptions, DecoratedBoxOptions } from './widgets/container.ts';
+export type { ClipLayoutData, ClipRRectOptions, ClipWidgetOptions } from './widgets/clip.ts';
 export type {
   BulletOptions,
   HeaderOptions,
@@ -438,6 +443,9 @@ export interface PublicApi {
   readonly Paragraph: typeof Paragraph;
   readonly Bullet: typeof Bullet;
   readonly TableOfContent: typeof TableOfContent;
+  readonly ClipRect: typeof ClipRect;
+  readonly ClipRRect: typeof ClipRRect;
+  readonly ClipOval: typeof ClipOval;
   readonly Placeholder: typeof Placeholder;
   readonly PdfLogo: typeof PdfLogo;
   readonly FlutterLogo: typeof FlutterLogo;
@@ -527,6 +535,9 @@ const publicApi: PublicApi = Object.freeze({
   Paragraph,
   Bullet,
   TableOfContent,
+  ClipRect,
+  ClipRRect,
+  ClipOval,
   Placeholder,
   PdfLogo,
   FlutterLogo,

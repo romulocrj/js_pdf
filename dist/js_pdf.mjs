@@ -3396,6 +3396,64 @@ class Container extends Widget {
   }
 }
 
+class ClipWidget extends Widget {
+  constructor({child = null} = {}) {
+    super();
+    this.child = child;
+  }
+  layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const childBox = this.child?.layout(context, parent) ?? null;
+    const size = parent.constrain(childBox ?? parent.smallest);
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    if (childBox === null) return;
+    context.canvas.saveContext();
+    this.appendClip(context, box);
+    context.canvas.clipPath();
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+    context.canvas.restoreContext();
+  }
+}
+
+class ClipRect extends ClipWidget {
+  appendClip(context, box) {
+    context.canvas.drawRect(box.x, context.canvas.pageHeight - box.y - box.height, box.width, box.height);
+  }
+}
+
+class ClipRRect extends ClipWidget {
+  constructor({child = null, horizontalRadius = 0, verticalRadius = 0} = {}) {
+    super({
+      child
+    });
+    this.horizontalRadius = Math.max(0, Number(horizontalRadius));
+    this.verticalRadius = Math.max(0, Number(verticalRadius));
+  }
+  appendClip(context, box) {
+    BorderRadius.all(new Radius(this.horizontalRadius, this.verticalRadius)).paint(context.canvas, box.x, box.y, box.width, box.height);
+  }
+}
+
+class ClipOval extends ClipWidget {
+  appendClip(context, box) {
+    context.canvas.drawEllipse(box.x + box.width / 2, context.canvas.pageHeight - box.y - box.height / 2, box.width / 2, box.height / 2);
+  }
+}
+
 function finiteNonNegative$1(value, name) {
   if (!Number.isFinite(value) || value < 0) {
     throw new RangeError(`${name} must be a finite non-negative number`);
@@ -9780,6 +9838,9 @@ const publicApi = Object.freeze({
   Paragraph,
   Bullet,
   TableOfContent,
+  ClipRect,
+  ClipRRect,
+  ClipOval,
   Placeholder,
   PdfLogo,
   FlutterLogo,
@@ -9874,4 +9935,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, Center, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridView, Header, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, Lorem, LoremText, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Placeholder, Positioned, PositionedDirectional, RadialGradient, Radius, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, Center, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridView, Header, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, Lorem, LoremText, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Placeholder, Positioned, PositionedDirectional, RadialGradient, Radius, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

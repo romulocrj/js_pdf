@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 82 `.ts` files, ~17,900 lines (TypeScript)
+**Ported:** 83 `.ts` files, ~18,000 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -29,9 +29,9 @@ table. Run `npm run examples`; current state, from
 | `invoice` | failed | 2 | 5.2 |
 | `document` | failed | 1 | 5.3 |
 | `server` | failed | 7 | 5.3 |
-| `resume` | failed | 9 | 5.5 |
+| `resume` | failed | 8 | 5.5 |
 
-**3 of 8**, with the missing-API total down from 124 to 28 — phase 1.4 cleared
+**3 of 8**, with the missing-API total down from 124 to 27 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
 from every one of the seven, phase 2.7 cleared `SvgImage` from six, and phase
 3.1 cleared `TableHelper` from four. Phase 3.3 then cleared the composition
@@ -41,7 +41,8 @@ primitives `Transform`, `Opacity`, `FittedBox`, `AspectRatio`, `FullPage`,
 and radii from six, phase 3.6 cleared stack/grid/partitions from four and made
 the calendar generate, phase 3.7 cleared rich text from four, and phase 3.8
 cleared all four content widgets from document. Phase 3.9 then supplied the
-placeholders used by four examples and made certificate generate. See
+placeholders used by four examples and made certificate generate; phase 3.10
+then removed `ClipOval` from resume. See
 [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which phase clears
 each one.
 
@@ -174,7 +175,7 @@ both, and will grow the shape factories in 2.5.
 | `widgets/image.dart`, `image_provider.dart` | 423 | — | — `Image`, `MemoryImage` — **phase 4.3** |
 | `widgets/border_radius.dart` | 466 | `src/widgets/border_radius.ts` | done — physical/directional circular or elliptical radii, with oversized radii scaled to a valid path |
 | `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | `src/widgets/stack.ts`, `wrap.ts`, `grid_view.ts`, `partitions.ts` | done — positioned overlays/clipping, multi-run wrap, fixed-track grid and parallel partitions; immutable continuation for wrap/grid/partitions |
-| `widgets/clip.dart` | 134 | — | — `ClipOval`, `ClipRect`, `ClipRRect` — **phase 3.10** |
+| `widgets/clip.dart` | 134 | `src/widgets/clip.ts` | done — rectangular, scaled rounded-rectangle and elliptical clip scopes over immutable child layout |
 | `widgets/chart/*.dart` | 1989 | — | — `Chart`, grids, data sets — **phase 5.1** |
 | `widgets/annotations.dart`, `forms.dart` | 1244 | — | — `UrlLink`, `AnnotationUrl` — **phase 5.3**; forms 5.6 |
 | `widgets/barcode.dart` | 298 | — | — `Barcode`, `BarcodeWidget` — **phase 5.2** |
@@ -195,7 +196,7 @@ both, and will grow the shape factories in 2.5.
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
 | SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping and gradients done; SVG text and embedded raster content remain |
-| Widgets | ~14,000 | ~65 public widget/value constructors, plus tables, rich styles, content and themes |
+| Widgets | ~14,000 | ~68 public widget/value constructors, plus tables, rich styles, content and themes |
 
 **Phases 0, 1 and 2 are complete.** The WinAnsi ceiling is gone: a TrueType font
 is parsed, subset to the glyphs a document used, embedded as a
@@ -204,7 +205,7 @@ Type0/CIDFontType2 composite with `/Identity-H`, and selected through `Font`,
 — it is drawn from the embedded font and stays searchable through the
 `/ToUnicode` CMap. The public SVG pipeline now reaches PDF shading patterns.
 
-What now limits the port is layout, not text or vector art: **the widget set
-(phase 3)** still limits resume through clipping; the other four remaining
-examples now wait on their phase-5 document features. See
+**Phase 3 is complete.** What now limits the five remaining examples is raster
+content (phase 4, for resume) and their dedicated document features (phase 5).
+See
 [ROADMAP.md](ROADMAP.md).

@@ -5,6 +5,7 @@ import { Align, AspectRatio, Builder, Center, ConstrainedBox, CustomPaint, Divid
 import { BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, Radius } from './widgets/border_radius.ts';
 import { Border, BorderSide, BorderStyle, BoxBorder } from './widgets/box_border.ts';
 import { Container, DecoratedBox } from './widgets/container.ts';
+import { ClipOval, ClipRect, ClipRRect } from './widgets/clip.ts';
 import { Bullet, Header, Paragraph, TableOfContent } from './widgets/content.ts';
 import { BoxDecoration, BoxShadow, Gradient, LinearGradient, RadialGradient } from './widgets/decoration.ts';
 import { Document } from './widgets/document.ts';
@@ -29,7 +30,7 @@ import { DefaultTextStyle, Theme, ThemeData } from './widgets/theme.ts';
 import { SpanningWidget, StatelessWidget, Widget } from './widgets/widget.ts';
 import { Wrap } from './widgets/wrap.ts';
 import type { DocumentOptions } from './widgets/document.ts';
-export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Bullet, Builder, Center, Column, ConstrainedBox, Container, CustomPaint, DefaultTextStyle, DecoratedBox, Divider, Document, EdgeInsets, Expanded, FixedColumnWidth, FlexColumnWidth, FittedBox, Flex, Flexible, Font, FlutterLogo, FractionColumnWidth, FullPage, Gradient, GridView, Header, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, Lorem, LoremText, MultiPage, Opacity, OverflowBox, Padding, Paragraph, Page, PageFormat, PageTheme, Partition, Partitions, PdfLogo, PdfTtfFont, PdfType1Font, RadialGradient, Radius, Positioned, PositionedDirectional, Placeholder, Row, SizedBox, Spacer, Stack, SpanningWidget, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, InlineSpan, RichText, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap };
+export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Bullet, Builder, Center, ClipOval, ClipRect, ClipRRect, Column, ConstrainedBox, Container, CustomPaint, DefaultTextStyle, DecoratedBox, Divider, Document, EdgeInsets, Expanded, FixedColumnWidth, FlexColumnWidth, FittedBox, Flex, Flexible, Font, FlutterLogo, FractionColumnWidth, FullPage, Gradient, GridView, Header, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, Lorem, LoremText, MultiPage, Opacity, OverflowBox, Padding, Paragraph, Page, PageFormat, PageTheme, Partition, Partitions, PdfLogo, PdfTtfFont, PdfType1Font, RadialGradient, Radius, Positioned, PositionedDirectional, Placeholder, Row, SizedBox, Spacer, Stack, SpanningWidget, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, InlineSpan, RichText, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap };
 export type { ColorInput, Rgb } from './pdf/color.ts';
 export { PdfGraphicState } from './pdf/graphic_state.ts';
 export type { PdfBlendMode, PdfGraphicStateOptions } from './pdf/graphic_state.ts';
@@ -53,6 +54,7 @@ export type { AnyLayoutBox, AnyWidget, Constraints, DocumentContext, LayoutBox, 
 export type { AlignLayoutData, AlignOptions, AspectRatioOptions, BasicAlignmentInput, BasicAlignmentName, BuilderOptions, CenterOptions, ConstrainedBoxOptions, CustomPaintOptions, CustomPainter, DividerOptions, FittedBoxLayoutData, FittedBoxOptions, FullPageOptions, LayoutBuilderOptions, LayoutWidgetBuilder, LimitedBoxOptions, OpacityOptions, OverflowBoxLayoutData, OverflowBoxOptions, PaddingOptions, SingleChildLayoutData, SizedBoxOptions, TransformLayoutData, TransformOptions, VerticalDividerOptions, WidgetBuilder } from './widgets/basic.ts';
 export type { Axis, ColumnOptions, CrossAxisAlignment, ExpandedOptions, FlexChildLayout, FlexibleLayoutData, FlexibleOptions, FlexFit, FlexLayoutData, FlexOptions, MainAxisAlignment, MainAxisSize, RowOptions, VerticalDirection } from './widgets/flex.ts';
 export type { ContainerLayoutData, ContainerOptions, DecoratedBoxOptions } from './widgets/container.ts';
+export type { ClipLayoutData, ClipRRectOptions, ClipWidgetOptions } from './widgets/clip.ts';
 export type { BulletOptions, HeaderOptions, ParagraphOptions, TableOfContentOptions } from './widgets/content.ts';
 export type { BorderRadiusDirectionalOnlyOptions, BorderRadiusOnlyOptions, RadiusInput, RadiusValue, TextDirection } from './widgets/border_radius.ts';
 export type { BorderOptions, BorderSideInput, BorderSideOptions, BorderStyleInput, BorderStyleOptions, BoxBorderInput, BoxBorderPaintOptions } from './widgets/box_border.ts';
@@ -87,6 +89,9 @@ export interface PublicApi {
     readonly Paragraph: typeof Paragraph;
     readonly Bullet: typeof Bullet;
     readonly TableOfContent: typeof TableOfContent;
+    readonly ClipRect: typeof ClipRect;
+    readonly ClipRRect: typeof ClipRRect;
+    readonly ClipOval: typeof ClipOval;
     readonly Placeholder: typeof Placeholder;
     readonly PdfLogo: typeof PdfLogo;
     readonly FlutterLogo: typeof FlutterLogo;
@@ -181,6 +186,9 @@ export declare const js_pdf: Readonly<{
     Paragraph: typeof Paragraph;
     Bullet: typeof Bullet;
     TableOfContent: typeof TableOfContent;
+    ClipRect: typeof ClipRect;
+    ClipRRect: typeof ClipRRect;
+    ClipOval: typeof ClipOval;
     Placeholder: typeof Placeholder;
     PdfLogo: typeof PdfLogo;
     FlutterLogo: typeof FlutterLogo;

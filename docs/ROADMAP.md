@@ -98,6 +98,11 @@ complete upstream file. Six tests and a retained V8 proof cover the phase;
 `certificate.pdf` now generates 126,786 bytes in both runtimes, the gate reaches
 3/8 examples and the missing-API total falls 33 → 28.
 
+**Phase 3.10 — clipping widgets — landed 2026-08-05.** `ClipRect`,
+`ClipRRect` and `ClipOval` scope the existing path clip operators around pure
+child layout data. Five tests and a retained V8 proof cover the phase; resume
+loses `ClipOval`, the missing-API total falls 28 → 27, and phase 3 is complete.
+
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
 option on `Page` and `MultiPage` as well as on `PageTheme`, and every physical
@@ -167,11 +172,11 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 3.10 — clipping widgets.** Port `ClipRect`, `ClipOval` and `ClipRRect`
-> on the existing phase-2.1 path/clip operators.
+> **Phase 4.1 — PNG decoder.** Port the image object and soft mask foundation,
+> including a synchronous host-free zlib/deflate decoder.
 
-Certificate now generates. Resume is the only example still waiting on phase 3,
-through `ClipOval`; document now waits only for `UrlLink`.
+Phase 3 is complete. Resume next needs raster images; document waits only for
+`UrlLink`.
 
 ---
 
@@ -1016,11 +1021,19 @@ example gates lose five API occurrences, reducing the total 33 → 28.
 The original off-by-one word selection and overlong paragraph defects are
 recorded in [ORIGINAL-BUG.md](../ORIGINAL-BUG.md).
 
-### 3.10 Clipping widgets
+### 3.10 Clipping widgets ✅ *(landed 2026-08-05)*
 
 - **Ports:** `widgets/clip.dart`
 - `ClipRect`, `ClipOval`, `ClipRRect`, on top of the phase-2.1 clip operators.
 - **Example gate:** `ClipOval` for `resume`.
+
+All three widgets measure their child once, return the same immutable size and
+paint inside a scoped `q`/`W n`/`Q` path. `ClipRRect` reuses the validated
+corner-radius painter, so oversized elliptical radii scale rather than crossing
+themselves. Five tests cover public APIs, operator scopes, ellipse curves,
+oversized radii and unchanged layout dimensions. Resume loses its sole phase-3
+blocker, reducing the total 28 → 27. `examples/clipping-phase-3.10.mjs`
+generates a 2,352-byte proof under Node and bare V8.
 
 ---
 

@@ -11,7 +11,9 @@ nos dois cantos da mesma borda. O caminho original soma 60 numa aresta de 40 e
 as curvas se cruzam.
 
 **Correção no port:** `BorderRadius.paint` reduz proporcionalmente todos os
-raios quando a soma de dois cantos excede a largura ou a altura disponível.
+raios quando a soma de dois cantos excede a largura ou a altura disponível. O
+mesmo caminho validado é usado por `ClipRRect`, evitando a interseção também no
+clip arredondado original.
 
 ## `Positioned` consulta tamanho de um layout anterior (`stack.dart`)
 
