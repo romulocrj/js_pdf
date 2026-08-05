@@ -669,7 +669,7 @@ and its result is a `/SMask` graphic state, neither of which exists earlier.
   `server-assets.json`. Unblocks `SvgImage` for `calendar`, `certificate`,
   `document`, `invoice`, `resume`, `server`.
 
-### 2.8 Gradients *(optional)*
+### 2.8 Gradients 
 
 - **Ports:** `pdf/lib/src/svg/gradient.dart`, `pdf/obj/shading.dart`,
   `pattern.dart`, `function.dart`
