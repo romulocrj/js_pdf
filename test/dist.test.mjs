@@ -34,7 +34,7 @@ const BANNER = `/*
  * romulocrj/js_pdf — JavaScript port of DavBfr/dart_pdf.
  *
  * Original work:
- * Copyright (C) 2017, David PHAM-VAN
+ * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
  * JavaScript port:
  * Copyright (C) 2026, Romulo Campos

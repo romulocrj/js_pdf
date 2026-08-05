@@ -1,6 +1,6 @@
 /*
  * js_pdf port of demo/lib/examples/server.dart from dart_pdf.
- * Copyright (C) 2017, David PHAM-VAN
+ * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  * Copyright (C) 2026, Romulo Campos
  * Licensed under the Apache License, Version 2.0.
  */
