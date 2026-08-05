@@ -1388,6 +1388,485 @@ class PdfTtfFont {
   }
 }
 
+class BitReader {
+  constructor(bytes) {
+    this.offset = 0;
+    this.bits = 0;
+    this.bitCount = 0;
+    this.bytes = bytes;
+  }
+  read(count) {
+    while (this.bitCount < count) {
+      const byte = this.bytes[this.offset++];
+      if (byte === undefined) throw new RangeError("Truncated DEFLATE stream");
+      this.bits |= byte << this.bitCount;
+      this.bitCount += 8;
+    }
+    const mask = count === 0 ? 0 : (1 << count) - 1;
+    const value = this.bits & mask;
+    this.bits >>>= count;
+    this.bitCount -= count;
+    return value;
+  }
+  align() {
+    this.bits = 0;
+    this.bitCount = 0;
+  }
+}
+
+function reverseBits(value, count) {
+  let result = 0;
+  for (let index = 0; index < count; index++) {
+    result = result << 1 | value >>> index & 1;
+  }
+  return result;
+}
+
+function huffman(lengths) {
+  let maxBits = 0;
+  for (const length of lengths) maxBits = Math.max(maxBits, length);
+  if (maxBits === 0) throw new RangeError("Empty DEFLATE Huffman table");
+  const counts = new Array(maxBits + 1).fill(0);
+  for (const length of lengths) {
+    if (length > 0) counts[length] = (counts[length] ?? 0) + 1;
+  }
+  const next = new Array(maxBits + 1).fill(0);
+  let code = 0;
+  for (let bits = 1; bits <= maxBits; bits++) {
+    code = code + (counts[bits - 1] ?? 0) << 1;
+    next[bits] = code;
+  }
+  const symbols = new Map;
+  for (let symbol = 0; symbol < lengths.length; symbol++) {
+    const length = lengths[symbol] ?? 0;
+    if (length === 0) continue;
+    const canonical = next[length] ?? 0;
+    next[length] = canonical + 1;
+    symbols.set(length * 65536 + reverseBits(canonical, length), symbol);
+  }
+  return {
+    symbols,
+    maxBits
+  };
+}
+
+function readSymbol(reader, table) {
+  let code = 0;
+  for (let length = 1; length <= table.maxBits; length++) {
+    code |= reader.read(1) << length - 1;
+    const symbol = table.symbols.get(length * 65536 + code);
+    if (symbol !== undefined) return symbol;
+  }
+  throw new RangeError("Invalid DEFLATE Huffman code");
+}
+
+const LENGTH_BASE = Object.freeze([ 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258 ]);
+
+const LENGTH_EXTRA = Object.freeze([ 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0 ]);
+
+const DISTANCE_BASE = Object.freeze([ 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577 ]);
+
+const DISTANCE_EXTRA = Object.freeze([ 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 ]);
+
+function compressedBlock(reader, output, literals, distances) {
+  for (;;) {
+    const symbol = readSymbol(reader, literals);
+    if (symbol < 256) {
+      output.push(symbol);
+      continue;
+    }
+    if (symbol === 256) return;
+    const lengthIndex = symbol - 257;
+    const baseLength = LENGTH_BASE[lengthIndex];
+    const lengthBits = LENGTH_EXTRA[lengthIndex];
+    if (baseLength === undefined || lengthBits === undefined) {
+      throw new RangeError(`Invalid DEFLATE length symbol ${symbol}`);
+    }
+    const length = baseLength + reader.read(lengthBits);
+    const distanceSymbol = readSymbol(reader, distances);
+    const baseDistance = DISTANCE_BASE[distanceSymbol];
+    const distanceBits = DISTANCE_EXTRA[distanceSymbol];
+    if (baseDistance === undefined || distanceBits === undefined) {
+      throw new RangeError(`Invalid DEFLATE distance symbol ${distanceSymbol}`);
+    }
+    const distance = baseDistance + reader.read(distanceBits);
+    if (distance > output.length) throw new RangeError("DEFLATE distance exceeds output");
+    for (let index = 0; index < length; index++) {
+      output.push(output[output.length - distance]);
+    }
+  }
+}
+
+function fixedTables() {
+  const literalLengths = new Array(288);
+  for (let symbol = 0; symbol <= 143; symbol++) literalLengths[symbol] = 8;
+  for (let symbol = 144; symbol <= 255; symbol++) literalLengths[symbol] = 9;
+  for (let symbol = 256; symbol <= 279; symbol++) literalLengths[symbol] = 7;
+  for (let symbol = 280; symbol <= 287; symbol++) literalLengths[symbol] = 8;
+  return [ huffman(literalLengths), huffman(new Array(32).fill(5)) ];
+}
+
+function dynamicTables(reader) {
+  const literalCount = reader.read(5) + 257;
+  const distanceCount = reader.read(5) + 1;
+  const codeCount = reader.read(4) + 4;
+  const order = [ 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 ];
+  const codeLengths = new Array(19).fill(0);
+  for (let index = 0; index < codeCount; index++) {
+    codeLengths[order[index]] = reader.read(3);
+  }
+  const codes = huffman(codeLengths);
+  const lengths = [];
+  const total = literalCount + distanceCount;
+  while (lengths.length < total) {
+    const symbol = readSymbol(reader, codes);
+    if (symbol <= 15) {
+      lengths.push(symbol);
+    } else if (symbol === 16) {
+      if (lengths.length === 0) throw new RangeError("DEFLATE repeat has no previous length");
+      const repeat = reader.read(2) + 3;
+      const previous = lengths[lengths.length - 1];
+      for (let index = 0; index < repeat; index++) lengths.push(previous);
+    } else if (symbol === 17) {
+      const repeat = reader.read(3) + 3;
+      for (let index = 0; index < repeat; index++) lengths.push(0);
+    } else if (symbol === 18) {
+      const repeat = reader.read(7) + 11;
+      for (let index = 0; index < repeat; index++) lengths.push(0);
+    } else {
+      throw new RangeError(`Invalid DEFLATE code-length symbol ${symbol}`);
+    }
+    if (lengths.length > total) throw new RangeError("DEFLATE code lengths overflow");
+  }
+  const literals = huffman(lengths.slice(0, literalCount));
+  const distanceLengths = lengths.slice(literalCount);
+  const distances = distanceLengths.every(length => length === 0) ? [ 1, ...distanceLengths.slice(1) ] : distanceLengths;
+  return [ literals, huffman(distances) ];
+}
+
+function adler32(bytes) {
+  let a = 1;
+  let b = 0;
+  for (const byte of bytes) {
+    a = (a + byte) % 65521;
+    b = (b + a) % 65521;
+  }
+  return (b << 16 | a) >>> 0;
+}
+
+function inflateZlib(bytes) {
+  if (bytes.length < 6) throw new RangeError("Truncated zlib stream");
+  const cmf = bytes[0];
+  const flags = bytes[1];
+  if ((cmf & 15) !== 8 || cmf >>> 4 > 7) throw new RangeError("Unsupported zlib method");
+  if ((cmf << 8 | flags) % 31 !== 0) throw new RangeError("Invalid zlib header");
+  if ((flags & 32) !== 0) throw new RangeError("Preset zlib dictionaries are unsupported");
+  const reader = new BitReader(bytes.subarray(2, bytes.length - 4));
+  const output = [];
+  let final = false;
+  while (!final) {
+    final = reader.read(1) === 1;
+    const type = reader.read(2);
+    if (type === 0) {
+      reader.align();
+      const length = reader.read(8) | reader.read(8) << 8;
+      const complement = reader.read(8) | reader.read(8) << 8;
+      if (((length ^ 65535) & 65535) !== complement) {
+        throw new RangeError("Invalid stored DEFLATE block length");
+      }
+      for (let index = 0; index < length; index++) output.push(reader.read(8));
+    } else if (type === 1) {
+      const [literals, distances] = fixedTables();
+      compressedBlock(reader, output, literals, distances);
+    } else if (type === 2) {
+      const [literals, distances] = dynamicTables(reader);
+      compressedBlock(reader, output, literals, distances);
+    } else {
+      throw new RangeError("Reserved DEFLATE block type");
+    }
+  }
+  const expected = (bytes[bytes.length - 4] << 24 | bytes[bytes.length - 3] << 16 | bytes[bytes.length - 2] << 8 | bytes[bytes.length - 1]) >>> 0;
+  if (adler32(output) !== expected) throw new RangeError("Invalid zlib checksum");
+  return Uint8Array.from(output);
+}
+
+function readU32(bytes, offset) {
+  return bytes[offset] * 16777216 + (bytes[offset + 1] << 16) + (bytes[offset + 2] << 8) + bytes[offset + 3] >>> 0;
+}
+
+function crc32(bytes, start, end) {
+  let crc = 4294967295;
+  for (let index = start; index < end; index++) {
+    crc ^= bytes[index];
+    for (let bit = 0; bit < 8; bit++) {
+      crc = crc >>> 1 ^ ((crc & 1) === 0 ? 0 : 3988292384);
+    }
+  }
+  return (crc ^ 4294967295) >>> 0;
+}
+
+function paeth(left, above, upperLeft) {
+  const estimate = left + above - upperLeft;
+  const dl = Math.abs(estimate - left);
+  const da = Math.abs(estimate - above);
+  const dul = Math.abs(estimate - upperLeft);
+  return dl <= da && dl <= dul ? left : da <= dul ? above : upperLeft;
+}
+
+function unfilter(data, offset, width, height, bitsPerPixel) {
+  const rowBytes = Math.ceil(width * bitsPerPixel / 8);
+  const bytesPerPixel = Math.max(1, Math.ceil(bitsPerPixel / 8));
+  const rows = [];
+  let cursor = offset;
+  for (let y = 0; y < height; y++) {
+    const filter = data[cursor++];
+    if (filter === undefined || filter > 4) throw new RangeError(`Invalid PNG filter ${String(filter)}`);
+    if (cursor + rowBytes > data.length) throw new RangeError("Truncated PNG scanline");
+    const row = new Uint8Array(rowBytes);
+    const above = rows[y - 1];
+    for (let index = 0; index < rowBytes; index++) {
+      const raw = data[cursor++];
+      const left = index >= bytesPerPixel ? row[index - bytesPerPixel] : 0;
+      const upper = above?.[index] ?? 0;
+      const upperLeft = index >= bytesPerPixel ? above?.[index - bytesPerPixel] ?? 0 : 0;
+      let predictor = 0;
+      if (filter === 1) predictor = left; else if (filter === 2) predictor = upper; else if (filter === 3) predictor = Math.floor((left + upper) / 2); else if (filter === 4) predictor = paeth(left, upper, upperLeft);
+      row[index] = raw + predictor & 255;
+    }
+    rows.push(row);
+  }
+  return {
+    rows,
+    offset: cursor
+  };
+}
+
+function sample(row, index, bitDepth) {
+  if (bitDepth === 8) return row[index];
+  if (bitDepth === 16) return row[index * 2] << 8 | row[index * 2 + 1];
+  const perByte = 8 / bitDepth;
+  const shift = (perByte - 1 - index % perByte) * bitDepth;
+  return row[Math.floor(index / perByte)] >>> shift & (1 << bitDepth) - 1;
+}
+
+function sample8(value, bitDepth) {
+  if (bitDepth === 16) return value >>> 8;
+  if (bitDepth === 8) return value;
+  return Math.round(value * 255 / ((1 << bitDepth) - 1));
+}
+
+function writePixels(target, row, passWidth, y, xStart, xStep, colorType, bitDepth, palette, transparency) {
+  const channels = colorType === 0 ? 1 : colorType === 2 ? 3 : colorType === 3 ? 1 : colorType === 4 ? 2 : 4;
+  let hasAlpha = false;
+  const transparentGray = transparency !== null && colorType === 0 ? transparency[0] << 8 | transparency[1] : -1;
+  const transparentRgb = transparency !== null && colorType === 2 ? [ transparency[0] << 8 | transparency[1], transparency[2] << 8 | transparency[3], transparency[4] << 8 | transparency[5] ] : null;
+  for (let x = 0; x < passWidth; x++) {
+    const values = new Array(channels);
+    for (let channel = 0; channel < channels; channel++) {
+      values[channel] = sample(row, x * channels + channel, bitDepth);
+    }
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+    let alpha = 255;
+    if (colorType === 0 || colorType === 4) {
+      red = green = blue = sample8(values[0], bitDepth);
+      if (colorType === 4) alpha = sample8(values[1], bitDepth); else if (values[0] === transparentGray) alpha = 0;
+    } else if (colorType === 2 || colorType === 6) {
+      red = sample8(values[0], bitDepth);
+      green = sample8(values[1], bitDepth);
+      blue = sample8(values[2], bitDepth);
+      if (colorType === 6) alpha = sample8(values[3], bitDepth); else if (transparentRgb !== null && values[0] === transparentRgb[0] && values[1] === transparentRgb[1] && values[2] === transparentRgb[2]) alpha = 0;
+    } else {
+      const paletteIndex = values[0];
+      const paletteOffset = paletteIndex * 3;
+      if (palette === null || paletteOffset + 2 >= palette.length) {
+        throw new RangeError(`PNG palette index ${paletteIndex} is out of range`);
+      }
+      red = palette[paletteOffset];
+      green = palette[paletteOffset + 1];
+      blue = palette[paletteOffset + 2];
+      alpha = transparency?.[paletteIndex] ?? 255;
+    }
+    const offset = (y + xStart + x * xStep) * 4;
+    target[offset] = red;
+    target[offset + 1] = green;
+    target[offset + 2] = blue;
+    target[offset + 3] = alpha;
+    if (alpha !== 255) hasAlpha = true;
+  }
+  return hasAlpha;
+}
+
+function passSize(size, start, step) {
+  return size <= start ? 0 : Math.floor((size - start + step - 1) / step);
+}
+
+function decodePng(bytes) {
+  const signature = [ 137, 80, 78, 71, 13, 10, 26, 10 ];
+  if (bytes.length < 33 || signature.some((byte, index) => bytes[index] !== byte)) {
+    throw new TypeError("Invalid PNG signature");
+  }
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = -1;
+  let interlace = 0;
+  let palette = null;
+  let transparency = null;
+  const idat = [];
+  let sawHeader = false;
+  let sawEnd = false;
+  let offset = 8;
+  while (offset + 12 <= bytes.length) {
+    const length = readU32(bytes, offset);
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    const crcOffset = dataEnd;
+    if (dataEnd + 4 > bytes.length) throw new RangeError("Truncated PNG chunk");
+    const typeCodes = bytes.subarray(offset + 4, offset + 8);
+    let type = "";
+    for (const code of typeCodes) type += String.fromCharCode(code);
+    const expectedCrc = readU32(bytes, crcOffset);
+    if (crc32(bytes, offset + 4, dataEnd) !== expectedCrc) {
+      throw new RangeError(`Invalid PNG CRC for ${type}`);
+    }
+    const data = bytes.subarray(dataStart, dataEnd);
+    if (type === "IHDR") {
+      if (sawHeader || length !== 13 || offset !== 8) throw new RangeError("Invalid PNG IHDR");
+      width = readU32(data, 0);
+      height = readU32(data, 4);
+      bitDepth = data[8];
+      colorType = data[9];
+      if (width === 0 || height === 0) throw new RangeError("PNG dimensions must be positive");
+      if (data[10] !== 0 || data[11] !== 0) throw new RangeError("Unsupported PNG compression or filter method");
+      interlace = data[12];
+      if (interlace !== 0 && interlace !== 1) throw new RangeError(`Unsupported PNG interlace method ${interlace}`);
+      const validDepths = colorType === 0 ? [ 1, 2, 4, 8, 16 ] : colorType === 3 ? [ 1, 2, 4, 8 ] : [ 8, 16 ];
+      if (![ 0, 2, 3, 4, 6 ].includes(colorType) || !validDepths.includes(bitDepth)) {
+        throw new RangeError(`Unsupported PNG colour type ${colorType} at ${bitDepth} bits`);
+      }
+      sawHeader = true;
+    } else if (type === "PLTE") {
+      palette = data.slice();
+    } else if (type === "tRNS") {
+      transparency = data.slice();
+    } else if (type === "IDAT") {
+      for (const byte of data) idat.push(byte);
+    } else if (type === "IEND") {
+      sawEnd = true;
+      offset = dataEnd + 4;
+      break;
+    } else if ((typeCodes[0] & 32) === 0) {
+      throw new RangeError(`Unsupported critical PNG chunk ${type}`);
+    }
+    offset = dataEnd + 4;
+  }
+  if (!sawHeader || !sawEnd || idat.length === 0) throw new RangeError("Incomplete PNG file");
+  if (colorType === 3 && palette === null) throw new RangeError("Indexed PNG has no palette");
+  const inflated = inflateZlib(Uint8Array.from(idat));
+  const channels = colorType === 0 ? 1 : colorType === 2 ? 3 : colorType === 3 ? 1 : colorType === 4 ? 2 : 4;
+  const bitsPerPixel = channels * bitDepth;
+  const pixels = new Uint8Array(width * height * 4);
+  pixels.fill(255);
+  let cursor = 0;
+  let hasAlpha = false;
+  if (interlace === 0) {
+    const decoded = unfilter(inflated, cursor, width, height, bitsPerPixel);
+    cursor = decoded.offset;
+    for (let y = 0; y < height; y++) {
+      hasAlpha = writePixels(pixels, decoded.rows[y], width, y * width, 0, 1, colorType, bitDepth, palette, transparency) || hasAlpha;
+    }
+  } else {
+    const startsX = [ 0, 4, 0, 2, 0, 1, 0 ];
+    const startsY = [ 0, 0, 4, 0, 2, 0, 1 ];
+    const stepsX = [ 8, 8, 4, 4, 2, 2, 1 ];
+    const stepsY = [ 8, 8, 8, 4, 4, 2, 2 ];
+    for (let pass = 0; pass < 7; pass++) {
+      const passWidth = passSize(width, startsX[pass], stepsX[pass]);
+      const passHeight = passSize(height, startsY[pass], stepsY[pass]);
+      if (passWidth === 0 || passHeight === 0) continue;
+      const decoded = unfilter(inflated, cursor, passWidth, passHeight, bitsPerPixel);
+      cursor = decoded.offset;
+      for (let row = 0; row < passHeight; row++) {
+        const targetY = startsY[pass] + row * stepsY[pass];
+        hasAlpha = writePixels(pixels, decoded.rows[row], passWidth, targetY * width, startsX[pass], stepsX[pass], colorType, bitDepth, palette, transparency) || hasAlpha;
+      }
+    }
+  }
+  if (cursor !== inflated.length) throw new RangeError("PNG scanline data has trailing bytes");
+  return {
+    width,
+    height,
+    pixels,
+    hasAlpha
+  };
+}
+
+class PdfXObject extends PdfObjectStream {
+  constructor(document, subtype, data = new Uint8Array(0)) {
+    super(document, data);
+    this.params.set("/Type", new PdfName("/XObject"));
+    if (subtype !== null) this.params.set("/Subtype", new PdfName(subtype));
+  }
+  get name() {
+    return `/X${this.objser}`;
+  }
+}
+
+class PdfImage {
+  constructor({pixels, width, height, hasAlpha = true, orientation = "topLeft"}) {
+    if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
+      throw new RangeError("Image dimensions must be positive integers");
+    }
+    if (pixels.length !== width * height * 4) {
+      throw new RangeError(`RGBA image needs ${width * height * 4} bytes, received ${pixels.length}`);
+    }
+    this.pixels = pixels.slice();
+    this.sourceWidth = width;
+    this.sourceHeight = height;
+    this.hasAlpha = Boolean(hasAlpha);
+    this.orientation = orientation;
+  }
+  static fromPng(bytes, orientation = "topLeft") {
+    const decoded = decodePng(bytes);
+    return new PdfImage({
+      ...decoded,
+      orientation
+    });
+  }
+  get width() {
+    return this.orientation === "leftTop" || this.orientation === "rightTop" || this.orientation === "rightBottom" || this.orientation === "leftBottom" ? this.sourceHeight : this.sourceWidth;
+  }
+  get height() {
+    return this.orientation === "leftTop" || this.orientation === "rightTop" || this.orientation === "rightBottom" || this.orientation === "leftBottom" ? this.sourceWidth : this.sourceHeight;
+  }
+}
+
+class PdfImageObject extends PdfXObject {
+  constructor(document, image, channel) {
+    const pixelCount = image.sourceWidth * image.sourceHeight;
+    const data = new Uint8Array(pixelCount * (channel === "rgb" ? 3 : 1));
+    for (let index = 0; index < pixelCount; index++) {
+      if (channel === "rgb") {
+        data[index * 3] = image.pixels[index * 4];
+        data[index * 3 + 1] = image.pixels[index * 4 + 1];
+        data[index * 3 + 2] = image.pixels[index * 4 + 2];
+      } else {
+        data[index] = image.pixels[index * 4 + 3];
+      }
+    }
+    super(document, "/Image", data);
+    this.params.set("/Width", new PdfNum(image.sourceWidth));
+    this.params.set("/Height", new PdfNum(image.sourceHeight));
+    this.params.set("/BitsPerComponent", new PdfNum(8));
+    this.params.set("/ColorSpace", new PdfName(channel === "rgb" ? "/DeviceRGB" : "/DeviceGray"));
+  }
+  setSoftMask(mask) {
+    this.params.set("/SMask", mask.ref());
+  }
+}
+
 function assertFiniteNumber(value, name) {
   if (!Number.isFinite(value)) {
     throw new TypeError(`${name} must be a finite number`);
@@ -4889,6 +5368,7 @@ class PdfDocument {
     this.serial = 0;
     this.xref = new PdfXrefTable;
     this.fontObjects = new Map;
+    this.imageObjects = new Map;
     const catalogSerial = this.genSerial();
     this.pageList = new PdfPageList(this);
     this.catalog = new PdfCatalog(this, this.pageList, catalogSerial);
@@ -4912,7 +5392,16 @@ class PdfDocument {
     this.fontObjects.set(font, object);
     return object;
   }
-  addPage(format, content, fonts = new Map, graphicStates = new Map, patterns = new Map) {
+  imageObject(image) {
+    const existing = this.imageObjects.get(image);
+    if (existing !== undefined) return existing;
+    const mask = image.hasAlpha ? new PdfImageObject(this, image, "alpha") : null;
+    const object = new PdfImageObject(this, image, "rgb");
+    if (mask !== null) object.setSoftMask(mask);
+    this.imageObjects.set(image, object);
+    return object;
+  }
+  addPage(format, content, fonts = new Map, graphicStates = new Map, patterns = new Map, images = new Map) {
     const resources = [];
     for (const [font, name] of fonts) {
       resources.push([ name, this.fontObject(font) ]);
@@ -4927,6 +5416,9 @@ class PdfDocument {
     }
     for (const [name, pattern] of patterns) {
       page.addPattern(name, pattern);
+    }
+    for (const [image, name] of images) {
+      page.addXObject(name, this.imageObject(image));
     }
     page.contents.push(stream);
     return page;
@@ -4976,7 +5468,7 @@ class PdfDocument {
 function serializePdf(pages, metadata, outlines = [], pageMode = "none") {
   const document = new PdfDocument(metadata);
   for (const page of pages) {
-    document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns);
+    document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns, page.images);
   }
   document.addNavigation(outlines, pageMode);
   return document.save();
@@ -5008,6 +5500,7 @@ class PdfCanvas {
     this.stateDicts = new Map;
     this.patternNames = new Map;
     this.patternDicts = new Map;
+    this.imageNames = new Map;
     this.currentTransform = identityMatrix;
     this.transformStack = [];
     this.pageHeight = pageHeight;
@@ -5035,6 +5528,16 @@ class PdfCanvas {
   }
   get patterns() {
     return this.patternDicts;
+  }
+  get images() {
+    return this.imageNames;
+  }
+  addImage(image) {
+    const existing = this.imageNames.get(image);
+    if (existing !== undefined) return existing;
+    const name = `/I${this.imageNames.size + 1}`;
+    this.imageNames.set(image, name);
+    return name;
   }
   saveContext() {
     this.push("q");
@@ -5095,6 +5598,48 @@ class PdfCanvas {
     const name = this.addPattern(pattern);
     this.push(`/Pattern CS ${name} SCN`);
     return name;
+  }
+  drawImage(image, x, y, width = image.width, height) {
+    const resolvedHeight = height ?? image.height * width / image.width;
+    const name = this.addImage(image);
+    let matrix;
+    switch (image.orientation) {
+     case "topRight":
+      matrix = [ -width, 0, 0, resolvedHeight, width + x, y ];
+      break;
+
+     case "bottomRight":
+      matrix = [ -width, 0, 0, -resolvedHeight, width + x, resolvedHeight + y ];
+      break;
+
+     case "bottomLeft":
+      matrix = [ width, 0, 0, -resolvedHeight, x, resolvedHeight + y ];
+      break;
+
+     case "leftTop":
+      matrix = [ 0, -resolvedHeight, -width, 0, width + x, resolvedHeight + y ];
+      break;
+
+     case "rightTop":
+      matrix = [ 0, -resolvedHeight, width, 0, x, resolvedHeight + y ];
+      break;
+
+     case "rightBottom":
+      matrix = [ 0, resolvedHeight, width, 0, x, y ];
+      break;
+
+     case "leftBottom":
+      matrix = [ 0, resolvedHeight, -width, 0, width + x, y ];
+      break;
+
+     default:
+      matrix = [ width, 0, 0, resolvedHeight, x, y ];
+      break;
+    }
+    this.push("q");
+    this.push(`${operands(matrix)} cm`);
+    this.push(`${name} Do`);
+    this.push("Q");
   }
   moveTo(x, y) {
     this.push(`${operands([ x, y ])} m`);
@@ -5511,7 +6056,8 @@ class MultiPage {
       content: canvas.output(),
       fonts: canvas.fonts,
       graphicStates: canvas.graphicStates,
-      patterns: canvas.patterns
+      patterns: canvas.patterns,
+      images: canvas.images
     }));
   }
 }
@@ -5566,7 +6112,8 @@ class Page {
       content: canvas.output(),
       fonts: canvas.fonts,
       graphicStates: canvas.graphicStates,
-      patterns: canvas.patterns
+      patterns: canvas.patterns,
+      images: canvas.images
     } ];
   }
   paintLayer(build, context, format) {
@@ -9935,4 +10482,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, Center, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridView, Header, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, Lorem, LoremText, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Placeholder, Positioned, PositionedDirectional, RadialGradient, Radius, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, Center, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridView, Header, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, Lorem, LoremText, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Placeholder, Positioned, PositionedDirectional, RadialGradient, Radius, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

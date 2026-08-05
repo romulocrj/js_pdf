@@ -24,6 +24,8 @@
 import { PageFormat } from './pdf/page_format.ts';
 import { PdfType1Font } from './pdf/font/type1_fonts.ts';
 import { PdfTtfFont } from './pdf/obj/ttf_font.ts';
+import { PdfImage } from './pdf/obj/image.ts';
+import { decodePng, inflateZlib } from './pdf/image/png.ts';
 import {
   Align,
   AspectRatio,
@@ -140,6 +142,7 @@ export {
   Partition,
   Partitions,
   PdfLogo,
+  PdfImage,
   PdfTtfFont,
   PdfType1Font,
   RadialGradient,
@@ -174,6 +177,10 @@ export {
   WidgetSpan,
   Wrap
 };
+
+export { decodePng, inflateZlib };
+export type { DecodedPng } from './pdf/image/png.ts';
+export type { PdfImageOptions, PdfImageOrientation } from './pdf/obj/image.ts';
 
 export type { ColorInput, Rgb } from './pdf/color.ts';
 export { PdfGraphicState } from './pdf/graphic_state.ts';

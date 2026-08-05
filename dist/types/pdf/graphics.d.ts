@@ -3,6 +3,7 @@ import type { PdfFont } from './font/font.ts';
 import { PdfDict } from './format/dict.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
+import type { PdfImage } from './obj/image.ts';
 import type { PdfMatrix } from './matrix.ts';
 import type { PdfRect } from './rect.ts';
 /**
@@ -77,6 +78,7 @@ export declare class PdfCanvas {
     private readonly stateDicts;
     private readonly patternNames;
     private readonly patternDicts;
+    private readonly imageNames;
     /**
      * The current transformation matrix, tracked so a widget can ask what space
      * it is drawing in. `q`/`Q` save and restore it, as they do in the reader.
@@ -106,6 +108,9 @@ export declare class PdfCanvas {
     get graphicStates(): ReadonlyMap<string, PdfDict>;
     /** The `/Pattern` entries this page selected, by content-stream name. */
     get patterns(): ReadonlyMap<string, PdfDict>;
+    /** The images this page drew with, mapped to page-local `/I…` names. */
+    get images(): ReadonlyMap<PdfImage, string>;
+    private addImage;
     /**
      * `q`. Upstream calls this `saveContext`; `save` is kept as the name the
      * port's own widgets have used since before the graphics context existed.
@@ -126,6 +131,8 @@ export declare class PdfCanvas {
     private addPattern;
     setFillPattern(pattern: PdfShadingPattern): string;
     setStrokePattern(pattern: PdfShadingPattern): string;
+    /** Draw an image in PDF user space, applying its stored EXIF-style orientation. */
+    drawImage(image: PdfImage, x: number, y: number, width?: number, height?: number): void;
     moveTo(x: number, y: number): void;
     lineTo(x: number, y: number): void;
     /**

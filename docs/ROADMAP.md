@@ -172,8 +172,9 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 4.1 — PNG decoder.** Port the image object and soft mask foundation,
-> including a synchronous host-free zlib/deflate decoder.
+> **Phase 4.2 — baseline JPEG.** Preserve JPEG bytes behind `/DCTDecode` and
+> parse SOF metadata for dimensions and colour space. The retained proof must
+> include the real `profile.jpg` bytes so the same module runs under V8.
 
 Phase 3 is complete. Resume next needs raster images; document waits only for
 `UrlLink`.
@@ -1042,13 +1043,28 @@ generates a 2,352-byte proof under Node and bare V8.
 **Example gate:** only `resume` needs images (`profile.jpg`), so this phase can
 slot in wherever convenient relative to phase 5.
 
-- **4.1** PNG decoder (zlib inflate included — no host decompression API is
-  available). `pdf/lib/src/pdf/obj/image.dart`, `smask.dart`.
+- **4.1** PNG decoder ✅ *(landed 2026-08-05)* (zlib inflate included — no host
+  decompression API is available). `pdf/lib/src/pdf/obj/image.dart`,
+  `smask.dart`.
 - **4.2** Baseline JPEG: pass through as `/DCTDecode`, parse SOF for dimensions.
   This is what `examples/assets/profile.jpg` exercises.
 - **4.3** `Image` widget and provider — `widgets/image.dart`,
   `image_provider.dart`. `Image`, `MemoryImage`. Bytes are supplied by the
   caller; the port never fetches.
+
+Phase 4.1 implements stored, fixed-Huffman and dynamic-Huffman DEFLATE blocks,
+validates zlib and PNG checksums, reverses all five row filters and decodes every
+legal PNG colour/depth combination, palette and `tRNS` transparency, plus all
+seven Adam7 passes into RGBA. The PDF resource layer separates RGB bytes from
+alpha, emits the latter as a grayscale image `/SMask`, caches one indirect image
+per identity and registers page-local `/I…` names. `PdfCanvas.drawImage` also
+ports all eight upstream orientations.
+
+Seven focused tests cover the compression block types, filters, packed palettes,
+16-bit transparency, Adam7, corrupt input and final XObject dictionaries.
+`examples/png-phase-4.1.mjs` embeds a complete 12×12 PNG and generates a
+2,867-byte proof under both Node and bare V8. No upstream example advances until
+the public provider/widget arrives in 4.3.
 
 ---
 

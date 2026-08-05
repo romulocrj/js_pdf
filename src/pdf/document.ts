@@ -42,6 +42,8 @@ import { PdfOutline } from './obj/outline.ts';
 import type { PdfOutlineStyle } from './obj/outline.ts';
 import type { PageSize } from './page_format.ts';
 import type { Rgb } from './color.ts';
+import { PdfImageObject } from './obj/image.ts';
+import type { PdfImage } from './obj/image.ts';
 
 export type { DocumentMetadata } from './obj/info.ts';
 
@@ -61,6 +63,9 @@ export interface SerializedPage {
 
   /** The direct shading-pattern dictionaries `content` selected. */
   readonly patterns?: ReadonlyMap<string, PdfDict>;
+
+  /** The image resources `content` selected, by their page-local names. */
+  readonly images?: ReadonlyMap<PdfImage, string>;
 }
 
 export interface SerializedOutline {
@@ -102,6 +107,7 @@ export class PdfDocument {
    * interchangeable either.
    */
   private readonly fontObjects = new Map<PdfFont, PdfObject<PdfDict>>();
+  private readonly imageObjects = new Map<PdfImage, PdfImageObject>();
 
   constructor(metadata: DocumentMetadata) {
     const catalogSerial = this.genSerial();
@@ -140,6 +146,16 @@ export class PdfDocument {
     return object;
   }
 
+  imageObject(image: PdfImage): PdfImageObject {
+    const existing = this.imageObjects.get(image);
+    if (existing !== undefined) return existing;
+    const mask = image.hasAlpha ? new PdfImageObject(this, image, 'alpha') : null;
+    const object = new PdfImageObject(this, image, 'rgb');
+    if (mask !== null) object.setSoftMask(mask);
+    this.imageObjects.set(image, object);
+    return object;
+  }
+
   /**
    * Append a page. Its fonts and content stream are created first so they are
    * numbered before the page that references them, keeping the file in
@@ -154,7 +170,8 @@ export class PdfDocument {
     content: string,
     fonts: ReadonlyMap<PdfFont, string> = new Map(),
     graphicStates: ReadonlyMap<string, PdfDict> = new Map(),
-    patterns: ReadonlyMap<string, PdfDict> = new Map()
+    patterns: ReadonlyMap<string, PdfDict> = new Map(),
+    images: ReadonlyMap<PdfImage, string> = new Map()
   ): PdfPage {
     const resources: [string, PdfObject<PdfDict>][] = [];
     for (const [font, name] of fonts) {
@@ -174,6 +191,10 @@ export class PdfDocument {
 
     for (const [name, pattern] of patterns) {
       page.addPattern(name, pattern);
+    }
+
+    for (const [image, name] of images) {
+      page.addXObject(name, this.imageObject(image));
     }
 
     page.contents.push(stream);
@@ -236,7 +257,7 @@ export function serializePdf(
   const document = new PdfDocument(metadata);
 
   for (const page of pages) {
-    document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns);
+    document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns, page.images);
   }
 
   document.addNavigation(outlines, pageMode);

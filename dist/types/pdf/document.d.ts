@@ -12,6 +12,8 @@ import { PdfPageList } from './obj/page_list.ts';
 import type { PdfOutlineStyle } from './obj/outline.ts';
 import type { PageSize } from './page_format.ts';
 import type { Rgb } from './color.ts';
+import { PdfImageObject } from './obj/image.ts';
+import type { PdfImage } from './obj/image.ts';
 export type { DocumentMetadata } from './obj/info.ts';
 /** One physical page, with its content stream already rendered to operators. */
 export interface SerializedPage {
@@ -26,6 +28,8 @@ export interface SerializedPage {
     readonly graphicStates?: ReadonlyMap<string, PdfDict>;
     /** The direct shading-pattern dictionaries `content` selected. */
     readonly patterns?: ReadonlyMap<string, PdfDict>;
+    /** The image resources `content` selected, by their page-local names. */
+    readonly images?: ReadonlyMap<PdfImage, string>;
 }
 export interface SerializedOutline {
     readonly title: string;
@@ -62,6 +66,7 @@ export declare class PdfDocument {
      * interchangeable either.
      */
     private readonly fontObjects;
+    private readonly imageObjects;
     constructor(metadata: DocumentMetadata);
     get objects(): readonly PdfObjectBase<PdfDataType>[];
     genSerial(): number;
@@ -74,6 +79,7 @@ export declare class PdfDocument {
      * which is exactly when `addPage` is called.
      */
     fontObject(font: PdfFont): PdfObject<PdfDict>;
+    imageObject(image: PdfImage): PdfImageObject;
     /**
      * Append a page. Its fonts and content stream are created first so they are
      * numbered before the page that references them, keeping the file in
@@ -83,7 +89,7 @@ export declare class PdfDocument {
      * wrote for that font — see `PdfCanvas.addFont`. A page that drew no text
      * passes nothing and gets no `/Resources` at all, as upstream does.
      */
-    addPage(format: PageSize, content: string, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>): PdfPage;
+    addPage(format: PageSize, content: string, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>, images?: ReadonlyMap<PdfImage, string>): PdfPage;
     addNavigation(outlines: readonly SerializedOutline[], pageMode: PdfPageMode): void;
     save(): Uint8Array;
 }

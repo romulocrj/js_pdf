@@ -31,8 +31,8 @@
  * A widget reaching for the path API converts with `toPdfY`, and a widget
  * setting a transform conjugates it with `flipMatrix` from `matrix.ts`.
  *
- * PORT GAP: no `drawImage` (phase 4) or direct shading operator. SVG
- * `drawShape` lives in `svg/path.ts` to preserve the one-way import direction.
+ * PORT GAP: no direct shading operator. SVG `drawShape` lives in `svg/path.ts`
+ * to preserve the one-way import direction.
  */
 
 import { colorOperator } from './color.ts';
@@ -43,6 +43,7 @@ import { PdfDict } from './format/dict.ts';
 import { formatNumber } from './format/num.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
+import type { PdfImage } from './obj/image.ts';
 import { identityMatrix, multiplyMatrix } from './matrix.ts';
 import type { PdfMatrix } from './matrix.ts';
 import type { PdfRect } from './rect.ts';
@@ -148,6 +149,7 @@ export class PdfCanvas {
   private readonly stateDicts = new Map<string, PdfDict>();
   private readonly patternNames = new Map<string, string>();
   private readonly patternDicts = new Map<string, PdfDict>();
+  private readonly imageNames = new Map<PdfImage, string>();
 
   /**
    * The current transformation matrix, tracked so a widget can ask what space
@@ -205,6 +207,19 @@ export class PdfCanvas {
   /** The `/Pattern` entries this page selected, by content-stream name. */
   get patterns(): ReadonlyMap<string, PdfDict> {
     return this.patternDicts;
+  }
+
+  /** The images this page drew with, mapped to page-local `/I…` names. */
+  get images(): ReadonlyMap<PdfImage, string> {
+    return this.imageNames;
+  }
+
+  private addImage(image: PdfImage): string {
+    const existing = this.imageNames.get(image);
+    if (existing !== undefined) return existing;
+    const name = `/I${this.imageNames.size + 1}`;
+    this.imageNames.set(image, name);
+    return name;
   }
 
   // ---------------------------------------------------------------- context
@@ -290,6 +305,43 @@ export class PdfCanvas {
     const name = this.addPattern(pattern);
     this.push(`/Pattern CS ${name} SCN`);
     return name;
+  }
+
+  /** Draw an image in PDF user space, applying its stored EXIF-style orientation. */
+  drawImage(image: PdfImage, x: number, y: number, width = image.width, height?: number): void {
+    const resolvedHeight = height ?? image.height * width / image.width;
+    const name = this.addImage(image);
+    let matrix: PdfMatrix;
+    switch (image.orientation) {
+      case 'topRight':
+        matrix = [-width, 0, 0, resolvedHeight, width + x, y];
+        break;
+      case 'bottomRight':
+        matrix = [-width, 0, 0, -resolvedHeight, width + x, resolvedHeight + y];
+        break;
+      case 'bottomLeft':
+        matrix = [width, 0, 0, -resolvedHeight, x, resolvedHeight + y];
+        break;
+      case 'leftTop':
+        matrix = [0, -resolvedHeight, -width, 0, width + x, resolvedHeight + y];
+        break;
+      case 'rightTop':
+        matrix = [0, -resolvedHeight, width, 0, x, resolvedHeight + y];
+        break;
+      case 'rightBottom':
+        matrix = [0, resolvedHeight, width, 0, x, y];
+        break;
+      case 'leftBottom':
+        matrix = [0, resolvedHeight, -width, 0, width + x, y];
+        break;
+      default:
+        matrix = [width, 0, 0, resolvedHeight, x, y];
+        break;
+    }
+    this.push('q');
+    this.push(`${operands(matrix)} cm`);
+    this.push(`${name} Do`);
+    this.push('Q');
   }
 
   // ------------------------------------------------------------ path building
