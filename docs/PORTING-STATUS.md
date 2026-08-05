@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 52 `.ts` files, ~8,000 lines (TypeScript)
+**Ported:** 53 `.ts` files, ~8,500 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -134,7 +134,7 @@ both, and will grow the shape factories in 2.5.
 
 | Upstream | Lines | Port / status |
 |---|---:|---|
-| `svg/parser.dart` | 219 | — **phase 2.7** |
+| `svg/parser.dart` | 219 | — **phase 2.7**; the XML reader it depends on landed in 2.3 as `src/svg/xml.ts` |
 | `svg/path.dart` | 320 | `src/svg/path.ts` — partial: the full `d` grammar, `drawShape`, `shapeBoundingBox`; the shape-to-`d` factories are **phase 2.5** |
 | `svg/painter.dart`, `operation.dart` | 251 | — **phase 2.5** |
 | `svg/transform.dart` | 124 | — **phase 2.4** — the matrix itself landed in 2.1 as `src/pdf/matrix.ts` |
@@ -144,6 +144,7 @@ both, and will grow the shape factories in 2.5.
 | `svg/gradient.dart` | 436 | — **phase 2.8**, optional |
 | `svg/text.dart` | 221 | — |
 | `svg/image.dart` | 150 | — |
+| *(no upstream file — the `xml` package)* | — | `src/svg/xml.ts` — done: elements, attributes, text, CDATA, comments, entities, namespaces; no DTD subset, no validation |
 
 ## `src/widgets/` — layout tree
 
@@ -184,7 +185,7 @@ both, and will grow the shape factories in 2.5.
 | Graphics | ~1,600 | paths, transforms, clipping and graphic states done; images, shading and patterns not |
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
-| SVG | ~2,800 | the `d` grammar and path bounding boxes done; everything else pending |
+| SVG | ~2,800 | the `d` grammar and an XML reader done; painting pending |
 | Widgets | ~14,000 | ~18 widgets of ~60, plus styles and themes |
 
 **Phases 0 and 1 are complete.** The WinAnsi ceiling is gone: a TrueType font is

@@ -48,6 +48,10 @@ neither. `Padding`, `Align`, `Center`, `SizedBox` and `Divider`, plus
 result — every one of the seven calls `Font.ttf`, so phase 1 remains on all their
 critical paths — but the missing-API total across them fell from 147 to 124.
 
+**Phase 2.3 — XML reader — landed 2026-08-05.** `src/svg/xml.ts` reads
+elements, attributes, text, CDATA, comments, entities and namespaces. Every SVG
+in `examples/assets/` and the inline markup in `server-assets.json` parse.
+
 **Phase 2.2 — SVG path data parser — landed 2026-08-05.** `src/svg/path.ts`
 reads the whole `d` grammar and reduces it to move / line / cubic / close, plus
 `drawShape` and `shapeBoundingBox`. Every `d` attribute in `examples/assets/`
@@ -69,11 +73,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 2.3 — XML reader.** A minimal, dependency-free parser in
-> `src/svg/xml.ts`: elements, attributes, text, CDATA, comments, entities,
-> namespaces. There is no `DOMParser` under ClearScript.
+> **Phase 2.4 — SVG transforms and viewBox.** Port
+> `pdf/lib/src/svg/transform.dart` into `src/svg/transform.ts` and the numeric
+> half of `svg/parser.dart` into `src/svg/parser.ts`: `matrix translate scale
+> rotate skewX skewY`, and the length units an SVG attribute may carry.
 
-The `d` grammar reads a path; nothing yet reads the document that holds one.
+A path and a tree both parse; what is missing is the space they are drawn in.
 
 ---
 
@@ -493,13 +498,33 @@ Divergences, each noted in the file:
   `SyntaxError` (a grammar violation) from `RangeError` (a number out of range),
   so a caller can tell a broken file from an unrepresentable one.
 
-### 2.3 XML reader
+### 2.3 XML reader ✅ *(landed 2026-08-05)*
 
 - **Into:** `src/svg/xml.ts`
 - A minimal, dependency-free XML parser: elements, attributes, text, CDATA,
   comments, entities, namespaces. No `DOMParser` — it does not exist in
   ClearScript.
 - **Test:** malformed input fails with a position; entity and namespace handling.
+
+Landed with 22 tests. There is no upstream file to translate — dart_pdf calls
+`XmlDocument.parse` from the `xml` package — so what is reproduced is the
+*interface* `svg/parser.dart` and `widgets/svg.dart` consume, under the Dart
+names, so those two modules read the same in both languages:
+`XmlDocument.parse`, `rootElement`, `getAttribute(name, namespace)`,
+`setAttribute`, `children`, `descendants`, `name.local`.
+
+Deliberately out of scope, each a silent no-op rather than an error because an
+SVG exporter may emit them and none changes what is drawn:
+
+- The internal DTD subset is skipped, so a custom `<!ENTITY>` is not expanded;
+  the reference survives into the text rather than the text being dropped.
+- No attribute-value normalization: a newline inside an attribute stays one.
+  Every attribute the port reads is split on whitespace anyway.
+- No DTD validation, no XInclude, no `xml:space`.
+
+The tree is **mutable by design** — `setAttribute` exists because upstream's
+`SvgParser.convertStyle` flattens a `style` attribute into real attributes on
+the element it found it on.
 
 ### 2.4 Transforms and viewBox
 
