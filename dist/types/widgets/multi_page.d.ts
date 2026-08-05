@@ -25,6 +25,7 @@ export interface MultiPageOptions {
     readonly header?: ((context: RenderContext) => AnyWidget) | null;
     readonly footer?: ((context: RenderContext) => AnyWidget) | null;
     readonly background?: ColorInput | null;
+    readonly maxPages?: number;
 }
 export declare class MultiPage implements Section {
     /**
@@ -39,7 +40,8 @@ export declare class MultiPage implements Section {
     readonly header: ((context: RenderContext) => AnyWidget) | null;
     readonly footer: ((context: RenderContext) => AnyWidget) | null;
     readonly background: ColorInput | null;
-    constructor({ format, pageFormat, margin, orientation, gap, theme, build, header, footer, background }: MultiPageOptions);
+    readonly maxPages: number;
+    constructor({ format, pageFormat, margin, orientation, gap, theme, build, header, footer, background, maxPages }: MultiPageOptions);
     /** The paper as written, with the orientation applied. */
     get format(): PageSize;
     /** Margins in the resolved orientation, rotated with the paper. */

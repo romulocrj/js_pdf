@@ -65,6 +65,25 @@ export declare abstract class Widget<TData = unknown> {
     abstract layout(context: RenderContext, constraints: Constraints): LayoutBox<TData>;
     abstract paint(context: RenderContext, box: PositionedBox<TData>): void;
 }
+/** One page-sized fragment and the immutable state needed for the next one. */
+export interface SpanLayout<TData, TState> {
+    readonly box: LayoutBox<TData>;
+    readonly nextState: TState;
+    readonly hasMore: boolean;
+}
+/**
+ * A widget that can return successive page-sized layout fragments.
+ *
+ * Upstream saves and restores a mutable `WidgetContext` held by the widget.
+ * That would violate this port's pure layout protocol, so continuation state is
+ * an explicit immutable value: the caller supplies one snapshot and receives
+ * the next alongside the box it applies to.
+ */
+export declare abstract class SpanningWidget<TData = unknown, TState = unknown> extends Widget<TData> {
+    readonly canSpan = true;
+    abstract initialSpanState(): TState;
+    abstract layoutSpan(context: RenderContext, constraints: Constraints, state: TState): SpanLayout<TData, TState>;
+}
 /** What a `StatelessWidget` hands from `layout` to `paint`: the built subtree. */
 export interface StatelessLayoutData {
     readonly childBox: AnyLayoutBox;

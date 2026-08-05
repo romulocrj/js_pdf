@@ -14,8 +14,9 @@ TypeScript, with the runtime contract and attribution enforced by
 model, with per-page resource dictionaries and **embedded TrueType fonts** —
 subset, written as Type0/CIDFontType2 composites, and selected through a theme.
 Beyond text, `SvgImage` exposes the SVG painter with fitting, alignment,
-clipping and PDF shading-pattern gradients, and tables now lay out fixed,
-intrinsic and flexible tracks. Raster images are still absent.
+clipping and PDF shading-pattern gradients, and tables lay out fixed, intrinsic
+and flexible tracks across as many pages as their rows require. Raster images
+are still absent.
 
 **Phases 0, 1 and 2 are complete.** The foundations are in place, the WinAnsi
 ceiling is gone and the vector pipeline is public; phase 3 (layout) is what the
@@ -89,6 +90,11 @@ row/cell decoration plus exterior/interior rules. `TableHelper.fromTextArray`
 adds theme-aware text, padding, formatting callbacks and repeatable headers. It
 removed `TableHelper` from four example gates; the missing total fell 88 → 84.
 
+**Phase 3.2 — spanning widgets — landed 2026-08-05.** `SpanningWidget` returns
+an immutable continuation snapshot with each page fragment. `MultiPage` drives
+those fragments inside the space left by its header/footer, and `Table` resumes
+at the next unpainted row while repeating marked headers.
+
 **Phase 2.3 — XML reader — landed 2026-08-05.** `src/svg/xml.ts` reads
 elements, attributes, text, CDATA, comments, entities and namespaces. Every SVG
 in `examples/assets/` and the inline markup in `server-assets.json` parse.
@@ -114,12 +120,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 3.2 — spanning widgets.** Add save/restore layout state so a long
-> table can consume one page, repeat its header and resume on the next.
+> **Phase 3.3 — remaining basic widgets.** Land the transform/opacity/fitting
+> group unblocked by 2.1, plus the remaining size and builder primitives that do
+> not require phase 3.4's minimum constraints.
 
-The table surface is public; pagination is now the blocking half. Until 3.2 an
-oversized table remains one atomic widget and raises the existing overflow
-error.
+Tables now paginate. The next layout blockers are the composition primitives
+shared by every example, before the full flex and decoration phases.
 
 ---
 
@@ -746,11 +752,10 @@ compatible with the `BoxDecoration`/`Border` objects arriving in 3.5.
 `TableHelper.fromTextArray` covers headers from a separate array or leading
 data rows, repeat markers, theme table styles, per-column alignment, padding,
 minimum heights, format/build/style/decoration callbacks and odd-row variants.
-Ten tests assert layout numbers and emitted operators. Pagination is
-deliberately not hidden here: repeat markers are retained, but 3.2 introduces
-the context protocol that can safely advance the same table across pages.
+Ten tests assert layout numbers and emitted operators. Repeat markers are part
+of the layout data consumed by 3.2's continuation protocol.
 
-### 3.2 Spanning widgets
+### 3.2 Spanning widgets ✅ *(landed 2026-08-05)*
 
 - **Ports:** `widgets/multi_page.dart`'s `SpanningWidget` protocol
 - A long table or paragraph splits across pages instead of throwing. Requires
@@ -758,6 +763,20 @@ the context protocol that can safely advance the same table across pages.
 - **Example gate:** no new API, but `document`, `invoice` and `report` all
   overflow a page — without this they will throw `RangeError` even once their
   widgets exist.
+
+Landed as a public `SpanningWidget<TData, TState>` base. In place of upstream's
+mutable `WidgetContext.clone/apply`, `layoutSpan()` takes an immutable state and
+returns the fragment box, its successor state and `hasMore`. This preserves the
+repository's central rule that layout never caches on `this`: replaying one
+snapshot produces the same rows and cannot overwrite a fragment already
+assigned to an earlier page.
+
+`MultiPage` detects direct spanning children, constrains every fragment to the
+space left after its header/footer, starts a fresh page while `hasMore`, and
+guards the loop with upstream's `maxPages` option. `Table` keeps column widths
+stable across fragments, resumes at the next row and includes every `repeat`
+row on continuations. Four tests cover immutable replay, three-page output,
+headers/footers, repeated table headers, page limits and an indivisible row.
 
 ### 3.3 Basic widgets ⚠️ *(partial — landed 2026-08-05)*
 

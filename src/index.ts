@@ -50,7 +50,7 @@ import { TableHelper } from './widgets/table_helper.ts';
 import { Text } from './widgets/text.ts';
 import { TextStyle } from './widgets/text_style.ts';
 import { DefaultTextStyle, Theme, ThemeData } from './widgets/theme.ts';
-import { StatelessWidget, Widget } from './widgets/widget.ts';
+import { SpanningWidget, StatelessWidget, Widget } from './widgets/widget.ts';
 import type { DocumentOptions } from './widgets/document.ts';
 
 export {
@@ -78,6 +78,7 @@ export {
   Row,
   SizedBox,
   Spacer,
+  SpanningWidget,
   StatelessWidget,
   SvgImage,
   Table,
@@ -155,6 +156,7 @@ export type {
   LayoutBox,
   PositionedBox,
   RenderContext,
+  SpanLayout,
   StatelessLayoutData
 } from './widgets/widget.ts';
 export type {
@@ -183,6 +185,7 @@ export type {
   TableOptions,
   TableRowLayout,
   TableRowOptions,
+  TableSpanState,
   TableWidth
 } from './widgets/table.ts';
 export type {
@@ -234,6 +237,7 @@ export interface PublicApi {
   readonly FlexColumnWidth: typeof FlexColumnWidth;
   readonly FractionColumnWidth: typeof FractionColumnWidth;
   readonly TableHelper: typeof TableHelper;
+  readonly SpanningWidget: typeof SpanningWidget;
   readonly Alignment: typeof Alignment;
   readonly EdgeInsets: typeof EdgeInsets;
   readonly PageFormat: typeof PageFormat;
@@ -272,6 +276,7 @@ const publicApi: PublicApi = Object.freeze({
   FlexColumnWidth,
   FractionColumnWidth,
   TableHelper,
+  SpanningWidget,
   Alignment,
   EdgeInsets,
   PageFormat,

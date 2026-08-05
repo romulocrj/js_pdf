@@ -1,5 +1,5 @@
 import type { ColorInput, Rgb } from '../pdf/color.ts';
-import { Widget } from './widget.ts';
+import { SpanningWidget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
 export type TableCellVerticalAlignment = 'bottom' | 'middle' | 'top' | 'full';
 export type TableWidth = 'min' | 'max';
@@ -109,6 +109,9 @@ export interface TableLayoutData {
     readonly rowHeights: readonly number[];
     readonly rows: readonly TableRowLayout[];
 }
+export interface TableSpanState {
+    readonly nextRow: number;
+}
 export interface TableOptions {
     readonly children?: readonly TableRow[];
     readonly border?: TableBorderInput | null;
@@ -118,7 +121,7 @@ export interface TableOptions {
     readonly tableWidth?: TableWidth;
 }
 /** A grid whose rows share one set of computed column tracks. */
-export declare class Table extends Widget<TableLayoutData> {
+export declare class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
     readonly children: readonly TableRow[];
     readonly border: TableBorder | null;
     readonly defaultVerticalAlignment: TableCellVerticalAlignment;
@@ -127,6 +130,13 @@ export declare class Table extends Widget<TableLayoutData> {
     readonly tableWidth: TableWidth;
     constructor({ children, border, defaultVerticalAlignment, columnWidths, defaultColumnWidth, tableWidth }?: TableOptions);
     private resolveWidths;
+    private layoutRows;
     layout(context: RenderContext, constraints: Constraints): LayoutBox<TableLayoutData>;
+    initialSpanState(): TableSpanState;
+    layoutSpan(context: RenderContext, constraints: Constraints, state: TableSpanState): {
+        readonly box: LayoutBox<TableLayoutData>;
+        readonly nextState: TableSpanState;
+        readonly hasMore: boolean;
+    };
     paint(context: RenderContext, box: PositionedBox<TableLayoutData>): void;
 }

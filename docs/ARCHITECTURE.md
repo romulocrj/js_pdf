@@ -119,7 +119,7 @@ safety) and that JavaScript has to check by hand.
   form of that subset: a Type0/CIDFontType2 composite with `/Identity-H` and a
   `/ToUnicode` CMap.
 - **`obj/graphic_stream.ts`** — the `/Resources` dictionary: `/Font`,
-  `/XObject` and `/ExtGState` registered per page.
+  `/XObject`, `/ExtGState` and `/Pattern` registered per page.
 - **`obj/page.ts`, `page_list.ts`, `catalog.ts`, `info.ts`, `object.ts`,
   `object_stream.ts`** — the indirect objects a document is made of. Each one
   registers itself with the document on construction and resolves its
@@ -143,6 +143,9 @@ safety) and that JavaScript has to check by hand.
 - **`container.ts`** — `Container`: padding, margin, fill, border.
 - **`basic.ts`** — `Padding`, `Align`, `Center`, `SizedBox`, `Divider`.
 - **`shape.ts`** — `Vector`, the imperative drawing surface.
+- **`table.ts` / `table_helper.ts`** — shared column tracks, table painting and
+  the scalar-array convenience builder; tables span pages through immutable
+  continuation state.
 - **`page.ts` / `page_theme.ts`** — one physical page, and everything about it
   but its body; overflow is an error.
 - **`multi_page.ts`** — pagination with per-page header and footer.
@@ -237,7 +240,7 @@ roadmap phase lands.
 | Font naming | `/F$objser`, derived from the font object's serial | Page-local `/F1`, `/F2`, … allocated as the content stream is written |
 | Colors | `PdfColor` value type with CMYK and HSL variants | RGB triple, DeviceRGB only |
 | Flex | Full Flutter flex: alignments, `Expanded`, `FlexFit`, `mainAxisSize` | `gap`, and fixed ratio `widths` on `Row` |
-| Pagination | `SpanningWidget` splits a tall widget across pages | Tall widget throws `RangeError` |
+| Pagination | `SpanningWidget` saves mutable widget context between pages | Direct spanning children return immutable continuation state; `Table` supports it, while other tall widgets still throw `RangeError` |
 | Decoration | `BoxDecoration`: gradients, shapes, radii, shadows, per-side borders | Flat `background` / `borderColor` / `borderWidth` |
 | Async | `save()` returns a `Future` | `save()` returns `Uint8Array` |
 

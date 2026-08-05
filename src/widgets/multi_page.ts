@@ -14,10 +14,9 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/widgets/multi_page.dart
  *
- * PORT GAP: upstream defines a `SpanningWidget` protocol so a single widget
- * (a long `Table`, a long `Paragraph`) can be split across pages by saving and
- * restoring its layout context. This port has no spanning: a child that does
- * not fit an empty content area throws.
+ * Spanning widgets return immutable continuation state with each fragment.
+ * This is the pure-layout equivalent of upstream's mutable save/restore
+ * context and keeps the same widget reusable after a page break.
  */
 
 import type { ColorInput } from '../pdf/color.ts';
@@ -30,6 +29,7 @@ import { PageTheme } from './page_theme.ts';
 import type { PageOrientation } from './page_theme.ts';
 import type { Section } from './page.ts';
 import type { ThemeData } from './theme.ts';
+import { SpanningWidget } from './widget.ts';
 import type { AnyWidget, DocumentContext, RenderContext } from './widget.ts';
 
 export interface MultiPageOptions {
@@ -54,6 +54,7 @@ export interface MultiPageOptions {
   readonly header?: ((context: RenderContext) => AnyWidget) | null;
   readonly footer?: ((context: RenderContext) => AnyWidget) | null;
   readonly background?: ColorInput | null;
+  readonly maxPages?: number;
 }
 
 /** Mutable per-page state while the section is being filled. */
@@ -79,6 +80,7 @@ export class MultiPage implements Section {
   readonly header: ((context: RenderContext) => AnyWidget) | null;
   readonly footer: ((context: RenderContext) => AnyWidget) | null;
   readonly background: ColorInput | null;
+  readonly maxPages: number;
 
   constructor({
     format = undefined,
@@ -90,7 +92,8 @@ export class MultiPage implements Section {
     build,
     header = null,
     footer = null,
-    background = null
+    background = null,
+    maxPages = 20
   }: MultiPageOptions) {
     if (typeof build !== 'function') throw new TypeError('MultiPage.build must be a function');
     this.pageTheme = new PageTheme({
@@ -104,6 +107,10 @@ export class MultiPage implements Section {
     this.header = header;
     this.footer = footer;
     this.background = background;
+    this.maxPages = Math.trunc(Number(maxPages));
+    if (!Number.isFinite(this.maxPages) || this.maxPages <= 0) {
+      throw new RangeError('MultiPage.maxPages must be a positive finite integer');
+    }
   }
 
   /** The paper as written, with the orientation applied. */
@@ -123,6 +130,9 @@ export class MultiPage implements Section {
     const canvases: PdfCanvas[] = [];
 
     const startPage = (): PageState => {
+      if (canvases.length >= this.maxPages) {
+        throw new RangeError(`MultiPage exceeded its ${this.maxPages} page limit`);
+      }
       const canvas = new PdfCanvas(this.format.height);
       if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
 
@@ -160,6 +170,48 @@ export class MultiPage implements Section {
     let page = startPage();
 
     for (const child of children) {
+      if (child instanceof SpanningWidget && child.canSpan) {
+        let state: unknown = child.initialSpanState();
+
+        while (true) {
+          const available = page.bottom - page.cursor;
+          const fragment = child.layoutSpan(page.context, {
+            maxWidth: page.maxWidth,
+            maxHeight: available
+          }, state);
+          const box = fragment.box;
+
+          if (box.height > available + 0.001) {
+            throw new RangeError('A spanning widget returned a fragment taller than its constraint');
+          }
+
+          if (box.height <= 0.001 && fragment.hasMore) {
+            if (page.cursor > page.top + 0.001) {
+              page = startPage();
+              continue;
+            }
+            throw new RangeError('A spanning row exceeds a full MultiPage content area');
+          }
+
+          if (box.height > 0) {
+            child.paint(page.context, {
+              ...box,
+              x: this.margin.left,
+              y: page.cursor
+            });
+          }
+
+          if (!fragment.hasMore) {
+            page.cursor += box.height + this.gap;
+            break;
+          }
+
+          state = fragment.nextState;
+          page = startPage();
+        }
+        continue;
+      }
+
       let box = child.layout(page.context, {
         maxWidth: page.maxWidth,
         maxHeight: page.bottom - page.cursor

@@ -218,3 +218,97 @@ test('invalid numeric and enum inputs fail before reaching PDF operators', () =>
     /Unknown table alignment/
   );
 });
+
+test('a spanning table returns immutable continuation state and repeats headers', () => {
+  const table = Pdf.TableHelper.fromTextArray({
+    headers: ['HEADER'],
+    data: [['one'], ['two'], ['three']],
+    headerHeight: 30,
+    cellHeight: 30,
+    border: null
+  });
+  assert.ok(table instanceof Pdf.SpanningWidget);
+
+  const document = new Pdf.Document();
+  const context = {
+    document,
+    canvas: null,
+    pageFormat: { width: 200, height: 200 },
+    pageNumber: 1,
+    theme: document.theme
+  };
+  const initial = table.initialSpanState();
+  const first = table.layoutSpan(context, { maxWidth: 200, maxHeight: 70 }, initial);
+  const replay = table.layoutSpan(context, { maxWidth: 200, maxHeight: 70 }, initial);
+
+  assert.deepEqual(initial, { nextRow: 0 });
+  assert.deepEqual(first.nextState, replay.nextState);
+  assert.deepEqual(first.box.data.rowHeights, [30, 30]);
+  assert.equal(first.hasMore, true);
+
+  const second = table.layoutSpan(
+    context,
+    { maxWidth: 200, maxHeight: 70 },
+    first.nextState
+  );
+  assert.deepEqual(second.box.data.rowHeights, [30, 30]);
+  assert.equal(second.box.data.rows[0].row.repeat, true);
+  assert.equal(second.hasMore, true);
+});
+
+test('MultiPage splits a long table and paints its header on every fragment', () => {
+  const data = Array.from({ length: 60 }, (_, index) => [`R${String(index + 1).padStart(2, '0')}`]);
+  const bytes = Pdf.createPdf({}, () => new Pdf.MultiPage({
+    margin: 40,
+    gap: 0,
+    header: () => new Pdf.Text('PAGE HEADER'),
+    footer: () => new Pdf.Text('PAGE FOOTER'),
+    build: () => [Pdf.TableHelper.fromTextArray({
+      headers: ['REPEATED HEADER'],
+      data,
+      headerHeight: 30,
+      cellHeight: 30,
+      border: null
+    })]
+  }));
+  const source = latin1(bytes);
+  const pages = (source.match(/\/Type \/Page\b/g) ?? []).length;
+
+  assert.ok(pages >= 3);
+  assert.equal((source.match(/\(REPEATED HEADER\) Tj/g) ?? []).length, pages);
+  assert.equal((source.match(/\(PAGE HEADER\) Tj/g) ?? []).length, pages);
+  assert.equal((source.match(/\(PAGE FOOTER\) Tj/g) ?? []).length, pages);
+  for (const [index] of data.entries()) {
+    const label = `R${String(index + 1).padStart(2, '0')}`;
+    assert.equal((source.match(new RegExp(`\\(${label}\\) Tj`, 'g')) ?? []).length, 1, label);
+  }
+});
+
+test('MultiPage bounds a spanning widget that cannot finish within maxPages', () => {
+  assert.throws(
+    () => Pdf.createPdf({}, () => new Pdf.MultiPage({
+      margin: 40,
+      maxPages: 1,
+      build: () => [Pdf.TableHelper.fromTextArray({
+        headerCount: 0,
+        data: Array.from({ length: 100 }, (_, index) => [String(index)]),
+        cellHeight: 30
+      })]
+    })),
+    /page limit/
+  );
+});
+
+test('an indivisible table row taller than a full page still fails clearly', () => {
+  assert.throws(
+    () => Pdf.createPdf({}, () => new Pdf.MultiPage({
+      margin: 40,
+      build: () => [Pdf.TableHelper.fromTextArray({
+        headerCount: 0,
+        data: [['too tall']],
+        cellHeight: 2000
+      })]
+    })),
+    /full MultiPage content area/
+  );
+});

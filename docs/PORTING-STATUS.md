@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 71 `.ts` files, ~12,500 lines (TypeScript)
+**Ported:** 71 `.ts` files, ~12,700 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -151,17 +151,17 @@ both, and will grow the shape factories in 2.5.
 
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
-| `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | partial — layout protocol, `StatelessWidget`, `theme` on the render context; no `InheritedWidget`, no `SpanningWidget` (**3.2**) |
+| `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | partial — pure layout protocol, `StatelessWidget`, immutable `SpanningWidget` continuation state and theme on the render context; no `InheritedWidget` |
 | `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — `EdgeInsets`, `Alignment`, `inscribe`; no `BoxConstraints` value type (**3.4**) |
 | `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts` | partial — `TextStyle` with merge and the four font slots, greedy wrap, `maxLines`; no `RichText`/`TextSpan`, no justification, no painted decorations, no `fontFallback` (**3.7**) |
 | `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — `Column`, `Row`, `Spacer`; no alignment, `Expanded`, `Flexible` (**phase 3.4**) |
 | `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts` | partial — fill, single border; no `BoxDecoration`, `Border`, `BorderSide` (**phase 3.5**) |
 | `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground; **one document may mix orientations and paper sizes**, per section; no `clip` |
-| `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — header/footer, page breaks and a per-section `orientation`; no `SpanningWidget` (**phase 3.2**) |
+| `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — header/footer, atomic page breaks, direct spanning children, `maxPages` and per-section `orientation`; no main/cross-axis distribution |
 | `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`; owns the theme and the per-document font cache |
 | `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts`, `src/widgets/svg.ts` | partial — imperative `Vector`; public `SvgImage` with all `BoxFit` modes, alignment, clipping and colour filter; no SVG text or embedded raster content |
 | `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | partial — `Padding`, `Align`, `Center`, `SizedBox`, `Divider`; no `Transform`/`Opacity`/`FittedBox` (blocked on **2.1** and `/ExtGState`), no `ConstrainedBox`/`AspectRatio`/`FullPage` |
-| `widgets/table.dart`, `table_helper.dart` | 834 | `src/widgets/table.ts`, `table_helper.ts` | partial — fixed/flex/intrinsic/fraction tracks, alignment, decorations, borders and `TableHelper`; repeatable rows are marked, pagination waits for **3.2** |
+| `widgets/table.dart`, `table_helper.dart` | 834 | `src/widgets/table.ts`, `table_helper.ts` | partial — fixed/flex/intrinsic/fraction tracks, alignment, decorations, borders, `TableHelper`, page spanning and repeatable headers; no bidi direction |
 | `widgets/theme.dart`, `font.dart` | 461 | `src/widgets/theme.ts`, `src/widgets/font.ts` | partial — `Font`, `ThemeData`, `Theme`, `DefaultTextStyle`; no `iconTheme` (**5.4**), no `DefaultTextStyle.merge` (needs `Builder`) |
 | `widgets/image.dart`, `image_provider.dart` | 423 | — | — `Image`, `MemoryImage` — **phase 4.3** |
 | `widgets/border_radius.dart` | 466 | — | — `BorderRadius` — **phase 3.5** |

@@ -14,15 +14,15 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/widgets/table.dart
  *
- * PORT GAP: `Table` is atomic until phase 3.2 adds the spanning-widget
- * protocol. Repeatable rows are retained in the layout model now so that phase
- * can paginate without changing this public API.
+ * Table continuation uses the port's immutable spanning state rather than
+ * upstream's mutable `TableContext`; repeated layout of one state is therefore
+ * deterministic and cannot overwrite a fragment already assigned to a page.
  */
 
 import { assertFiniteNumber } from '../base/assert.ts';
 import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput, Rgb } from '../pdf/color.ts';
-import { Widget } from './widget.ts';
+import { SpanningWidget } from './widget.ts';
 import type {
   AnyLayoutBox,
   AnyWidget,
@@ -331,6 +331,10 @@ export interface TableLayoutData {
   readonly rows: readonly TableRowLayout[];
 }
 
+export interface TableSpanState {
+  readonly nextRow: number;
+}
+
 export interface TableOptions {
   readonly children?: readonly TableRow[];
   readonly border?: TableBorderInput | null;
@@ -341,7 +345,7 @@ export interface TableOptions {
 }
 
 /** A grid whose rows share one set of computed column tracks. */
-export class Table extends Widget<TableLayoutData> {
+export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
   readonly children: readonly TableRow[];
   readonly border: TableBorder | null;
   readonly defaultVerticalAlignment: TableCellVerticalAlignment;
@@ -429,8 +433,12 @@ export class Table extends Widget<TableLayoutData> {
     return widths;
   }
 
-  override layout(context: RenderContext, constraints: Constraints): LayoutBox<TableLayoutData> {
-    const columnWidths = this.resolveWidths(context, constraints);
+  private layoutRows(
+    context: RenderContext,
+    constraints: Constraints,
+    columnWidths: readonly number[],
+    selectedRows: readonly TableRow[]
+  ): LayoutBox<TableLayoutData> {
     if (columnWidths.length === 0) {
       return { widget: this, width: 0, height: 0, data: { columnWidths, rowHeights: [], rows: [] } };
     }
@@ -439,7 +447,7 @@ export class Table extends Widget<TableLayoutData> {
     const rowHeights: number[] = [];
     let rowY = 0;
 
-    for (const row of this.children) {
+    for (const row of selectedRows) {
       const measured: { readonly box: AnyLayoutBox; readonly column: number; readonly x: number; }[] = [];
       let x = 0;
       let rowHeight = 0;
@@ -479,6 +487,83 @@ export class Table extends Widget<TableLayoutData> {
       width: columnWidths.reduce((sum, value) => sum + value, 0),
       height: rowY,
       data: { columnWidths, rowHeights, rows }
+    };
+  }
+
+  override layout(context: RenderContext, constraints: Constraints): LayoutBox<TableLayoutData> {
+    const columnWidths = this.resolveWidths(context, constraints);
+    return this.layoutRows(context, constraints, columnWidths, this.children);
+  }
+
+  override initialSpanState(): TableSpanState {
+    return Object.freeze({ nextRow: 0 });
+  }
+
+  override layoutSpan(
+    context: RenderContext,
+    constraints: Constraints,
+    state: TableSpanState
+  ): { readonly box: LayoutBox<TableLayoutData>; readonly nextState: TableSpanState; readonly hasMore: boolean } {
+    const nextRow = Number(state.nextRow);
+    if (!Number.isInteger(nextRow) || nextRow < 0 || nextRow > this.children.length) {
+      throw new RangeError('Invalid table continuation state');
+    }
+
+    const columnWidths = this.resolveWidths(context, constraints);
+    const candidates: { readonly row: TableRow; readonly index: number }[] = [];
+    for (let index = 0; index < this.children.length; index++) {
+      const row = this.children[index]!;
+      if (index >= nextRow || row.repeat) {
+        candidates.push({ row, index });
+      }
+    }
+
+    const measured = this.layoutRows(
+      context,
+      constraints,
+      columnWidths,
+      candidates.map(candidate => candidate.row)
+    );
+    let height = 0;
+    let count = 0;
+    let followingRow = nextRow;
+
+    for (let index = 0; index < measured.data.rows.length; index++) {
+      const rowHeight = measured.data.rowHeights[index] ?? 0;
+      if (height + rowHeight > constraints.maxHeight + 0.001) {
+        break;
+      }
+      height += rowHeight;
+      count++;
+      const originalIndex = candidates[index]!.index;
+      if (originalIndex >= followingRow) {
+        followingRow = originalIndex + 1;
+      }
+    }
+
+    const hasMore = followingRow < this.children.length;
+    if (hasMore && followingRow === nextRow) {
+      const emptyBox: LayoutBox<TableLayoutData> = {
+        widget: this,
+        width: columnWidths.reduce((sum, value) => sum + value, 0),
+        height: 0,
+        data: { columnWidths, rowHeights: [], rows: [] }
+      };
+      return { box: emptyBox, nextState: state, hasMore: true };
+    }
+
+    const rows = measured.data.rows.slice(0, count);
+    const rowHeights = measured.data.rowHeights.slice(0, count);
+    const box: LayoutBox<TableLayoutData> = {
+      widget: this,
+      width: measured.width,
+      height,
+      data: { columnWidths, rowHeights, rows }
+    };
+    return {
+      box,
+      nextState: Object.freeze({ nextRow: followingRow }),
+      hasMore
     };
   }
 

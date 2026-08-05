@@ -1535,6 +1535,13 @@ function inscribe(alignment, childWidth, childHeight, boxWidth, boxHeight) {
 
 class Widget {}
 
+class SpanningWidget extends Widget {
+  constructor() {
+    super(...arguments);
+    this.canSpan = true;
+  }
+}
+
 class StatelessWidget extends Widget {
   layout(context, constraints) {
     const childBox = this.build(context).layout(context, constraints);
@@ -2538,7 +2545,7 @@ class PageTheme {
 }
 
 class MultiPage {
-  constructor({format = undefined, pageFormat = undefined, margin = DEFAULT_MARGIN, orientation = "natural", gap = 8, theme = undefined, build, header = null, footer = null, background = null}) {
+  constructor({format = undefined, pageFormat = undefined, margin = DEFAULT_MARGIN, orientation = "natural", gap = 8, theme = undefined, build, header = null, footer = null, background = null, maxPages = 20}) {
     if (typeof build !== "function") throw new TypeError("MultiPage.build must be a function");
     this.pageTheme = new PageTheme({
       pageFormat: pageFormat ?? format ?? PageFormat.A4,
@@ -2551,6 +2558,10 @@ class MultiPage {
     this.header = header;
     this.footer = footer;
     this.background = background;
+    this.maxPages = Math.trunc(Number(maxPages));
+    if (!Number.isFinite(this.maxPages) || this.maxPages <= 0) {
+      throw new RangeError("MultiPage.maxPages must be a positive finite integer");
+    }
   }
   get format() {
     return this.pageTheme.resolvedFormat;
@@ -2563,6 +2574,9 @@ class MultiPage {
     if (!Array.isArray(children)) throw new TypeError("MultiPage.build must return an array of widgets");
     const canvases = [];
     const startPage = () => {
+      if (canvases.length >= this.maxPages) {
+        throw new RangeError(`MultiPage exceeded its ${this.maxPages} page limit`);
+      }
       const canvas = new PdfCanvas(this.format.height);
       if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
       const pageNumber = canvases.length + 1;
@@ -2614,6 +2628,41 @@ class MultiPage {
     };
     let page = startPage();
     for (const child of children) {
+      if (child instanceof SpanningWidget && child.canSpan) {
+        let state = child.initialSpanState();
+        while (true) {
+          const available = page.bottom - page.cursor;
+          const fragment = child.layoutSpan(page.context, {
+            maxWidth: page.maxWidth,
+            maxHeight: available
+          }, state);
+          const box = fragment.box;
+          if (box.height > available + .001) {
+            throw new RangeError("A spanning widget returned a fragment taller than its constraint");
+          }
+          if (box.height <= .001 && fragment.hasMore) {
+            if (page.cursor > page.top + .001) {
+              page = startPage();
+              continue;
+            }
+            throw new RangeError("A spanning row exceeds a full MultiPage content area");
+          }
+          if (box.height > 0) {
+            child.paint(page.context, {
+              ...box,
+              x: this.margin.left,
+              y: page.cursor
+            });
+          }
+          if (!fragment.hasMore) {
+            page.cursor += box.height + this.gap;
+            break;
+          }
+          state = fragment.nextState;
+          page = startPage();
+        }
+        continue;
+      }
       let box = child.layout(page.context, {
         maxWidth: page.maxWidth,
         maxHeight: page.bottom - page.cursor
@@ -6012,7 +6061,7 @@ function mappedWidth(map, index) {
   return map[index];
 }
 
-class Table extends Widget {
+class Table extends SpanningWidget {
   constructor({children = [], border = null, defaultVerticalAlignment = "top", columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max"} = {}) {
     super();
     if (![ "bottom", "middle", "top", "full" ].includes(defaultVerticalAlignment)) {
@@ -6079,8 +6128,7 @@ class Table extends Widget {
     }
     return widths;
   }
-  layout(context, constraints) {
-    const columnWidths = this.resolveWidths(context, constraints);
+  layoutRows(context, constraints, columnWidths, selectedRows) {
     if (columnWidths.length === 0) {
       return {
         widget: this,
@@ -6096,7 +6144,7 @@ class Table extends Widget {
     const rows = [];
     const rowHeights = [];
     let rowY = 0;
-    for (const row of this.children) {
+    for (const row of selectedRows) {
       const measured = [];
       let x = 0;
       let rowHeight = 0;
@@ -6144,6 +6192,85 @@ class Table extends Widget {
         rowHeights,
         rows
       }
+    };
+  }
+  layout(context, constraints) {
+    const columnWidths = this.resolveWidths(context, constraints);
+    return this.layoutRows(context, constraints, columnWidths, this.children);
+  }
+  initialSpanState() {
+    return Object.freeze({
+      nextRow: 0
+    });
+  }
+  layoutSpan(context, constraints, state) {
+    const nextRow = Number(state.nextRow);
+    if (!Number.isInteger(nextRow) || nextRow < 0 || nextRow > this.children.length) {
+      throw new RangeError("Invalid table continuation state");
+    }
+    const columnWidths = this.resolveWidths(context, constraints);
+    const candidates = [];
+    for (let index = 0; index < this.children.length; index++) {
+      const row = this.children[index];
+      if (index >= nextRow || row.repeat) {
+        candidates.push({
+          row,
+          index
+        });
+      }
+    }
+    const measured = this.layoutRows(context, constraints, columnWidths, candidates.map(candidate => candidate.row));
+    let height = 0;
+    let count = 0;
+    let followingRow = nextRow;
+    for (let index = 0; index < measured.data.rows.length; index++) {
+      const rowHeight = measured.data.rowHeights[index] ?? 0;
+      if (height + rowHeight > constraints.maxHeight + .001) {
+        break;
+      }
+      height += rowHeight;
+      count++;
+      const originalIndex = candidates[index].index;
+      if (originalIndex >= followingRow) {
+        followingRow = originalIndex + 1;
+      }
+    }
+    const hasMore = followingRow < this.children.length;
+    if (hasMore && followingRow === nextRow) {
+      const emptyBox = {
+        widget: this,
+        width: columnWidths.reduce((sum, value) => sum + value, 0),
+        height: 0,
+        data: {
+          columnWidths,
+          rowHeights: [],
+          rows: []
+        }
+      };
+      return {
+        box: emptyBox,
+        nextState: state,
+        hasMore: true
+      };
+    }
+    const rows = measured.data.rows.slice(0, count);
+    const rowHeights = measured.data.rowHeights.slice(0, count);
+    const box = {
+      widget: this,
+      width: measured.width,
+      height,
+      data: {
+        columnWidths,
+        rowHeights,
+        rows
+      }
+    };
+    return {
+      box,
+      nextState: Object.freeze({
+        nextRow: followingRow
+      }),
+      hasMore
     };
   }
   paint(context, box) {
@@ -6495,6 +6622,7 @@ const publicApi = Object.freeze({
   FlexColumnWidth,
   FractionColumnWidth,
   TableHelper,
+  SpanningWidget,
   Alignment,
   EdgeInsets,
   PageFormat,
@@ -6526,4 +6654,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Center, Column, Container, DefaultTextStyle, Divider, Document, EdgeInsets, FixedColumnWidth, FlexColumnWidth, Font, FractionColumnWidth, IntrinsicColumnWidth, MultiPage, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableRow, Text, TextStyle, Theme, ThemeData, Vector, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Center, Column, Container, DefaultTextStyle, Divider, Document, EdgeInsets, FixedColumnWidth, FlexColumnWidth, Font, FractionColumnWidth, IntrinsicColumnWidth, MultiPage, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, SpanningWidget, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableRow, Text, TextStyle, Theme, ThemeData, Vector, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
