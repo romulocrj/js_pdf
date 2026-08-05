@@ -48,6 +48,12 @@ neither. `Padding`, `Align`, `Center`, `SizedBox` and `Divider`, plus
 result — every one of the seven calls `Font.ttf`, so phase 1 remains on all their
 critical paths — but the missing-API total across them fell from 147 to 124.
 
+**Mixed page orientations — landed 2026-08-05.** One document can hold pages in
+different orientations *and* different paper sizes. `orientation` is a per-section
+option on `Page` and `MultiPage` as well as on `PageTheme`, and every physical
+page is written with its own `/MediaBox`. Requested by the user, who could not
+get this to work in dart_pdf. See the dedicated section below.
+
 **Phase 2.4 — SVG transforms and units — landed 2026-08-05.**
 `src/svg/transform.ts` reads the `transform` attribute and `src/svg/parser.ts`
 the numeric half of upstream's parser — `SvgNumeric` with its length units,
@@ -84,6 +90,47 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 > `svg/path.dart`. This is the phase that actually paints.
 
 Everything an SVG element is made of now parses; nothing yet draws one.
+
+---
+
+## Mixed page orientations ✅
+
+**One document, several orientations and paper sizes.** An A4 portrait cover, an
+A4 landscape table and a Letter appendix are three sections of one `save()`:
+
+```js
+createPdf({}, api => [
+  new api.Page({ pageFormat: api.PageFormat.A4, build: () => cover }),
+  new api.MultiPage({
+    pageFormat: api.PageFormat.A4,
+    orientation: 'landscape',       // this section only
+    build: () => wideRows
+  }),
+  new api.Page({ pageFormat: api.PageFormat.LETTER, build: () => appendix })
+]);
+```
+
+`orientation` takes `'natural'` (the format as declared), `'portrait'` or
+`'landscape'`, and is accepted by `Page`, `MultiPage` and `PageTheme` alike.
+
+Why this works, and what to be careful of if it is ever refactored:
+
+- **Nothing in the pipeline holds a document-wide page size.** A section renders
+  to `SerializedPage[]`, each carrying its own `format`; `PdfDocument.addPage`
+  hands that format to a fresh `PdfPage`, which writes its own `/MediaBox`. A
+  change that hoisted the format up to `PdfDocument` would break this silently —
+  the file would still open, at the wrong size.
+- **The rotation is real, not a `/MediaBox` edit.** `RenderContext.pageFormat`
+  reports the resolved dimensions, so a widget sizing itself against the page
+  follows the turn, and margins rotate with the paper (a `left` margin on
+  portrait becomes the `top` margin on landscape).
+- **`PageTheme.mustRotate` swaps the paper's dimensions rather than rotating the
+  content through the CTM**, which is what upstream does. The page a reader sees
+  is the same. Now that phase 2.1 has the `cm` operator the other approach is
+  possible, but swapping is the better one *for this feature*: `/MediaBox` then
+  states the true page size, which is what a printer's imposition step reads.
+
+**Test:** `test/page_orientation.test.mjs`, nine cases.
 
 ---
 

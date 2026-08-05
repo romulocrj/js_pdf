@@ -25,8 +25,9 @@ import type { SerializedPage } from '../pdf/document.ts';
 import { PdfCanvas } from '../pdf/graphics.ts';
 import { DEFAULT_MARGIN, PageFormat } from '../pdf/page_format.ts';
 import type { PageSize } from '../pdf/page_format.ts';
-import { normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
+import { PageTheme } from './page_theme.ts';
+import type { PageOrientation } from './page_theme.ts';
 import type { Section } from './page.ts';
 import type { ThemeData } from './theme.ts';
 import type { AnyWidget, DocumentContext, RenderContext } from './widget.ts';
@@ -38,6 +39,13 @@ export interface MultiPageOptions {
   readonly pageFormat?: PageSize;
 
   readonly margin?: InsetsInput;
+
+  /**
+   * `'portrait'` or `'landscape'` forces the paper's orientation for this
+   * section only, so a landscape table can sit between portrait sections of the
+   * same document. See the note on `Section` in `page.ts`.
+   */
+  readonly orientation?: PageOrientation;
 
   /** The styles this section's widgets inherit; defaults to the document's. */
   readonly theme?: ThemeData;
@@ -59,8 +67,12 @@ interface PageState {
 }
 
 export class MultiPage implements Section {
-  readonly format: PageSize;
-  readonly margin: Insets;
+  /**
+   * Everything about the paper, so orientation resolves exactly as it does for
+   * a `Page`: `format` and `margin` below are the *resolved* values, rotated
+   * with the paper when the orientation disagrees with the declared format.
+   */
+  readonly pageTheme: PageTheme;
   readonly gap: number;
   readonly theme: ThemeData | null;
   readonly build: (context: DocumentContext) => AnyWidget[];
@@ -72,6 +84,7 @@ export class MultiPage implements Section {
     format = undefined,
     pageFormat = undefined,
     margin = DEFAULT_MARGIN,
+    orientation = 'natural',
     gap = 8,
     theme = undefined,
     build,
@@ -80,15 +93,27 @@ export class MultiPage implements Section {
     background = null
   }: MultiPageOptions) {
     if (typeof build !== 'function') throw new TypeError('MultiPage.build must be a function');
-    const size = pageFormat ?? format ?? PageFormat.A4;
-    this.format = { width: Number(size.width), height: Number(size.height) };
-    this.margin = normalizeInsets(margin);
+    this.pageTheme = new PageTheme({
+      pageFormat: pageFormat ?? format ?? PageFormat.A4,
+      margin,
+      orientation
+    });
     this.theme = theme ?? null;
     this.gap = Number(gap);
     this.build = build;
     this.header = header;
     this.footer = footer;
     this.background = background;
+  }
+
+  /** The paper as written, with the orientation applied. */
+  get format(): PageSize {
+    return this.pageTheme.resolvedFormat;
+  }
+
+  /** Margins in the resolved orientation, rotated with the paper. */
+  get margin(): Insets {
+    return this.pageTheme.margin;
   }
 
   render(documentContext: DocumentContext): SerializedPage[] {

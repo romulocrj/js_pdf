@@ -2448,21 +2448,70 @@ class PdfCanvas {
   }
 }
 
-class MultiPage {
-  constructor({format = undefined, pageFormat = undefined, margin = DEFAULT_MARGIN, gap = 8, theme = undefined, build, header = null, footer = null, background = null}) {
-    if (typeof build !== "function") throw new TypeError("MultiPage.build must be a function");
-    const size = pageFormat ?? format ?? PageFormat.A4;
-    this.format = {
-      width: Number(size.width),
-      height: Number(size.height)
+class PageTheme {
+  constructor({pageFormat = PageFormat.A4, buildBackground = null, buildForeground = null, theme = null, orientation = "natural", margin = null, clip = false} = {}) {
+    this.pageFormat = {
+      width: Number(pageFormat.width),
+      height: Number(pageFormat.height)
     };
-    this.margin = normalizeInsets(margin);
+    this.orientation = orientation;
+    this.buildBackground = buildBackground;
+    this.buildForeground = buildForeground;
+    this.theme = theme;
+    this.clip = clip;
+    this.declaredMargin = margin == null ? null : normalizeInsets(margin);
+  }
+  get mustRotate() {
+    return this.orientation === "landscape" && this.pageFormat.height > this.pageFormat.width || this.orientation === "portrait" && this.pageFormat.width > this.pageFormat.height;
+  }
+  get resolvedFormat() {
+    return this.mustRotate ? {
+      width: this.pageFormat.height,
+      height: this.pageFormat.width
+    } : this.pageFormat;
+  }
+  get margin() {
+    const declared = this.declaredMargin ?? normalizeInsets(DEFAULT_MARGIN);
+    return this.mustRotate ? {
+      left: declared.bottom,
+      top: declared.left,
+      right: declared.top,
+      bottom: declared.right
+    } : declared;
+  }
+  copyWith(options = {}) {
+    return new PageTheme({
+      pageFormat: options.pageFormat ?? this.pageFormat,
+      buildBackground: options.buildBackground ?? this.buildBackground,
+      buildForeground: options.buildForeground ?? this.buildForeground,
+      theme: options.theme ?? this.theme,
+      orientation: options.orientation ?? this.orientation,
+      margin: options.margin ?? this.declaredMargin,
+      clip: options.clip ?? this.clip
+    });
+  }
+}
+
+class MultiPage {
+  constructor({format = undefined, pageFormat = undefined, margin = DEFAULT_MARGIN, orientation = "natural", gap = 8, theme = undefined, build, header = null, footer = null, background = null}) {
+    if (typeof build !== "function") throw new TypeError("MultiPage.build must be a function");
+    this.pageTheme = new PageTheme({
+      pageFormat: pageFormat ?? format ?? PageFormat.A4,
+      margin,
+      orientation
+    });
     this.theme = theme ?? null;
     this.gap = Number(gap);
     this.build = build;
     this.header = header;
     this.footer = footer;
     this.background = background;
+  }
+  get format() {
+    return this.pageTheme.resolvedFormat;
+  }
+  get margin() {
+    return this.pageTheme.margin;
   }
   render(documentContext) {
     const children = this.build(documentContext);
@@ -2550,58 +2599,15 @@ class MultiPage {
   }
 }
 
-class PageTheme {
-  constructor({pageFormat = PageFormat.A4, buildBackground = null, buildForeground = null, theme = null, orientation = "natural", margin = null, clip = false} = {}) {
-    this.pageFormat = {
-      width: Number(pageFormat.width),
-      height: Number(pageFormat.height)
-    };
-    this.orientation = orientation;
-    this.buildBackground = buildBackground;
-    this.buildForeground = buildForeground;
-    this.theme = theme;
-    this.clip = clip;
-    this.declaredMargin = margin == null ? null : normalizeInsets(margin);
-  }
-  get mustRotate() {
-    return this.orientation === "landscape" && this.pageFormat.height > this.pageFormat.width || this.orientation === "portrait" && this.pageFormat.width > this.pageFormat.height;
-  }
-  get resolvedFormat() {
-    return this.mustRotate ? {
-      width: this.pageFormat.height,
-      height: this.pageFormat.width
-    } : this.pageFormat;
-  }
-  get margin() {
-    const declared = this.declaredMargin ?? normalizeInsets(DEFAULT_MARGIN);
-    return this.mustRotate ? {
-      left: declared.bottom,
-      top: declared.left,
-      right: declared.top,
-      bottom: declared.right
-    } : declared;
-  }
-  copyWith(options = {}) {
-    return new PageTheme({
-      pageFormat: options.pageFormat ?? this.pageFormat,
-      buildBackground: options.buildBackground ?? this.buildBackground,
-      buildForeground: options.buildForeground ?? this.buildForeground,
-      theme: options.theme ?? this.theme,
-      orientation: options.orientation ?? this.orientation,
-      margin: options.margin ?? this.declaredMargin,
-      clip: options.clip ?? this.clip
-    });
-  }
-}
-
 class Page {
-  constructor({pageTheme = undefined, pageFormat = undefined, format = undefined, margin = undefined, theme = undefined, build, background = null}) {
+  constructor({pageTheme = undefined, pageFormat = undefined, format = undefined, margin = undefined, theme = undefined, orientation = undefined, build, background = null}) {
     if (typeof build !== "function") throw new TypeError("Page.build must be a function");
     const base = pageTheme ?? new PageTheme;
     this.pageTheme = base.copyWith({
       pageFormat: pageFormat ?? format,
       margin,
-      theme
+      theme,
+      orientation
     });
     this.build = build;
     this.background = background;

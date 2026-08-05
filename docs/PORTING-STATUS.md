@@ -155,8 +155,8 @@ both, and will grow the shape factories in 2.5.
 | `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts` | partial — `TextStyle` with merge and the four font slots, greedy wrap, `maxLines`; no `RichText`/`TextSpan`, no justification, no painted decorations, no `fontFallback` (**3.7**) |
 | `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — `Column`, `Row`, `Spacer`; no alignment, `Expanded`, `Flexible` (**phase 3.4**) |
 | `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts` | partial — fill, single border; no `BoxDecoration`, `Border`, `BorderSide` (**phase 3.5**) |
-| `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground; orientation swaps the paper instead of rotating the content (**2.1**), no `clip` |
-| `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — header/footer and page breaks; no `SpanningWidget` (**phase 3.2**) |
+| `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground; **one document may mix orientations and paper sizes**, per section; no `clip` |
+| `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — header/footer, page breaks and a per-section `orientation`; no `SpanningWidget` (**phase 3.2**) |
 | `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`; owns the theme and the per-document font cache |
 | `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts` | partial — imperative `Vector`; no `SvgImage` (**phase 2.7**) |
 | `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | partial — `Padding`, `Align`, `Center`, `SizedBox`, `Divider`; no `Transform`/`Opacity`/`FittedBox` (blocked on **2.1** and `/ExtGState`), no `ConstrainedBox`/`AspectRatio`/`FullPage` |

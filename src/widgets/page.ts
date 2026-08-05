@@ -20,11 +20,21 @@ import type { ColorInput } from '../pdf/color.ts';
 import { PdfCanvas } from '../pdf/graphics.ts';
 import type { PageSize } from '../pdf/page_format.ts';
 import { PageTheme } from './page_theme.ts';
+import type { PageOrientation } from './page_theme.ts';
 import type { AnyWidget, DocumentContext, RenderContext } from './widget.ts';
 import type { InsetsInput } from './geometry.ts';
 import type { ThemeData } from './theme.ts';
 
-/** A `Page` or a `MultiPage`: anything a `Document` can render. */
+/**
+ * A `Page` or a `MultiPage`: anything a `Document` can render.
+ *
+ * A section carries its own paper size and orientation, and every physical page
+ * it produces is written with its own `/MediaBox`. **A document may therefore
+ * mix orientations and paper sizes freely** — an A4 portrait cover, an A4
+ * landscape table and a Letter appendix are three sections in one `save()`, with
+ * no rotation flag and no post-processing. Nothing in the pipeline holds a
+ * document-wide page size: `PdfPage` takes the format its section rendered at.
+ */
 export interface Section {
   render(documentContext: DocumentContext): SerializedPage[];
 }
@@ -41,6 +51,16 @@ export interface PageOptions {
 
   readonly margin?: InsetsInput;
   readonly theme?: ThemeData;
+
+  /**
+   * `'portrait'` or `'landscape'` forces the paper's orientation; `'natural'`
+   * takes the format as declared.
+   *
+   * Orientation is **per section**, so one document can mix them freely — see
+   * the note on `Section`.
+   */
+  readonly orientation?: PageOrientation;
+
   readonly build: (context: RenderContext) => AnyWidget;
   readonly background?: ColorInput | null;
 }
@@ -60,6 +80,7 @@ export class Page implements Section {
     format = undefined,
     margin = undefined,
     theme = undefined,
+    orientation = undefined,
     build,
     background = null
   }: PageOptions) {
@@ -71,7 +92,8 @@ export class Page implements Section {
     this.pageTheme = base.copyWith({
       pageFormat: pageFormat ?? format,
       margin,
-      theme
+      theme,
+      orientation
     });
 
     this.build = build;
