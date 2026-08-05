@@ -2788,7 +2788,7 @@ class Opacity extends Widget {
   }
 }
 
-function applyFit(fit, input, output) {
+function applyBoxFit$1(fit, input, output) {
   const {width: iw, height: ih} = input;
   const {width: ow, height: oh} = output;
   if (iw <= 0 || ih <= 0 || ow <= 0 || oh <= 0) {
@@ -2875,7 +2875,7 @@ function applyFit(fit, input, output) {
 class FittedBox extends Widget {
   constructor({fit = "contain", alignment = "center", child = null} = {}) {
     super();
-    applyFit(fit, {
+    applyBoxFit$1(fit, {
       width: 1,
       height: 1
     }, {
@@ -2913,7 +2913,7 @@ class FittedBox extends Widget {
   paint(context, box) {
     const {childBox} = box.data;
     if (childBox === null || childBox.width <= 0 || childBox.height <= 0) return;
-    const fitted = applyFit(this.fit, {
+    const fitted = applyBoxFit$1(this.fit, {
       width: childBox.width,
       height: childBox.height
     }, {
@@ -6816,6 +6816,138 @@ class Partitions extends SpanningWidget {
   }
 }
 
+class Image extends Widget {
+  constructor(image, {fit = "contain", alignment = "center", width = null, height = null, dpi = null} = {}) {
+    super();
+    applyBoxFit$1(fit, {
+      width: 1,
+      height: 1
+    }, {
+      width: 1,
+      height: 1
+    });
+    if (width !== null && (!Number.isFinite(width) || width < 0)) throw new RangeError("Image width must be non-negative");
+    if (height !== null && (!Number.isFinite(height) || height < 0)) throw new RangeError("Image height must be non-negative");
+    this.image = image;
+    this.fit = fit;
+    this.alignment = resolveBasicAlignment(alignment);
+    this.width = width;
+    this.height = height;
+    this.dpi = dpi;
+  }
+  layout(_context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const image = this.image.resolve();
+    const offered = {
+      width: parent.constrainWidth(this.width ?? (parent.hasBoundedWidth ? parent.maxWidth : this.image.width)),
+      height: parent.constrainHeight(this.height ?? (parent.hasBoundedHeight ? parent.maxHeight : this.image.height))
+    };
+    const fitted = applyBoxFit$1(this.fit, {
+      width: this.image.width,
+      height: this.image.height
+    }, offered);
+    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, this.image.width, this.image.height);
+    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, offered.width, offered.height);
+    return {
+      widget: this,
+      width: fitted.destination.width,
+      height: fitted.destination.height,
+      data: {
+        image,
+        source: fitted.source,
+        destination: fitted.destination,
+        sourceX: sourceOffset.dx,
+        sourceY: sourceOffset.dy,
+        destinationX: destinationOffset.dx,
+        destinationY: destinationOffset.dy
+      }
+    };
+  }
+  paint(context, box) {
+    const data = box.data;
+    if (data.source.width <= 0 || data.source.height <= 0) return;
+    const scaleX = data.destination.width / data.source.width;
+    const scaleY = data.destination.height / data.source.height;
+    const destinationX = box.x + data.destinationX;
+    const destinationY = box.y + data.destinationY;
+    const fullWidth = this.image.width * scaleX;
+    const fullHeight = this.image.height * scaleY;
+    const fullX = destinationX - data.sourceX * scaleX;
+    const fullTop = destinationY - data.sourceY * scaleY;
+    context.canvas.saveContext();
+    context.canvas.drawRect(destinationX, context.canvas.pageHeight - destinationY - data.destination.height, data.destination.width, data.destination.height);
+    context.canvas.clipPath();
+    context.canvas.drawImage(data.image, fullX, context.canvas.pageHeight - fullTop - fullHeight, fullWidth, fullHeight);
+    context.canvas.restoreContext();
+  }
+}
+
+class ImageProvider {
+  constructor(width, height, orientation, dpi) {
+    this.cached = null;
+    this.sourceWidth = width;
+    this.sourceHeight = height;
+    this.orientation = orientation;
+    this.dpi = dpi;
+  }
+  get width() {
+    return this.orientation === "leftTop" || this.orientation === "rightTop" || this.orientation === "rightBottom" || this.orientation === "leftBottom" ? this.sourceHeight : this.sourceWidth;
+  }
+  get height() {
+    return this.orientation === "leftTop" || this.orientation === "rightTop" || this.orientation === "rightBottom" || this.orientation === "leftBottom" ? this.sourceWidth : this.sourceHeight;
+  }
+  resolve(_size, _dpi) {
+    this.cached ?? (this.cached = this.buildImage());
+    return this.cached;
+  }
+}
+
+class ImageProxy extends ImageProvider {
+  constructor(image, {dpi = null} = {}) {
+    super(image.sourceWidth, image.sourceHeight, image.orientation, dpi);
+    this.image = image;
+  }
+  buildImage() {
+    return this.image;
+  }
+}
+
+class MemoryImage extends ImageProvider {
+  constructor(bytes, {orientation = "topLeft", dpi = null} = {}) {
+    let image;
+    if (bytes[0] === 255 && bytes[1] === 216) {
+      image = PdfImage.fromJpeg(bytes, orientation);
+    } else if (bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71) {
+      image = PdfImage.fromPng(bytes, orientation);
+    } else {
+      throw new TypeError(`Unable to determine image type from ${bytes.length} bytes`);
+    }
+    super(image.sourceWidth, image.sourceHeight, orientation, dpi);
+    this.bytes = bytes.slice();
+    this.image = image;
+  }
+  buildImage() {
+    return this.image;
+  }
+}
+
+class RawImage extends ImageProvider {
+  constructor({bytes, width, height, orientation = "topLeft", dpi = null}) {
+    const image = new PdfImage({
+      pixels: bytes,
+      width,
+      height,
+      orientation,
+      hasAlpha: true
+    });
+    super(width, height, orientation, dpi);
+    this.image = image;
+  }
+  buildImage() {
+    return this.image;
+  }
+}
+
 const svgColors = Object.freeze({
   indigo: "#4b0082",
   gold: "#ffd700",
@@ -10529,6 +10661,11 @@ const publicApi = Object.freeze({
   CustomPaint,
   LimitedBox,
   VerticalDivider,
+  Image,
+  ImageProvider,
+  ImageProxy,
+  MemoryImage,
+  RawImage,
   SvgImage,
   Table,
   TableRow,
@@ -10572,4 +10709,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, Center, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridView, Header, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, Lorem, LoremText, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Placeholder, Positioned, PositionedDirectional, RadialGradient, Radius, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, Center, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridView, Header, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Placeholder, Positioned, PositionedDirectional, RadialGradient, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

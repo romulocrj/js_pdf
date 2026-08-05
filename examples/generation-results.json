@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T21:39:30.966Z",
+  "generatedAt": "2026-08-05T22:29:31.636Z",
   "results": [
     {
       "name": "hello-world",
@@ -34,7 +34,7 @@
     {
       "name": "resume",
       "status": "failed",
-      "error": "resume requires unported js_pdf APIs: Barcode, BarcodeWidget, CircularProgressIndicator, Icon, IconData, Image, MemoryImage, UrlLink"
+      "error": "resume requires unported js_pdf APIs: Barcode, BarcodeWidget, CircularProgressIndicator, Icon, IconData, UrlLink"
     },
     {
       "name": "server",

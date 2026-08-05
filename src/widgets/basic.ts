@@ -578,17 +578,17 @@ export class Opacity extends Widget<SingleChildLayoutData> {
   }
 }
 
-interface FitSize {
+export interface FitSize {
   readonly width: number;
   readonly height: number;
 }
 
-interface FitResult {
+export interface FitResult {
   readonly source: FitSize;
   readonly destination: FitSize;
 }
 
-function applyFit(fit: BoxFit, input: FitSize, output: FitSize): FitResult {
+export function applyBoxFit(fit: BoxFit, input: FitSize, output: FitSize): FitResult {
   const { width: iw, height: ih } = input;
   const { width: ow, height: oh } = output;
   if (iw <= 0 || ih <= 0 || ow <= 0 || oh <= 0) {
@@ -641,7 +641,7 @@ export class FittedBox extends Widget<FittedBoxLayoutData> {
   constructor({ fit = 'contain', alignment = 'center', child = null }: FittedBoxOptions = {}) {
     super();
     // Validate eagerly, including a zero-size probe.
-    applyFit(fit, { width: 1, height: 1 }, { width: 1, height: 1 });
+    applyBoxFit(fit, { width: 1, height: 1 }, { width: 1, height: 1 });
     this.fit = fit;
     this.alignment = resolveBasicAlignment(alignment);
     this.child = child;
@@ -671,7 +671,7 @@ export class FittedBox extends Widget<FittedBoxLayoutData> {
   override paint(context: RenderContext, box: PositionedBox<FittedBoxLayoutData>): void {
     const { childBox } = box.data;
     if (childBox === null || childBox.width <= 0 || childBox.height <= 0) return;
-    const fitted = applyFit(
+    const fitted = applyBoxFit(
       this.fit,
       { width: childBox.width, height: childBox.height },
       { width: box.width, height: box.height }

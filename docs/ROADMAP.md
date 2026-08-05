@@ -17,13 +17,13 @@ TypeScript, with the runtime contract and attribution enforced by
 model, with per-page resource dictionaries and **embedded TrueType fonts** —
 subset, written as Type0/CIDFontType2 composites, and selected through a theme.
 Beyond text, `SvgImage` exposes the SVG painter with fitting, alignment,
-clipping and PDF shading-pattern gradients, and tables lay out fixed, intrinsic
-and flexible tracks across as many pages as their rows require. Raster images
-are still absent.
+clipping and PDF shading-pattern gradients, tables lay out fixed, intrinsic and
+flexible tracks across as many pages as their rows require, and raster images
+flow through the public `Image` widget/provider surface.
 
-**Phases 0, 1 and 2 are complete.** The foundations are in place, the WinAnsi
-ceiling is gone and the vector pipeline is public; phase 3 (layout) is what the
-examples now wait on.
+**Phases 0, 1, 2, 3 and 4 are complete.** The foundations, layout system, SVG
+surface and raster image pipeline are all in place; the remaining examples now
+wait only on phase-5 document features.
 
 **Phase 0.0 — TypeScript migration — landed 2026-08-05.** Every module is `.ts`;
 `tsconfig.json` compiles against the ES2020 lib with no DOM and no host types,
@@ -103,6 +103,13 @@ complete upstream file. Six tests and a retained V8 proof cover the phase;
 child layout data. Five tests and a retained V8 proof cover the phase; resume
 loses `ClipOval`, the missing-API total falls 28 → 27, and phase 3 is complete.
 
+**Phase 4.3 — image widget and provider — landed 2026-08-05.** Public
+`Image`, `ImageProvider`, `ImageProxy`, `MemoryImage` and `RawImage` now bridge
+the existing PNG/JPEG object layer to widgets, including BoxFit/alignment crop
+layout data and clipped painting. Six focused tests plus `examples/image-phase-4.3.mjs`
+cover the surface; the proof generates 3,677 bytes in both Node and bare V8,
+and resume loses `Image` + `MemoryImage` (27 → 25 missing APIs).
+
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
 option on `Page` and `MultiPage` as well as on `PageTheme`, and every physical
@@ -172,12 +179,13 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 4.3 — image widget and provider.** Port `MemoryImage` and `Image`,
-> including BoxFit/alignment cropping. Bytes always come from the caller; make
-> `resume` lose its two image API blockers.
+> **Phase 5.1 — charts (`report`).** Port `widgets/chart/*.dart` so
+> `BarDataSet`, `CartesianGrid`, `Chart`, `ChartLegend`, `FixedAxis`,
+> `LineDataSet`, `PieDataSet`, `PieGrid` and `PointChartValue` unlock the
+> report example and advance server.
 
-Phase 3 is complete. Resume next needs raster images; document waits only for
-`UrlLink`.
+Phase 4 is complete. The gate now waits on charts, barcodes, links,
+icons and progress from phase 5.
 
 ---
 
@@ -1049,9 +1057,10 @@ slot in wherever convenient relative to phase 5.
 - **4.2** Baseline JPEG ✅ *(landed 2026-08-05)*: pass through as `/DCTDecode`,
   parse SOF for dimensions. This is what `examples/assets/profile.jpg`
   exercises.
-- **4.3** `Image` widget and provider — `widgets/image.dart`,
-  `image_provider.dart`. `Image`, `MemoryImage`. Bytes are supplied by the
-  caller; the port never fetches.
+- **4.3** `Image` widget and provider ✅ *(landed 2026-08-05)* —
+  `widgets/image.dart`, `image_provider.dart`: `Image`, `ImageProvider`,
+  `ImageProxy`, `MemoryImage`, `RawImage`. Bytes are supplied by the caller;
+  the port never fetches.
 
 Phase 4.1 implements stored, fixed-Huffman and dynamic-Huffman DEFLATE blocks,
 validates zlib and PNG checksums, reverses all five row filters and decodes every
@@ -1074,6 +1083,14 @@ real 200×200 profile, gray and CMYK marker variants, malformed/progressive inpu
 and byte-for-byte PDF pass-through. `examples/jpeg-phase-4.2.mjs` retains that
 real profile as host-free base64 data and generates a 37,957-byte proof under
 Node and bare V8.
+
+Phase 4.3 ports the image widget/provider layer over that object model:
+`MemoryImage` detects PNG/JPEG bytes synchronously, `Image` performs BoxFit and
+alignment crop geometry in pure layout data, and paint scopes clipping before
+drawing the resolved resource. Six focused tests cover API exposure,
+orientation-aware dimensions, immutable layout data, clipping/crop operators and
+resource reuse. `examples/image-phase-4.3.mjs` adds the retained host-free
+proof and generates 3,677 bytes under both Node and bare V8.
 
 The upstream early-SOF exit can miss a later legal APP14 marker and invert
 direct CMYK incorrectly; the correction and reproduction are recorded in

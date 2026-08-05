@@ -156,6 +156,15 @@ export declare class Opacity extends Widget<SingleChildLayoutData> {
     layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData>;
     paint(context: RenderContext, box: PositionedBox<SingleChildLayoutData>): void;
 }
+export interface FitSize {
+    readonly width: number;
+    readonly height: number;
+}
+export interface FitResult {
+    readonly source: FitSize;
+    readonly destination: FitSize;
+}
+export declare function applyBoxFit(fit: BoxFit, input: FitSize, output: FitSize): FitResult;
 export interface FittedBoxOptions {
     readonly fit?: BoxFit;
     readonly alignment?: BasicAlignmentInput;

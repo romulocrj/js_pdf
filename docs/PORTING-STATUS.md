@@ -29,9 +29,9 @@ table. Run `npm run examples`; current state, from
 | `invoice` | failed | 2 | 5.2 |
 | `document` | failed | 1 | 5.3 |
 | `server` | failed | 7 | 5.3 |
-| `resume` | failed | 8 | 5.5 |
+| `resume` | failed | 6 | 5.5 |
 
-**3 of 8**, with the missing-API total down from 124 to 27 — phase 1.4 cleared
+**3 of 8**, with the missing-API total down from 124 to 25 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
 from every one of the seven, phase 2.7 cleared `SvgImage` from six, and phase
 3.1 cleared `TableHelper` from four. Phase 3.3 then cleared the composition
@@ -42,7 +42,8 @@ and radii from six, phase 3.6 cleared stack/grid/partitions from four and made
 the calendar generate, phase 3.7 cleared rich text from four, and phase 3.8
 cleared all four content widgets from document. Phase 3.9 then supplied the
 placeholders used by four examples and made certificate generate; phase 3.10
-then removed `ClipOval` from resume. See
+then removed `ClipOval` from resume; phase 4.3 then removed `Image` and
+`MemoryImage` from resume. See
 [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which phase clears
 each one.
 
@@ -164,7 +165,7 @@ both, and will grow the shape factories in 2.5.
 | `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — `BoxConstraints` with factories/transforms, `EdgeInsets`, `Alignment`, `inscribe`; no directional geometry or `TextDirection` |
 | `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, inherited per-run styles and fallback fonts, wrapping, immutable page continuation, LTR/explicit RTL placement, justification, backgrounds and combined decorations; no Arabic shaping or Unicode bidi reordering |
 | `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — full `Flex`/`Row`/`Column` allocation, all main/cross alignments, `mainAxisSize`, vertical direction, `Expanded`, `Flexible`, proportional `Spacer`, plus `gap`/weighted-row extensions; no `ListView`, bidi direction or baseline alignment |
-| `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts`, `decoration.ts`, `box_border.ts` | partial — `Container`, `DecoratedBox`, background/foreground `BoxDecoration`, per-side/dashed borders, axial/radial gradients and vector shadows; decoration images wait for **4.3** |
+| `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts`, `decoration.ts`, `box_border.ts` | partial — `Container`, `DecoratedBox`, background/foreground `BoxDecoration`, per-side/dashed borders, axial/radial gradients and vector shadows; no decoration image painter yet |
 | `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground; **one document may mix orientations and paper sizes**, per section; no `clip` |
 | `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — header/footer, atomic page breaks, direct spanning children, `maxPages` and per-section `orientation` |
 | `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`; owns the theme and the per-document font cache |
@@ -172,7 +173,7 @@ both, and will grow the shape factories in 2.5.
 | `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | done — all upstream public classes, including tight `SizedBox`, `ConstrainedBox`, minimum-preserving `LimitedBox` and aligned `OverflowBox`; dividers paint the equivalent rule directly |
 | `widgets/table.dart`, `table_helper.dart` | 834 | `src/widgets/table.ts`, `table_helper.ts` | partial — fixed/flex/intrinsic/fraction tracks, alignment, decorations, borders, `TableHelper`, page spanning and repeatable headers; no bidi direction |
 | `widgets/theme.dart`, `font.dart` | 461 | `src/widgets/theme.ts`, `src/widgets/font.ts` | partial — `Font`, `ThemeData`, `Theme`, `DefaultTextStyle`; no `iconTheme` (**5.4**) or `DefaultTextStyle.merge` |
-| `widgets/image.dart`, `image_provider.dart` | 423 | — | — `Image`, `MemoryImage` — **phase 4.3** |
+| `widgets/image.dart`, `image_provider.dart` | 423 | `src/widgets/image.ts`, `src/widgets/image_provider.ts` | partial — `Image`, `ImageProvider`, `ImageProxy`, `MemoryImage`, `RawImage`; bytes are caller-supplied only |
 | `widgets/border_radius.dart` | 466 | `src/widgets/border_radius.ts` | done — physical/directional circular or elliptical radii, with oversized radii scaled to a valid path |
 | `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | `src/widgets/stack.ts`, `wrap.ts`, `grid_view.ts`, `partitions.ts` | done — positioned overlays/clipping, multi-run wrap, fixed-track grid and parallel partitions; immutable continuation for wrap/grid/partitions |
 | `widgets/clip.dart` | 134 | `src/widgets/clip.ts` | done — rectangular, scaled rounded-rectangle and elliptical clip scopes over immutable child layout |
@@ -192,11 +193,11 @@ both, and will grow the shape factories in 2.5.
 | Subsystem | Upstream lines | State |
 |---|---:|---|
 | Object syntax / serialization | ~1,700 | self-serializing value types; no filters, no xref streams |
-| Graphics | ~1,600 | paths, transforms, clipping, graphic states and shading patterns done; images and direct shading operators not |
+| Graphics | ~1,600 | paths, transforms, clipping, graphic states, shading patterns and raster image XObjects done; no direct `sh` operator |
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
 | SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping and gradients done; SVG text and embedded raster content remain |
-| Widgets | ~14,000 | ~68 public widget/value constructors, plus tables, rich styles, content and themes |
+| Widgets | ~14,000 | ~73 public widget/value constructors, plus tables, rich styles, content and themes |
 
 **Phases 0, 1 and 2 are complete.** The WinAnsi ceiling is gone: a TrueType font
 is parsed, subset to the glyphs a document used, embedded as a
@@ -205,7 +206,8 @@ Type0/CIDFontType2 composite with `/Identity-H`, and selected through `Font`,
 — it is drawn from the embedded font and stays searchable through the
 `/ToUnicode` CMap. The public SVG pipeline now reaches PDF shading patterns.
 
-**Phase 3 is complete.** What now limits the five remaining examples is raster
-content (phase 4, for resume) and their dedicated document features (phase 5).
+**Phase 4 is complete.** What now limits the five remaining examples is their
+dedicated document features in phase 5 (charts, barcodes, links, icons and
+progress).
 See
 [ROADMAP.md](ROADMAP.md).

@@ -62,6 +62,8 @@ import { Partition, Partitions } from './widgets/partitions.ts';
 import { Page } from './widgets/page.ts';
 import type { Section } from './widgets/page.ts';
 import { PageTheme } from './widgets/page_theme.ts';
+import { Image } from './widgets/image.ts';
+import { ImageProvider, ImageProxy, MemoryImage, RawImage } from './widgets/image_provider.ts';
 import { FlutterLogo, Lorem, LoremText, PdfLogo, Placeholder } from './widgets/placeholders.ts';
 import { Vector } from './widgets/shape.ts';
 import { Positioned, PositionedDirectional, Stack } from './widgets/stack.ts';
@@ -126,12 +128,16 @@ export {
   Gradient,
   GridView,
   Header,
+  Image,
+  ImageProvider,
+  ImageProxy,
   IntrinsicColumnWidth,
   LayoutBuilder,
   LimitedBox,
   LinearGradient,
   Lorem,
   LoremText,
+  MemoryImage,
   MultiPage,
   Opacity,
   OverflowBox,
@@ -172,6 +178,7 @@ export {
   Theme,
   ThemeData,
   Transform,
+  RawImage,
   Vector,
   VerticalDivider,
   Widget,
@@ -416,6 +423,14 @@ export type {
 } from './widgets/text.ts';
 export type { VectorApi, VectorOptions } from './widgets/shape.ts';
 export type {
+  ImageLayoutData,
+  ImageOptions
+} from './widgets/image.ts';
+export type {
+  MemoryImageOptions,
+  RawImageOptions
+} from './widgets/image_provider.ts';
+export type {
   AlignmentInput,
   AlignmentName,
   BoxFit,
@@ -506,6 +521,11 @@ export interface PublicApi {
   readonly CustomPaint: typeof CustomPaint;
   readonly LimitedBox: typeof LimitedBox;
   readonly VerticalDivider: typeof VerticalDivider;
+  readonly Image: typeof Image;
+  readonly ImageProvider: typeof ImageProvider;
+  readonly ImageProxy: typeof ImageProxy;
+  readonly MemoryImage: typeof MemoryImage;
+  readonly RawImage: typeof RawImage;
   readonly SvgImage: typeof SvgImage;
   readonly Table: typeof Table;
   readonly TableRow: typeof TableRow;
@@ -598,6 +618,11 @@ const publicApi: PublicApi = Object.freeze({
   CustomPaint,
   LimitedBox,
   VerticalDivider,
+  Image,
+  ImageProvider,
+  ImageProxy,
+  MemoryImage,
+  RawImage,
   SvgImage,
   Table,
   TableRow,
