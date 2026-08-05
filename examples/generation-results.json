@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T21:16:04.218Z",
+  "generatedAt": "2026-08-05T21:21:48.511Z",
   "results": [
     {
       "name": "hello-world",
@@ -19,7 +19,7 @@
     {
       "name": "document",
       "status": "failed",
-      "error": "document requires unported js_pdf APIs: Bullet, Header, Paragraph, PdfLogo, TableOfContent, UrlLink"
+      "error": "document requires unported js_pdf APIs: PdfLogo, UrlLink"
     },
     {
       "name": "invoice",

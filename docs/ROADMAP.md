@@ -85,6 +85,13 @@ start/end alignment, justification, inline widgets, backgrounds, combined
 single/double decorations and page continuation. Six tests and a retained V8
 proof cover the phase; the missing-API total fell 45 → 37.
 
+**Phase 3.8 — content widgets — landed 2026-08-05.** `Header`, `Paragraph`,
+`Bullet` and `TableOfContent` are public. Headers create unique named
+destinations and a hierarchical PDF outline; a table placed before its headings
+requests one deterministic collection replay. Five tests and a retained V8
+proof cover the phase; document's blockers fell from six to two and the global
+missing-API total fell 37 → 33.
+
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
 option on `Page` and `MultiPage` as well as on `PageTheme`, and every physical
@@ -154,12 +161,11 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 3.8 — content widgets.** Port `Header`, `Paragraph`, `Bullet` and
-> `TableOfContent`, including the named destinations and outlines the table of
-> contents needs.
+> **Phase 3.9 — placeholders.** Port `PdfLogo`, `Lorem` and `LoremText`; this
+> makes `certificate` the third upstream example to generate end to end.
 
-The calendar generates, and certificate now has only `LoremText` left. Content
-widgets are the next shared blocker for document.
+Certificate has only `LoremText` left, while document now waits only for
+`PdfLogo` and `UrlLink`.
 
 ---
 
@@ -955,13 +961,32 @@ placement and start/end alignment.
 The original single-run justification division-by-zero defect is recorded with
 its reproduction in [ORIGINAL-BUG.md](../ORIGINAL-BUG.md).
 
-### 3.8 Content widgets
+### 3.8 Content widgets ✅ *(landed 2026-08-05)*
 
 - **Ports:** `widgets/content.dart`
 - `Header`, `Paragraph`, `Bullet`, `TableOfContent`. `TableOfContent` also needs
   named destinations from `obj/names.dart` and `obj/outline.dart` — pull those
   in here rather than deferring to phase 5.
 - **Example gate:** `document` (all four).
+
+`Header` selects the matching theme level, supplies upstream's margins and
+borders, and records a uniquely named destination when painted. Destinations
+are serialized as a sorted `/Names` tree and mirrored by a hierarchical
+`/Outlines` tree with page, position, colour and style. `Document` normally
+renders once; when a `TableOfContent` appears before its headings, the first
+render collects the complete outline and exactly one replay paints the table.
+The public page mode can open the viewer outline pane.
+
+`Paragraph` composes the justified paragraph style and `Bullet` preserves the
+theme, marker size/margin, colour and circle/rectangle shape. Five tests cover
+the API surfaces, PDF navigation dictionaries, forward TOC collection,
+single-pass documents and visual operators. The document gate loses four API
+occurrences, reducing the global total 37 → 33.
+`examples/content-phase-3.8.mjs` generates a 5,652-byte two-page proof under
+Node and bare V8.
+
+The original destination collision for repeated/child-only headers is recorded
+in [ORIGINAL-BUG.md](../ORIGINAL-BUG.md).
 
 ### 3.9 Placeholders ⇒ `certificate`
 

@@ -46,6 +46,7 @@ import {
 import { BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, Radius } from './widgets/border_radius.ts';
 import { Border, BorderSide, BorderStyle, BoxBorder } from './widgets/box_border.ts';
 import { Container, DecoratedBox } from './widgets/container.ts';
+import { Bullet, Header, Paragraph, TableOfContent } from './widgets/content.ts';
 import { BoxDecoration, BoxShadow, Gradient, LinearGradient, RadialGradient } from './widgets/decoration.ts';
 import { Document } from './widgets/document.ts';
 import { Column, Expanded, Flex, Flexible, Row, Spacer } from './widgets/flex.ts';
@@ -92,6 +93,7 @@ export {
   BoxConstraints,
   BoxDecoration,
   BoxShadow,
+  Bullet,
   Builder,
   Center,
   Column,
@@ -114,6 +116,7 @@ export {
   FullPage,
   Gradient,
   GridView,
+  Header,
   IntrinsicColumnWidth,
   LayoutBuilder,
   LimitedBox,
@@ -122,6 +125,7 @@ export {
   Opacity,
   OverflowBox,
   Padding,
+  Paragraph,
   Page,
   PageFormat,
   PageTheme,
@@ -144,6 +148,7 @@ export {
   TableBorder,
   TableColumnWidth,
   TableHelper,
+  TableOfContent,
   TableRow,
   InlineSpan,
   RichText,
@@ -280,6 +285,12 @@ export type {
 } from './widgets/flex.ts';
 export type { ContainerLayoutData, ContainerOptions, DecoratedBoxOptions } from './widgets/container.ts';
 export type {
+  BulletOptions,
+  HeaderOptions,
+  ParagraphOptions,
+  TableOfContentOptions
+} from './widgets/content.ts';
+export type {
   BorderRadiusDirectionalOnlyOptions,
   BorderRadiusOnlyOptions,
   RadiusInput,
@@ -395,6 +406,9 @@ export type {
 export type { PageOptions, Section } from './widgets/page.ts';
 export type { MultiPageOptions } from './widgets/multi_page.ts';
 export type { DocumentOptions } from './widgets/document.ts';
+export type { DocumentOutlineEntry } from './widgets/document.ts';
+export type { PdfPageMode, SerializedOutline } from './pdf/document.ts';
+export type { PdfOutlineStyle } from './pdf/obj/outline.ts';
 
 /** The widget constructors handed to a `createPdf` build callback. */
 export interface PublicApi {
@@ -406,6 +420,10 @@ export interface PublicApi {
   readonly RichText: typeof RichText;
   readonly TextSpan: typeof TextSpan;
   readonly WidgetSpan: typeof WidgetSpan;
+  readonly Header: typeof Header;
+  readonly Paragraph: typeof Paragraph;
+  readonly Bullet: typeof Bullet;
+  readonly TableOfContent: typeof TableOfContent;
   readonly Column: typeof Column;
   readonly Row: typeof Row;
   readonly Flex: typeof Flex;
@@ -486,6 +504,10 @@ const publicApi: PublicApi = Object.freeze({
   RichText,
   TextSpan,
   WidgetSpan,
+  Header,
+  Paragraph,
+  Bullet,
+  TableOfContent,
   Column,
   Row,
   Flex,

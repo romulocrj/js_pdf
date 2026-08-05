@@ -14,11 +14,9 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/obj/catalog.dart
  *
- * PORT GAP: `/Type` and `/Pages` only. Upstream also wires `/Outlines`,
- * `/Names`, `/Metadata`, `/PageLabels`, `/PageMode`, `/AcroForm` and the PDF/A
- * output intents. Those arrive with the features that need them — named
- * destinations in roadmap phase 3.8, annotations in 5.3, forms and metadata in
- * 5.6.
+ * Named destinations, outlines and outline page mode landed with the content
+ * widgets in phase 3.8. Metadata, page labels, forms and PDF/A output intents
+ * remain with their later consumers.
  */
 
 import { PdfDict } from '../format/dict.ts';
@@ -26,10 +24,15 @@ import { PdfName } from '../format/name.ts';
 import { PdfObject } from './object.ts';
 import type { PdfObjectRegistry } from './object.ts';
 import type { PdfPageList } from './page_list.ts';
+import type { PdfNames } from './names.ts';
+import type { PdfOutline } from './outline.ts';
 
 /** The document catalog: the `/Root` the trailer points at. */
 export class PdfCatalog extends PdfObject<PdfDict> {
   readonly pageList: PdfPageList;
+  names: PdfNames | null = null;
+  outline: PdfOutline | null = null;
+  showOutlines = false;
 
   constructor(document: PdfObjectRegistry, pageList: PdfPageList, objser?: number) {
     super(document, new PdfDict([['/Type', new PdfName('/Catalog')]]), objser);
@@ -38,5 +41,8 @@ export class PdfCatalog extends PdfObject<PdfDict> {
 
   override prepare(): void {
     this.params.set('/Pages', this.pageList.ref());
+    if (this.names !== null) this.params.set('/Names', this.names.ref());
+    if (this.outline !== null) this.params.set('/Outlines', this.outline.ref());
+    if (this.showOutlines) this.params.set('/PageMode', new PdfName('/UseOutlines'));
   }
 }

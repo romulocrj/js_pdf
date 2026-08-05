@@ -65,3 +65,14 @@ span, o denominador é zero e o deslocamento seguinte deixa de ser finito.
 **Correção no port:** a folga é distribuída apenas quando a linha quebrada tem
 ao menos um intervalo real entre palavras. Linhas sem intervalo conservam sua
 posição normal, e todos os deslocamentos permanecem finitos.
+
+## Destinos de cabeçalhos podem colidir (`content.dart`)
+
+**Como reproduzir:** crie dois `Header` com o mesmo `text`, ou dois cabeçalhos
+que usam apenas `child` e `title`. O original usa `text.hashCode.toString()`
+como nome do destino; textos iguais geram o mesmo nome e o caso sem `text` usa o
+mesmo hash nulo, fazendo uma entrada sobrescrever a outra em `PdfNames`.
+
+**Correção no port:** cada cabeçalho pintado recebe uma âncora sequencial única
+na ordem do documento (`outline-1`, `outline-2`, ...). O replay usado pelo índice
+reutiliza essas âncoras sem criar duplicatas.

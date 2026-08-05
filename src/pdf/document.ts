@@ -37,7 +37,11 @@ import { PdfObject } from './obj/object.ts';
 import { PdfObjectStream } from './obj/object_stream.ts';
 import { PdfPage } from './obj/page.ts';
 import { PdfPageList } from './obj/page_list.ts';
+import { PdfNames } from './obj/names.ts';
+import { PdfOutline } from './obj/outline.ts';
+import type { PdfOutlineStyle } from './obj/outline.ts';
 import type { PageSize } from './page_format.ts';
+import type { Rgb } from './color.ts';
 
 export type { DocumentMetadata } from './obj/info.ts';
 
@@ -58,6 +62,20 @@ export interface SerializedPage {
   /** The direct shading-pattern dictionaries `content` selected. */
   readonly patterns?: ReadonlyMap<string, PdfDict>;
 }
+
+export interface SerializedOutline {
+  readonly title: string;
+  readonly level: number;
+  readonly anchor: string;
+  /** One-based physical page number. */
+  readonly page: number;
+  /** Destination coordinate in PDF bottom-left space. */
+  readonly y: number;
+  readonly color?: Rgb | null;
+  readonly style?: PdfOutlineStyle;
+}
+
+export type PdfPageMode = 'none' | 'outlines';
 
 /**
  * Owns the objects that make up a file, and writes them.
@@ -162,6 +180,38 @@ export class PdfDocument {
     return page;
   }
 
+  addNavigation(outlines: readonly SerializedOutline[], pageMode: PdfPageMode): void {
+    if (outlines.length === 0) {
+      this.catalog.showOutlines = pageMode === 'outlines';
+      return;
+    }
+
+    const names = new PdfNames(this);
+    const root = new PdfOutline(this);
+    const levels: PdfOutline[] = [root];
+
+    for (const entry of outlines) {
+      const page = this.pageList.pages[entry.page - 1];
+      if (page === undefined) continue;
+      names.addDestination(entry.anchor, page, { y: entry.y });
+      const node = new PdfOutline(this, {
+        title: entry.title,
+        anchor: entry.anchor,
+        color: entry.color ?? null,
+        style: entry.style ?? 'normal'
+      });
+      const parentIndex = Math.min(entry.level, levels.length - 1);
+      const parent = levels[parentIndex] ?? root;
+      parent.add(node);
+      levels.length = parentIndex + 1;
+      levels.push(node);
+    }
+
+    this.catalog.names = names;
+    this.catalog.outline = root;
+    this.catalog.showOutlines = pageMode === 'outlines';
+  }
+
   save(): Uint8Array {
     for (const object of this.objects) {
       object.prepare();
@@ -179,13 +229,17 @@ export class PdfDocument {
 /** Build a document from already-rendered pages and write it. */
 export function serializePdf(
   pages: readonly SerializedPage[],
-  metadata: DocumentMetadata
+  metadata: DocumentMetadata,
+  outlines: readonly SerializedOutline[] = [],
+  pageMode: PdfPageMode = 'none'
 ): Uint8Array {
   const document = new PdfDocument(metadata);
 
   for (const page of pages) {
     document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns);
   }
+
+  document.addNavigation(outlines, pageMode);
 
   return document.save();
 }

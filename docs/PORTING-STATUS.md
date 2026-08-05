@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 78 `.ts` files, ~16,900 lines (TypeScript)
+**Ported:** 81 `.ts` files, ~17,600 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -27,11 +27,11 @@ table. Run `npm run examples`; current state, from
 | `certificate` | failed | 1 | 3.9 |
 | `report` | failed | 9 | 5.1 |
 | `invoice` | failed | 4 | 5.2 |
-| `document` | failed | 6 | 5.3 |
+| `document` | failed | 2 | 5.3 |
 | `server` | failed | 7 | 5.3 |
 | `resume` | failed | 10 | 5.5 |
 
-**2 of 8**, with the missing-API total down from 124 to 37 — phase 1.4 cleared
+**2 of 8**, with the missing-API total down from 124 to 33 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
 from every one of the seven, phase 2.7 cleared `SvgImage` from six, and phase
 3.1 cleared `TableHelper` from four. Phase 3.3 then cleared the composition
@@ -39,7 +39,8 @@ primitives `Transform`, `Opacity`, `FittedBox`, `AspectRatio`, `FullPage`,
 `Builder` and `LayoutBuilder` wherever they occurred. Phase 3.4 cleared
 `Expanded`/`Flexible` from five examples, phase 3.5 cleared decoration, borders
 and radii from six, phase 3.6 cleared stack/grid/partitions from four and made
-the calendar generate, and phase 3.7 cleared rich text from four. See
+the calendar generate, phase 3.7 cleared rich text from four, and phase 3.8
+cleared all four content widgets from document. See
 [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which phase clears
 each one.
 
@@ -100,7 +101,7 @@ on: an object registers itself with the document, hands out references through
 |---|---:|---|---|
 | `obj/object.dart`, `object_dict.dart` | 93 | `src/pdf/obj/object.ts` | done — `PdfObject`, `PdfObjectDict` |
 | `obj/object_stream.dart` | 51 | `src/pdf/obj/object_stream.ts` | partial — no Ascii85 flag, no deflate |
-| `obj/catalog.dart` | 178 | `src/pdf/obj/catalog.ts` | partial — `/Type`, `/Pages`; no outlines, names, page labels, `/AcroForm` |
+| `obj/catalog.dart` | 178 | `src/pdf/obj/catalog.ts` | partial — `/Type`, `/Pages`, `/Names`, `/Outlines`, outline page mode; no page labels or `/AcroForm` |
 | `obj/page_list.dart` | 46 | `src/pdf/obj/page_list.ts` | done — flat page tree |
 | `obj/page.dart` | 164 | `src/pdf/obj/page.ts` | partial — `/Resources` inherited from `PdfGraphicStream`; no `/Rotate`, no `/Annots` |
 | `obj/info.dart` | 69 | `src/pdf/obj/info.ts` | partial — no `/CreationDate` (no clock) and no `/Keywords` |
@@ -112,7 +113,8 @@ on: an object registers itself with the document, hands out references through
 | `obj/xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 206 | — | — form XObjects, **phase 4** |
 | `obj/image.dart`, `smask.dart` | 347 | — | — **phase 4.1–4.2** |
 | `obj/shading.dart`, `pattern.dart`, `function.dart` | 349 | `src/pdf/obj/shading.ts`, `pattern.ts`, `function.ts` | partial — axial/radial DeviceRGB shadings, type-2 interpolation and type-3 stitching, direct shading-pattern dictionaries; no sampled streams or tiling patterns |
-| `obj/annotation.dart`, `border.dart`, `names.dart`, `outline.dart` | 1366 | — | — links **phase 5.3**; names/outlines needed by `TableOfContent` in **3.8** |
+| `obj/names.dart`, `outline.dart` | 296 | `src/pdf/obj/names.ts`, `outline.ts` | done — sorted named destinations and hierarchical outline tree with title, style, colour, siblings and closed descendants |
+| `obj/annotation.dart`, `border.dart` | 1070 | — | — links **phase 5.3** |
 | `obj/metadata.dart`, `page_label.dart` | 248 | — | — |
 | `obj/encryption.dart`, `signature.dart` | 151 | — | — |
 | `obj/pdfa/*.dart` | 342 | — | — |
@@ -175,7 +177,7 @@ both, and will grow the shape factories in 2.5.
 | `widgets/chart/*.dart` | 1989 | — | — `Chart`, grids, data sets — **phase 5.1** |
 | `widgets/annotations.dart`, `forms.dart` | 1244 | — | — `UrlLink`, `AnnotationUrl` — **phase 5.3**; forms 5.6 |
 | `widgets/barcode.dart` | 298 | — | — `Barcode`, `BarcodeWidget` — **phase 5.2** |
-| `widgets/content.dart` | 360 | — | — `Header`, `Paragraph`, `Bullet`, `TableOfContent` — **phase 3.8** |
+| `widgets/content.dart` | 360 | `src/widgets/content.ts` | partial — `Header`, `Paragraph`, `Bullet`, `TableOfContent`, named destinations and conditional two-pass TOC; no `Watermark` or `Footer` |
 | `widgets/placeholders.dart` | 187 | — | — `PdfLogo`, `Lorem`, `LoremText` — **phase 3.9** |
 | `widgets/icon.dart` | 146 | — | — `Icon`, `IconData` — **phase 5.4** |
 | `widgets/progress.dart` | 202 | — | — `CircularProgressIndicator` — **phase 5.5** |
@@ -192,7 +194,7 @@ both, and will grow the shape factories in 2.5.
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
 | SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping and gradients done; SVG text and embedded raster content remain |
-| Widgets | ~14,000 | ~61 public widget/value constructors, plus tables, rich styles and themes |
+| Widgets | ~14,000 | ~65 public widget/value constructors, plus tables, rich styles, content and themes |
 
 **Phases 0, 1 and 2 are complete.** The WinAnsi ceiling is gone: a TrueType font
 is parsed, subset to the glyphs a document used, embedded as a

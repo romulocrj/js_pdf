@@ -9,7 +9,9 @@ import type { DocumentMetadata } from './obj/info.ts';
 import { PdfObject } from './obj/object.ts';
 import { PdfPage } from './obj/page.ts';
 import { PdfPageList } from './obj/page_list.ts';
+import type { PdfOutlineStyle } from './obj/outline.ts';
 import type { PageSize } from './page_format.ts';
+import type { Rgb } from './color.ts';
 export type { DocumentMetadata } from './obj/info.ts';
 /** One physical page, with its content stream already rendered to operators. */
 export interface SerializedPage {
@@ -25,6 +27,18 @@ export interface SerializedPage {
     /** The direct shading-pattern dictionaries `content` selected. */
     readonly patterns?: ReadonlyMap<string, PdfDict>;
 }
+export interface SerializedOutline {
+    readonly title: string;
+    readonly level: number;
+    readonly anchor: string;
+    /** One-based physical page number. */
+    readonly page: number;
+    /** Destination coordinate in PDF bottom-left space. */
+    readonly y: number;
+    readonly color?: Rgb | null;
+    readonly style?: PdfOutlineStyle;
+}
+export type PdfPageMode = 'none' | 'outlines';
 /**
  * Owns the objects that make up a file, and writes them.
  *
@@ -70,7 +84,8 @@ export declare class PdfDocument {
      * passes nothing and gets no `/Resources` at all, as upstream does.
      */
     addPage(format: PageSize, content: string, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>): PdfPage;
+    addNavigation(outlines: readonly SerializedOutline[], pageMode: PdfPageMode): void;
     save(): Uint8Array;
 }
 /** Build a document from already-rendered pages and write it. */
-export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata): Uint8Array;
+export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata, outlines?: readonly SerializedOutline[], pageMode?: PdfPageMode): Uint8Array;

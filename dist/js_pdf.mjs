@@ -3396,6 +3396,1178 @@ class Container extends Widget {
   }
 }
 
+function finiteNonNegative$1(value, name) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(`${name} must be a finite non-negative number`);
+  }
+  return value;
+}
+
+function childMain(box, direction) {
+  return direction === "horizontal" ? box.width : box.height;
+}
+
+function childCross(box, direction) {
+  return direction === "horizontal" ? box.height : box.width;
+}
+
+function axisConstraints(direction, minMain, maxMain, minCross, maxCross) {
+  return direction === "horizontal" ? new BoxConstraints({
+    minWidth: minMain,
+    maxWidth: maxMain,
+    minHeight: minCross,
+    maxHeight: maxCross
+  }) : new BoxConstraints({
+    minWidth: minCross,
+    maxWidth: maxCross,
+    minHeight: minMain,
+    maxHeight: maxMain
+  });
+}
+
+class EmptyFlexChild extends Widget {
+  layout(_context, constraints) {
+    const size = BoxConstraints.from(constraints).smallest;
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: null
+    };
+  }
+  paint() {}
+}
+
+class Flexible extends Widget {
+  constructor({flex = 1, fit = "loose", child}) {
+    super();
+    this.flex = finiteNonNegative$1(Number(flex), "flex");
+    if (fit !== "tight" && fit !== "loose") {
+      throw new TypeError(`Unknown FlexFit: ${fit}`);
+    }
+    this.fit = fit;
+    this.child = child;
+  }
+  layout(context, constraints) {
+    const childBox = this.child.layout(context, constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class Expanded extends Flexible {
+  constructor({flex = 1, fit = "tight", child}) {
+    super({
+      flex,
+      fit,
+      child
+    });
+  }
+}
+
+class Spacer extends Expanded {
+  constructor(options = 1) {
+    const flex = typeof options === "number" ? options : options.flex ?? 1;
+    super({
+      flex,
+      child: new EmptyFlexChild
+    });
+  }
+}
+
+class Flex extends Widget {
+  constructor({direction, children = [], mainAxisAlignment = "start", mainAxisSize = "max", crossAxisAlignment = "center", verticalDirection = "down", gap = 0, margin = 0, widths = null}) {
+    super();
+    if (direction !== "horizontal" && direction !== "vertical") {
+      throw new TypeError(`Unknown Axis: ${direction}`);
+    }
+    if (![ "start", "end", "center", "spaceBetween", "spaceAround", "spaceEvenly" ].includes(mainAxisAlignment)) {
+      throw new TypeError(`Unknown MainAxisAlignment: ${mainAxisAlignment}`);
+    }
+    if (mainAxisSize !== "min" && mainAxisSize !== "max") {
+      throw new TypeError(`Unknown MainAxisSize: ${mainAxisSize}`);
+    }
+    if (![ "start", "end", "center", "stretch" ].includes(crossAxisAlignment)) {
+      throw new TypeError(`Unknown CrossAxisAlignment: ${crossAxisAlignment}`);
+    }
+    if (verticalDirection !== "up" && verticalDirection !== "down") {
+      throw new TypeError(`Unknown VerticalDirection: ${verticalDirection}`);
+    }
+    if (widths !== null && direction !== "horizontal") {
+      throw new TypeError("Flex.widths is only valid on a horizontal flex");
+    }
+    this.direction = direction;
+    this.children = children;
+    this.mainAxisAlignment = mainAxisAlignment;
+    this.mainAxisSize = mainAxisSize;
+    this.crossAxisAlignment = crossAxisAlignment;
+    this.verticalDirection = verticalDirection;
+    this.gap = finiteNonNegative$1(Number(gap), "gap");
+    this.margin = normalizeInsets(margin);
+    this.widths = widths;
+  }
+  crossConstraints(constraints) {
+    const maximum = this.direction === "horizontal" ? constraints.maxHeight : constraints.maxWidth;
+    if (this.crossAxisAlignment === "stretch" && Number.isFinite(maximum)) {
+      return [ maximum, maximum ];
+    }
+    return [ 0, maximum ];
+  }
+  layout(context, incoming) {
+    const outer = BoxConstraints.from(incoming);
+    const constraints = outer.deflate(this.margin);
+    const horizontal = this.direction === "horizontal";
+    const maxMain = horizontal ? constraints.maxWidth : constraints.maxHeight;
+    const minMain = horizontal ? constraints.minWidth : constraints.minHeight;
+    const maxCross = horizontal ? constraints.maxHeight : constraints.maxWidth;
+    const minCross = horizontal ? constraints.minHeight : constraints.minWidth;
+    const canFlex = Number.isFinite(maxMain);
+    const baseGap = this.gap * Math.max(0, this.children.length - 1);
+    const measured = new Array(this.children.length);
+    let allocated = 0;
+    let crossSize = 0;
+    const measure = (index, childConstraints) => {
+      const box = this.children[index].layout(context, childConstraints);
+      measured[index] = box;
+      allocated += childMain(box, this.direction);
+      crossSize = Math.max(crossSize, childCross(box, this.direction));
+      return box;
+    };
+    if (this.widths !== null) {
+      if (!canFlex) throw new RangeError("Row.widths requires a bounded width");
+      const available = Math.max(0, maxMain - baseGap);
+      const weights = this.children.map((_, index) => finiteNonNegative$1(Number(this.widths?.[index] ?? 1), `widths[${index}]`));
+      const total = weights.reduce((sum, value) => sum + value, 0) || 1;
+      const [childMinCross, childMaxCross] = this.crossConstraints(constraints);
+      let used = 0;
+      for (let index = 0; index < this.children.length; index++) {
+        const extent = index === this.children.length - 1 ? available - used : available * weights[index] / total;
+        used += extent;
+        measure(index, axisConstraints(this.direction, extent, extent, childMinCross, childMaxCross));
+      }
+    } else {
+      let totalFlex = 0;
+      const flexible = [];
+      const [childMinCross, childMaxCross] = this.crossConstraints(constraints);
+      for (let index = 0; index < this.children.length; index++) {
+        const child = this.children[index];
+        if (child instanceof Flexible && child.flex > 0) {
+          if (!canFlex && (this.mainAxisSize === "max" || child.fit === "tight")) {
+            throw new RangeError("Flex children require a bounded main-axis constraint");
+          }
+          totalFlex += child.flex;
+          flexible.push(index);
+        } else {
+          measure(index, axisConstraints(this.direction, 0, Infinity, childMinCross, childMaxCross));
+        }
+      }
+      const freeSpace = Math.max(0, (canFlex ? maxMain : 0) - allocated - baseGap);
+      let allocatedFlex = 0;
+      for (let flexIndex = 0; flexIndex < flexible.length; flexIndex++) {
+        const index = flexible[flexIndex];
+        const child = this.children[index];
+        const extent = canFlex ? flexIndex === flexible.length - 1 ? freeSpace - allocatedFlex : freeSpace * child.flex / totalFlex : Infinity;
+        allocatedFlex += extent;
+        measure(index, axisConstraints(this.direction, child.fit === "tight" ? extent : 0, extent, childMinCross, childMaxCross));
+      }
+    }
+    allocated += baseGap;
+    const idealMain = canFlex && this.mainAxisSize === "max" ? maxMain : allocated;
+    const actualMain = Math.min(maxMain, Math.max(minMain, idealMain));
+    const actualCross = Math.min(maxCross, Math.max(minCross, crossSize));
+    const remaining = Math.max(0, actualMain - allocated);
+    let leading = 0;
+    let between = this.gap;
+    const count = this.children.length;
+    switch (this.mainAxisAlignment) {
+     case "end":
+      leading = remaining;
+      break;
+
+     case "center":
+      leading = remaining / 2;
+      break;
+
+     case "spaceBetween":
+      between += count > 1 ? remaining / (count - 1) : 0;
+      break;
+
+     case "spaceAround":
+      {
+        const extra = count > 0 ? remaining / count : 0;
+        leading = extra / 2;
+        between += extra;
+        break;
+      }
+
+     case "spaceEvenly":
+      {
+        const extra = count > 0 ? remaining / (count + 1) : 0;
+        leading = extra;
+        between += extra;
+        break;
+      }
+    }
+    const reverse = this.direction === "vertical" && this.verticalDirection === "up";
+    let cursor = reverse ? actualMain - leading : leading;
+    const children = [];
+    for (let index = 0; index < measured.length; index++) {
+      const box = measured[index];
+      const main = childMain(box, this.direction);
+      const cross = childCross(box, this.direction);
+      const crossPosition = this.crossAxisAlignment === "end" ? actualCross - cross : this.crossAxisAlignment === "center" ? (actualCross - cross) / 2 : 0;
+      const mainPosition = reverse ? cursor - main : cursor;
+      children.push({
+        box,
+        dx: this.margin.left + (horizontal ? mainPosition : crossPosition),
+        dy: this.margin.top + (horizontal ? crossPosition : mainPosition)
+      });
+      cursor += reverse ? -(main + between) : main + between;
+    }
+    const innerWidth = horizontal ? actualMain : actualCross;
+    const innerHeight = horizontal ? actualCross : actualMain;
+    const size = outer.constrain({
+      width: innerWidth + this.margin.left + this.margin.right,
+      height: innerHeight + this.margin.top + this.margin.bottom
+    });
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        children
+      }
+    };
+  }
+  paint(context, box) {
+    for (const child of box.data.children) {
+      child.box.widget.paint(context, {
+        ...child.box,
+        x: box.x + child.dx,
+        y: box.y + child.dy
+      });
+    }
+  }
+}
+
+class Row extends Flex {
+  constructor(options = {}) {
+    super({
+      ...options,
+      direction: "horizontal"
+    });
+  }
+}
+
+class Column extends Flex {
+  constructor(options = {}) {
+    super({
+      ...options,
+      direction: "vertical"
+    });
+  }
+}
+
+const TYPE1_FACES = Object.freeze({
+  courier: PdfType1Font.courier,
+  courierBold: PdfType1Font.courierBold,
+  courierBoldOblique: PdfType1Font.courierBoldOblique,
+  courierOblique: PdfType1Font.courierOblique,
+  helvetica: PdfType1Font.helvetica,
+  helveticaBold: PdfType1Font.helveticaBold,
+  helveticaBoldOblique: PdfType1Font.helveticaBoldOblique,
+  helveticaOblique: PdfType1Font.helveticaOblique,
+  times: PdfType1Font.times,
+  timesBold: PdfType1Font.timesBold,
+  timesBoldItalic: PdfType1Font.timesBoldItalic,
+  timesItalic: PdfType1Font.timesItalic,
+  symbol: PdfType1Font.symbol,
+  zapfDingbats: PdfType1Font.zapfDingbats
+});
+
+class Font {
+  constructor(create) {
+    this.create = create;
+  }
+  static type1(face) {
+    const factory = TYPE1_FACES[face];
+    if (factory === undefined) {
+      throw new TypeError(`\`${face}\` is not one of the 14 standard Type1 fonts`);
+    }
+    return new Font(factory);
+  }
+  static courier() {
+    return Font.type1("courier");
+  }
+  static courierBold() {
+    return Font.type1("courierBold");
+  }
+  static courierBoldOblique() {
+    return Font.type1("courierBoldOblique");
+  }
+  static courierOblique() {
+    return Font.type1("courierOblique");
+  }
+  static helvetica() {
+    return Font.type1("helvetica");
+  }
+  static helveticaBold() {
+    return Font.type1("helveticaBold");
+  }
+  static helveticaBoldOblique() {
+    return Font.type1("helveticaBoldOblique");
+  }
+  static helveticaOblique() {
+    return Font.type1("helveticaOblique");
+  }
+  static times() {
+    return Font.type1("times");
+  }
+  static timesBold() {
+    return Font.type1("timesBold");
+  }
+  static timesBoldItalic() {
+    return Font.type1("timesBoldItalic");
+  }
+  static timesItalic() {
+    return Font.type1("timesItalic");
+  }
+  static symbol() {
+    return Font.type1("symbol");
+  }
+  static zapfDingbats() {
+    return Font.type1("zapfDingbats");
+  }
+  static ttf(data, options) {
+    if (!(data instanceof Uint8Array)) {
+      throw new TypeError("Font.ttf expects the font file as a Uint8Array");
+    }
+    return new Font(() => new PdfTtfFont(data, options));
+  }
+  static fromPdfFont(font) {
+    return new Font(() => font);
+  }
+  build() {
+    return this.create();
+  }
+  getFont(context) {
+    return context.document.resolveFont(this);
+  }
+}
+
+const DEFAULT_FONT_SIZE = 12;
+
+const DEFAULT_LINE_HEIGHT = 1.2;
+
+class TextStyle {
+  constructor({inherit = true, color = null, font = null, fontNormal = null, fontBold = null, fontItalic = null, fontBoldItalic = null, fontFallback = null, fontSize = null, fontWeight = null, fontStyle = null, letterSpacing = null, wordSpacing = null, lineSpacing = null, height = null, background = null, decoration = null, decorationColor = null, decorationStyle = null, decorationThickness = null} = {}) {
+    const isItalic = fontStyle === "italic";
+    const isBold = fontWeight === "bold";
+    this.inherit = inherit;
+    this.color = color == null ? null : normalizeColor(color);
+    this.fontNormal = fontNormal ?? (!isItalic && !isBold ? font : null);
+    this.fontBold = fontBold ?? (!isItalic && isBold ? font : null);
+    this.fontItalic = fontItalic ?? (isItalic && !isBold ? font : null);
+    this.fontBoldItalic = fontBoldItalic ?? (isItalic && isBold ? font : null);
+    this.fontFallback = fontFallback ?? [];
+    this.fontSize = fontSize;
+    this.fontWeight = fontWeight;
+    this.fontStyle = fontStyle;
+    this.letterSpacing = letterSpacing;
+    this.wordSpacing = wordSpacing;
+    this.lineSpacing = lineSpacing;
+    this.height = height;
+    this.background = normalizeBoxDecoration(background);
+    this.decoration = decoration;
+    this.decorationColor = decorationColor == null ? null : normalizeColor(decorationColor);
+    this.decorationStyle = decorationStyle;
+    this.decorationThickness = decorationThickness;
+  }
+  static defaultStyle() {
+    return new TextStyle({
+      inherit: false,
+      color: "#000000",
+      fontNormal: Font.helvetica(),
+      fontBold: Font.helveticaBold(),
+      fontItalic: Font.helveticaOblique(),
+      fontBoldItalic: Font.helveticaBoldOblique(),
+      fontSize: DEFAULT_FONT_SIZE,
+      fontWeight: "normal",
+      fontStyle: "normal",
+      letterSpacing: 0,
+      wordSpacing: 0,
+      lineSpacing: 0,
+      height: DEFAULT_LINE_HEIGHT,
+      decoration: "none",
+      decorationStyle: "solid",
+      decorationThickness: 1
+    });
+  }
+  get font() {
+    if (this.fontWeight !== "bold") {
+      if (this.fontStyle !== "italic") {
+        return this.fontNormal ?? this.fontBold ?? this.fontItalic ?? this.fontBoldItalic;
+      }
+      return this.fontItalic ?? this.fontNormal ?? this.fontBold ?? this.fontBoldItalic;
+    }
+    if (this.fontStyle !== "italic") {
+      return this.fontBold ?? this.fontNormal ?? this.fontItalic ?? this.fontBoldItalic;
+    }
+    return this.fontBoldItalic ?? this.fontBold ?? this.fontItalic ?? this.fontNormal;
+  }
+  copyWith(options = {}) {
+    return new TextStyle({
+      inherit: this.inherit,
+      color: options.color ?? this.color,
+      font: options.font ?? this.font,
+      fontNormal: options.fontNormal ?? this.fontNormal,
+      fontBold: options.fontBold ?? this.fontBold,
+      fontItalic: options.fontItalic ?? this.fontItalic,
+      fontBoldItalic: options.fontBoldItalic ?? this.fontBoldItalic,
+      fontFallback: options.fontFallback ?? this.fontFallback,
+      fontSize: options.fontSize ?? this.fontSize,
+      fontWeight: options.fontWeight ?? this.fontWeight,
+      fontStyle: options.fontStyle ?? this.fontStyle,
+      letterSpacing: options.letterSpacing ?? this.letterSpacing,
+      wordSpacing: options.wordSpacing ?? this.wordSpacing,
+      lineSpacing: options.lineSpacing ?? this.lineSpacing,
+      height: options.height ?? this.height,
+      background: options.background ?? this.background,
+      decoration: options.decoration ?? this.decoration,
+      decorationColor: options.decorationColor ?? this.decorationColor,
+      decorationStyle: options.decorationStyle ?? this.decorationStyle,
+      decorationThickness: options.decorationThickness ?? this.decorationThickness
+    });
+  }
+  merge(other) {
+    if (other == null) {
+      return this;
+    }
+    if (!other.inherit) {
+      return other;
+    }
+    return this.copyWith({
+      color: other.color,
+      font: other.font,
+      fontNormal: other.fontNormal,
+      fontBold: other.fontBold,
+      fontItalic: other.fontItalic,
+      fontBoldItalic: other.fontBoldItalic,
+      fontFallback: [ ...other.fontFallback, ...this.fontFallback ],
+      fontSize: other.fontSize,
+      fontWeight: other.fontWeight,
+      fontStyle: other.fontStyle,
+      letterSpacing: other.letterSpacing,
+      wordSpacing: other.wordSpacing,
+      lineSpacing: other.lineSpacing,
+      height: other.height,
+      background: other.background,
+      decoration: other.decoration,
+      decorationColor: other.decorationColor,
+      decorationStyle: other.decorationStyle,
+      decorationThickness: other.decorationThickness
+    });
+  }
+}
+
+class InlineSpan {
+  constructor({style = null, baseline = 0, annotation = null} = {}) {
+    this.style = style;
+    this.baseline = assertFiniteNumber(Number(baseline), "baseline");
+    this.annotation = annotation;
+  }
+  toPlainText() {
+    let value = "";
+    this.visitChildren(span => {
+      if (span instanceof TextSpan && span.text !== null) value += span.text;
+      return true;
+    }, TextStyle.defaultStyle());
+    return value;
+  }
+}
+
+class TextSpan extends InlineSpan {
+  constructor({text = null, children = null, ...options} = {}) {
+    super(options);
+    this.text = text === null ? null : String(text);
+    this.children = children === null ? [] : [ ...children ];
+  }
+  copyWith(options = {}) {
+    return new TextSpan({
+      text: options.text ?? this.text,
+      children: options.children ?? this.children,
+      style: options.style ?? this.style,
+      baseline: options.baseline ?? this.baseline,
+      annotation: options.annotation ?? this.annotation
+    });
+  }
+  visitChildren(visitor, parentStyle, annotation = null) {
+    const style = parentStyle.merge(this.style);
+    const effectiveAnnotation = this.annotation ?? annotation;
+    if (this.text !== null && !visitor(this, style, effectiveAnnotation)) return false;
+    for (const child of this.children) {
+      if (!child.visitChildren(visitor, style, effectiveAnnotation)) return false;
+    }
+    return true;
+  }
+}
+
+class WidgetSpan extends InlineSpan {
+  constructor({child, ...options}) {
+    super(options);
+    this.child = child;
+  }
+  copyWith(options = {}) {
+    return new WidgetSpan({
+      child: this.child,
+      style: options.style ?? this.style,
+      baseline: options.baseline ?? this.baseline,
+      annotation: options.annotation ?? this.annotation
+    });
+  }
+  visitChildren(visitor, parentStyle, annotation = null) {
+    return visitor(this, parentStyle.merge(this.style), this.annotation ?? annotation);
+  }
+}
+
+function countSpaces(value) {
+  let count = 0;
+  for (const character of value) if (/\s/u.test(character)) count++;
+  return count;
+}
+
+function textWidth(style, value) {
+  return style.font.stringMetrics(value, style.fontSize, style.letterSpacing).advanceWidth + countSpaces(value) * style.wordSpacing;
+}
+
+function supportsRune(font, codePoint) {
+  const candidate = font;
+  return candidate.isRuneSupported?.(codePoint) ?? codePoint <= 255;
+}
+
+function decorationNames(style) {
+  const value = style.decoration ?? "none";
+  const values = Array.isArray(value) ? value : [ value ];
+  return values.filter(name => name !== "none");
+}
+
+function resolveStyle(context, style, baseline, scale, directFont = null) {
+  const fontSize = (style.fontSize ?? DEFAULT_FONT_SIZE) * scale;
+  const declaredFont = style.font;
+  const font = directFont ?? (declaredFont === null ? context.document.font : declaredFont.getFont(context));
+  return {
+    font,
+    fontSize,
+    color: style.color ?? [ 0, 0, 0 ],
+    lineAdvance: fontSize * (style.height ?? DEFAULT_LINE_HEIGHT) + (style.lineSpacing ?? 0) * scale,
+    letterSpacing: (style.letterSpacing ?? 0) * scale,
+    wordSpacing: (style.wordSpacing ?? 0) * scale,
+    baseline: baseline * scale,
+    background: style.background,
+    decorations: decorationNames(style),
+    decorationColor: style.decorationColor ?? style.color ?? [ 0, 0, 0 ],
+    decorationStyle: style.decorationStyle ?? "solid",
+    decorationThickness: style.decorationThickness ?? 1
+  };
+}
+
+function splitLongWord(value, maxWidth, style) {
+  const parts = [];
+  let current = "";
+  for (const character of value) {
+    const candidate = current + character;
+    if (current !== "" && textWidth(style, candidate) > maxWidth) {
+      parts.push(current);
+      current = character;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current !== "") parts.push(current);
+  return parts.length === 0 ? [ "" ] : parts;
+}
+
+function trimTrailingGaps(line) {
+  while (line.tokens[line.tokens.length - 1]?.kind === "gap") {
+    line.width -= line.tokens.pop()?.width ?? 0;
+  }
+}
+
+function positionLine(line, y, contentWidth, align, direction) {
+  let ascent = line.emptyStyle.fontSize + Math.max(0, line.emptyStyle.baseline);
+  let descent = Math.max(0, line.emptyStyle.lineAdvance - line.emptyStyle.fontSize - line.emptyStyle.baseline);
+  let minimumHeight = line.emptyStyle.lineAdvance;
+  for (const token of line.tokens) {
+    minimumHeight = Math.max(minimumHeight, token.style.lineAdvance);
+    if (token.kind === "widget") {
+      ascent = Math.max(ascent, token.height + token.style.baseline);
+      descent = Math.max(descent, -token.style.baseline);
+    } else {
+      ascent = Math.max(ascent, token.style.fontSize + token.style.baseline);
+      descent = Math.max(descent, token.style.lineAdvance - token.style.fontSize - token.style.baseline);
+    }
+  }
+  const height = Math.max(minimumHeight, ascent + descent);
+  const effectiveAlign = align === "start" ? direction === "rtl" ? "right" : "left" : align === "end" ? direction === "rtl" ? "left" : "right" : align;
+  let offset = 0;
+  if (effectiveAlign === "right") offset = contentWidth - line.width;
+  if (effectiveAlign === "center") offset = (contentWidth - line.width) / 2;
+  const gapCount = line.wrapped && effectiveAlign === "justify" ? line.tokens.filter(token => token.kind === "gap").length : 0;
+  const extraPerGap = gapCount === 0 ? 0 : Math.max(0, contentWidth - line.width) / gapCount;
+  const paintTokens = [];
+  for (const token of line.tokens) {
+    const previous = paintTokens[paintTokens.length - 1];
+    if (extraPerGap === 0 && token.kind !== "widget" && previous !== undefined && previous.kind !== "widget" && previous.style === token.style) {
+      paintTokens[paintTokens.length - 1] = {
+        kind: "text",
+        text: previous.text + token.text,
+        width: previous.width + token.width,
+        style: token.style
+      };
+    } else {
+      paintTokens.push(token);
+    }
+  }
+  let x = offset;
+  let accumulatedExtra = 0;
+  const runs = [];
+  for (const token of paintTokens) {
+    let runX = x + accumulatedExtra;
+    if (direction === "rtl") runX = contentWidth - runX - token.width;
+    const tokenBaseline = y + ascent - token.style.baseline;
+    const tokenY = token.kind === "widget" ? tokenBaseline - token.height : tokenBaseline - token.style.fontSize;
+    runs.push({
+      kind: token.kind,
+      text: token.kind === "widget" ? "" : token.text,
+      x: runX,
+      y: tokenY,
+      width: token.width,
+      height: token.kind === "widget" ? token.height : token.style.lineAdvance,
+      baseline: tokenBaseline,
+      style: token.style,
+      childBox: token.kind === "widget" ? token.childBox : null
+    });
+    x += token.width;
+    if (token.kind === "gap") accumulatedExtra += extraPerGap;
+  }
+  const usedWidth = extraPerGap === 0 ? line.width : contentWidth;
+  return {
+    runs,
+    y,
+    width: usedWidth,
+    height,
+    wrapped: line.wrapped
+  };
+}
+
+function rebaseLines(lines, top) {
+  return lines.map(line => ({
+    ...line,
+    y: line.y - top,
+    runs: line.runs.map(run => ({
+      ...run,
+      y: run.y - top,
+      baseline: run.baseline - top
+    }))
+  }));
+}
+
+class RichText extends SpanningWidget {
+  constructor({text, textAlign = null, textDirection = "ltr", softWrap = null, tightBounds = false, textScaleFactor = 1, maxLines = null, overflow = null, margin = 0}) {
+    super();
+    this.text = text;
+    this.textAlign = textAlign;
+    this.textDirection = textDirection;
+    this.softWrap = softWrap;
+    this.tightBounds = tightBounds;
+    this.textScaleFactor = assertFiniteNumber(Number(textScaleFactor), "textScaleFactor");
+    this.maxLines = maxLines;
+    this.overflow = overflow;
+    this.margin = normalizeInsets(margin);
+  }
+  initialSpanState() {
+    return {
+      lineIndex: 0
+    };
+  }
+  inputTokens(context, maxWidth) {
+    const result = [];
+    const scale = this.textScaleFactor;
+    this.text.visitChildren((span, textStyle) => {
+      const baseStyle = resolveStyle(context, textStyle, span.baseline, scale);
+      if (span instanceof WidgetSpan) {
+        const childBox = span.child.layout(context, new BoxConstraints({
+          maxWidth,
+          maxHeight: Infinity
+        }));
+        result.push({
+          kind: "widget",
+          width: childBox.width,
+          height: childBox.height,
+          style: baseStyle,
+          childBox
+        });
+        return true;
+      }
+      if (!(span instanceof TextSpan) || span.text === null) return true;
+      let group = "";
+      let groupFont = baseStyle.font;
+      const flush = () => {
+        if (group === "") return;
+        const style = groupFont === baseStyle.font ? baseStyle : {
+          ...baseStyle,
+          font: groupFont
+        };
+        for (const part of group.replace(/\r\n?/g, "\n").split(/(\n|[^\S\n]+|[^\s]+)/u)) {
+          if (part === "") continue;
+          if (part === "\n") result.push({
+            kind: "break",
+            style
+          }); else result.push({
+            kind: /^\s+$/u.test(part) ? "gap" : "text",
+            text: part,
+            width: textWidth(style, part),
+            style
+          });
+        }
+        group = "";
+      };
+      for (const character of span.text) {
+        const codePoint = character.codePointAt(0) ?? 0;
+        let font = baseStyle.font;
+        if (!supportsRune(font, codePoint)) {
+          for (const fallback of textStyle.fontFallback) {
+            const candidate = fallback.getFont(context);
+            if (supportsRune(candidate, codePoint)) {
+              font = candidate;
+              break;
+            }
+          }
+        }
+        if (font !== groupFont && group !== "") flush();
+        groupFont = font;
+        group += character;
+      }
+      flush();
+      return true;
+    }, context.theme.defaultTextStyle);
+    return result;
+  }
+  allLines(context, contentWidth) {
+    const align = this.textAlign ?? context.theme.textAlign ?? "left";
+    const softWrap = this.softWrap ?? context.theme.softWrap;
+    const maxLines = this.maxLines ?? context.theme.maxLines;
+    const tokens = this.inputTokens(context, contentWidth);
+    const fallbackStyle = resolveStyle(context, context.theme.defaultTextStyle, 0, this.textScaleFactor);
+    const raw = [];
+    let current = {
+      tokens: [],
+      width: 0,
+      wrapped: false,
+      emptyStyle: fallbackStyle
+    };
+    const pushLine = wrapped => {
+      trimTrailingGaps(current);
+      current.wrapped = wrapped;
+      raw.push(current);
+      current = {
+        tokens: [],
+        width: 0,
+        wrapped: false,
+        emptyStyle: current.emptyStyle
+      };
+    };
+    for (const token of tokens) {
+      current.emptyStyle = token.style;
+      if (token.kind === "break") {
+        pushLine(false);
+        continue;
+      }
+      if (token.kind === "gap" && current.tokens.length === 0) continue;
+      if (softWrap && current.tokens.length > 0 && current.width + token.width > contentWidth + 1e-5) {
+        pushLine(true);
+        if (token.kind === "gap") continue;
+      }
+      if (token.kind === "text" && softWrap && token.width > contentWidth + 1e-5) {
+        const pieces = splitLongWord(token.text, contentWidth, token.style);
+        for (let index = 0; index < pieces.length; index++) {
+          const piece = pieces[index] ?? "";
+          const part = {
+            ...token,
+            text: piece,
+            width: textWidth(token.style, piece)
+          };
+          if (current.tokens.length > 0) pushLine(true);
+          current.tokens.push(part);
+          current.width = part.width;
+          if (index < pieces.length - 1) pushLine(true);
+        }
+        continue;
+      }
+      current.tokens.push(token);
+      current.width += token.width;
+    }
+    if (current.tokens.length > 0 || raw.length === 0 || tokens[tokens.length - 1]?.kind === "break") pushLine(false);
+    const limited = maxLines === null ? raw : raw.slice(0, Math.max(1, maxLines));
+    const targetWidth = limited.some(line => line.wrapped || align === "justify") ? contentWidth : Math.max(0, ...limited.map(line => line.width));
+    let y = 0;
+    const lines = [];
+    for (const line of limited) {
+      const positioned = positionLine(line, y, targetWidth, align, this.textDirection);
+      lines.push(positioned);
+      y += positioned.height;
+    }
+    return lines;
+  }
+  fragment(context, constraints, lineIndex, spanning) {
+    const parent = BoxConstraints.from(constraints);
+    const contentWidth = Math.max(1, parent.maxWidth - this.margin.left - this.margin.right);
+    const all = this.allLines(context, contentWidth);
+    const topMargin = lineIndex === 0 ? this.margin.top : 0;
+    const availableHeight = Math.max(0, parent.maxHeight - topMargin);
+    let end = lineIndex;
+    let height = 0;
+    while (end < all.length) {
+      const nextHeight = all[end]?.height ?? 0;
+      const finalBottom = end === all.length - 1 ? this.margin.bottom : 0;
+      if (spanning && height + nextHeight + finalBottom > availableHeight + 1e-5) break;
+      height += nextHeight;
+      end++;
+      if (!spanning && height > availableHeight + 1e-5) break;
+    }
+    if (!spanning) end = all.length;
+    const isFinal = end >= all.length;
+    const bottomMargin = isFinal ? this.margin.bottom : 0;
+    const lineTop = all[lineIndex]?.y ?? 0;
+    const selected = rebaseLines(all.slice(lineIndex, end), lineTop - topMargin);
+    const widest = Math.max(0, ...selected.map(line => line.width));
+    const naturalHeight = topMargin + selected.reduce((sum, line) => sum + line.height, 0) + bottomMargin;
+    const size = parent.constrain({
+      width: widest + this.margin.left + this.margin.right,
+      height: naturalHeight
+    });
+    const effectiveOverflow = this.overflow ?? context.theme.overflow;
+    return {
+      box: {
+        widget: this,
+        width: size.width,
+        height: size.height,
+        data: {
+          lines: selected,
+          contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
+          clip: effectiveOverflow === "clip" || naturalHeight > size.height + 1e-5
+        }
+      },
+      nextState: {
+        lineIndex: end
+      },
+      hasMore: end < all.length
+    };
+  }
+  layout(context, constraints) {
+    return this.fragment(context, constraints, 0, false).box;
+  }
+  layoutSpan(context, constraints, state) {
+    return this.fragment(context, constraints, state.lineIndex, true);
+  }
+  paint(context, box) {
+    const {canvas} = context;
+    if (box.data.clip) {
+      canvas.saveContext();
+      canvas.drawRect(box.x, canvas.pageHeight - box.y - box.height, box.width, box.height);
+      canvas.clipPath();
+    }
+    for (const line of box.data.lines) {
+      for (const run of line.runs) {
+        const x = box.x + this.margin.left + run.x;
+        const y = box.y + run.y;
+        if (run.style.background !== null && run.width > 0) {
+          run.style.background.paint(context, x, y, run.width, run.height, "all", this.textDirection);
+        }
+      }
+    }
+    for (const line of box.data.lines) {
+      for (const run of line.runs) {
+        const x = box.x + this.margin.left + run.x;
+        if (run.kind === "text") {
+          canvas.text(run.text, x, box.y + run.baseline, {
+            font: run.style.font,
+            fontSize: run.style.fontSize,
+            color: run.style.color,
+            letterSpacing: run.style.letterSpacing,
+            wordSpacing: run.style.wordSpacing
+          });
+        } else if (run.kind === "widget" && run.childBox !== null) {
+          run.childBox.widget.paint(context, {
+            ...run.childBox,
+            x,
+            y: box.y + run.y
+          });
+        }
+      }
+    }
+    for (const line of box.data.lines) {
+      for (const run of line.runs) {
+        if (run.style.decorations.length === 0 || run.width <= 0) continue;
+        const x = box.x + this.margin.left + run.x;
+        const width = Math.max(.25, run.style.fontSize * .05 * run.style.decorationThickness);
+        for (const decoration of run.style.decorations) {
+          const top = decoration === "underline" ? box.y + run.baseline + run.style.fontSize * .08 : decoration === "overline" ? box.y + run.baseline - run.style.fontSize : box.y + run.baseline - run.style.fontSize * .35;
+          canvas.line(x, top, x + run.width, top, run.style.decorationColor, width);
+          if (run.style.decorationStyle === "double") {
+            const gap = Math.max(width * 2, run.style.fontSize * .04);
+            canvas.line(x, top + gap, x + run.width, top + gap, run.style.decorationColor, width);
+          }
+        }
+      }
+    }
+    if (box.data.clip) canvas.restoreContext();
+  }
+}
+
+class Text extends RichText {
+  constructor(value, {style = undefined, fontSize = undefined, lineHeight = undefined, color = undefined, align = undefined, textAlign = undefined, textDirection = "ltr", softWrap = undefined, tightBounds = false, textScaleFactor = 1, margin = 0, maxLines = undefined, overflow = undefined, font = undefined} = {}) {
+    const overrides = new TextStyle({
+      color: color === undefined ? null : normalizeColor(color),
+      font: font === undefined ? null : undefined,
+      fontSize: fontSize === undefined ? null : assertFiniteNumber(Number(fontSize), "fontSize"),
+      height: lineHeight === undefined ? null : assertFiniteNumber(Number(lineHeight), "lineHeight")
+    });
+    const merged = (style ?? new TextStyle).merge(overrides);
+    super({
+      text: new TextSpan({
+        text: String(value),
+        style: merged
+      }),
+      textAlign: textAlign ?? align ?? null,
+      textDirection,
+      softWrap: softWrap ?? null,
+      tightBounds,
+      textScaleFactor,
+      maxLines: maxLines ?? null,
+      overflow: overflow ?? null,
+      margin
+    });
+    this.value = String(value);
+    this.directFont = font ?? null;
+  }
+  inputTokens(context, maxWidth) {
+    if (this.directFont === null) return super.inputTokens(context, maxWidth);
+    const tokens = super.inputTokens(context, maxWidth);
+    return tokens.map(token => ({
+      ...token,
+      style: {
+        ...token.style,
+        font: this.directFont
+      }
+    }));
+  }
+}
+
+class Header extends StatelessWidget {
+  constructor({level = 1, text = null, child = null, decoration = null, margin = undefined, padding = undefined, textStyle = null, title = undefined, outlineColor = null, outlineStyle = "normal"} = {}) {
+    super();
+    if (!Number.isInteger(level) || level < 0 || level > 5) {
+      throw new RangeError("Header.level must be an integer from 0 through 5");
+    }
+    if (child === null && text === null) throw new Error("Header needs text or a child");
+    this.level = level;
+    this.text = text;
+    this.child = child;
+    this.decoration = decoration;
+    this.margin = margin;
+    this.padding = padding;
+    this.textStyle = textStyle;
+    this.title = title === undefined ? text : title;
+    this.outlineColor = outlineColor === null ? null : normalizeColor(outlineColor);
+    this.outlineStyle = outlineStyle;
+  }
+  build(context) {
+    const millimeter = PageUnit.mm;
+    let margin = this.margin;
+    let padding = this.padding;
+    let decoration = this.decoration;
+    let style = this.textStyle;
+    if (this.level === 0) {
+      margin ?? (margin = {
+        bottom: 5 * millimeter
+      });
+      padding ?? (padding = {
+        bottom: millimeter
+      });
+      decoration ?? (decoration = new BoxDecoration({
+        border: new Border({
+          bottom: new BorderSide
+        })
+      }));
+      style ?? (style = context.theme.header0);
+    } else if (this.level === 1) {
+      margin ?? (margin = {
+        top: 3 * millimeter,
+        bottom: 5 * millimeter
+      });
+      decoration ?? (decoration = new BoxDecoration({
+        border: new Border({
+          bottom: new BorderSide({
+            width: .2
+          })
+        })
+      }));
+      style ?? (style = context.theme.header1);
+    } else {
+      margin ?? (margin = {
+        top: 2 * millimeter,
+        bottom: 4 * millimeter
+      });
+      style ?? (style = [ context.theme.header0, context.theme.header1, context.theme.header2, context.theme.header3, context.theme.header4, context.theme.header5 ][this.level] ?? context.theme.header5);
+    }
+    return new Container({
+      alignment: "topLeft",
+      margin: margin ?? 0,
+      padding: padding ?? 0,
+      decoration,
+      child: this.child ?? new Text(this.text ?? "", {
+        style
+      })
+    });
+  }
+  paint(context, box) {
+    if (this.title !== null) {
+      context.document.registerOutline({
+        title: this.title,
+        level: this.level,
+        pageNumber: context.pageNumber,
+        y: context.pageFormat.height - box.y,
+        color: this.outlineColor,
+        style: this.outlineStyle
+      });
+    }
+    super.paint(context, box);
+  }
+}
+
+class Paragraph extends StatelessWidget {
+  constructor({text = "", textAlign = "justify", style = null, margin = {
+    bottom: 5 * PageUnit.mm
+  }, padding = 0} = {}) {
+    super();
+    this.text = text ?? "";
+    this.textAlign = textAlign;
+    this.style = style;
+    this.margin = margin;
+    this.padding = padding;
+  }
+  build(context) {
+    return new Container({
+      margin: this.margin,
+      padding: this.padding,
+      child: new Text(this.text, {
+        textAlign: this.textAlign,
+        style: this.style ?? context.theme.paragraphStyle,
+        overflow: "span"
+      })
+    });
+  }
+}
+
+class Bullet extends StatelessWidget {
+  constructor({text = null, textAlign = "left", style = null, margin = {
+    bottom: 2 * PageUnit.mm
+  }, padding = 0, bulletMargin = {
+    top: 1.5 * PageUnit.mm,
+    left: 5 * PageUnit.mm,
+    right: 2 * PageUnit.mm
+  }, bulletSize = 2 * PageUnit.mm, bulletShape = "circle", bulletColor = "#000000"} = {}) {
+    super();
+    this.text = text;
+    this.textAlign = textAlign;
+    this.style = style;
+    this.margin = margin;
+    this.padding = padding;
+    this.bulletMargin = bulletMargin;
+    this.bulletSize = Number(bulletSize);
+    this.bulletShape = bulletShape;
+    this.bulletColor = normalizeColor(bulletColor);
+  }
+  build(context) {
+    return new Container({
+      margin: this.margin,
+      padding: this.padding,
+      child: new Row({
+        crossAxisAlignment: "start",
+        children: [ new Container({
+          width: this.bulletSize,
+          height: this.bulletSize,
+          margin: this.bulletMargin,
+          decoration: new BoxDecoration({
+            color: this.bulletColor,
+            shape: this.bulletShape
+          })
+        }), new Expanded({
+          child: this.text === null ? new SizedBox : new Text(this.text, {
+            textAlign: this.textAlign,
+            style: context.theme.bulletStyle.merge(this.style)
+          })
+        }) ]
+      })
+    });
+  }
+}
+
+class TableOfContent extends StatelessWidget {
+  constructor({indent = 10, gap = 8, textStyle = null} = {}) {
+    super();
+    this.indent = Number(indent);
+    this.gap = Number(gap);
+    this.textStyle = textStyle;
+  }
+  build(context) {
+    context.document.requestOutlineRerender();
+    const rows = context.document.outlines.map(entry => new Padding({
+      padding: {
+        bottom: 2
+      },
+      child: new Row({
+        children: [ new SizedBox({
+          width: this.indent * entry.level
+        }), new Text(entry.title, {
+          style: this.textStyle ?? undefined
+        }), new SizedBox({
+          width: this.gap
+        }), new Expanded({
+          child: new Divider({
+            height: 4,
+            thickness: .2
+          })
+        }), new SizedBox({
+          width: this.gap
+        }), new Text(String(entry.page), {
+          style: this.textStyle ?? undefined
+        }) ]
+      })
+    }));
+    return new Column({
+      crossAxisAlignment: "start",
+      mainAxisSize: "min",
+      children: rows
+    });
+  }
+}
+
 function legacyRef(xref, free = false) {
   const offset = String(xref.offset).padStart(10, "0");
   const gen = String(xref.gen).padStart(5, "0");
@@ -3462,10 +4634,16 @@ class PdfXrefTable {
 class PdfCatalog extends PdfObject {
   constructor(document, pageList, objser) {
     super(document, new PdfDict([ [ "/Type", new PdfName("/Catalog") ] ]), objser);
+    this.names = null;
+    this.outline = null;
+    this.showOutlines = false;
     this.pageList = pageList;
   }
   prepare() {
     this.params.set("/Pages", this.pageList.ref());
+    if (this.names !== null) this.params.set("/Names", this.names.ref());
+    if (this.outline !== null) this.params.set("/Outlines", this.outline.ref());
+    if (this.showOutlines) this.params.set("/PageMode", new PdfName("/UseOutlines"));
   }
 }
 
@@ -3564,6 +4742,90 @@ class PdfPageList extends PdfObject {
   }
 }
 
+class PdfNull extends PdfDataType {
+  output(s) {
+    s.putString("null");
+  }
+}
+
+class PdfNames extends PdfObject {
+  constructor(document) {
+    super(document, new PdfDict);
+    this.destinations = [];
+  }
+  addDestination(name, page, {x = null, y = null, zoom = null} = {}) {
+    this.destinations.push({
+      name,
+      page,
+      x,
+      y,
+      zoom
+    });
+  }
+  prepare() {
+    const sorted = [ ...this.destinations ].sort((a, b) => a.name.localeCompare(b.name));
+    const values = new PdfArray;
+    for (const destination of sorted) {
+      values.add(new PdfString(destination.name));
+      values.add(new PdfDict([ [ "/D", new PdfArray([ destination.page.ref(), new PdfName("/XYZ"), destination.x === null ? new PdfNull : new PdfNum(destination.x), destination.y === null ? new PdfNull : new PdfNum(destination.y), destination.zoom === null ? new PdfNull : new PdfNum(destination.zoom) ]) ] ]));
+    }
+    const destinations = new PdfDict;
+    if (sorted.length > 0) {
+      destinations.set("/Names", values);
+      destinations.set("/Limits", new PdfArray([ new PdfString(sorted[0].name), new PdfString(sorted[sorted.length - 1].name) ]));
+    }
+    this.params.set("/Dests", destinations);
+  }
+}
+
+const STYLE_NUMBER = Object.freeze({
+  normal: 0,
+  italic: 1,
+  bold: 2,
+  italicBold: 3
+});
+
+class PdfOutline extends PdfObject {
+  constructor(document, {title = null, anchor = null, color = null, style = "normal"} = {}) {
+    super(document, new PdfDict);
+    this.children = [];
+    this.parent = null;
+    this.title = title;
+    this.anchor = anchor;
+    this.color = color;
+    this.style = style;
+  }
+  add(child) {
+    child.parent = this;
+    this.children.push(child);
+  }
+  descendantCount() {
+    return this.children.reduce((count, child) => count + 1 + child.descendantCount(), 0);
+  }
+  prepare() {
+    if (this.parent !== null) {
+      this.params.set("/Title", new PdfString(this.title ?? ""));
+      if (this.color !== null) this.params.set("/C", PdfArray.fromNum(this.color));
+      if (this.style !== "normal") this.params.set("/F", new PdfNum(STYLE_NUMBER[this.style]));
+      if (this.anchor !== null) this.params.set("/Dest", new PdfString(this.anchor));
+      this.params.set("/Parent", this.parent.ref());
+      const index = this.parent.children.indexOf(this);
+      if (index > 0) this.params.set("/Prev", this.parent.children[index - 1].ref());
+      if (index + 1 < this.parent.children.length) {
+        this.params.set("/Next", this.parent.children[index + 1].ref());
+      }
+      const descendants = this.descendantCount();
+      if (descendants > 0) this.params.set("/Count", new PdfNum(-descendants));
+    } else {
+      this.params.set("/Count", new PdfNum(this.children.length));
+    }
+    if (this.children.length > 0) {
+      this.params.set("/First", this.children[0].ref());
+      this.params.set("/Last", this.children[this.children.length - 1].ref());
+    }
+  }
+}
+
 class PdfDocument {
   constructor(metadata) {
     this.serial = 0;
@@ -3611,6 +4873,36 @@ class PdfDocument {
     page.contents.push(stream);
     return page;
   }
+  addNavigation(outlines, pageMode) {
+    if (outlines.length === 0) {
+      this.catalog.showOutlines = pageMode === "outlines";
+      return;
+    }
+    const names = new PdfNames(this);
+    const root = new PdfOutline(this);
+    const levels = [ root ];
+    for (const entry of outlines) {
+      const page = this.pageList.pages[entry.page - 1];
+      if (page === undefined) continue;
+      names.addDestination(entry.anchor, page, {
+        y: entry.y
+      });
+      const node = new PdfOutline(this, {
+        title: entry.title,
+        anchor: entry.anchor,
+        color: entry.color ?? null,
+        style: entry.style ?? "normal"
+      });
+      const parentIndex = Math.min(entry.level, levels.length - 1);
+      const parent = levels[parentIndex] ?? root;
+      parent.add(node);
+      levels.length = parentIndex + 1;
+      levels.push(node);
+    }
+    this.catalog.names = names;
+    this.catalog.outline = root;
+    this.catalog.showOutlines = pageMode === "outlines";
+  }
   save() {
     for (const object of this.objects) {
       object.prepare();
@@ -3623,99 +4915,13 @@ class PdfDocument {
   }
 }
 
-function serializePdf(pages, metadata) {
+function serializePdf(pages, metadata, outlines = [], pageMode = "none") {
   const document = new PdfDocument(metadata);
   for (const page of pages) {
     document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns);
   }
+  document.addNavigation(outlines, pageMode);
   return document.save();
-}
-
-const TYPE1_FACES = Object.freeze({
-  courier: PdfType1Font.courier,
-  courierBold: PdfType1Font.courierBold,
-  courierBoldOblique: PdfType1Font.courierBoldOblique,
-  courierOblique: PdfType1Font.courierOblique,
-  helvetica: PdfType1Font.helvetica,
-  helveticaBold: PdfType1Font.helveticaBold,
-  helveticaBoldOblique: PdfType1Font.helveticaBoldOblique,
-  helveticaOblique: PdfType1Font.helveticaOblique,
-  times: PdfType1Font.times,
-  timesBold: PdfType1Font.timesBold,
-  timesBoldItalic: PdfType1Font.timesBoldItalic,
-  timesItalic: PdfType1Font.timesItalic,
-  symbol: PdfType1Font.symbol,
-  zapfDingbats: PdfType1Font.zapfDingbats
-});
-
-class Font {
-  constructor(create) {
-    this.create = create;
-  }
-  static type1(face) {
-    const factory = TYPE1_FACES[face];
-    if (factory === undefined) {
-      throw new TypeError(`\`${face}\` is not one of the 14 standard Type1 fonts`);
-    }
-    return new Font(factory);
-  }
-  static courier() {
-    return Font.type1("courier");
-  }
-  static courierBold() {
-    return Font.type1("courierBold");
-  }
-  static courierBoldOblique() {
-    return Font.type1("courierBoldOblique");
-  }
-  static courierOblique() {
-    return Font.type1("courierOblique");
-  }
-  static helvetica() {
-    return Font.type1("helvetica");
-  }
-  static helveticaBold() {
-    return Font.type1("helveticaBold");
-  }
-  static helveticaBoldOblique() {
-    return Font.type1("helveticaBoldOblique");
-  }
-  static helveticaOblique() {
-    return Font.type1("helveticaOblique");
-  }
-  static times() {
-    return Font.type1("times");
-  }
-  static timesBold() {
-    return Font.type1("timesBold");
-  }
-  static timesBoldItalic() {
-    return Font.type1("timesBoldItalic");
-  }
-  static timesItalic() {
-    return Font.type1("timesItalic");
-  }
-  static symbol() {
-    return Font.type1("symbol");
-  }
-  static zapfDingbats() {
-    return Font.type1("zapfDingbats");
-  }
-  static ttf(data, options) {
-    if (!(data instanceof Uint8Array)) {
-      throw new TypeError("Font.ttf expects the font file as a Uint8Array");
-    }
-    return new Font(() => new PdfTtfFont(data, options));
-  }
-  static fromPdfFont(font) {
-    return new Font(() => font);
-  }
-  build() {
-    return this.create();
-  }
-  getFont(context) {
-    return context.document.resolveFont(this);
-  }
 }
 
 const LINE_CAP_OPERAND = Object.freeze({
@@ -4322,121 +5528,6 @@ class Page {
   }
 }
 
-const DEFAULT_FONT_SIZE = 12;
-
-const DEFAULT_LINE_HEIGHT = 1.2;
-
-class TextStyle {
-  constructor({inherit = true, color = null, font = null, fontNormal = null, fontBold = null, fontItalic = null, fontBoldItalic = null, fontFallback = null, fontSize = null, fontWeight = null, fontStyle = null, letterSpacing = null, wordSpacing = null, lineSpacing = null, height = null, background = null, decoration = null, decorationColor = null, decorationStyle = null, decorationThickness = null} = {}) {
-    const isItalic = fontStyle === "italic";
-    const isBold = fontWeight === "bold";
-    this.inherit = inherit;
-    this.color = color == null ? null : normalizeColor(color);
-    this.fontNormal = fontNormal ?? (!isItalic && !isBold ? font : null);
-    this.fontBold = fontBold ?? (!isItalic && isBold ? font : null);
-    this.fontItalic = fontItalic ?? (isItalic && !isBold ? font : null);
-    this.fontBoldItalic = fontBoldItalic ?? (isItalic && isBold ? font : null);
-    this.fontFallback = fontFallback ?? [];
-    this.fontSize = fontSize;
-    this.fontWeight = fontWeight;
-    this.fontStyle = fontStyle;
-    this.letterSpacing = letterSpacing;
-    this.wordSpacing = wordSpacing;
-    this.lineSpacing = lineSpacing;
-    this.height = height;
-    this.background = normalizeBoxDecoration(background);
-    this.decoration = decoration;
-    this.decorationColor = decorationColor == null ? null : normalizeColor(decorationColor);
-    this.decorationStyle = decorationStyle;
-    this.decorationThickness = decorationThickness;
-  }
-  static defaultStyle() {
-    return new TextStyle({
-      inherit: false,
-      color: "#000000",
-      fontNormal: Font.helvetica(),
-      fontBold: Font.helveticaBold(),
-      fontItalic: Font.helveticaOblique(),
-      fontBoldItalic: Font.helveticaBoldOblique(),
-      fontSize: DEFAULT_FONT_SIZE,
-      fontWeight: "normal",
-      fontStyle: "normal",
-      letterSpacing: 0,
-      wordSpacing: 0,
-      lineSpacing: 0,
-      height: DEFAULT_LINE_HEIGHT,
-      decoration: "none",
-      decorationStyle: "solid",
-      decorationThickness: 1
-    });
-  }
-  get font() {
-    if (this.fontWeight !== "bold") {
-      if (this.fontStyle !== "italic") {
-        return this.fontNormal ?? this.fontBold ?? this.fontItalic ?? this.fontBoldItalic;
-      }
-      return this.fontItalic ?? this.fontNormal ?? this.fontBold ?? this.fontBoldItalic;
-    }
-    if (this.fontStyle !== "italic") {
-      return this.fontBold ?? this.fontNormal ?? this.fontItalic ?? this.fontBoldItalic;
-    }
-    return this.fontBoldItalic ?? this.fontBold ?? this.fontItalic ?? this.fontNormal;
-  }
-  copyWith(options = {}) {
-    return new TextStyle({
-      inherit: this.inherit,
-      color: options.color ?? this.color,
-      font: options.font ?? this.font,
-      fontNormal: options.fontNormal ?? this.fontNormal,
-      fontBold: options.fontBold ?? this.fontBold,
-      fontItalic: options.fontItalic ?? this.fontItalic,
-      fontBoldItalic: options.fontBoldItalic ?? this.fontBoldItalic,
-      fontFallback: options.fontFallback ?? this.fontFallback,
-      fontSize: options.fontSize ?? this.fontSize,
-      fontWeight: options.fontWeight ?? this.fontWeight,
-      fontStyle: options.fontStyle ?? this.fontStyle,
-      letterSpacing: options.letterSpacing ?? this.letterSpacing,
-      wordSpacing: options.wordSpacing ?? this.wordSpacing,
-      lineSpacing: options.lineSpacing ?? this.lineSpacing,
-      height: options.height ?? this.height,
-      background: options.background ?? this.background,
-      decoration: options.decoration ?? this.decoration,
-      decorationColor: options.decorationColor ?? this.decorationColor,
-      decorationStyle: options.decorationStyle ?? this.decorationStyle,
-      decorationThickness: options.decorationThickness ?? this.decorationThickness
-    });
-  }
-  merge(other) {
-    if (other == null) {
-      return this;
-    }
-    if (!other.inherit) {
-      return other;
-    }
-    return this.copyWith({
-      color: other.color,
-      font: other.font,
-      fontNormal: other.fontNormal,
-      fontBold: other.fontBold,
-      fontItalic: other.fontItalic,
-      fontBoldItalic: other.fontBoldItalic,
-      fontFallback: [ ...other.fontFallback, ...this.fontFallback ],
-      fontSize: other.fontSize,
-      fontWeight: other.fontWeight,
-      fontStyle: other.fontStyle,
-      letterSpacing: other.letterSpacing,
-      wordSpacing: other.wordSpacing,
-      lineSpacing: other.lineSpacing,
-      height: other.height,
-      background: other.background,
-      decoration: other.decoration,
-      decorationColor: other.decorationColor,
-      decorationStyle: other.decorationStyle,
-      decorationThickness: other.decorationThickness
-    });
-  }
-}
-
 class ThemeData {
   constructor(fields) {
     this.defaultTextStyle = fields.defaultTextStyle;
@@ -4597,8 +5688,13 @@ class DefaultTextStyle extends InheritedTheme {
 }
 
 class Document {
-  constructor({title = null, author = null, subject = null, creator = "js_pdf", producer = "js_pdf", theme = undefined, font = undefined} = {}) {
+  constructor({title = null, author = null, subject = null, creator = "js_pdf", producer = "js_pdf", theme = undefined, font = undefined, pageMode = "none"} = {}) {
     this.sections = [];
+    this.outlineEntries = [];
+    this.outlineReplay = false;
+    this.outlineCursor = 0;
+    this.outlineRerenderRequested = false;
+    this.renderPageOffset = 0;
     this.fonts = new Map;
     this.fallbackFont = Font.helvetica();
     this.metadata = {
@@ -4611,6 +5707,7 @@ class Document {
     this.theme = theme ?? (font === undefined ? ThemeData.base() : ThemeData.withFont({
       base: Font.fromPdfFont(font)
     }));
+    this.pageMode = pageMode;
   }
   resolveFont(declaration) {
     const existing = this.fonts.get(declaration);
@@ -4631,304 +5728,69 @@ class Document {
     this.sections.push(page);
     return this;
   }
-  save() {
-    const documentContext = {
-      document: this
-    };
+  get outlines() {
+    return this.outlineEntries;
+  }
+  requestOutlineRerender() {
+    this.outlineRerenderRequested = true;
+  }
+  registerOutline({title, level, pageNumber, y, color = null, style = "normal"}) {
+    const page = this.renderPageOffset + pageNumber;
+    if (this.outlineReplay) {
+      const existing = this.outlineEntries[this.outlineCursor];
+      if (existing !== undefined) {
+        existing.page = page;
+        existing.y = y;
+      } else {
+        this.outlineEntries.push({
+          title,
+          level,
+          anchor: `outline-${this.outlineCursor + 1}`,
+          page,
+          y,
+          color,
+          style
+        });
+      }
+      this.outlineCursor++;
+      return;
+    }
+    this.outlineEntries.push({
+      title,
+      level,
+      anchor: `outline-${this.outlineEntries.length + 1}`,
+      page,
+      y,
+      color,
+      style
+    });
+  }
+  renderSections(replay) {
+    this.outlineReplay = replay;
+    this.outlineCursor = 0;
     const pages = [];
     for (const section of this.sections) {
-      pages.push(...section.render(documentContext));
+      this.renderPageOffset = pages.length;
+      pages.push(...section.render({
+        document: this
+      }));
+    }
+    return pages;
+  }
+  save() {
+    this.outlineEntries.length = 0;
+    this.outlineRerenderRequested = false;
+    let pages = this.renderSections(false);
+    if (this.outlineRerenderRequested) {
+      pages = this.renderSections(true);
     }
     if (pages.length === 0) {
       throw new Error("Document must contain at least one page");
     }
-    return serializePdf(pages, this.metadata);
-  }
-}
-
-function finiteNonNegative$1(value, name) {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new RangeError(`${name} must be a finite non-negative number`);
-  }
-  return value;
-}
-
-function childMain(box, direction) {
-  return direction === "horizontal" ? box.width : box.height;
-}
-
-function childCross(box, direction) {
-  return direction === "horizontal" ? box.height : box.width;
-}
-
-function axisConstraints(direction, minMain, maxMain, minCross, maxCross) {
-  return direction === "horizontal" ? new BoxConstraints({
-    minWidth: minMain,
-    maxWidth: maxMain,
-    minHeight: minCross,
-    maxHeight: maxCross
-  }) : new BoxConstraints({
-    minWidth: minCross,
-    maxWidth: maxCross,
-    minHeight: minMain,
-    maxHeight: maxMain
-  });
-}
-
-class EmptyFlexChild extends Widget {
-  layout(_context, constraints) {
-    const size = BoxConstraints.from(constraints).smallest;
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: null
-    };
-  }
-  paint() {}
-}
-
-class Flexible extends Widget {
-  constructor({flex = 1, fit = "loose", child}) {
-    super();
-    this.flex = finiteNonNegative$1(Number(flex), "flex");
-    if (fit !== "tight" && fit !== "loose") {
-      throw new TypeError(`Unknown FlexFit: ${fit}`);
-    }
-    this.fit = fit;
-    this.child = child;
-  }
-  layout(context, constraints) {
-    const childBox = this.child.layout(context, constraints);
-    return {
-      widget: this,
-      width: childBox.width,
-      height: childBox.height,
-      data: {
-        childBox
-      }
-    };
-  }
-  paint(context, box) {
-    const {childBox} = box.data;
-    childBox.widget.paint(context, {
-      ...childBox,
-      x: box.x,
-      y: box.y
-    });
-  }
-}
-
-class Expanded extends Flexible {
-  constructor({flex = 1, fit = "tight", child}) {
-    super({
-      flex,
-      fit,
-      child
-    });
-  }
-}
-
-class Spacer extends Expanded {
-  constructor(options = 1) {
-    const flex = typeof options === "number" ? options : options.flex ?? 1;
-    super({
-      flex,
-      child: new EmptyFlexChild
-    });
-  }
-}
-
-class Flex extends Widget {
-  constructor({direction, children = [], mainAxisAlignment = "start", mainAxisSize = "max", crossAxisAlignment = "center", verticalDirection = "down", gap = 0, margin = 0, widths = null}) {
-    super();
-    if (direction !== "horizontal" && direction !== "vertical") {
-      throw new TypeError(`Unknown Axis: ${direction}`);
-    }
-    if (![ "start", "end", "center", "spaceBetween", "spaceAround", "spaceEvenly" ].includes(mainAxisAlignment)) {
-      throw new TypeError(`Unknown MainAxisAlignment: ${mainAxisAlignment}`);
-    }
-    if (mainAxisSize !== "min" && mainAxisSize !== "max") {
-      throw new TypeError(`Unknown MainAxisSize: ${mainAxisSize}`);
-    }
-    if (![ "start", "end", "center", "stretch" ].includes(crossAxisAlignment)) {
-      throw new TypeError(`Unknown CrossAxisAlignment: ${crossAxisAlignment}`);
-    }
-    if (verticalDirection !== "up" && verticalDirection !== "down") {
-      throw new TypeError(`Unknown VerticalDirection: ${verticalDirection}`);
-    }
-    if (widths !== null && direction !== "horizontal") {
-      throw new TypeError("Flex.widths is only valid on a horizontal flex");
-    }
-    this.direction = direction;
-    this.children = children;
-    this.mainAxisAlignment = mainAxisAlignment;
-    this.mainAxisSize = mainAxisSize;
-    this.crossAxisAlignment = crossAxisAlignment;
-    this.verticalDirection = verticalDirection;
-    this.gap = finiteNonNegative$1(Number(gap), "gap");
-    this.margin = normalizeInsets(margin);
-    this.widths = widths;
-  }
-  crossConstraints(constraints) {
-    const maximum = this.direction === "horizontal" ? constraints.maxHeight : constraints.maxWidth;
-    if (this.crossAxisAlignment === "stretch" && Number.isFinite(maximum)) {
-      return [ maximum, maximum ];
-    }
-    return [ 0, maximum ];
-  }
-  layout(context, incoming) {
-    const outer = BoxConstraints.from(incoming);
-    const constraints = outer.deflate(this.margin);
-    const horizontal = this.direction === "horizontal";
-    const maxMain = horizontal ? constraints.maxWidth : constraints.maxHeight;
-    const minMain = horizontal ? constraints.minWidth : constraints.minHeight;
-    const maxCross = horizontal ? constraints.maxHeight : constraints.maxWidth;
-    const minCross = horizontal ? constraints.minHeight : constraints.minWidth;
-    const canFlex = Number.isFinite(maxMain);
-    const baseGap = this.gap * Math.max(0, this.children.length - 1);
-    const measured = new Array(this.children.length);
-    let allocated = 0;
-    let crossSize = 0;
-    const measure = (index, childConstraints) => {
-      const box = this.children[index].layout(context, childConstraints);
-      measured[index] = box;
-      allocated += childMain(box, this.direction);
-      crossSize = Math.max(crossSize, childCross(box, this.direction));
-      return box;
-    };
-    if (this.widths !== null) {
-      if (!canFlex) throw new RangeError("Row.widths requires a bounded width");
-      const available = Math.max(0, maxMain - baseGap);
-      const weights = this.children.map((_, index) => finiteNonNegative$1(Number(this.widths?.[index] ?? 1), `widths[${index}]`));
-      const total = weights.reduce((sum, value) => sum + value, 0) || 1;
-      const [childMinCross, childMaxCross] = this.crossConstraints(constraints);
-      let used = 0;
-      for (let index = 0; index < this.children.length; index++) {
-        const extent = index === this.children.length - 1 ? available - used : available * weights[index] / total;
-        used += extent;
-        measure(index, axisConstraints(this.direction, extent, extent, childMinCross, childMaxCross));
-      }
-    } else {
-      let totalFlex = 0;
-      const flexible = [];
-      const [childMinCross, childMaxCross] = this.crossConstraints(constraints);
-      for (let index = 0; index < this.children.length; index++) {
-        const child = this.children[index];
-        if (child instanceof Flexible && child.flex > 0) {
-          if (!canFlex && (this.mainAxisSize === "max" || child.fit === "tight")) {
-            throw new RangeError("Flex children require a bounded main-axis constraint");
-          }
-          totalFlex += child.flex;
-          flexible.push(index);
-        } else {
-          measure(index, axisConstraints(this.direction, 0, Infinity, childMinCross, childMaxCross));
-        }
-      }
-      const freeSpace = Math.max(0, (canFlex ? maxMain : 0) - allocated - baseGap);
-      let allocatedFlex = 0;
-      for (let flexIndex = 0; flexIndex < flexible.length; flexIndex++) {
-        const index = flexible[flexIndex];
-        const child = this.children[index];
-        const extent = canFlex ? flexIndex === flexible.length - 1 ? freeSpace - allocatedFlex : freeSpace * child.flex / totalFlex : Infinity;
-        allocatedFlex += extent;
-        measure(index, axisConstraints(this.direction, child.fit === "tight" ? extent : 0, extent, childMinCross, childMaxCross));
-      }
-    }
-    allocated += baseGap;
-    const idealMain = canFlex && this.mainAxisSize === "max" ? maxMain : allocated;
-    const actualMain = Math.min(maxMain, Math.max(minMain, idealMain));
-    const actualCross = Math.min(maxCross, Math.max(minCross, crossSize));
-    const remaining = Math.max(0, actualMain - allocated);
-    let leading = 0;
-    let between = this.gap;
-    const count = this.children.length;
-    switch (this.mainAxisAlignment) {
-     case "end":
-      leading = remaining;
-      break;
-
-     case "center":
-      leading = remaining / 2;
-      break;
-
-     case "spaceBetween":
-      between += count > 1 ? remaining / (count - 1) : 0;
-      break;
-
-     case "spaceAround":
-      {
-        const extra = count > 0 ? remaining / count : 0;
-        leading = extra / 2;
-        between += extra;
-        break;
-      }
-
-     case "spaceEvenly":
-      {
-        const extra = count > 0 ? remaining / (count + 1) : 0;
-        leading = extra;
-        between += extra;
-        break;
-      }
-    }
-    const reverse = this.direction === "vertical" && this.verticalDirection === "up";
-    let cursor = reverse ? actualMain - leading : leading;
-    const children = [];
-    for (let index = 0; index < measured.length; index++) {
-      const box = measured[index];
-      const main = childMain(box, this.direction);
-      const cross = childCross(box, this.direction);
-      const crossPosition = this.crossAxisAlignment === "end" ? actualCross - cross : this.crossAxisAlignment === "center" ? (actualCross - cross) / 2 : 0;
-      const mainPosition = reverse ? cursor - main : cursor;
-      children.push({
-        box,
-        dx: this.margin.left + (horizontal ? mainPosition : crossPosition),
-        dy: this.margin.top + (horizontal ? crossPosition : mainPosition)
-      });
-      cursor += reverse ? -(main + between) : main + between;
-    }
-    const innerWidth = horizontal ? actualMain : actualCross;
-    const innerHeight = horizontal ? actualCross : actualMain;
-    const size = outer.constrain({
-      width: innerWidth + this.margin.left + this.margin.right,
-      height: innerHeight + this.margin.top + this.margin.bottom
-    });
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: {
-        children
-      }
-    };
-  }
-  paint(context, box) {
-    for (const child of box.data.children) {
-      child.box.widget.paint(context, {
-        ...child.box,
-        x: box.x + child.dx,
-        y: box.y + child.dy
-      });
-    }
-  }
-}
-
-class Row extends Flex {
-  constructor(options = {}) {
-    super({
-      ...options,
-      direction: "horizontal"
-    });
-  }
-}
-
-class Column extends Flex {
-  constructor(options = {}) {
-    super({
-      ...options,
-      direction: "vertical"
-    });
+    const outlines = this.outlineEntries.map(entry => ({
+      ...entry
+    }));
+    return serializePdf(pages, this.metadata, outlines, this.pageMode);
   }
 }
 
@@ -8400,500 +9262,6 @@ class Table extends SpanningWidget {
   }
 }
 
-class InlineSpan {
-  constructor({style = null, baseline = 0, annotation = null} = {}) {
-    this.style = style;
-    this.baseline = assertFiniteNumber(Number(baseline), "baseline");
-    this.annotation = annotation;
-  }
-  toPlainText() {
-    let value = "";
-    this.visitChildren(span => {
-      if (span instanceof TextSpan && span.text !== null) value += span.text;
-      return true;
-    }, TextStyle.defaultStyle());
-    return value;
-  }
-}
-
-class TextSpan extends InlineSpan {
-  constructor({text = null, children = null, ...options} = {}) {
-    super(options);
-    this.text = text === null ? null : String(text);
-    this.children = children === null ? [] : [ ...children ];
-  }
-  copyWith(options = {}) {
-    return new TextSpan({
-      text: options.text ?? this.text,
-      children: options.children ?? this.children,
-      style: options.style ?? this.style,
-      baseline: options.baseline ?? this.baseline,
-      annotation: options.annotation ?? this.annotation
-    });
-  }
-  visitChildren(visitor, parentStyle, annotation = null) {
-    const style = parentStyle.merge(this.style);
-    const effectiveAnnotation = this.annotation ?? annotation;
-    if (this.text !== null && !visitor(this, style, effectiveAnnotation)) return false;
-    for (const child of this.children) {
-      if (!child.visitChildren(visitor, style, effectiveAnnotation)) return false;
-    }
-    return true;
-  }
-}
-
-class WidgetSpan extends InlineSpan {
-  constructor({child, ...options}) {
-    super(options);
-    this.child = child;
-  }
-  copyWith(options = {}) {
-    return new WidgetSpan({
-      child: this.child,
-      style: options.style ?? this.style,
-      baseline: options.baseline ?? this.baseline,
-      annotation: options.annotation ?? this.annotation
-    });
-  }
-  visitChildren(visitor, parentStyle, annotation = null) {
-    return visitor(this, parentStyle.merge(this.style), this.annotation ?? annotation);
-  }
-}
-
-function countSpaces(value) {
-  let count = 0;
-  for (const character of value) if (/\s/u.test(character)) count++;
-  return count;
-}
-
-function textWidth(style, value) {
-  return style.font.stringMetrics(value, style.fontSize, style.letterSpacing).advanceWidth + countSpaces(value) * style.wordSpacing;
-}
-
-function supportsRune(font, codePoint) {
-  const candidate = font;
-  return candidate.isRuneSupported?.(codePoint) ?? codePoint <= 255;
-}
-
-function decorationNames(style) {
-  const value = style.decoration ?? "none";
-  const values = Array.isArray(value) ? value : [ value ];
-  return values.filter(name => name !== "none");
-}
-
-function resolveStyle(context, style, baseline, scale, directFont = null) {
-  const fontSize = (style.fontSize ?? DEFAULT_FONT_SIZE) * scale;
-  const declaredFont = style.font;
-  const font = directFont ?? (declaredFont === null ? context.document.font : declaredFont.getFont(context));
-  return {
-    font,
-    fontSize,
-    color: style.color ?? [ 0, 0, 0 ],
-    lineAdvance: fontSize * (style.height ?? DEFAULT_LINE_HEIGHT) + (style.lineSpacing ?? 0) * scale,
-    letterSpacing: (style.letterSpacing ?? 0) * scale,
-    wordSpacing: (style.wordSpacing ?? 0) * scale,
-    baseline: baseline * scale,
-    background: style.background,
-    decorations: decorationNames(style),
-    decorationColor: style.decorationColor ?? style.color ?? [ 0, 0, 0 ],
-    decorationStyle: style.decorationStyle ?? "solid",
-    decorationThickness: style.decorationThickness ?? 1
-  };
-}
-
-function splitLongWord(value, maxWidth, style) {
-  const parts = [];
-  let current = "";
-  for (const character of value) {
-    const candidate = current + character;
-    if (current !== "" && textWidth(style, candidate) > maxWidth) {
-      parts.push(current);
-      current = character;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current !== "") parts.push(current);
-  return parts.length === 0 ? [ "" ] : parts;
-}
-
-function trimTrailingGaps(line) {
-  while (line.tokens[line.tokens.length - 1]?.kind === "gap") {
-    line.width -= line.tokens.pop()?.width ?? 0;
-  }
-}
-
-function positionLine(line, y, contentWidth, align, direction) {
-  let ascent = line.emptyStyle.fontSize + Math.max(0, line.emptyStyle.baseline);
-  let descent = Math.max(0, line.emptyStyle.lineAdvance - line.emptyStyle.fontSize - line.emptyStyle.baseline);
-  let minimumHeight = line.emptyStyle.lineAdvance;
-  for (const token of line.tokens) {
-    minimumHeight = Math.max(minimumHeight, token.style.lineAdvance);
-    if (token.kind === "widget") {
-      ascent = Math.max(ascent, token.height + token.style.baseline);
-      descent = Math.max(descent, -token.style.baseline);
-    } else {
-      ascent = Math.max(ascent, token.style.fontSize + token.style.baseline);
-      descent = Math.max(descent, token.style.lineAdvance - token.style.fontSize - token.style.baseline);
-    }
-  }
-  const height = Math.max(minimumHeight, ascent + descent);
-  const effectiveAlign = align === "start" ? direction === "rtl" ? "right" : "left" : align === "end" ? direction === "rtl" ? "left" : "right" : align;
-  let offset = 0;
-  if (effectiveAlign === "right") offset = contentWidth - line.width;
-  if (effectiveAlign === "center") offset = (contentWidth - line.width) / 2;
-  const gapCount = line.wrapped && effectiveAlign === "justify" ? line.tokens.filter(token => token.kind === "gap").length : 0;
-  const extraPerGap = gapCount === 0 ? 0 : Math.max(0, contentWidth - line.width) / gapCount;
-  const paintTokens = [];
-  for (const token of line.tokens) {
-    const previous = paintTokens[paintTokens.length - 1];
-    if (extraPerGap === 0 && token.kind !== "widget" && previous !== undefined && previous.kind !== "widget" && previous.style === token.style) {
-      paintTokens[paintTokens.length - 1] = {
-        kind: "text",
-        text: previous.text + token.text,
-        width: previous.width + token.width,
-        style: token.style
-      };
-    } else {
-      paintTokens.push(token);
-    }
-  }
-  let x = offset;
-  let accumulatedExtra = 0;
-  const runs = [];
-  for (const token of paintTokens) {
-    let runX = x + accumulatedExtra;
-    if (direction === "rtl") runX = contentWidth - runX - token.width;
-    const tokenBaseline = y + ascent - token.style.baseline;
-    const tokenY = token.kind === "widget" ? tokenBaseline - token.height : tokenBaseline - token.style.fontSize;
-    runs.push({
-      kind: token.kind,
-      text: token.kind === "widget" ? "" : token.text,
-      x: runX,
-      y: tokenY,
-      width: token.width,
-      height: token.kind === "widget" ? token.height : token.style.lineAdvance,
-      baseline: tokenBaseline,
-      style: token.style,
-      childBox: token.kind === "widget" ? token.childBox : null
-    });
-    x += token.width;
-    if (token.kind === "gap") accumulatedExtra += extraPerGap;
-  }
-  const usedWidth = extraPerGap === 0 ? line.width : contentWidth;
-  return {
-    runs,
-    y,
-    width: usedWidth,
-    height,
-    wrapped: line.wrapped
-  };
-}
-
-function rebaseLines(lines, top) {
-  return lines.map(line => ({
-    ...line,
-    y: line.y - top,
-    runs: line.runs.map(run => ({
-      ...run,
-      y: run.y - top,
-      baseline: run.baseline - top
-    }))
-  }));
-}
-
-class RichText extends SpanningWidget {
-  constructor({text, textAlign = null, textDirection = "ltr", softWrap = null, tightBounds = false, textScaleFactor = 1, maxLines = null, overflow = null, margin = 0}) {
-    super();
-    this.text = text;
-    this.textAlign = textAlign;
-    this.textDirection = textDirection;
-    this.softWrap = softWrap;
-    this.tightBounds = tightBounds;
-    this.textScaleFactor = assertFiniteNumber(Number(textScaleFactor), "textScaleFactor");
-    this.maxLines = maxLines;
-    this.overflow = overflow;
-    this.margin = normalizeInsets(margin);
-  }
-  initialSpanState() {
-    return {
-      lineIndex: 0
-    };
-  }
-  inputTokens(context, maxWidth) {
-    const result = [];
-    const scale = this.textScaleFactor;
-    this.text.visitChildren((span, textStyle) => {
-      const baseStyle = resolveStyle(context, textStyle, span.baseline, scale);
-      if (span instanceof WidgetSpan) {
-        const childBox = span.child.layout(context, new BoxConstraints({
-          maxWidth,
-          maxHeight: Infinity
-        }));
-        result.push({
-          kind: "widget",
-          width: childBox.width,
-          height: childBox.height,
-          style: baseStyle,
-          childBox
-        });
-        return true;
-      }
-      if (!(span instanceof TextSpan) || span.text === null) return true;
-      let group = "";
-      let groupFont = baseStyle.font;
-      const flush = () => {
-        if (group === "") return;
-        const style = groupFont === baseStyle.font ? baseStyle : {
-          ...baseStyle,
-          font: groupFont
-        };
-        for (const part of group.replace(/\r\n?/g, "\n").split(/(\n|[^\S\n]+|[^\s]+)/u)) {
-          if (part === "") continue;
-          if (part === "\n") result.push({
-            kind: "break",
-            style
-          }); else result.push({
-            kind: /^\s+$/u.test(part) ? "gap" : "text",
-            text: part,
-            width: textWidth(style, part),
-            style
-          });
-        }
-        group = "";
-      };
-      for (const character of span.text) {
-        const codePoint = character.codePointAt(0) ?? 0;
-        let font = baseStyle.font;
-        if (!supportsRune(font, codePoint)) {
-          for (const fallback of textStyle.fontFallback) {
-            const candidate = fallback.getFont(context);
-            if (supportsRune(candidate, codePoint)) {
-              font = candidate;
-              break;
-            }
-          }
-        }
-        if (font !== groupFont && group !== "") flush();
-        groupFont = font;
-        group += character;
-      }
-      flush();
-      return true;
-    }, context.theme.defaultTextStyle);
-    return result;
-  }
-  allLines(context, contentWidth) {
-    const align = this.textAlign ?? context.theme.textAlign ?? "left";
-    const softWrap = this.softWrap ?? context.theme.softWrap;
-    const maxLines = this.maxLines ?? context.theme.maxLines;
-    const tokens = this.inputTokens(context, contentWidth);
-    const fallbackStyle = resolveStyle(context, context.theme.defaultTextStyle, 0, this.textScaleFactor);
-    const raw = [];
-    let current = {
-      tokens: [],
-      width: 0,
-      wrapped: false,
-      emptyStyle: fallbackStyle
-    };
-    const pushLine = wrapped => {
-      trimTrailingGaps(current);
-      current.wrapped = wrapped;
-      raw.push(current);
-      current = {
-        tokens: [],
-        width: 0,
-        wrapped: false,
-        emptyStyle: current.emptyStyle
-      };
-    };
-    for (const token of tokens) {
-      current.emptyStyle = token.style;
-      if (token.kind === "break") {
-        pushLine(false);
-        continue;
-      }
-      if (token.kind === "gap" && current.tokens.length === 0) continue;
-      if (softWrap && current.tokens.length > 0 && current.width + token.width > contentWidth + 1e-5) {
-        pushLine(true);
-        if (token.kind === "gap") continue;
-      }
-      if (token.kind === "text" && softWrap && token.width > contentWidth + 1e-5) {
-        const pieces = splitLongWord(token.text, contentWidth, token.style);
-        for (let index = 0; index < pieces.length; index++) {
-          const piece = pieces[index] ?? "";
-          const part = {
-            ...token,
-            text: piece,
-            width: textWidth(token.style, piece)
-          };
-          if (current.tokens.length > 0) pushLine(true);
-          current.tokens.push(part);
-          current.width = part.width;
-          if (index < pieces.length - 1) pushLine(true);
-        }
-        continue;
-      }
-      current.tokens.push(token);
-      current.width += token.width;
-    }
-    if (current.tokens.length > 0 || raw.length === 0 || tokens[tokens.length - 1]?.kind === "break") pushLine(false);
-    const limited = maxLines === null ? raw : raw.slice(0, Math.max(1, maxLines));
-    const targetWidth = limited.some(line => line.wrapped || align === "justify") ? contentWidth : Math.max(0, ...limited.map(line => line.width));
-    let y = 0;
-    const lines = [];
-    for (const line of limited) {
-      const positioned = positionLine(line, y, targetWidth, align, this.textDirection);
-      lines.push(positioned);
-      y += positioned.height;
-    }
-    return lines;
-  }
-  fragment(context, constraints, lineIndex, spanning) {
-    const parent = BoxConstraints.from(constraints);
-    const contentWidth = Math.max(1, parent.maxWidth - this.margin.left - this.margin.right);
-    const all = this.allLines(context, contentWidth);
-    const topMargin = lineIndex === 0 ? this.margin.top : 0;
-    const availableHeight = Math.max(0, parent.maxHeight - topMargin);
-    let end = lineIndex;
-    let height = 0;
-    while (end < all.length) {
-      const nextHeight = all[end]?.height ?? 0;
-      const finalBottom = end === all.length - 1 ? this.margin.bottom : 0;
-      if (spanning && height + nextHeight + finalBottom > availableHeight + 1e-5) break;
-      height += nextHeight;
-      end++;
-      if (!spanning && height > availableHeight + 1e-5) break;
-    }
-    if (!spanning) end = all.length;
-    const isFinal = end >= all.length;
-    const bottomMargin = isFinal ? this.margin.bottom : 0;
-    const lineTop = all[lineIndex]?.y ?? 0;
-    const selected = rebaseLines(all.slice(lineIndex, end), lineTop - topMargin);
-    const widest = Math.max(0, ...selected.map(line => line.width));
-    const naturalHeight = topMargin + selected.reduce((sum, line) => sum + line.height, 0) + bottomMargin;
-    const size = parent.constrain({
-      width: widest + this.margin.left + this.margin.right,
-      height: naturalHeight
-    });
-    const effectiveOverflow = this.overflow ?? context.theme.overflow;
-    return {
-      box: {
-        widget: this,
-        width: size.width,
-        height: size.height,
-        data: {
-          lines: selected,
-          contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
-          clip: effectiveOverflow === "clip" || naturalHeight > size.height + 1e-5
-        }
-      },
-      nextState: {
-        lineIndex: end
-      },
-      hasMore: end < all.length
-    };
-  }
-  layout(context, constraints) {
-    return this.fragment(context, constraints, 0, false).box;
-  }
-  layoutSpan(context, constraints, state) {
-    return this.fragment(context, constraints, state.lineIndex, true);
-  }
-  paint(context, box) {
-    const {canvas} = context;
-    if (box.data.clip) {
-      canvas.saveContext();
-      canvas.drawRect(box.x, canvas.pageHeight - box.y - box.height, box.width, box.height);
-      canvas.clipPath();
-    }
-    for (const line of box.data.lines) {
-      for (const run of line.runs) {
-        const x = box.x + this.margin.left + run.x;
-        const y = box.y + run.y;
-        if (run.style.background !== null && run.width > 0) {
-          run.style.background.paint(context, x, y, run.width, run.height, "all", this.textDirection);
-        }
-      }
-    }
-    for (const line of box.data.lines) {
-      for (const run of line.runs) {
-        const x = box.x + this.margin.left + run.x;
-        if (run.kind === "text") {
-          canvas.text(run.text, x, box.y + run.baseline, {
-            font: run.style.font,
-            fontSize: run.style.fontSize,
-            color: run.style.color,
-            letterSpacing: run.style.letterSpacing,
-            wordSpacing: run.style.wordSpacing
-          });
-        } else if (run.kind === "widget" && run.childBox !== null) {
-          run.childBox.widget.paint(context, {
-            ...run.childBox,
-            x,
-            y: box.y + run.y
-          });
-        }
-      }
-    }
-    for (const line of box.data.lines) {
-      for (const run of line.runs) {
-        if (run.style.decorations.length === 0 || run.width <= 0) continue;
-        const x = box.x + this.margin.left + run.x;
-        const width = Math.max(.25, run.style.fontSize * .05 * run.style.decorationThickness);
-        for (const decoration of run.style.decorations) {
-          const top = decoration === "underline" ? box.y + run.baseline + run.style.fontSize * .08 : decoration === "overline" ? box.y + run.baseline - run.style.fontSize : box.y + run.baseline - run.style.fontSize * .35;
-          canvas.line(x, top, x + run.width, top, run.style.decorationColor, width);
-          if (run.style.decorationStyle === "double") {
-            const gap = Math.max(width * 2, run.style.fontSize * .04);
-            canvas.line(x, top + gap, x + run.width, top + gap, run.style.decorationColor, width);
-          }
-        }
-      }
-    }
-    if (box.data.clip) canvas.restoreContext();
-  }
-}
-
-class Text extends RichText {
-  constructor(value, {style = undefined, fontSize = undefined, lineHeight = undefined, color = undefined, align = undefined, textAlign = undefined, textDirection = "ltr", softWrap = undefined, tightBounds = false, textScaleFactor = 1, margin = 0, maxLines = undefined, overflow = undefined, font = undefined} = {}) {
-    const overrides = new TextStyle({
-      color: color === undefined ? null : normalizeColor(color),
-      font: font === undefined ? null : undefined,
-      fontSize: fontSize === undefined ? null : assertFiniteNumber(Number(fontSize), "fontSize"),
-      height: lineHeight === undefined ? null : assertFiniteNumber(Number(lineHeight), "lineHeight")
-    });
-    const merged = (style ?? new TextStyle).merge(overrides);
-    super({
-      text: new TextSpan({
-        text: String(value),
-        style: merged
-      }),
-      textAlign: textAlign ?? align ?? null,
-      textDirection,
-      softWrap: softWrap ?? null,
-      tightBounds,
-      textScaleFactor,
-      maxLines: maxLines ?? null,
-      overflow: overflow ?? null,
-      margin
-    });
-    this.value = String(value);
-    this.directFont = font ?? null;
-  }
-  inputTokens(context, maxWidth) {
-    if (this.directFont === null) return super.inputTokens(context, maxWidth);
-    const tokens = super.inputTokens(context, maxWidth);
-    return tokens.map(token => ({
-      ...token,
-      style: {
-        ...token.style,
-        font: this.directFont
-      }
-    }));
-  }
-}
-
 function indexed(values, index) {
   if (values === null) return undefined;
   if (values instanceof Map) return values.get(index);
@@ -9273,6 +9641,10 @@ const publicApi = Object.freeze({
   RichText,
   TextSpan,
   WidgetSpan,
+  Header,
+  Paragraph,
+  Bullet,
+  TableOfContent,
   Column,
   Row,
   Flex,
@@ -9362,4 +9734,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Center, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, Font, FractionColumnWidth, FullPage, Gradient, GridView, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Positioned, PositionedDirectional, RadialGradient, Radius, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, Center, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, Font, FractionColumnWidth, FullPage, Gradient, GridView, Header, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Positioned, PositionedDirectional, RadialGradient, Radius, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

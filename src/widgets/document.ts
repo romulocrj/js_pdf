@@ -20,14 +20,20 @@
  */
 
 import { serializePdf } from '../pdf/document.ts';
-import type { DocumentMetadata, SerializedPage } from '../pdf/document.ts';
+import type {
+  DocumentMetadata,
+  PdfPageMode,
+  SerializedOutline,
+  SerializedPage
+} from '../pdf/document.ts';
+import type { Rgb } from '../pdf/color.ts';
+import type { PdfOutlineStyle } from '../pdf/obj/outline.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
 import { Font } from './font.ts';
 import { MultiPage } from './multi_page.ts';
 import { Page } from './page.ts';
 import type { Section } from './page.ts';
 import { ThemeData } from './theme.ts';
-import type { DocumentContext } from './widget.ts';
 
 export interface DocumentOptions {
   readonly title?: string | null;
@@ -46,12 +52,31 @@ export interface DocumentOptions {
    * `theme` wins if both are given.
    */
   readonly font?: PdfFont;
+
+  /** Open the viewer's outline pane when the file is opened. */
+  readonly pageMode?: PdfPageMode;
+}
+
+export interface DocumentOutlineEntry {
+  readonly title: string;
+  readonly level: number;
+  readonly anchor: string;
+  page: number;
+  y: number;
+  readonly color: Rgb | null;
+  readonly style: PdfOutlineStyle;
 }
 
 export class Document {
   readonly metadata: DocumentMetadata;
   readonly theme: ThemeData;
+  readonly pageMode: PdfPageMode;
   readonly sections: Section[] = [];
+  private readonly outlineEntries: DocumentOutlineEntry[] = [];
+  private outlineReplay = false;
+  private outlineCursor = 0;
+  private outlineRerenderRequested = false;
+  private renderPageOffset = 0;
 
   /**
    * One `PdfFont` per declaration, for this document only. An embedded font
@@ -70,13 +95,15 @@ export class Document {
     creator = 'js_pdf',
     producer = 'js_pdf',
     theme = undefined,
-    font = undefined
+    font = undefined,
+    pageMode = 'none'
   }: DocumentOptions = {}) {
     this.metadata = { title, author, subject, creator, producer };
     this.theme = theme
       ?? (font === undefined
         ? ThemeData.base()
         : ThemeData.withFont({ base: Font.fromPdfFont(font) }));
+    this.pageMode = pageMode;
   }
 
   /** The `PdfFont` `declaration` stands for here, built once. */
@@ -108,18 +135,87 @@ export class Document {
     return this;
   }
 
-  save(): Uint8Array {
-    const documentContext: DocumentContext = { document: this };
-    const pages: SerializedPage[] = [];
+  /** Current first-pass outline data, consumed by `TableOfContent`. */
+  get outlines(): readonly DocumentOutlineEntry[] {
+    return this.outlineEntries;
+  }
 
+  requestOutlineRerender(): void {
+    this.outlineRerenderRequested = true;
+  }
+
+  registerOutline({
+    title,
+    level,
+    pageNumber,
+    y,
+    color = null,
+    style = 'normal'
+  }: {
+    readonly title: string;
+    readonly level: number;
+    readonly pageNumber: number;
+    readonly y: number;
+    readonly color?: Rgb | null;
+    readonly style?: PdfOutlineStyle;
+  }): void {
+    const page = this.renderPageOffset + pageNumber;
+    if (this.outlineReplay) {
+      const existing = this.outlineEntries[this.outlineCursor];
+      if (existing !== undefined) {
+        existing.page = page;
+        existing.y = y;
+      } else {
+        this.outlineEntries.push({
+          title,
+          level,
+          anchor: `outline-${this.outlineCursor + 1}`,
+          page,
+          y,
+          color,
+          style
+        });
+      }
+      this.outlineCursor++;
+      return;
+    }
+
+    this.outlineEntries.push({
+      title,
+      level,
+      anchor: `outline-${this.outlineEntries.length + 1}`,
+      page,
+      y,
+      color,
+      style
+    });
+  }
+
+  private renderSections(replay: boolean): SerializedPage[] {
+    this.outlineReplay = replay;
+    this.outlineCursor = 0;
+    const pages: SerializedPage[] = [];
     for (const section of this.sections) {
-      pages.push(...section.render(documentContext));
+      this.renderPageOffset = pages.length;
+      pages.push(...section.render({ document: this }));
+    }
+    return pages;
+  }
+
+  save(): Uint8Array {
+    this.outlineEntries.length = 0;
+    this.outlineRerenderRequested = false;
+    let pages = this.renderSections(false);
+
+    if (this.outlineRerenderRequested) {
+      pages = this.renderSections(true);
     }
 
     if (pages.length === 0) {
       throw new Error('Document must contain at least one page');
     }
 
-    return serializePdf(pages, this.metadata);
+    const outlines: SerializedOutline[] = this.outlineEntries.map(entry => ({ ...entry }));
+    return serializePdf(pages, this.metadata, outlines, this.pageMode);
   }
 }
