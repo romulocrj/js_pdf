@@ -48,6 +48,11 @@ neither. `Padding`, `Align`, `Center`, `SizedBox` and `Divider`, plus
 result — every one of the seven calls `Font.ttf`, so phase 1 remains on all their
 critical paths — but the missing-API total across them fell from 147 to 124.
 
+**Phase 2.2 — SVG path data parser — landed 2026-08-05.** `src/svg/path.ts`
+reads the whole `d` grammar and reduces it to move / line / cubic / close, plus
+`drawShape` and `shapeBoundingBox`. Every `d` attribute in `examples/assets/`
+parses.
+
 **Phase 2.1 — graphics path operators — landed 2026-08-05.** The canvas grew
 the whole path surface — segments, ellipses, rounded rectangles, elliptical arcs,
 both fill rules, clipping, the CTM, cap/join/miter/dash and `/ExtGState` — plus
@@ -64,12 +69,11 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 2.2 — SVG path data parser.** Port `pdf/lib/src/svg/path.dart` into
-> `src/svg/path.ts`: the full `d` grammar, driving the phase-2.1 path operators
-> through a proxy so `PdfCanvas.drawShape` becomes possible.
+> **Phase 2.3 — XML reader.** A minimal, dependency-free parser in
+> `src/svg/xml.ts`: elements, attributes, text, CDATA, comments, entities,
+> namespaces. There is no `DOMParser` under ClearScript.
 
-Phase 2.1 landed, so the canvas can now draw an arbitrary path; what it cannot
-do is read one. Everything else in phase 2 needs the grammar.
+The `d` grammar reads a path; nothing yet reads the document that holds one.
 
 ---
 
@@ -452,7 +456,7 @@ Divergences, each noted in the file that makes it:
 - `setMiterLimit` throws below 1, where upstream asserts — which a Dart release
   build compiles out.
 
-### 2.2 Path data parser
+### 2.2 Path data parser ✅ *(landed 2026-08-05)*
 
 - **Ports:** `pdf/lib/src/svg/path.dart` (320 lines)
 - **Into:** `src/svg/path.ts`
@@ -461,6 +465,33 @@ Divergences, each noted in the file that makes it:
   converted to cubic Béziers.
 - **Test:** a table of path strings → expected operator sequences, including the
   arc-conversion edge cases (zero radii, large-arc/sweep flag combinations).
+
+Landed as `writeSvgPathDataToPath`, `drawShape` and `shapeBoundingBox`, with 24
+tests. The module is **internal** — nothing is exported from `src/index.ts`
+until 2.7 has an `SvgImage` to export, the same way the TTF parser stayed
+internal through 1.1.
+
+Divergences, each noted in the file:
+
+- **Upstream does not implement this.** `svg/path.dart` holds the shape-to-`d`
+  factories (a `<rect>` written out as a path, which is **2.5** here) and hands
+  the grammar to the `path_parsing` package — itself a translation of Chromium's
+  SVG path parser. The port has no runtime dependencies, so the grammar is
+  translated here, keeping `path_parsing`'s two-stage shape (a string source
+  that yields segments, a normalizer that turns them absolute and emits them) so
+  the two stay comparable when a path renders differently.
+- **The command letter is the command.** `path_parsing` has an
+  `SvgPathSegType` enum and a letter-to-enum table; `enum` is not erasable
+  TypeScript, and the letter carries the same information.
+- `parseSegments` returns an array, not a generator. A `d` string is bounded and
+  the port is synchronous, so nothing is gained by streaming.
+- `drawShape` and `shapeBoundingBox` are free functions here, not `PdfCanvas`
+  methods as in `graphics.dart`. The port's import direction is one-way: `svg/`
+  may reach into `pdf/`, never the reverse. Upstream can put them on the canvas
+  because `path_parsing` is an external package to it.
+- Upstream throws `StateError` for every malformed input; the port distinguishes
+  `SyntaxError` (a grammar violation) from `RangeError` (a number out of range),
+  so a caller can tell a broken file from an unrepresentable one.
 
 ### 2.3 XML reader
 

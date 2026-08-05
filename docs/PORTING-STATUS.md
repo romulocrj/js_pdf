@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-05
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 51 `.ts` files, ~7,300 lines (TypeScript)
+**Ported:** 52 `.ts` files, ~8,000 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -123,15 +123,19 @@ on: an object registers itself with the document, hands out references through
 
 ## `src/svg/` — SVG subsystem
 
-Nothing ported. `src/widgets/shape.ts` (`Vector`) is the drawing surface this
-subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
+The `d` grammar landed in phase 2.2. The corpus is the SVG already in
 `examples/assets/` — twelve files plus the inline markup in
-`server-assets.json`.
+`server-assets.json`; every `d` attribute in it parses.
 
-| Upstream | Lines | Status |
+Upstream's own `svg/path.dart` holds only the *shapes* — a `<rect>` written out
+as a `d` string, and so on — and delegates the grammar to the `path_parsing`
+package. The port has no runtime dependencies, so `src/svg/path.ts` carries
+both, and will grow the shape factories in 2.5.
+
+| Upstream | Lines | Port / status |
 |---|---:|---|
 | `svg/parser.dart` | 219 | — **phase 2.7** |
-| `svg/path.dart` | 320 | — **phase 2.2** |
+| `svg/path.dart` | 320 | `src/svg/path.ts` — partial: the full `d` grammar, `drawShape`, `shapeBoundingBox`; the shape-to-`d` factories are **phase 2.5** |
 | `svg/painter.dart`, `operation.dart` | 251 | — **phase 2.5** |
 | `svg/transform.dart` | 124 | — **phase 2.4** — the matrix itself landed in 2.1 as `src/pdf/matrix.ts` |
 | `svg/group.dart`, `use.dart`, `symbol.dart` | 287 | — **phase 2.5** |
@@ -180,7 +184,7 @@ subsystem will target. **Roadmap phase 2.** The corpus is the SVG already in
 | Graphics | ~1,600 | paths, transforms, clipping and graphic states done; images, shading and patterns not |
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
-| SVG | ~2,800 | not started |
+| SVG | ~2,800 | the `d` grammar and path bounding boxes done; everything else pending |
 | Widgets | ~14,000 | ~18 widgets of ~60, plus styles and themes |
 
 **Phases 0 and 1 are complete.** The WinAnsi ceiling is gone: a TrueType font is
