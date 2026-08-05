@@ -1,20 +1,20 @@
 {
-  "generatedAt": "2026-08-05T20:34:05.338Z",
+  "generatedAt": "2026-08-05T20:50:22.005Z",
   "results": [
     {
       "name": "hello-world",
       "status": "generated",
-      "bytes": 740
+      "bytes": 736
     },
     {
       "name": "calendar",
       "status": "failed",
-      "error": "calendar requires unported js_pdf APIs: BoxDecoration, Border, BorderSide, Expanded, GridView"
+      "error": "calendar requires unported js_pdf APIs: BoxDecoration, Border, BorderSide, GridView"
     },
     {
       "name": "certificate",
       "status": "failed",
-      "error": "certificate requires unported js_pdf APIs: Border, BoxDecoration, Flexible, LoremText, Positioned, RichText, Stack, TextSpan"
+      "error": "certificate requires unported js_pdf APIs: Border, BoxDecoration, LoremText, Positioned, RichText, Stack, TextSpan"
     },
     {
       "name": "document",
@@ -24,12 +24,12 @@
     {
       "name": "invoice",
       "status": "failed",
-      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, Border, BorderRadius, BoxDecoration, Expanded, GridView, LoremText, PdfLogo, RichText, TextSpan"
+      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget, Border, BorderRadius, BoxDecoration, GridView, LoremText, PdfLogo, RichText, TextSpan"
     },
     {
       "name": "report",
       "status": "failed",
-      "error": "report requires unported js_pdf APIs: BarDataSet, CartesianGrid, Chart, ChartLegend, Expanded, FixedAxis, Flexible, LineDataSet, PieDataSet, PieGrid, PointChartValue"
+      "error": "report requires unported js_pdf APIs: BarDataSet, CartesianGrid, Chart, ChartLegend, FixedAxis, LineDataSet, PieDataSet, PieGrid, PointChartValue"
     },
     {
       "name": "resume",
@@ -39,7 +39,7 @@
     {
       "name": "server",
       "status": "failed",
-      "error": "server requires unported js_pdf APIs: AnnotationUrl, BarDataSet, Border, BorderRadius, BoxDecoration, CartesianGrid, Chart, Expanded, FixedAxis, PointChartValue, RichText, TextSpan, UrlLink"
+      "error": "server requires unported js_pdf APIs: AnnotationUrl, BarDataSet, Border, BorderRadius, BoxDecoration, CartesianGrid, Chart, FixedAxis, PointChartValue, RichText, TextSpan, UrlLink"
     }
   ]
 }

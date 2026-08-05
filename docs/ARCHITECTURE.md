@@ -134,12 +134,14 @@ safety) and that JavaScript has to check by hand.
 ### `src/widgets/` — the layout tree
 
 - **`widget.ts`** — the `Widget` base class and the layout protocol (§3).
-- **`geometry.ts`** — `EdgeInsets`, `Alignment`, and inset normalization.
+- **`geometry.ts`** — `BoxConstraints`, `EdgeInsets`, `Alignment`, and inset
+  normalization.
 - **`text.ts`** — greedy line breaker plus the `Text` widget.
 - **`text_style.ts` / `theme.ts` / `font.ts`** — `TextStyle` and its four font
   slots, `ThemeData` and the widgets that scope it, and the lazy `Font`
   declaration a style names.
-- **`flex.ts`** — `Column`, `Row`, `Spacer`.
+- **`flex.ts`** — full `Flex` allocation, `Column`, `Row`, `Expanded`,
+  `Flexible`, proportional `Spacer`, plus `gap` and weighted row tracks.
 - **`container.ts`** — `Container`: padding, margin, fill, border.
 - **`basic.ts`** — composition, fitting, transforms, opacity, builders,
   custom painting and basic sizing widgets.
@@ -175,6 +177,11 @@ for `Text`, child boxes for `Column`, a scale factor for `Vector`. The type
 parameter is what makes the hand-off safe: the box `layout()` returns is exactly
 the box `paint()` receives, so the two cannot drift. The parent decides `x`/`y`
 and passes them in via `PositionedBox`.
+
+`Constraints` is the structural input accepted at the low-level boundary;
+parents pass the public `BoxConstraints` value, whose minimum/maximum pairs and
+transformations mirror upstream. `BoxConstraints.from()` normalizes historical
+layout probes that supply only `maxWidth`/`maxHeight`.
 
 Two consequences:
 
@@ -240,7 +247,6 @@ roadmap phase lands.
 | Object serialization | A value consults its owning object for compression, encryption and a verbose pretty-printer | `output(stream)` only, no `PdfSettings`; dictionaries and arrays keep the port's `<< /Type /Page >>` spacing |
 | Font naming | `/F$objser`, derived from the font object's serial | Page-local `/F1`, `/F2`, … allocated as the content stream is written |
 | Colors | `PdfColor` value type with CMYK and HSL variants | RGB triple, DeviceRGB only |
-| Flex | Full Flutter flex: alignments, `Expanded`, `FlexFit`, `mainAxisSize` | `gap`, and fixed ratio `widths` on `Row` |
 | Pagination | `SpanningWidget` saves mutable widget context between pages | Direct spanning children return immutable continuation state; `Table` supports it, while other tall widgets still throw `RangeError` |
 | Decoration | `BoxDecoration`: gradients, shapes, radii, shadows, per-side borders | Flat `background` / `borderColor` / `borderWidth` |
 | Async | `save()` returns a `Future` | `save()` returns `Uint8Array` |

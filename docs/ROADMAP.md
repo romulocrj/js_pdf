@@ -53,6 +53,14 @@ The two widgets that fundamentally need minimum constraints move into 3.4. The
 phase reduced the example missing-API total first from 147 to 124, then 84 to
 75.
 
+**Phase 3.4 — full flex and constraints — landed 2026-08-05.** Public
+`BoxConstraints` now carries minimums and maximums through the layout tree.
+`Flex`, `Row` and `Column` implement tight/loose proportional allocation, every
+main/cross alignment, axis sizing and vertical order; `Expanded`, `Flexible`
+and proportional `Spacer` are public. `ConstrainedBox`, `OverflowBox` and the
+minimum-preserving `LimitedBox` close `basic.dart`. Twelve tests and the retained
+V8 proof cover the phase, and the missing-API total fell 75 → 69.
+
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
 option on `Page` and `MultiPage` as well as on `PageTheme`, and every physical
@@ -122,13 +130,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 3.4 — full flex and constraints.** Replace the max-only constraint
-> protocol with real `BoxConstraints`, then port flex allocation, alignment,
-> `Expanded`, `Flexible`, `FlexFit`, `mainAxisSize`, `ConstrainedBox` and
-> `OverflowBox`.
+> **Phase 3.5 — decoration.** Port `BoxDecoration`, `Border`, `BorderSide` and
+> `BorderRadius`, including per-side rules, rounded corners, gradients and
+> shadows.
 
-Tables paginate and the basic composition set is complete. The next blockers
-are minimum constraints and the full flex algorithm shared by five examples.
+Constraints and flex are complete. Decoration is now the broadest shared layout
+blocker, appearing in six of the seven remaining upstream examples.
 
 ---
 
@@ -811,22 +818,16 @@ emitted transform, clip, alpha and paint-order operators. It removes nine more
 feature occurrences from the examples, taking the total 84 → 75.
 `examples/basic-widgets-phase-3.3.mjs` is the retained visual/V8 proof.
 
-`ConstrainedBox` and `OverflowBox` move to **3.4** because faithfully porting
-them requires minimum constraints. `LimitedBox` currently contributes its
-max-only useful branch; 3.4 will complete its minimum-preserving behaviour.
+The constraint-dependent tail (`ConstrainedBox`, `OverflowBox` and the
+minimum-preserving branch of `LimitedBox`) landed with **3.4**.
 
 Two divergences worth knowing:
 
-- `Align` fills an axis unless given a factor, which is upstream's rule under
-  finite constraints. But upstream's `Flex` hands children an *infinite*
-  main-axis constraint, so an `Align` inside a `Column` shrink-wraps there and
-  here it does not — it claims the remaining page height until **3.4** replaces
-  the flex algorithm. `heightFactor: 1` is the workaround.
 - `Divider` fills its rule directly rather than composing `SizedBox` + `Center` +
   `Container` + `BoxDecoration` + `Border` + `BorderSide`, since decoration is
   **3.5**. The emitted `re f` is what upstream's bottom border produces anyway.
 
-### 3.4 Full flex and constraints
+### 3.4 Full flex and constraints ✅ *(landed 2026-08-05)*
 
 - **Ports:** `widgets/flex.dart`, the constraint-dependent pieces of
   `widgets/basic.dart` and `widgets/geometry.dart`
@@ -835,6 +836,23 @@ Two divergences worth knowing:
   `LimitedBox`.
 - **Example gate:** `Expanded`/`Flexible` for `calendar`, `certificate`,
   `invoice`, `report`, `server`.
+
+Landed as a public immutable `BoxConstraints` value with tight/expand/finite
+factories, bounded/tight queries, constrain/aspect-ratio operations and
+`tighten`, `deflate`, `loosen`, `enforce`, `copyWith`. Existing low-level probes
+that provide only maxima remain structurally accepted, while pages and parents
+now pass complete instances. `Padding`, `SizedBox`, `Container`, text, vector,
+SVG, tables and the basic composition wrappers all preserve minimums.
+
+`Flex` follows upstream's two-pass algorithm: measure inflexible children on an
+unbounded main axis, divide remaining bounded space by flex factor, then place
+children using all six main-axis alignments, four cross-axis alignments,
+`mainAxisSize`, tight/loose fit and vertical order. The port retains `gap`,
+`margin` and weighted `Row.widths` as explicit extensions. Twelve tests cover
+layout numbers, public surfaces, failure on tight flex in an unbounded axis and
+painted PDF tracks. The example gate removed six API occurrences, reducing the
+total 75 → 69. `examples/flex-layout-phase-3.4.mjs` is the retained visual/V8
+proof.
 
 ### 3.5 Decoration
 

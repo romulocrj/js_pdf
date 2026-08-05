@@ -22,6 +22,7 @@
 import { assertFiniteNumber } from '../base/assert.ts';
 import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { BoxConstraints } from './geometry.ts';
 import { SpanningWidget } from './widget.ts';
 import type {
   AnyLayoutBox,
@@ -435,7 +436,7 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
 
   private layoutRows(
     context: RenderContext,
-    constraints: Constraints,
+    _constraints: Constraints,
     columnWidths: readonly number[],
     selectedRows: readonly TableRow[]
   ): LayoutBox<TableLayoutData> {
@@ -455,7 +456,11 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
       for (let column = 0; column < row.children.length; column++) {
         const child = row.children[column]!;
         const width = columnWidths[column] ?? 0;
-        const box = child.layout(context, { maxWidth: width, maxHeight: constraints.maxHeight });
+        const box = child.layout(context, new BoxConstraints({
+          minWidth: width,
+          maxWidth: width,
+          maxHeight: Infinity
+        }));
         measured.push({ box, column, x });
         rowHeight = Math.max(rowHeight, box.height);
         x += width;

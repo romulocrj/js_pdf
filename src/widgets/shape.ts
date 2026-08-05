@@ -23,6 +23,7 @@
 import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
+import { BoxConstraints } from './geometry.ts';
 import { Widget } from './widget.ts';
 import type { Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
 
@@ -96,11 +97,13 @@ export class Vector extends Widget<VectorLayoutData> {
   }
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<VectorLayoutData> {
-    const scale = Math.min(1, constraints.maxWidth / this.width);
+    const parent = BoxConstraints.from(constraints);
+    const scale = Math.min(1, parent.maxWidth / this.width, parent.maxHeight / this.height);
+    const size = parent.constrain({ width: this.width * scale, height: this.height * scale });
     return {
       widget: this,
-      width: this.width * scale,
-      height: this.height * scale,
+      width: size.width,
+      height: size.height,
       data: { scale }
     };
   }

@@ -1521,6 +1521,178 @@ function flipMatrix(matrix, height) {
   return multiplyMatrix(flip, multiplyMatrix(matrix, flip));
 }
 
+function constraintNumber(value, name) {
+  if (Number.isNaN(value) || value < 0) {
+    throw new RangeError(`${name} must be non-negative`);
+  }
+  return value;
+}
+
+function clampConstraint(value, minimum, maximum) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+class BoxConstraints {
+  constructor({minWidth = 0, maxWidth = Infinity, minHeight = 0, maxHeight = Infinity} = {}) {
+    this.minWidth = constraintNumber(Number(minWidth), "minWidth");
+    this.maxWidth = constraintNumber(Number(maxWidth), "maxWidth");
+    this.minHeight = constraintNumber(Number(minHeight), "minHeight");
+    this.maxHeight = constraintNumber(Number(maxHeight), "maxHeight");
+    if (this.minWidth > this.maxWidth || this.minHeight > this.maxHeight) {
+      throw new RangeError("BoxConstraints minimums must not exceed maximums");
+    }
+  }
+  static from(value) {
+    return value instanceof BoxConstraints ? value : new BoxConstraints(value);
+  }
+  static tightFor({width = null, height = null} = {}) {
+    return new BoxConstraints({
+      minWidth: width ?? 0,
+      maxWidth: width ?? Infinity,
+      minHeight: height ?? 0,
+      maxHeight: height ?? Infinity
+    });
+  }
+  static tight(size) {
+    return new BoxConstraints({
+      minWidth: size.width,
+      maxWidth: size.width,
+      minHeight: size.height,
+      maxHeight: size.height
+    });
+  }
+  static expand({width = Infinity, height = Infinity} = {}) {
+    return BoxConstraints.tightFor({
+      width,
+      height
+    });
+  }
+  static tightForFinite({width = Infinity, height = Infinity} = {}) {
+    return BoxConstraints.tightFor({
+      width: Number.isFinite(width) ? width : null,
+      height: Number.isFinite(height) ? height : null
+    });
+  }
+  get hasBoundedWidth() {
+    return Number.isFinite(this.maxWidth);
+  }
+  get hasBoundedHeight() {
+    return Number.isFinite(this.maxHeight);
+  }
+  get hasInfiniteWidth() {
+    return !Number.isFinite(this.minWidth);
+  }
+  get hasInfiniteHeight() {
+    return !Number.isFinite(this.minHeight);
+  }
+  get hasTightWidth() {
+    return this.minWidth >= this.maxWidth;
+  }
+  get hasTightHeight() {
+    return this.minHeight >= this.maxHeight;
+  }
+  get isTight() {
+    return this.hasTightWidth && this.hasTightHeight;
+  }
+  get biggest() {
+    return {
+      width: this.constrainWidth(),
+      height: this.constrainHeight()
+    };
+  }
+  get smallest() {
+    return {
+      width: this.constrainWidth(0),
+      height: this.constrainHeight(0)
+    };
+  }
+  constrainWidth(width = Infinity) {
+    return clampConstraint(width, this.minWidth, this.maxWidth);
+  }
+  constrainHeight(height = Infinity) {
+    return clampConstraint(height, this.minHeight, this.maxHeight);
+  }
+  constrain(size) {
+    return {
+      width: this.constrainWidth(size.width),
+      height: this.constrainHeight(size.height)
+    };
+  }
+  constrainSizeAndAttemptToPreserveAspectRatio(size) {
+    if (this.isTight) return this.smallest;
+    if (size.width <= 0 || size.height <= 0) return this.constrain(size);
+    const ratio = size.width / size.height;
+    let width = size.width;
+    let height = size.height;
+    if (width > this.maxWidth) {
+      width = this.maxWidth;
+      height = width / ratio;
+    }
+    if (height > this.maxHeight) {
+      height = this.maxHeight;
+      width = height * ratio;
+    }
+    if (width < this.minWidth) {
+      width = this.minWidth;
+      height = width / ratio;
+    }
+    if (height < this.minHeight) {
+      height = this.minHeight;
+      width = height * ratio;
+    }
+    return this.constrain({
+      width,
+      height
+    });
+  }
+  tighten({width = null, height = null} = {}) {
+    const tightWidth = width === null ? null : clampConstraint(width, this.minWidth, this.maxWidth);
+    const tightHeight = height === null ? null : clampConstraint(height, this.minHeight, this.maxHeight);
+    return new BoxConstraints({
+      minWidth: tightWidth ?? this.minWidth,
+      maxWidth: tightWidth ?? this.maxWidth,
+      minHeight: tightHeight ?? this.minHeight,
+      maxHeight: tightHeight ?? this.maxHeight
+    });
+  }
+  deflate(edges) {
+    const insets = normalizeInsets(edges);
+    const horizontal = insetsHorizontal(insets);
+    const vertical = insetsVertical(insets);
+    const minWidth = Math.max(0, this.minWidth - horizontal);
+    const minHeight = Math.max(0, this.minHeight - vertical);
+    return new BoxConstraints({
+      minWidth,
+      maxWidth: Math.max(minWidth, this.maxWidth - horizontal),
+      minHeight,
+      maxHeight: Math.max(minHeight, this.maxHeight - vertical)
+    });
+  }
+  loosen() {
+    return new BoxConstraints({
+      maxWidth: this.maxWidth,
+      maxHeight: this.maxHeight
+    });
+  }
+  enforce(other) {
+    const constraints = BoxConstraints.from(other);
+    return new BoxConstraints({
+      minWidth: clampConstraint(this.minWidth, constraints.minWidth, constraints.maxWidth),
+      maxWidth: clampConstraint(this.maxWidth, constraints.minWidth, constraints.maxWidth),
+      minHeight: clampConstraint(this.minHeight, constraints.minHeight, constraints.maxHeight),
+      maxHeight: clampConstraint(this.maxHeight, constraints.minHeight, constraints.maxHeight)
+    });
+  }
+  copyWith(values = {}) {
+    return new BoxConstraints({
+      minWidth: values.minWidth ?? this.minWidth,
+      maxWidth: values.maxWidth ?? this.maxWidth,
+      minHeight: values.minHeight ?? this.minHeight,
+      maxHeight: values.maxHeight ?? this.maxHeight
+    });
+  }
+}
+
 function normalizeInsets(value = 0) {
   if (typeof value === "number") {
     return {
@@ -1673,26 +1845,32 @@ class Padding extends Widget {
     this.child = child;
   }
   layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
     const horizontal = insetsHorizontal(this.padding);
     const vertical = insetsVertical(this.padding);
     if (this.child === null) {
+      const size = parent.constrain({
+        width: horizontal,
+        height: vertical
+      });
       return {
         widget: this,
-        width: Math.min(constraints.maxWidth, horizontal),
-        height: Math.min(constraints.maxHeight, vertical),
+        width: size.width,
+        height: size.height,
         data: {
           childBox: null
         }
       };
     }
-    const childBox = this.child.layout(context, {
-      maxWidth: Math.max(0, constraints.maxWidth - horizontal),
-      maxHeight: Math.max(0, constraints.maxHeight - vertical)
+    const childBox = this.child.layout(context, parent.deflate(this.padding));
+    const size = parent.constrain({
+      width: childBox.width + horizontal,
+      height: childBox.height + vertical
     });
     return {
       widget: this,
-      width: Math.min(constraints.maxWidth, childBox.width + horizontal),
-      height: childBox.height + vertical,
+      width: size.width,
+      height: size.height,
       data: {
         childBox
       }
@@ -1718,11 +1896,18 @@ class Align extends Widget {
     this.child = child;
   }
   layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const shrinkWidth = this.widthFactor !== null || !parent.hasBoundedWidth;
+    const shrinkHeight = this.heightFactor !== null || !parent.hasBoundedHeight;
     if (this.child === null) {
+      const size = parent.constrain({
+        width: shrinkWidth ? 0 : Infinity,
+        height: shrinkHeight ? 0 : Infinity
+      });
       return {
         widget: this,
-        width: this.widthFactor === null ? constraints.maxWidth : 0,
-        height: this.heightFactor === null ? constraints.maxHeight : 0,
+        width: size.width,
+        height: size.height,
         data: {
           childBox: null,
           dx: 0,
@@ -1730,14 +1915,16 @@ class Align extends Widget {
         }
       };
     }
-    const childBox = this.child.layout(context, constraints);
-    const width = this.widthFactor === null ? constraints.maxWidth : Math.min(constraints.maxWidth, childBox.width * this.widthFactor);
-    const height = this.heightFactor === null ? constraints.maxHeight : Math.min(constraints.maxHeight, childBox.height * this.heightFactor);
-    const offset = inscribe(this.alignment, childBox.width, childBox.height, width, height);
+    const childBox = this.child.layout(context, parent.loosen());
+    const size = parent.constrain({
+      width: shrinkWidth ? childBox.width * (this.widthFactor ?? 1) : Infinity,
+      height: shrinkHeight ? childBox.height * (this.heightFactor ?? 1) : Infinity
+    });
+    const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
     return {
       widget: this,
-      width,
-      height,
+      width: size.width,
+      height: size.height,
       data: {
         childBox,
         dx: offset.dx,
@@ -1752,6 +1939,35 @@ class Align extends Widget {
       ...childBox,
       x: box.x + dx,
       y: box.y + dy
+    });
+  }
+}
+
+class ConstrainedBox extends Widget {
+  constructor({constraints, child = null}) {
+    super();
+    this.constraints = BoxConstraints.from(constraints);
+    this.child = child;
+  }
+  layout(context, constraints) {
+    const enforced = this.constraints.enforce(BoxConstraints.from(constraints));
+    const childBox = this.child?.layout(context, enforced) ?? null;
+    const size = childBox === null ? enforced.smallest : enforced.constrain(childBox);
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox?.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
     });
   }
 }
@@ -1775,16 +1991,16 @@ class SizedBox extends Widget {
     this.child = child;
   }
   layout(context, constraints) {
-    const maxWidth = Math.min(constraints.maxWidth, this.width ?? constraints.maxWidth);
-    const maxHeight = Math.min(constraints.maxHeight, this.height ?? constraints.maxHeight);
-    const childBox = this.child === null ? null : this.child.layout(context, {
-      maxWidth,
-      maxHeight
+    const tight = BoxConstraints.from(constraints).tighten({
+      width: this.width,
+      height: this.height
     });
+    const childBox = this.child === null ? null : this.child.layout(context, tight);
+    const size = childBox === null ? tight.smallest : tight.constrain(childBox);
     return {
       widget: this,
-      width: this.width ?? childBox?.width ?? 0,
-      height: this.height ?? childBox?.height ?? 0,
+      width: size.width,
+      height: size.height,
       data: {
         childBox
       }
@@ -1815,10 +2031,14 @@ class Divider extends Widget {
     this.color = normalizeColor(color);
   }
   layout(_context, constraints) {
+    const size = BoxConstraints.from(constraints).constrain({
+      width: Infinity,
+      height: this.height
+    });
     return {
       widget: this,
-      width: constraints.maxWidth,
-      height: Math.min(constraints.maxHeight, this.height),
+      width: size.width,
+      height: size.height,
       data: null
     };
   }
@@ -1883,11 +2103,13 @@ class Transform extends Widget {
     this.child = child;
   }
   layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
     if (this.child === null) {
+      const size = parent.smallest;
       return {
         widget: this,
-        width: 0,
-        height: 0,
+        width: size.width,
+        height: size.height,
         data: {
           childBox: null,
           layoutDx: 0,
@@ -1895,12 +2117,13 @@ class Transform extends Widget {
         }
       };
     }
-    const childBox = this.child.layout(context, constraints);
+    const childBox = this.child.layout(context, this.adjustLayout && this.unconstrained ? new BoxConstraints : parent);
     if (!this.adjustLayout) {
+      const size = parent.constrain(childBox);
       return {
         widget: this,
-        width: childBox.width,
-        height: childBox.height,
+        width: size.width,
+        height: size.height,
         data: {
           childBox,
           layoutDx: 0,
@@ -1913,10 +2136,14 @@ class Transform extends Widget {
     const maximumX = Math.max(...corners.map(point => point.x));
     const minimumY = Math.min(...corners.map(point => point.y));
     const maximumY = Math.max(...corners.map(point => point.y));
+    const size = parent.constrain({
+      width: maximumX - minimumX,
+      height: maximumY - minimumY
+    });
     return {
       widget: this,
-      width: maximumX - minimumX,
-      height: maximumY - minimumY,
+      width: size.width,
+      height: size.height,
       data: {
         childBox,
         layoutDx: -minimumX,
@@ -1958,10 +2185,14 @@ class Opacity extends Widget {
   }
   layout(context, constraints) {
     const childBox = this.child?.layout(context, constraints) ?? null;
+    const size = BoxConstraints.from(constraints).constrain(childBox ?? {
+      width: 0,
+      height: 0
+    });
     return {
       widget: this,
-      width: childBox?.width ?? 0,
-      height: childBox?.height ?? 0,
+      width: size.width,
+      height: size.height,
       data: {
         childBox
       }
@@ -2082,22 +2313,24 @@ class FittedBox extends Widget {
     this.child = child;
   }
   layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
     if (this.child === null) {
+      const size = parent.smallest;
       return {
         widget: this,
-        width: 0,
-        height: 0,
+        width: size.width,
+        height: size.height,
         data: {
           childBox: null
         }
       };
     }
-    const childBox = this.child.layout(context, constraints);
-    const factor = childBox.width <= 0 || childBox.height <= 0 ? 0 : Math.min(1, constraints.maxWidth / childBox.width, constraints.maxHeight / childBox.height);
+    const childBox = this.child.layout(context, new BoxConstraints);
+    const size = parent.constrainSizeAndAttemptToPreserveAspectRatio(childBox);
     return {
       widget: this,
-      width: childBox.width * factor,
-      height: childBox.height * factor,
+      width: size.width,
+      height: size.height,
       data: {
         childBox
       }
@@ -2141,20 +2374,45 @@ class AspectRatio extends Widget {
     this.child = child;
   }
   layout(context, constraints) {
-    let width = constraints.maxWidth;
-    let height = width / this.aspectRatio;
-    if (height > constraints.maxHeight) {
-      height = constraints.maxHeight;
-      width = height * this.aspectRatio;
+    const parent = BoxConstraints.from(constraints);
+    let size;
+    if (parent.isTight) {
+      size = parent.smallest;
+    } else {
+      let width = parent.maxWidth;
+      let height;
+      if (Number.isFinite(width)) {
+        height = width / this.aspectRatio;
+      } else {
+        height = parent.maxHeight;
+        width = height * this.aspectRatio;
+      }
+      if (width > parent.maxWidth) {
+        width = parent.maxWidth;
+        height = width / this.aspectRatio;
+      }
+      if (height > parent.maxHeight) {
+        height = parent.maxHeight;
+        width = height * this.aspectRatio;
+      }
+      if (width < parent.minWidth) {
+        width = parent.minWidth;
+        height = width / this.aspectRatio;
+      }
+      if (height < parent.minHeight) {
+        height = parent.minHeight;
+        width = height * this.aspectRatio;
+      }
+      size = parent.constrain({
+        width,
+        height
+      });
     }
-    const childBox = this.child?.layout(context, {
-      maxWidth: width,
-      maxHeight: height
-    }) ?? null;
+    const childBox = this.child?.layout(context, BoxConstraints.tight(size)) ?? null;
     return {
       widget: this,
-      width,
-      height,
+      width: size.width,
+      height: size.height,
       data: {
         childBox
       }
@@ -2221,10 +2479,14 @@ class CustomPaint extends Widget {
   }
   layout(context, constraints) {
     const childBox = this.child?.layout(context, constraints) ?? null;
+    const size = BoxConstraints.from(constraints).constrain(childBox ?? {
+      width: Math.max(0, this.size.x),
+      height: Math.max(0, this.size.y)
+    });
     return {
       widget: this,
-      width: childBox?.width ?? Math.min(constraints.maxWidth, Math.max(0, this.size.x)),
-      height: childBox?.height ?? Math.min(constraints.maxHeight, Math.max(0, this.size.y)),
+      width: size.width,
+      height: size.height,
       data: {
         childBox
       }
@@ -2260,12 +2522,15 @@ class FullPage extends Widget {
     this.child = child;
   }
   layout(context, constraints) {
-    const width = this.ignoreMargins ? context.pageFormat.width : constraints.maxWidth;
-    const height = this.ignoreMargins ? context.pageFormat.height : constraints.maxHeight;
-    const childBox = this.child?.layout(context, {
-      maxWidth: width,
-      maxHeight: height
-    }) ?? null;
+    const page = BoxConstraints.tight({
+      width: context.pageFormat.width,
+      height: context.pageFormat.height
+    });
+    const offered = this.ignoreMargins ? page : BoxConstraints.from(constraints);
+    const size = offered.biggest;
+    const childBox = this.child?.layout(context, offered) ?? null;
+    const width = size.width;
+    const height = size.height;
     return {
       widget: this,
       width,
@@ -2308,16 +2573,19 @@ class LimitedBox extends Widget {
     this.child = child;
   }
   layout(context, constraints) {
-    const maxWidth = Number.isFinite(constraints.maxWidth) ? constraints.maxWidth : this.maxWidth;
-    const maxHeight = Number.isFinite(constraints.maxHeight) ? constraints.maxHeight : this.maxHeight;
-    const childBox = this.child?.layout(context, {
-      maxWidth,
-      maxHeight
-    }) ?? null;
+    const parent = BoxConstraints.from(constraints);
+    const limited = new BoxConstraints({
+      minWidth: parent.minWidth,
+      maxWidth: parent.hasBoundedWidth ? parent.maxWidth : parent.constrainWidth(this.maxWidth),
+      minHeight: parent.minHeight,
+      maxHeight: parent.hasBoundedHeight ? parent.maxHeight : parent.constrainHeight(this.maxHeight)
+    });
+    const childBox = this.child?.layout(context, limited) ?? null;
+    const size = parent.constrain(childBox ?? limited.smallest);
     return {
       widget: this,
-      width: Math.min(maxWidth, childBox?.width ?? 0),
-      height: Math.min(maxHeight, childBox?.height ?? 0),
+      width: size.width,
+      height: size.height,
       data: {
         childBox
       }
@@ -2333,6 +2601,56 @@ class LimitedBox extends Widget {
   }
 }
 
+class OverflowBox extends Widget {
+  constructor({alignment = "center", minWidth = null, maxWidth = null, minHeight = null, maxHeight = null, child = null} = {}) {
+    super();
+    this.alignment = resolveBasicAlignment(alignment);
+    this.minWidth = minWidth === null ? null : Number(minWidth);
+    this.maxWidth = maxWidth === null ? null : Number(maxWidth);
+    this.minHeight = minHeight === null ? null : Number(minHeight);
+    this.maxHeight = maxHeight === null ? null : Number(maxHeight);
+    this.child = child;
+    new BoxConstraints({
+      minWidth: this.minWidth ?? 0,
+      maxWidth: this.maxWidth ?? Infinity,
+      minHeight: this.minHeight ?? 0,
+      maxHeight: this.maxHeight ?? Infinity
+    });
+  }
+  layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const size = parent.smallest;
+    const childBox = this.child?.layout(context, new BoxConstraints({
+      minWidth: this.minWidth ?? parent.minWidth,
+      maxWidth: this.maxWidth ?? parent.maxWidth,
+      minHeight: this.minHeight ?? parent.minHeight,
+      maxHeight: this.maxHeight ?? parent.maxHeight
+    })) ?? null;
+    const offset = childBox === null ? {
+      dx: 0,
+      dy: 0
+    } : inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        childBox,
+        dx: offset.dx,
+        dy: offset.dy
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox, dx, dy} = box.data;
+    childBox?.widget.paint(context, {
+      ...childBox,
+      x: box.x + dx,
+      y: box.y + dy
+    });
+  }
+}
+
 class VerticalDivider extends Widget {
   constructor({width = DEFAULT_DIVIDER_HEIGHT, thickness = DEFAULT_DIVIDER_THICKNESS, indent = 0, endIndent = 0, color = "#000000"} = {}) {
     super();
@@ -2343,10 +2661,14 @@ class VerticalDivider extends Widget {
     this.color = normalizeColor(color);
   }
   layout(_context, constraints) {
+    const size = BoxConstraints.from(constraints).constrain({
+      width: this.width,
+      height: Infinity
+    });
     return {
       widget: this,
-      width: Math.min(constraints.maxWidth, this.width),
-      height: constraints.maxHeight,
+      width: size.width,
+      height: size.height,
       data: null
     };
   }
@@ -2370,21 +2692,32 @@ class Container extends Widget {
     this.borderWidth = Number(borderWidth);
   }
   layout(context, constraints) {
-    const outerMaxWidth = Math.max(0, constraints.maxWidth - this.margin.left - this.margin.right);
-    const desiredWidth = this.width == null ? outerMaxWidth : Math.min(this.width, outerMaxWidth);
-    const innerMaxWidth = Math.max(0, desiredWidth - this.padding.left - this.padding.right);
-    const childBox = this.child ? this.child.layout(context, {
-      maxWidth: innerMaxWidth,
-      maxHeight: constraints.maxHeight
-    }) : null;
-    const contentHeight = childBox?.height ?? 0;
-    const contentWidth = childBox?.width ?? 0;
-    const boxWidth = this.width == null ? Math.min(outerMaxWidth, Math.max(contentWidth + this.padding.left + this.padding.right, desiredWidth)) : desiredWidth;
-    const boxHeight = this.height == null ? contentHeight + this.padding.top + this.padding.bottom : this.height;
+    const parent = BoxConstraints.from(constraints);
+    const outer = parent.deflate(this.margin);
+    const desired = outer.tighten({
+      width: this.width ?? (outer.hasBoundedWidth ? outer.maxWidth : null),
+      height: this.height
+    });
+    const inner = desired.deflate(this.padding);
+    const childBox = this.child?.layout(context, inner) ?? null;
+    const content = childBox ?? {
+      width: 0,
+      height: 0
+    };
+    const decorated = desired.constrain({
+      width: content.width + this.padding.left + this.padding.right,
+      height: content.height + this.padding.top + this.padding.bottom
+    });
+    const boxWidth = decorated.width;
+    const boxHeight = decorated.height;
+    const size = parent.constrain({
+      width: boxWidth + this.margin.left + this.margin.right,
+      height: boxHeight + this.margin.top + this.margin.bottom
+    });
     return {
       widget: this,
-      width: boxWidth + this.margin.left + this.margin.right,
-      height: boxHeight + this.margin.top + this.margin.bottom,
+      width: size.width,
+      height: size.height,
       data: {
         childBox,
         boxWidth,
@@ -3166,10 +3499,10 @@ class MultiPage {
       let bottom = this.format.height - this.margin.bottom;
       if (this.header) {
         const headerWidget = this.header(context);
-        const headerBox = headerWidget.layout(context, {
+        const headerBox = headerWidget.layout(context, new BoxConstraints({
           maxWidth,
           maxHeight: bottom - top
-        });
+        }));
         headerWidget.paint(context, {
           ...headerBox,
           x: this.margin.left,
@@ -3179,10 +3512,10 @@ class MultiPage {
       }
       if (this.footer) {
         const footerWidget = this.footer(context);
-        const footerBox = footerWidget.layout(context, {
+        const footerBox = footerWidget.layout(context, new BoxConstraints({
           maxWidth,
           maxHeight: bottom - top
-        });
+        }));
         bottom -= footerBox.height + this.gap;
         footerWidget.paint(context, {
           ...footerBox,
@@ -3206,10 +3539,10 @@ class MultiPage {
         let state = child.initialSpanState();
         while (true) {
           const available = page.bottom - page.cursor;
-          const fragment = child.layoutSpan(page.context, {
+          const fragment = child.layoutSpan(page.context, new BoxConstraints({
             maxWidth: page.maxWidth,
             maxHeight: available
-          }, state);
+          }), state);
           const box = fragment.box;
           if (box.height > available + .001) {
             throw new RangeError("A spanning widget returned a fragment taller than its constraint");
@@ -3237,19 +3570,19 @@ class MultiPage {
         }
         continue;
       }
-      let box = child.layout(page.context, {
+      let box = child.layout(page.context, new BoxConstraints({
         maxWidth: page.maxWidth,
-        maxHeight: page.bottom - page.cursor
-      });
+        maxHeight: Infinity
+      }));
       if (page.cursor + box.height > page.bottom + .001) {
         if (box.height > page.bottom - page.top + .001) {
           throw new RangeError(`Widget height ${box.height.toFixed(2)} exceeds a full MultiPage content area`);
         }
         page = startPage();
-        box = child.layout(page.context, {
+        box = child.layout(page.context, new BoxConstraints({
           maxWidth: page.maxWidth,
-          maxHeight: page.bottom - page.cursor
-        });
+          maxHeight: Infinity
+        }));
       }
       child.paint(page.context, {
         ...box,
@@ -3300,10 +3633,10 @@ class Page {
     const maxHeight = format.height - margin.top - margin.bottom;
     this.paintLayer(this.pageTheme.buildBackground, context, format);
     const widget = this.build(context);
-    const box = widget.layout(context, {
+    const box = widget.layout(context, new BoxConstraints({
       maxWidth,
       maxHeight
-    });
+    }));
     if (box.height > maxHeight + .001) {
       throw new RangeError(`Page content height ${box.height.toFixed(2)} exceeds available height ${maxHeight.toFixed(2)}`);
     }
@@ -3326,10 +3659,10 @@ class Page {
       return;
     }
     const widget = build(context);
-    const box = widget.layout(context, {
+    const box = widget.layout(context, new BoxConstraints({
       maxWidth: format.width,
       maxHeight: format.height
-    });
+    }));
     widget.paint(context, {
       ...box,
       x: 0,
@@ -3659,113 +3992,289 @@ class Document {
   }
 }
 
-class Spacer extends Widget {
-  constructor(height = 8) {
-    super();
-    this.requestedHeight = Number(height);
+function finiteNonNegative(value, name) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(`${name} must be a finite non-negative number`);
   }
+  return value;
+}
+
+function childMain(box, direction) {
+  return direction === "horizontal" ? box.width : box.height;
+}
+
+function childCross(box, direction) {
+  return direction === "horizontal" ? box.height : box.width;
+}
+
+function axisConstraints(direction, minMain, maxMain, minCross, maxCross) {
+  return direction === "horizontal" ? new BoxConstraints({
+    minWidth: minMain,
+    maxWidth: maxMain,
+    minHeight: minCross,
+    maxHeight: maxCross
+  }) : new BoxConstraints({
+    minWidth: minCross,
+    maxWidth: maxCross,
+    minHeight: minMain,
+    maxHeight: maxMain
+  });
+}
+
+class EmptyFlexChild extends Widget {
   layout(_context, constraints) {
+    const size = BoxConstraints.from(constraints).smallest;
     return {
       widget: this,
-      width: constraints.maxWidth,
-      height: Math.max(0, this.requestedHeight),
+      width: size.width,
+      height: size.height,
       data: null
     };
   }
   paint() {}
 }
 
-class Column extends Widget {
-  constructor({children = [], gap = 0, margin = 0} = {}) {
+class Flexible extends Widget {
+  constructor({flex = 1, fit = "loose", child}) {
     super();
-    this.children = children;
-    this.gap = Number(gap);
-    this.margin = normalizeInsets(margin);
+    this.flex = finiteNonNegative(Number(flex), "flex");
+    if (fit !== "tight" && fit !== "loose") {
+      throw new TypeError(`Unknown FlexFit: ${fit}`);
+    }
+    this.fit = fit;
+    this.child = child;
   }
   layout(context, constraints) {
-    const innerWidth = Math.max(0, constraints.maxWidth - this.margin.left - this.margin.right);
-    const childBoxes = [];
-    let height = this.margin.top + this.margin.bottom;
-    let width = 0;
-    for (let index = 0; index < this.children.length; index++) {
-      const child = this.children[index];
-      const childBox = child.layout(context, {
-        maxWidth: innerWidth,
-        maxHeight: constraints.maxHeight
-      });
-      childBoxes.push(childBox);
-      height += childBox.height;
-      width = Math.max(width, childBox.width);
-      if (index < this.children.length - 1) height += this.gap;
-    }
+    const childBox = this.child.layout(context, constraints);
     return {
       widget: this,
-      width: Math.min(constraints.maxWidth, width + this.margin.left + this.margin.right),
-      height,
+      width: childBox.width,
+      height: childBox.height,
       data: {
-        childBoxes
+        childBox
       }
     };
   }
   paint(context, box) {
-    let y = box.y + this.margin.top;
-    for (const childBox of box.data.childBoxes) {
-      childBox.widget.paint(context, {
-        ...childBox,
-        x: box.x + this.margin.left,
-        y
+    const {childBox} = box.data;
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class Expanded extends Flexible {
+  constructor({flex = 1, fit = "tight", child}) {
+    super({
+      flex,
+      fit,
+      child
+    });
+  }
+}
+
+class Spacer extends Expanded {
+  constructor(options = 1) {
+    const flex = typeof options === "number" ? options : options.flex ?? 1;
+    super({
+      flex,
+      child: new EmptyFlexChild
+    });
+  }
+}
+
+class Flex extends Widget {
+  constructor({direction, children = [], mainAxisAlignment = "start", mainAxisSize = "max", crossAxisAlignment = "center", verticalDirection = "down", gap = 0, margin = 0, widths = null}) {
+    super();
+    if (direction !== "horizontal" && direction !== "vertical") {
+      throw new TypeError(`Unknown Axis: ${direction}`);
+    }
+    if (![ "start", "end", "center", "spaceBetween", "spaceAround", "spaceEvenly" ].includes(mainAxisAlignment)) {
+      throw new TypeError(`Unknown MainAxisAlignment: ${mainAxisAlignment}`);
+    }
+    if (mainAxisSize !== "min" && mainAxisSize !== "max") {
+      throw new TypeError(`Unknown MainAxisSize: ${mainAxisSize}`);
+    }
+    if (![ "start", "end", "center", "stretch" ].includes(crossAxisAlignment)) {
+      throw new TypeError(`Unknown CrossAxisAlignment: ${crossAxisAlignment}`);
+    }
+    if (verticalDirection !== "up" && verticalDirection !== "down") {
+      throw new TypeError(`Unknown VerticalDirection: ${verticalDirection}`);
+    }
+    if (widths !== null && direction !== "horizontal") {
+      throw new TypeError("Flex.widths is only valid on a horizontal flex");
+    }
+    this.direction = direction;
+    this.children = children;
+    this.mainAxisAlignment = mainAxisAlignment;
+    this.mainAxisSize = mainAxisSize;
+    this.crossAxisAlignment = crossAxisAlignment;
+    this.verticalDirection = verticalDirection;
+    this.gap = finiteNonNegative(Number(gap), "gap");
+    this.margin = normalizeInsets(margin);
+    this.widths = widths;
+  }
+  crossConstraints(constraints) {
+    const maximum = this.direction === "horizontal" ? constraints.maxHeight : constraints.maxWidth;
+    if (this.crossAxisAlignment === "stretch" && Number.isFinite(maximum)) {
+      return [ maximum, maximum ];
+    }
+    return [ 0, maximum ];
+  }
+  layout(context, incoming) {
+    const outer = BoxConstraints.from(incoming);
+    const constraints = outer.deflate(this.margin);
+    const horizontal = this.direction === "horizontal";
+    const maxMain = horizontal ? constraints.maxWidth : constraints.maxHeight;
+    const minMain = horizontal ? constraints.minWidth : constraints.minHeight;
+    const maxCross = horizontal ? constraints.maxHeight : constraints.maxWidth;
+    const minCross = horizontal ? constraints.minHeight : constraints.minWidth;
+    const canFlex = Number.isFinite(maxMain);
+    const baseGap = this.gap * Math.max(0, this.children.length - 1);
+    const measured = new Array(this.children.length);
+    let allocated = 0;
+    let crossSize = 0;
+    const measure = (index, childConstraints) => {
+      const box = this.children[index].layout(context, childConstraints);
+      measured[index] = box;
+      allocated += childMain(box, this.direction);
+      crossSize = Math.max(crossSize, childCross(box, this.direction));
+      return box;
+    };
+    if (this.widths !== null) {
+      if (!canFlex) throw new RangeError("Row.widths requires a bounded width");
+      const available = Math.max(0, maxMain - baseGap);
+      const weights = this.children.map((_, index) => finiteNonNegative(Number(this.widths?.[index] ?? 1), `widths[${index}]`));
+      const total = weights.reduce((sum, value) => sum + value, 0) || 1;
+      const [childMinCross, childMaxCross] = this.crossConstraints(constraints);
+      let used = 0;
+      for (let index = 0; index < this.children.length; index++) {
+        const extent = index === this.children.length - 1 ? available - used : available * weights[index] / total;
+        used += extent;
+        measure(index, axisConstraints(this.direction, extent, extent, childMinCross, childMaxCross));
+      }
+    } else {
+      let totalFlex = 0;
+      const flexible = [];
+      const [childMinCross, childMaxCross] = this.crossConstraints(constraints);
+      for (let index = 0; index < this.children.length; index++) {
+        const child = this.children[index];
+        if (child instanceof Flexible && child.flex > 0) {
+          if (!canFlex && (this.mainAxisSize === "max" || child.fit === "tight")) {
+            throw new RangeError("Flex children require a bounded main-axis constraint");
+          }
+          totalFlex += child.flex;
+          flexible.push(index);
+        } else {
+          measure(index, axisConstraints(this.direction, 0, Infinity, childMinCross, childMaxCross));
+        }
+      }
+      const freeSpace = Math.max(0, (canFlex ? maxMain : 0) - allocated - baseGap);
+      let allocatedFlex = 0;
+      for (let flexIndex = 0; flexIndex < flexible.length; flexIndex++) {
+        const index = flexible[flexIndex];
+        const child = this.children[index];
+        const extent = canFlex ? flexIndex === flexible.length - 1 ? freeSpace - allocatedFlex : freeSpace * child.flex / totalFlex : Infinity;
+        allocatedFlex += extent;
+        measure(index, axisConstraints(this.direction, child.fit === "tight" ? extent : 0, extent, childMinCross, childMaxCross));
+      }
+    }
+    allocated += baseGap;
+    const idealMain = canFlex && this.mainAxisSize === "max" ? maxMain : allocated;
+    const actualMain = Math.min(maxMain, Math.max(minMain, idealMain));
+    const actualCross = Math.min(maxCross, Math.max(minCross, crossSize));
+    const remaining = Math.max(0, actualMain - allocated);
+    let leading = 0;
+    let between = this.gap;
+    const count = this.children.length;
+    switch (this.mainAxisAlignment) {
+     case "end":
+      leading = remaining;
+      break;
+
+     case "center":
+      leading = remaining / 2;
+      break;
+
+     case "spaceBetween":
+      between += count > 1 ? remaining / (count - 1) : 0;
+      break;
+
+     case "spaceAround":
+      {
+        const extra = count > 0 ? remaining / count : 0;
+        leading = extra / 2;
+        between += extra;
+        break;
+      }
+
+     case "spaceEvenly":
+      {
+        const extra = count > 0 ? remaining / (count + 1) : 0;
+        leading = extra;
+        between += extra;
+        break;
+      }
+    }
+    const reverse = this.direction === "vertical" && this.verticalDirection === "up";
+    let cursor = reverse ? actualMain - leading : leading;
+    const children = [];
+    for (let index = 0; index < measured.length; index++) {
+      const box = measured[index];
+      const main = childMain(box, this.direction);
+      const cross = childCross(box, this.direction);
+      const crossPosition = this.crossAxisAlignment === "end" ? actualCross - cross : this.crossAxisAlignment === "center" ? (actualCross - cross) / 2 : 0;
+      const mainPosition = reverse ? cursor - main : cursor;
+      children.push({
+        box,
+        dx: this.margin.left + (horizontal ? mainPosition : crossPosition),
+        dy: this.margin.top + (horizontal ? crossPosition : mainPosition)
       });
-      y += childBox.height + this.gap;
+      cursor += reverse ? -(main + between) : main + between;
+    }
+    const innerWidth = horizontal ? actualMain : actualCross;
+    const innerHeight = horizontal ? actualCross : actualMain;
+    const size = outer.constrain({
+      width: innerWidth + this.margin.left + this.margin.right,
+      height: innerHeight + this.margin.top + this.margin.bottom
+    });
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        children
+      }
+    };
+  }
+  paint(context, box) {
+    for (const child of box.data.children) {
+      child.box.widget.paint(context, {
+        ...child.box,
+        x: box.x + child.dx,
+        y: box.y + child.dy
+      });
     }
   }
 }
 
-class Row extends Widget {
-  constructor({children = [], gap = 0, widths = null, margin = 0} = {}) {
-    super();
-    this.children = children;
-    this.gap = Number(gap);
-    this.widths = widths;
-    this.margin = normalizeInsets(margin);
+class Row extends Flex {
+  constructor(options = {}) {
+    super({
+      ...options,
+      direction: "horizontal"
+    });
   }
-  layout(context, constraints) {
-    const available = Math.max(0, constraints.maxWidth - this.margin.left - this.margin.right - Math.max(0, this.children.length - 1) * this.gap);
-    const ratios = this.widths ?? this.children.map(() => 1);
-    const totalRatio = ratios.reduce((sum, value) => sum + Number(value), 0) || 1;
-    const childBoxes = [];
-    let height = 0;
-    for (let index = 0; index < this.children.length; index++) {
-      const child = this.children[index];
-      const width = available * Number(ratios[index] ?? 1) / totalRatio;
-      const childBox = child.layout(context, {
-        maxWidth: width,
-        maxHeight: constraints.maxHeight
-      });
-      childBoxes.push({
-        ...childBox,
-        allocatedWidth: width
-      });
-      height = Math.max(height, childBox.height);
-    }
-    return {
-      widget: this,
-      width: constraints.maxWidth,
-      height: height + this.margin.top + this.margin.bottom,
-      data: {
-        childBoxes
-      }
-    };
-  }
-  paint(context, box) {
-    let x = box.x + this.margin.left;
-    for (const childBox of box.data.childBoxes) {
-      childBox.widget.paint(context, {
-        ...childBox,
-        x,
-        y: box.y + this.margin.top
-      });
-      x += childBox.allocatedWidth + this.gap;
-    }
+}
+
+class Column extends Flex {
+  constructor(options = {}) {
+    super({
+      ...options,
+      direction: "vertical"
+    });
   }
 }
 
@@ -3777,11 +4286,16 @@ class Vector extends Widget {
     this.draw = draw;
   }
   layout(_context, constraints) {
-    const scale = Math.min(1, constraints.maxWidth / this.width);
+    const parent = BoxConstraints.from(constraints);
+    const scale = Math.min(1, parent.maxWidth / this.width, parent.maxHeight / this.height);
+    const size = parent.constrain({
+      width: this.width * scale,
+      height: this.height * scale
+    });
     return {
       widget: this,
-      width: this.width * scale,
-      height: this.height * scale,
+      width: size.width,
+      height: size.height,
       data: {
         scale
       }
@@ -6385,14 +6899,16 @@ class SvgImage extends Widget {
     this.height = height === null ? null : Number(height);
   }
   layout(_context, constraints) {
-    const offeredWidth = this.width !== null || this.parser.width !== null ? constrain(this.width ?? this.parser.width, constraints.maxWidth) : Number.isFinite(constraints.maxWidth) ? constraints.maxWidth : constrain(this.parser.viewBox.width, constraints.maxWidth);
-    const offeredHeight = this.height !== null || this.parser.height !== null ? constrain(this.height ?? this.parser.height, constraints.maxHeight) : Number.isFinite(constraints.maxHeight) ? constraints.maxHeight : constrain(this.parser.viewBox.height, constraints.maxHeight);
+    const parent = BoxConstraints.from(constraints);
+    const offeredWidth = this.width !== null || this.parser.width !== null ? constrain(this.width ?? this.parser.width, parent.maxWidth) : parent.hasBoundedWidth ? parent.maxWidth : constrain(this.parser.viewBox.width, parent.maxWidth);
+    const offeredHeight = this.height !== null || this.parser.height !== null ? constrain(this.height ?? this.parser.height, parent.maxHeight) : parent.hasBoundedHeight ? parent.maxHeight : constrain(this.parser.viewBox.height, parent.maxHeight);
     const fitted = applyBoxFit(this.fit, size(this.parser.viewBox.width, this.parser.viewBox.height), size(offeredWidth, offeredHeight));
     const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, this.parser.viewBox.width, this.parser.viewBox.height);
+    const constrainedSize = parent.constrain(fitted.destination);
     return {
       widget: this,
-      width: fitted.destination.width,
-      height: fitted.destination.height,
+      width: constrainedSize.width,
+      height: constrainedSize.height,
       data: {
         source: fitted.source,
         destination: fitted.destination,
@@ -6656,7 +7172,7 @@ class Table extends SpanningWidget {
     }
     return widths;
   }
-  layoutRows(context, constraints, columnWidths, selectedRows) {
+  layoutRows(context, _constraints, columnWidths, selectedRows) {
     if (columnWidths.length === 0) {
       return {
         widget: this,
@@ -6679,10 +7195,11 @@ class Table extends SpanningWidget {
       for (let column = 0; column < row.children.length; column++) {
         const child = row.children[column];
         const width = columnWidths[column] ?? 0;
-        const box = child.layout(context, {
+        const box = child.layout(context, new BoxConstraints({
+          minWidth: width,
           maxWidth: width,
-          maxHeight: constraints.maxHeight
-        });
+          maxHeight: Infinity
+        }));
         measured.push({
           box,
           column,
@@ -6903,20 +7420,25 @@ class Text extends Widget {
     };
   }
   layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
     const style = this.resolveStyle(context);
-    const contentWidth = Math.max(1, constraints.maxWidth - this.margin.left - this.margin.right);
-    const wrapped = wrapText(this.value, contentWidth, style.fontSize, style.font);
+    const availableContentWidth = Math.max(1, parent.maxWidth - this.margin.left - this.margin.right);
+    const wrapped = wrapText(this.value, availableContentWidth, style.fontSize, style.font);
     const lines = style.maxLines === null ? wrapped : wrapped.slice(0, Math.max(1, style.maxLines));
     const contentHeight = lines.length * style.lineAdvance;
     const widest = Math.max(...lines.map(line => textWidth(style.font, line, style.fontSize, style.letterSpacing)), 0);
+    const size = parent.constrain({
+      width: widest + this.margin.left + this.margin.right,
+      height: contentHeight + this.margin.top + this.margin.bottom
+    });
     return {
       widget: this,
-      width: Math.min(constraints.maxWidth, widest + this.margin.left + this.margin.right),
-      height: contentHeight + this.margin.top + this.margin.bottom,
+      width: size.width,
+      height: size.height,
       data: {
         lines,
         lineAdvance: style.lineAdvance,
-        contentWidth,
+        contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
         style
       }
     };
@@ -7010,16 +7532,18 @@ class HelperCell extends Widget {
     this.expandChildWidth = expandChildWidth;
   }
   layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
     const horizontal = insetsHorizontal(this.padding);
     const vertical = insetsVertical(this.padding);
-    const childBox = this.child.layout(context, {
-      maxWidth: Math.max(0, constraints.maxWidth - horizontal),
-      maxHeight: Math.max(0, constraints.maxHeight - vertical)
+    const childBox = this.child.layout(context, parent.deflate(this.padding));
+    const size = parent.constrain({
+      width: childBox.width + horizontal,
+      height: Math.max(this.minimumHeight, childBox.height + vertical)
     });
     return {
       widget: this,
-      width: Math.min(constraints.maxWidth, childBox.width + horizontal),
-      height: Math.max(this.minimumHeight, childBox.height + vertical),
+      width: size.width,
+      height: size.height,
       data: {
         childBox
       }
@@ -7132,16 +7656,21 @@ const publicApi = Object.freeze({
   Text,
   Column,
   Row,
+  Flex,
+  Flexible,
+  Expanded,
   Container,
   Spacer,
   Vector,
   Padding,
   Align,
   Center,
+  ConstrainedBox,
   SizedBox,
   Divider,
   Transform,
   Opacity,
+  OverflowBox,
   FittedBox,
   AspectRatio,
   FullPage,
@@ -7162,6 +7691,7 @@ const publicApi = Object.freeze({
   TableHelper,
   SpanningWidget,
   Alignment,
+  BoxConstraints,
   EdgeInsets,
   PageFormat,
   PdfType1Font,
@@ -7192,4 +7722,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AspectRatio, Builder, Center, Column, Container, CustomPaint, DefaultTextStyle, Divider, Document, EdgeInsets, FittedBox, FixedColumnWidth, FlexColumnWidth, Font, FractionColumnWidth, FullPage, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, MultiPage, Opacity, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, SpanningWidget, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableRow, Text, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AspectRatio, BoxConstraints, Builder, Center, Column, ConstrainedBox, Container, CustomPaint, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, Font, FractionColumnWidth, FullPage, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, PdfFontMetrics, PdfGraphicState, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Row, SizedBox, Spacer, SpanningWidget, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableRow, Text, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, composeMatrices, createPdf, flipMatrix, identityMatrix, invertMatrix, js_pdf, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

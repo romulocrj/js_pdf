@@ -10,8 +10,8 @@ import { customData, requireFeatures } from './upstream-example-helpers.mjs';
 
 export function generateReport(pageFormat = pw.PageFormat.A4, _data = customData, resources = {}) {
   requireFeatures(pw, 'report', [
-    'BarDataSet', 'CartesianGrid', 'Chart', 'ChartLegend', 'Divider', 'Expanded',
-    'FixedAxis', 'Flexible', 'Font', 'LineDataSet', 'PieDataSet', 'PieGrid', 'PointChartValue',
+    'BarDataSet', 'CartesianGrid', 'Chart', 'ChartLegend', 'Divider', 'FixedAxis',
+    'Font', 'LineDataSet', 'PieDataSet', 'PieGrid', 'PointChartValue',
     'SizedBox', 'TextStyle', 'ThemeData'
   ]);
 

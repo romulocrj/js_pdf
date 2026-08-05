@@ -2,8 +2,8 @@ import type { ColorInput, Rgb } from '../pdf/color.ts';
 import type { PdfCanvas } from '../pdf/graphics.ts';
 import type { PdfMatrix } from '../pdf/matrix.ts';
 import type { PdfPoint } from '../pdf/rect.ts';
-import { Alignment } from './geometry.ts';
-import type { Insets, InsetsInput, Offset } from './geometry.ts';
+import { Alignment, BoxConstraints } from './geometry.ts';
+import type { BoxConstraintsInput, Insets, InsetsInput, Offset } from './geometry.ts';
 import type { BoxFit } from './svg.ts';
 import { StatelessWidget, Widget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext, StatelessLayoutData } from './widget.ts';
@@ -37,18 +37,8 @@ export interface AlignOptions {
 /**
  * Positions its child inside itself according to `alignment`.
  *
- * Sizing follows upstream: an axis shrink-wraps the child when a factor is given
- * for it, and otherwise fills the constraint. Upstream also shrink-wraps an axis
- * whose constraint is infinite, which never happens here — this port's
- * constraints are always finite — so the practical rule is *fill unless a factor
- * says otherwise*.
- *
- * PORT GAP, and a sharp edge worth knowing: upstream's `Flex` gives its children
- * an infinite main-axis constraint, so an `Align` inside a `Column` shrink-wraps
- * its height there. This port's `Column` passes the remaining page height
- * instead, so an `Align` inside one currently claims all of it. Pass
- * `heightFactor: 1` to shrink-wrap in the meantime. The real fix is phase 3.4's
- * flex algorithm, not a special case here.
+ * Sizing follows upstream: an axis shrink-wraps when it has a factor or an
+ * unbounded maximum, and otherwise fills the available extent.
  */
 export declare class Align extends Widget<AlignLayoutData> {
     readonly alignment: Alignment;
@@ -58,6 +48,18 @@ export declare class Align extends Widget<AlignLayoutData> {
     constructor({ alignment, widthFactor, heightFactor, child }?: AlignOptions);
     layout(context: RenderContext, constraints: Constraints): LayoutBox<AlignLayoutData>;
     paint(context: RenderContext, box: PositionedBox<AlignLayoutData>): void;
+}
+export interface ConstrainedBoxOptions {
+    readonly constraints: BoxConstraints | BoxConstraintsInput;
+    readonly child?: AnyWidget | null;
+}
+/** Imposes additional minimum and maximum dimensions on its child. */
+export declare class ConstrainedBox extends Widget<SingleChildLayoutData> {
+    readonly constraints: BoxConstraints;
+    readonly child: AnyWidget | null;
+    constructor({ constraints, child }: ConstrainedBoxOptions);
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData>;
+    paint(context: RenderContext, box: PositionedBox<SingleChildLayoutData>): void;
 }
 export interface CenterOptions {
     readonly widthFactor?: number | null;
@@ -73,18 +75,7 @@ export interface SizedBoxOptions {
     readonly height?: number | null;
     readonly child?: AnyWidget | null;
 }
-/**
- * A box of a stated size.
- *
- * Upstream builds a `ConstrainedBox` with tight constraints, which forces the
- * child to that exact size. Without minimums in `Constraints` this instead
- * *offers* the size to the child as a maximum and reports the stated size
- * regardless of what the child took — the box occupies the right space either
- * way, and a child that would have stretched into it simply does not. That
- * distinction disappears when phase 3.4 introduces real `BoxConstraints`.
- *
- * With no child and no size, this is upstream's `SizedBox.shrink()`.
- */
+/** A box that tightens either stated dimension around its child. */
 export declare class SizedBox extends Widget<SingleChildLayoutData> {
     readonly width: number | null;
     readonly height: number | null;
@@ -250,6 +241,30 @@ export declare class LimitedBox extends Widget<SingleChildLayoutData> {
     constructor({ maxWidth, maxHeight, child }?: LimitedBoxOptions);
     layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData>;
     paint(context: RenderContext, box: PositionedBox<SingleChildLayoutData>): void;
+}
+export interface OverflowBoxOptions {
+    readonly alignment?: BasicAlignmentInput;
+    readonly minWidth?: number | null;
+    readonly maxWidth?: number | null;
+    readonly minHeight?: number | null;
+    readonly maxHeight?: number | null;
+    readonly child?: AnyWidget | null;
+}
+export interface OverflowBoxLayoutData extends SingleChildLayoutData {
+    readonly dx: number;
+    readonly dy: number;
+}
+/** Gives its child replacement constraints and permits it to exceed this box. */
+export declare class OverflowBox extends Widget<OverflowBoxLayoutData> {
+    readonly alignment: Alignment;
+    readonly minWidth: number | null;
+    readonly maxWidth: number | null;
+    readonly minHeight: number | null;
+    readonly maxHeight: number | null;
+    readonly child: AnyWidget | null;
+    constructor({ alignment, minWidth, maxWidth, minHeight, maxHeight, child }?: OverflowBoxOptions);
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<OverflowBoxLayoutData>;
+    paint(context: RenderContext, box: PositionedBox<OverflowBoxLayoutData>): void;
 }
 export interface VerticalDividerOptions {
     readonly width?: number;

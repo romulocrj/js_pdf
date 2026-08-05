@@ -20,7 +20,14 @@
  * phase 3.4, so the wrapper carries the same minimum height explicitly.
  */
 
-import { Alignment, inscribe, insetsHorizontal, insetsVertical, normalizeInsets } from './geometry.ts';
+import {
+  Alignment,
+  BoxConstraints,
+  inscribe,
+  insetsHorizontal,
+  insetsVertical,
+  normalizeInsets
+} from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import { assertFiniteNumber } from '../base/assert.ts';
 import {
@@ -173,16 +180,18 @@ class HelperCell extends Widget<HelperCellLayoutData> {
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<HelperCellLayoutData> {
+    const parent = BoxConstraints.from(constraints);
     const horizontal = insetsHorizontal(this.padding);
     const vertical = insetsVertical(this.padding);
-    const childBox = this.child.layout(context, {
-      maxWidth: Math.max(0, constraints.maxWidth - horizontal),
-      maxHeight: Math.max(0, constraints.maxHeight - vertical)
+    const childBox = this.child.layout(context, parent.deflate(this.padding));
+    const size = parent.constrain({
+      width: childBox.width + horizontal,
+      height: Math.max(this.minimumHeight, childBox.height + vertical)
     });
     return {
       widget: this,
-      width: Math.min(constraints.maxWidth, childBox.width + horizontal),
-      height: Math.max(this.minimumHeight, childBox.height + vertical),
+      width: size.width,
+      height: size.height,
       data: { childBox }
     };
   }

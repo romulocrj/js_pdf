@@ -24,6 +24,7 @@ import type { SerializedPage } from '../pdf/document.ts';
 import { PdfCanvas } from '../pdf/graphics.ts';
 import { DEFAULT_MARGIN, PageFormat } from '../pdf/page_format.ts';
 import type { PageSize } from '../pdf/page_format.ts';
+import { BoxConstraints } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import { PageTheme } from './page_theme.ts';
 import type { PageOrientation } from './page_theme.ts';
@@ -151,14 +152,20 @@ export class MultiPage implements Section {
 
       if (this.header) {
         const headerWidget = this.header(context);
-        const headerBox = headerWidget.layout(context, { maxWidth, maxHeight: bottom - top });
+        const headerBox = headerWidget.layout(context, new BoxConstraints({
+          maxWidth,
+          maxHeight: bottom - top
+        }));
         headerWidget.paint(context, { ...headerBox, x: this.margin.left, y: top });
         top += headerBox.height + this.gap;
       }
 
       if (this.footer) {
         const footerWidget = this.footer(context);
-        const footerBox = footerWidget.layout(context, { maxWidth, maxHeight: bottom - top });
+        const footerBox = footerWidget.layout(context, new BoxConstraints({
+          maxWidth,
+          maxHeight: bottom - top
+        }));
         bottom -= footerBox.height + this.gap;
         footerWidget.paint(context, { ...footerBox, x: this.margin.left, y: bottom + this.gap });
       }
@@ -175,10 +182,10 @@ export class MultiPage implements Section {
 
         while (true) {
           const available = page.bottom - page.cursor;
-          const fragment = child.layoutSpan(page.context, {
+          const fragment = child.layoutSpan(page.context, new BoxConstraints({
             maxWidth: page.maxWidth,
             maxHeight: available
-          }, state);
+          }), state);
           const box = fragment.box;
 
           if (box.height > available + 0.001) {
@@ -212,10 +219,10 @@ export class MultiPage implements Section {
         continue;
       }
 
-      let box = child.layout(page.context, {
+      let box = child.layout(page.context, new BoxConstraints({
         maxWidth: page.maxWidth,
-        maxHeight: page.bottom - page.cursor
-      });
+        maxHeight: Infinity
+      }));
 
       if (page.cursor + box.height > page.bottom + 0.001) {
         if (box.height > page.bottom - page.top + 0.001) {
@@ -223,10 +230,10 @@ export class MultiPage implements Section {
         }
 
         page = startPage();
-        box = child.layout(page.context, {
+        box = child.layout(page.context, new BoxConstraints({
           maxWidth: page.maxWidth,
-          maxHeight: page.bottom - page.cursor
-        });
+          maxHeight: Infinity
+        }));
       }
 
       child.paint(page.context, {

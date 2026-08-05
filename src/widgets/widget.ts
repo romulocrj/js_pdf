@@ -42,7 +42,9 @@ export interface RenderContext extends DocumentContext {
 }
 
 export interface Constraints {
+  readonly minWidth?: number;
   readonly maxWidth: number;
+  readonly minHeight?: number;
   readonly maxHeight: number;
 }
 

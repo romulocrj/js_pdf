@@ -29,6 +29,7 @@ import {
   AspectRatio,
   Builder,
   Center,
+  ConstrainedBox,
   CustomPaint,
   Divider,
   FittedBox,
@@ -36,6 +37,7 @@ import {
   LayoutBuilder,
   LimitedBox,
   Opacity,
+  OverflowBox,
   Padding,
   SizedBox,
   Transform,
@@ -43,9 +45,9 @@ import {
 } from './widgets/basic.ts';
 import { Container } from './widgets/container.ts';
 import { Document } from './widgets/document.ts';
-import { Column, Row, Spacer } from './widgets/flex.ts';
+import { Column, Expanded, Flex, Flexible, Row, Spacer } from './widgets/flex.ts';
 import { Font } from './widgets/font.ts';
-import { Alignment, EdgeInsets } from './widgets/geometry.ts';
+import { Alignment, BoxConstraints, EdgeInsets } from './widgets/geometry.ts';
 import { MultiPage } from './widgets/multi_page.ts';
 import { Page } from './widgets/page.ts';
 import type { Section } from './widgets/page.ts';
@@ -73,18 +75,23 @@ export {
   Align,
   Alignment,
   AspectRatio,
+  BoxConstraints,
   Builder,
   Center,
   Column,
+  ConstrainedBox,
   Container,
   CustomPaint,
   DefaultTextStyle,
   Divider,
   Document,
   EdgeInsets,
+  Expanded,
   FixedColumnWidth,
   FlexColumnWidth,
   FittedBox,
+  Flex,
+  Flexible,
   Font,
   FractionColumnWidth,
   FullPage,
@@ -93,6 +100,7 @@ export {
   LimitedBox,
   MultiPage,
   Opacity,
+  OverflowBox,
   Padding,
   Page,
   PageFormat,
@@ -173,7 +181,13 @@ export type {
   PageOrientation,
   PageThemeOptions
 } from './widgets/page_theme.ts';
-export type { Insets, InsetsInput, Offset } from './widgets/geometry.ts';
+export type {
+  BoxConstraintsInput,
+  ConstraintSize,
+  Insets,
+  InsetsInput,
+  Offset
+} from './widgets/geometry.ts';
 export type {
   AnyLayoutBox,
   AnyWidget,
@@ -193,6 +207,7 @@ export type {
   BasicAlignmentName,
   BuilderOptions,
   CenterOptions,
+  ConstrainedBoxOptions,
   CustomPaintOptions,
   CustomPainter,
   DividerOptions,
@@ -203,6 +218,8 @@ export type {
   LayoutWidgetBuilder,
   LimitedBoxOptions,
   OpacityOptions,
+  OverflowBoxLayoutData,
+  OverflowBoxOptions,
   PaddingOptions,
   SingleChildLayoutData,
   SizedBoxOptions,
@@ -211,7 +228,22 @@ export type {
   VerticalDividerOptions,
   WidgetBuilder
 } from './widgets/basic.ts';
-export type { ColumnOptions, RowOptions } from './widgets/flex.ts';
+export type {
+  Axis,
+  ColumnOptions,
+  CrossAxisAlignment,
+  ExpandedOptions,
+  FlexChildLayout,
+  FlexibleLayoutData,
+  FlexibleOptions,
+  FlexFit,
+  FlexLayoutData,
+  FlexOptions,
+  MainAxisAlignment,
+  MainAxisSize,
+  RowOptions,
+  VerticalDirection
+} from './widgets/flex.ts';
 export type { ContainerOptions } from './widgets/container.ts';
 export type {
   ColumnLayout,
@@ -262,16 +294,21 @@ export interface PublicApi {
   readonly Text: typeof Text;
   readonly Column: typeof Column;
   readonly Row: typeof Row;
+  readonly Flex: typeof Flex;
+  readonly Flexible: typeof Flexible;
+  readonly Expanded: typeof Expanded;
   readonly Container: typeof Container;
   readonly Spacer: typeof Spacer;
   readonly Vector: typeof Vector;
   readonly Padding: typeof Padding;
   readonly Align: typeof Align;
   readonly Center: typeof Center;
+  readonly ConstrainedBox: typeof ConstrainedBox;
   readonly SizedBox: typeof SizedBox;
   readonly Divider: typeof Divider;
   readonly Transform: typeof Transform;
   readonly Opacity: typeof Opacity;
+  readonly OverflowBox: typeof OverflowBox;
   readonly FittedBox: typeof FittedBox;
   readonly AspectRatio: typeof AspectRatio;
   readonly FullPage: typeof FullPage;
@@ -292,6 +329,7 @@ export interface PublicApi {
   readonly TableHelper: typeof TableHelper;
   readonly SpanningWidget: typeof SpanningWidget;
   readonly Alignment: typeof Alignment;
+  readonly BoxConstraints: typeof BoxConstraints;
   readonly EdgeInsets: typeof EdgeInsets;
   readonly PageFormat: typeof PageFormat;
   readonly PdfType1Font: typeof PdfType1Font;
@@ -311,16 +349,21 @@ const publicApi: PublicApi = Object.freeze({
   Text,
   Column,
   Row,
+  Flex,
+  Flexible,
+  Expanded,
   Container,
   Spacer,
   Vector,
   Padding,
   Align,
   Center,
+  ConstrainedBox,
   SizedBox,
   Divider,
   Transform,
   Opacity,
+  OverflowBox,
   FittedBox,
   AspectRatio,
   FullPage,
@@ -341,6 +384,7 @@ const publicApi: PublicApi = Object.freeze({
   TableHelper,
   SpanningWidget,
   Alignment,
+  BoxConstraints,
   EdgeInsets,
   PageFormat,
   PdfType1Font,

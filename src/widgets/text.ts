@@ -31,7 +31,7 @@ import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput, Rgb } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
 import { defaultPdfFont } from '../pdf/font/type1_fonts.ts';
-import { normalizeInsets } from './geometry.ts';
+import { BoxConstraints, normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import type { TextStyle } from './text_style.ts';
 import { DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT } from './text_style.ts';
@@ -212,9 +212,13 @@ export class Text extends Widget<TextLayoutData> {
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<TextLayoutData> {
+    const parent = BoxConstraints.from(constraints);
     const style = this.resolveStyle(context);
-    const contentWidth = Math.max(1, constraints.maxWidth - this.margin.left - this.margin.right);
-    const wrapped = wrapText(this.value, contentWidth, style.fontSize, style.font);
+    const availableContentWidth = Math.max(
+      1,
+      parent.maxWidth - this.margin.left - this.margin.right
+    );
+    const wrapped = wrapText(this.value, availableContentWidth, style.fontSize, style.font);
     const lines = style.maxLines === null ? wrapped : wrapped.slice(0, Math.max(1, style.maxLines));
     const contentHeight = lines.length * style.lineAdvance;
 
@@ -223,11 +227,20 @@ export class Text extends Widget<TextLayoutData> {
       0
     );
 
+    const size = parent.constrain({
+      width: widest + this.margin.left + this.margin.right,
+      height: contentHeight + this.margin.top + this.margin.bottom
+    });
     return {
       widget: this,
-      width: Math.min(constraints.maxWidth, widest + this.margin.left + this.margin.right),
-      height: contentHeight + this.margin.top + this.margin.bottom,
-      data: { lines, lineAdvance: style.lineAdvance, contentWidth, style }
+      width: size.width,
+      height: size.height,
+      data: {
+        lines,
+        lineAdvance: style.lineAdvance,
+        contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
+        style
+      }
     };
   }
 

@@ -28,7 +28,7 @@ import type { PdfMatrix } from '../pdf/matrix.ts';
 import { SvgPainter } from '../svg/painter.ts';
 import { SvgParser } from '../svg/parser.ts';
 import { parseXml } from '../svg/xml.ts';
-import { Alignment, inscribe } from './geometry.ts';
+import { Alignment, BoxConstraints, inscribe } from './geometry.ts';
 import type { Alignment as AlignmentValue } from './geometry.ts';
 import { Widget } from './widget.ts';
 import type { Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
@@ -170,16 +170,17 @@ export class SvgImage extends Widget<SvgImageLayoutData> {
   }
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<SvgImageLayoutData> {
+    const parent = BoxConstraints.from(constraints);
     const offeredWidth = this.width !== null || this.parser.width !== null
-      ? constrain(this.width ?? this.parser.width!, constraints.maxWidth)
-      : (Number.isFinite(constraints.maxWidth)
-        ? constraints.maxWidth
-        : constrain(this.parser.viewBox.width, constraints.maxWidth));
+      ? constrain(this.width ?? this.parser.width!, parent.maxWidth)
+      : (parent.hasBoundedWidth
+        ? parent.maxWidth
+        : constrain(this.parser.viewBox.width, parent.maxWidth));
     const offeredHeight = this.height !== null || this.parser.height !== null
-      ? constrain(this.height ?? this.parser.height!, constraints.maxHeight)
-      : (Number.isFinite(constraints.maxHeight)
-        ? constraints.maxHeight
-        : constrain(this.parser.viewBox.height, constraints.maxHeight));
+      ? constrain(this.height ?? this.parser.height!, parent.maxHeight)
+      : (parent.hasBoundedHeight
+        ? parent.maxHeight
+        : constrain(this.parser.viewBox.height, parent.maxHeight));
 
     const fitted = applyBoxFit(
       this.fit,
@@ -194,10 +195,11 @@ export class SvgImage extends Widget<SvgImageLayoutData> {
       this.parser.viewBox.height
     );
 
+    const constrainedSize = parent.constrain(fitted.destination);
     return {
       widget: this,
-      width: fitted.destination.width,
-      height: fitted.destination.height,
+      width: constrainedSize.width,
+      height: constrainedSize.height,
       data: {
         source: fitted.source,
         destination: fitted.destination,

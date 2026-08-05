@@ -15,12 +15,7 @@
  *   - pdf/lib/src/widgets/basic.dart
  *   - pdf/lib/src/widgets/geometry.dart
  *
- * The composition widgets from upstream's `basic.dart` that do not require
- * minimum constraints.
- *
- * PORT GAP: `ConstrainedBox` and `OverflowBox` wait on phase 3.4's real
- * `BoxConstraints` value with minimums. `LimitedBox` is useful for an unbounded
- * maximum now, but cannot express upstream's minimum-preserving branch yet.
+ * The composition and constraint widgets from upstream's `basic.dart`.
  */
 
 import { assertFiniteNumber } from '../base/assert.ts';
@@ -39,8 +34,15 @@ import {
 } from '../pdf/matrix.ts';
 import type { PdfMatrix } from '../pdf/matrix.ts';
 import type { PdfPoint } from '../pdf/rect.ts';
-import { Alignment, inscribe, insetsHorizontal, insetsVertical, normalizeInsets } from './geometry.ts';
-import type { Insets, InsetsInput, Offset } from './geometry.ts';
+import {
+  Alignment,
+  BoxConstraints,
+  inscribe,
+  insetsHorizontal,
+  insetsVertical,
+  normalizeInsets
+} from './geometry.ts';
+import type { BoxConstraintsInput, Insets, InsetsInput, Offset } from './geometry.ts';
 import type { BoxFit } from './svg.ts';
 import { StatelessWidget, Widget } from './widget.ts';
 import type {
@@ -75,27 +77,30 @@ export class Padding extends Widget<SingleChildLayoutData> {
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData> {
+    const parent = BoxConstraints.from(constraints);
     const horizontal = insetsHorizontal(this.padding);
     const vertical = insetsVertical(this.padding);
 
     if (this.child === null) {
+      const size = parent.constrain({ width: horizontal, height: vertical });
       return {
         widget: this,
-        width: Math.min(constraints.maxWidth, horizontal),
-        height: Math.min(constraints.maxHeight, vertical),
+        width: size.width,
+        height: size.height,
         data: { childBox: null }
       };
     }
 
-    const childBox = this.child.layout(context, {
-      maxWidth: Math.max(0, constraints.maxWidth - horizontal),
-      maxHeight: Math.max(0, constraints.maxHeight - vertical)
+    const childBox = this.child.layout(context, parent.deflate(this.padding));
+    const size = parent.constrain({
+      width: childBox.width + horizontal,
+      height: childBox.height + vertical
     });
 
     return {
       widget: this,
-      width: Math.min(constraints.maxWidth, childBox.width + horizontal),
-      height: childBox.height + vertical,
+      width: size.width,
+      height: size.height,
       data: { childBox }
     };
   }
@@ -128,18 +133,8 @@ export interface AlignOptions {
 /**
  * Positions its child inside itself according to `alignment`.
  *
- * Sizing follows upstream: an axis shrink-wraps the child when a factor is given
- * for it, and otherwise fills the constraint. Upstream also shrink-wraps an axis
- * whose constraint is infinite, which never happens here — this port's
- * constraints are always finite — so the practical rule is *fill unless a factor
- * says otherwise*.
- *
- * PORT GAP, and a sharp edge worth knowing: upstream's `Flex` gives its children
- * an infinite main-axis constraint, so an `Align` inside a `Column` shrink-wraps
- * its height there. This port's `Column` passes the remaining page height
- * instead, so an `Align` inside one currently claims all of it. Pass
- * `heightFactor: 1` to shrink-wrap in the meantime. The real fix is phase 3.4's
- * flex algorithm, not a special case here.
+ * Sizing follows upstream: an axis shrink-wraps when it has a factor or an
+ * unbounded maximum, and otherwise fills the available extent.
  */
 export class Align extends Widget<AlignLayoutData> {
   readonly alignment: Alignment;
@@ -161,30 +156,34 @@ export class Align extends Widget<AlignLayoutData> {
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<AlignLayoutData> {
+    const parent = BoxConstraints.from(constraints);
+    const shrinkWidth = this.widthFactor !== null || !parent.hasBoundedWidth;
+    const shrinkHeight = this.heightFactor !== null || !parent.hasBoundedHeight;
     if (this.child === null) {
+      const size = parent.constrain({
+        width: shrinkWidth ? 0 : Infinity,
+        height: shrinkHeight ? 0 : Infinity
+      });
       return {
         widget: this,
-        width: this.widthFactor === null ? constraints.maxWidth : 0,
-        height: this.heightFactor === null ? constraints.maxHeight : 0,
+        width: size.width,
+        height: size.height,
         data: { childBox: null, dx: 0, dy: 0 }
       };
     }
 
-    const childBox = this.child.layout(context, constraints);
+    const childBox = this.child.layout(context, parent.loosen());
+    const size = parent.constrain({
+      width: shrinkWidth ? childBox.width * (this.widthFactor ?? 1) : Infinity,
+      height: shrinkHeight ? childBox.height * (this.heightFactor ?? 1) : Infinity
+    });
 
-    const width = this.widthFactor === null
-      ? constraints.maxWidth
-      : Math.min(constraints.maxWidth, childBox.width * this.widthFactor);
-    const height = this.heightFactor === null
-      ? constraints.maxHeight
-      : Math.min(constraints.maxHeight, childBox.height * this.heightFactor);
-
-    const offset = inscribe(this.alignment, childBox.width, childBox.height, width, height);
+    const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
 
     return {
       widget: this,
-      width,
-      height,
+      width: size.width,
+      height: size.height,
       data: { childBox, dx: offset.dx, dy: offset.dy }
     };
   }
@@ -194,6 +193,40 @@ export class Align extends Widget<AlignLayoutData> {
     if (childBox === null) return;
 
     childBox.widget.paint(context, { ...childBox, x: box.x + dx, y: box.y + dy });
+  }
+}
+
+export interface ConstrainedBoxOptions {
+  readonly constraints: BoxConstraints | BoxConstraintsInput;
+  readonly child?: AnyWidget | null;
+}
+
+/** Imposes additional minimum and maximum dimensions on its child. */
+export class ConstrainedBox extends Widget<SingleChildLayoutData> {
+  readonly constraints: BoxConstraints;
+  readonly child: AnyWidget | null;
+
+  constructor({ constraints, child = null }: ConstrainedBoxOptions) {
+    super();
+    this.constraints = BoxConstraints.from(constraints);
+    this.child = child;
+  }
+
+  override layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData> {
+    const enforced = this.constraints.enforce(BoxConstraints.from(constraints));
+    const childBox = this.child?.layout(context, enforced) ?? null;
+    const size = childBox === null ? enforced.smallest : enforced.constrain(childBox);
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: { childBox }
+    };
+  }
+
+  override paint(context: RenderContext, box: PositionedBox<SingleChildLayoutData>): void {
+    const { childBox } = box.data;
+    childBox?.widget.paint(context, { ...childBox, x: box.x, y: box.y });
   }
 }
 
@@ -216,18 +249,7 @@ export interface SizedBoxOptions {
   readonly child?: AnyWidget | null;
 }
 
-/**
- * A box of a stated size.
- *
- * Upstream builds a `ConstrainedBox` with tight constraints, which forces the
- * child to that exact size. Without minimums in `Constraints` this instead
- * *offers* the size to the child as a maximum and reports the stated size
- * regardless of what the child took — the box occupies the right space either
- * way, and a child that would have stretched into it simply does not. That
- * distinction disappears when phase 3.4 introduces real `BoxConstraints`.
- *
- * With no child and no size, this is upstream's `SizedBox.shrink()`.
- */
+/** A box that tightens either stated dimension around its child. */
 export class SizedBox extends Widget<SingleChildLayoutData> {
   readonly width: number | null;
   readonly height: number | null;
@@ -241,16 +263,19 @@ export class SizedBox extends Widget<SingleChildLayoutData> {
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData> {
-    const maxWidth = Math.min(constraints.maxWidth, this.width ?? constraints.maxWidth);
-    const maxHeight = Math.min(constraints.maxHeight, this.height ?? constraints.maxHeight);
+    const tight = BoxConstraints.from(constraints).tighten({
+      width: this.width,
+      height: this.height
+    });
     const childBox = this.child === null
       ? null
-      : this.child.layout(context, { maxWidth, maxHeight });
+      : this.child.layout(context, tight);
+    const size = childBox === null ? tight.smallest : tight.constrain(childBox);
 
     return {
       widget: this,
-      width: this.width ?? childBox?.width ?? 0,
-      height: this.height ?? childBox?.height ?? 0,
+      width: size.width,
+      height: size.height,
       data: { childBox }
     };
   }
@@ -306,10 +331,14 @@ export class Divider extends Widget<null> {
   }
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<null> {
+    const size = BoxConstraints.from(constraints).constrain({
+      width: Infinity,
+      height: this.height
+    });
     return {
       widget: this,
-      width: constraints.maxWidth,
-      height: Math.min(constraints.maxHeight, this.height),
+      width: size.width,
+      height: size.height,
       data: null
     };
   }
@@ -436,23 +465,27 @@ export class Transform extends Widget<TransformLayoutData> {
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<TransformLayoutData> {
+    const parent = BoxConstraints.from(constraints);
     if (this.child === null) {
+      const size = parent.smallest;
       return {
         widget: this,
-        width: 0,
-        height: 0,
+        width: size.width,
+        height: size.height,
         data: { childBox: null, layoutDx: 0, layoutDy: 0 }
       };
     }
 
-    // The current protocol has no unconstrained value distinct from an
-    // unbounded maximum. Phase 3.4 supplies that distinction.
-    const childBox = this.child.layout(context, constraints);
+    const childBox = this.child.layout(
+      context,
+      this.adjustLayout && this.unconstrained ? new BoxConstraints() : parent
+    );
     if (!this.adjustLayout) {
+      const size = parent.constrain(childBox);
       return {
         widget: this,
-        width: childBox.width,
-        height: childBox.height,
+        width: size.width,
+        height: size.height,
         data: { childBox, layoutDx: 0, layoutDy: 0 }
       };
     }
@@ -468,10 +501,14 @@ export class Transform extends Widget<TransformLayoutData> {
     const minimumY = Math.min(...corners.map(point => point.y));
     const maximumY = Math.max(...corners.map(point => point.y));
 
+    const size = parent.constrain({
+      width: maximumX - minimumX,
+      height: maximumY - minimumY
+    });
     return {
       widget: this,
-      width: maximumX - minimumX,
-      height: maximumY - minimumY,
+      width: size.width,
+      height: size.height,
       data: { childBox, layoutDx: -minimumX, layoutDy: -minimumY }
     };
   }
@@ -523,10 +560,11 @@ export class Opacity extends Widget<SingleChildLayoutData> {
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData> {
     const childBox = this.child?.layout(context, constraints) ?? null;
+    const size = BoxConstraints.from(constraints).constrain(childBox ?? { width: 0, height: 0 });
     return {
       widget: this,
-      width: childBox?.width ?? 0,
-      height: childBox?.height ?? 0,
+      width: size.width,
+      height: size.height,
       data: { childBox }
     };
   }
@@ -611,17 +649,22 @@ export class FittedBox extends Widget<FittedBoxLayoutData> {
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<FittedBoxLayoutData> {
+    const parent = BoxConstraints.from(constraints);
     if (this.child === null) {
-      return { widget: this, width: 0, height: 0, data: { childBox: null } };
+      const size = parent.smallest;
+      return {
+        widget: this,
+        width: size.width,
+        height: size.height,
+        data: { childBox: null }
+      };
     }
-    const childBox = this.child.layout(context, constraints);
-    const factor = childBox.width <= 0 || childBox.height <= 0
-      ? 0
-      : Math.min(1, constraints.maxWidth / childBox.width, constraints.maxHeight / childBox.height);
+    const childBox = this.child.layout(context, new BoxConstraints());
+    const size = parent.constrainSizeAndAttemptToPreserveAspectRatio(childBox);
     return {
       widget: this,
-      width: childBox.width * factor,
-      height: childBox.height * factor,
+      width: size.width,
+      height: size.height,
       data: { childBox }
     };
   }
@@ -691,14 +734,39 @@ export class AspectRatio extends Widget<SingleChildLayoutData> {
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData> {
-    let width = constraints.maxWidth;
-    let height = width / this.aspectRatio;
-    if (height > constraints.maxHeight) {
-      height = constraints.maxHeight;
-      width = height * this.aspectRatio;
+    const parent = BoxConstraints.from(constraints);
+    let size: { readonly width: number; readonly height: number };
+    if (parent.isTight) {
+      size = parent.smallest;
+    } else {
+      let width = parent.maxWidth;
+      let height: number;
+      if (Number.isFinite(width)) {
+        height = width / this.aspectRatio;
+      } else {
+        height = parent.maxHeight;
+        width = height * this.aspectRatio;
+      }
+      if (width > parent.maxWidth) {
+        width = parent.maxWidth;
+        height = width / this.aspectRatio;
+      }
+      if (height > parent.maxHeight) {
+        height = parent.maxHeight;
+        width = height * this.aspectRatio;
+      }
+      if (width < parent.minWidth) {
+        width = parent.minWidth;
+        height = width / this.aspectRatio;
+      }
+      if (height < parent.minHeight) {
+        height = parent.minHeight;
+        width = height * this.aspectRatio;
+      }
+      size = parent.constrain({ width, height });
     }
-    const childBox = this.child?.layout(context, { maxWidth: width, maxHeight: height }) ?? null;
-    return { widget: this, width, height, data: { childBox } };
+    const childBox = this.child?.layout(context, BoxConstraints.tight(size)) ?? null;
+    return { widget: this, width: size.width, height: size.height, data: { childBox } };
   }
 
   override paint(context: RenderContext, box: PositionedBox<SingleChildLayoutData>): void {
@@ -783,10 +851,13 @@ export class CustomPaint extends Widget<SingleChildLayoutData> {
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData> {
     const childBox = this.child?.layout(context, constraints) ?? null;
+    const size = BoxConstraints.from(constraints).constrain(
+      childBox ?? { width: Math.max(0, this.size.x), height: Math.max(0, this.size.y) }
+    );
     return {
       widget: this,
-      width: childBox?.width ?? Math.min(constraints.maxWidth, Math.max(0, this.size.x)),
-      height: childBox?.height ?? Math.min(constraints.maxHeight, Math.max(0, this.size.y)),
+      width: size.width,
+      height: size.height,
       data: { childBox }
     };
   }
@@ -835,9 +906,15 @@ export class FullPage extends Widget<SingleChildLayoutData> {
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData> {
-    const width = this.ignoreMargins ? context.pageFormat.width : constraints.maxWidth;
-    const height = this.ignoreMargins ? context.pageFormat.height : constraints.maxHeight;
-    const childBox = this.child?.layout(context, { maxWidth: width, maxHeight: height }) ?? null;
+    const page = BoxConstraints.tight({
+      width: context.pageFormat.width,
+      height: context.pageFormat.height
+    });
+    const offered = this.ignoreMargins ? page : BoxConstraints.from(constraints);
+    const size = offered.biggest;
+    const childBox = this.child?.layout(context, offered) ?? null;
+    const width = size.width;
+    const height = size.height;
     return { widget: this, width, height, data: { childBox } };
   }
 
@@ -898,13 +975,19 @@ export class LimitedBox extends Widget<SingleChildLayoutData> {
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData> {
-    const maxWidth = Number.isFinite(constraints.maxWidth) ? constraints.maxWidth : this.maxWidth;
-    const maxHeight = Number.isFinite(constraints.maxHeight) ? constraints.maxHeight : this.maxHeight;
-    const childBox = this.child?.layout(context, { maxWidth, maxHeight }) ?? null;
+    const parent = BoxConstraints.from(constraints);
+    const limited = new BoxConstraints({
+      minWidth: parent.minWidth,
+      maxWidth: parent.hasBoundedWidth ? parent.maxWidth : parent.constrainWidth(this.maxWidth),
+      minHeight: parent.minHeight,
+      maxHeight: parent.hasBoundedHeight ? parent.maxHeight : parent.constrainHeight(this.maxHeight)
+    });
+    const childBox = this.child?.layout(context, limited) ?? null;
+    const size = parent.constrain(childBox ?? limited.smallest);
     return {
       widget: this,
-      width: Math.min(maxWidth, childBox?.width ?? 0),
-      height: Math.min(maxHeight, childBox?.height ?? 0),
+      width: size.width,
+      height: size.height,
       data: { childBox }
     };
   }
@@ -912,6 +995,78 @@ export class LimitedBox extends Widget<SingleChildLayoutData> {
   override paint(context: RenderContext, box: PositionedBox<SingleChildLayoutData>): void {
     const { childBox } = box.data;
     childBox?.widget.paint(context, { ...childBox, x: box.x, y: box.y });
+  }
+}
+
+export interface OverflowBoxOptions {
+  readonly alignment?: BasicAlignmentInput;
+  readonly minWidth?: number | null;
+  readonly maxWidth?: number | null;
+  readonly minHeight?: number | null;
+  readonly maxHeight?: number | null;
+  readonly child?: AnyWidget | null;
+}
+
+export interface OverflowBoxLayoutData extends SingleChildLayoutData {
+  readonly dx: number;
+  readonly dy: number;
+}
+
+/** Gives its child replacement constraints and permits it to exceed this box. */
+export class OverflowBox extends Widget<OverflowBoxLayoutData> {
+  readonly alignment: Alignment;
+  readonly minWidth: number | null;
+  readonly maxWidth: number | null;
+  readonly minHeight: number | null;
+  readonly maxHeight: number | null;
+  readonly child: AnyWidget | null;
+
+  constructor({
+    alignment = 'center',
+    minWidth = null,
+    maxWidth = null,
+    minHeight = null,
+    maxHeight = null,
+    child = null
+  }: OverflowBoxOptions = {}) {
+    super();
+    this.alignment = resolveBasicAlignment(alignment);
+    this.minWidth = minWidth === null ? null : Number(minWidth);
+    this.maxWidth = maxWidth === null ? null : Number(maxWidth);
+    this.minHeight = minHeight === null ? null : Number(minHeight);
+    this.maxHeight = maxHeight === null ? null : Number(maxHeight);
+    this.child = child;
+    new BoxConstraints({
+      minWidth: this.minWidth ?? 0,
+      maxWidth: this.maxWidth ?? Infinity,
+      minHeight: this.minHeight ?? 0,
+      maxHeight: this.maxHeight ?? Infinity
+    });
+  }
+
+  override layout(context: RenderContext, constraints: Constraints): LayoutBox<OverflowBoxLayoutData> {
+    const parent = BoxConstraints.from(constraints);
+    const size = parent.smallest;
+    const childBox = this.child?.layout(context, new BoxConstraints({
+      minWidth: this.minWidth ?? parent.minWidth,
+      maxWidth: this.maxWidth ?? parent.maxWidth,
+      minHeight: this.minHeight ?? parent.minHeight,
+      maxHeight: this.maxHeight ?? parent.maxHeight
+    })) ?? null;
+    const offset = childBox === null
+      ? { dx: 0, dy: 0 }
+      : inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: { childBox, dx: offset.dx, dy: offset.dy }
+    };
+  }
+
+  override paint(context: RenderContext, box: PositionedBox<OverflowBoxLayoutData>): void {
+    const { childBox, dx, dy } = box.data;
+    childBox?.widget.paint(context, { ...childBox, x: box.x + dx, y: box.y + dy });
   }
 }
 
@@ -946,10 +1101,14 @@ export class VerticalDivider extends Widget<null> {
   }
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<null> {
+    const size = BoxConstraints.from(constraints).constrain({
+      width: this.width,
+      height: Infinity
+    });
     return {
       widget: this,
-      width: Math.min(constraints.maxWidth, this.width),
-      height: constraints.maxHeight,
+      width: size.width,
+      height: size.height,
       data: null
     };
   }

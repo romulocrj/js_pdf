@@ -21,7 +21,9 @@ export interface RenderContext extends DocumentContext {
     readonly theme: ThemeData;
 }
 export interface Constraints {
+    readonly minWidth?: number;
     readonly maxWidth: number;
+    readonly minHeight?: number;
     readonly maxHeight: number;
 }
 /**

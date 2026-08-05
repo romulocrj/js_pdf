@@ -1,3 +1,63 @@
+/** Structural input accepted wherever callers historically supplied maxima. */
+export interface BoxConstraintsInput {
+    readonly minWidth?: number;
+    readonly maxWidth?: number;
+    readonly minHeight?: number;
+    readonly maxHeight?: number;
+}
+export interface ConstraintSize {
+    readonly width: number;
+    readonly height: number;
+}
+/**
+ * The four-sided size contract used by every widget.
+ *
+ * This is a direct value-type port of upstream `BoxConstraints`. The static
+ * factories replace Dart's named constructors, while `from()` keeps the old
+ * `{ maxWidth, maxHeight }` layout probes source-compatible.
+ */
+export declare class BoxConstraints {
+    readonly minWidth: number;
+    readonly maxWidth: number;
+    readonly minHeight: number;
+    readonly maxHeight: number;
+    constructor({ minWidth, maxWidth, minHeight, maxHeight }?: BoxConstraintsInput);
+    static from(value: BoxConstraintsInput): BoxConstraints;
+    static tightFor({ width, height }?: {
+        readonly width?: number | null;
+        readonly height?: number | null;
+    }): BoxConstraints;
+    static tight(size: ConstraintSize): BoxConstraints;
+    static expand({ width, height }?: {
+        readonly width?: number;
+        readonly height?: number;
+    }): BoxConstraints;
+    static tightForFinite({ width, height }?: {
+        readonly width?: number;
+        readonly height?: number;
+    }): BoxConstraints;
+    get hasBoundedWidth(): boolean;
+    get hasBoundedHeight(): boolean;
+    get hasInfiniteWidth(): boolean;
+    get hasInfiniteHeight(): boolean;
+    get hasTightWidth(): boolean;
+    get hasTightHeight(): boolean;
+    get isTight(): boolean;
+    get biggest(): ConstraintSize;
+    get smallest(): ConstraintSize;
+    constrainWidth(width?: number): number;
+    constrainHeight(height?: number): number;
+    constrain(size: ConstraintSize): ConstraintSize;
+    constrainSizeAndAttemptToPreserveAspectRatio(size: ConstraintSize): ConstraintSize;
+    tighten({ width, height }?: {
+        readonly width?: number | null;
+        readonly height?: number | null;
+    }): BoxConstraints;
+    deflate(edges: InsetsInput): BoxConstraints;
+    loosen(): BoxConstraints;
+    enforce(other: BoxConstraintsInput): BoxConstraints;
+    copyWith(values?: BoxConstraintsInput): BoxConstraints;
+}
 export interface Insets {
     readonly top: number;
     readonly right: number;

@@ -23,6 +23,7 @@ import { PageTheme } from './page_theme.ts';
 import type { PageOrientation } from './page_theme.ts';
 import type { AnyWidget, DocumentContext, RenderContext } from './widget.ts';
 import type { InsetsInput } from './geometry.ts';
+import { BoxConstraints } from './geometry.ts';
 import type { ThemeData } from './theme.ts';
 
 /**
@@ -127,7 +128,7 @@ export class Page implements Section {
     this.paintLayer(this.pageTheme.buildBackground, context, format);
 
     const widget = this.build(context);
-    const box = widget.layout(context, { maxWidth, maxHeight });
+    const box = widget.layout(context, new BoxConstraints({ maxWidth, maxHeight }));
 
     if (box.height > maxHeight + 0.001) {
       throw new RangeError(`Page content height ${box.height.toFixed(2)} exceeds available height ${maxHeight.toFixed(2)}`);
@@ -156,7 +157,10 @@ export class Page implements Section {
     }
 
     const widget = build(context);
-    const box = widget.layout(context, { maxWidth: format.width, maxHeight: format.height });
+    const box = widget.layout(context, new BoxConstraints({
+      maxWidth: format.width,
+      maxHeight: format.height
+    }));
     widget.paint(context, { ...box, x: 0, y: 0 });
   }
 }

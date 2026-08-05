@@ -23,7 +23,7 @@
 
 import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput, Rgb } from '../pdf/color.ts';
-import { normalizeInsets } from './geometry.ts';
+import { BoxConstraints, normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import { Widget } from './widget.ts';
 import type {
@@ -84,27 +84,30 @@ export class Container extends Widget<ContainerLayoutData> {
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<ContainerLayoutData> {
-    const outerMaxWidth = Math.max(0, constraints.maxWidth - this.margin.left - this.margin.right);
-    const desiredWidth = this.width == null ? outerMaxWidth : Math.min(this.width, outerMaxWidth);
-    const innerMaxWidth = Math.max(0, desiredWidth - this.padding.left - this.padding.right);
-
-    const childBox = this.child
-      ? this.child.layout(context, { maxWidth: innerMaxWidth, maxHeight: constraints.maxHeight })
-      : null;
-
-    const contentHeight = childBox?.height ?? 0;
-    const contentWidth = childBox?.width ?? 0;
-    const boxWidth = this.width == null
-      ? Math.min(outerMaxWidth, Math.max(contentWidth + this.padding.left + this.padding.right, desiredWidth))
-      : desiredWidth;
-    const boxHeight = this.height == null
-      ? contentHeight + this.padding.top + this.padding.bottom
-      : this.height;
+    const parent = BoxConstraints.from(constraints);
+    const outer = parent.deflate(this.margin);
+    const desired = outer.tighten({
+      width: this.width ?? (outer.hasBoundedWidth ? outer.maxWidth : null),
+      height: this.height
+    });
+    const inner = desired.deflate(this.padding);
+    const childBox = this.child?.layout(context, inner) ?? null;
+    const content = childBox ?? { width: 0, height: 0 };
+    const decorated = desired.constrain({
+      width: content.width + this.padding.left + this.padding.right,
+      height: content.height + this.padding.top + this.padding.bottom
+    });
+    const boxWidth = decorated.width;
+    const boxHeight = decorated.height;
+    const size = parent.constrain({
+      width: boxWidth + this.margin.left + this.margin.right,
+      height: boxHeight + this.margin.top + this.margin.bottom
+    });
 
     return {
       widget: this,
-      width: boxWidth + this.margin.left + this.margin.right,
-      height: boxHeight + this.margin.top + this.margin.bottom,
+      width: size.width,
+      height: size.height,
       data: { childBox, boxWidth, boxHeight }
     };
   }
