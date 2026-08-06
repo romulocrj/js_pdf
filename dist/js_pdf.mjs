@@ -4771,6 +4771,8 @@ function decodePng(bytes) {
 
 const SOF_MARKERS = Object.freeze([ 192, 193, 194, 195, 197, 198, 199, 201, 202, 203, 205, 206, 207 ]);
 
+const DCT_SOF_MARKERS = Object.freeze([ 192, 193, 194 ]);
+
 function u16(bytes, offset) {
   const high = bytes[offset];
   const low = bytes[offset + 1];
@@ -4788,7 +4790,7 @@ function parseJpeg(bytes) {
   let bitsPerComponent = 0;
   let components = 0;
   let adobeTransform = null;
-  let foundBaseline = false;
+  let foundFrame = false;
   while (offset < bytes.length) {
     if (bytes[offset] !== 255) throw new RangeError(`Invalid JPEG marker at offset ${offset}`);
     while (bytes[offset] === 255) offset++;
@@ -4802,21 +4804,23 @@ function parseJpeg(bytes) {
     const dataEnd = offset + length;
     if (dataEnd > bytes.length) throw new RangeError("Truncated JPEG segment");
     if (SOF_MARKERS.includes(marker)) {
-      if (marker !== 192) throw new RangeError("Only baseline JPEG images are supported");
-      if (length < 8) throw new RangeError("Truncated JPEG baseline frame");
+      if (!DCT_SOF_MARKERS.includes(marker)) {
+        throw new RangeError(`Unsupported JPEG frame marker 0x${marker.toString(16)}`);
+      }
+      if (length < 8) throw new RangeError("Truncated JPEG frame");
       bitsPerComponent = bytes[dataStart];
       height = u16(bytes, dataStart + 1);
       width = u16(bytes, dataStart + 3);
       components = bytes[dataStart + 5];
       const expectedLength = 8 + components * 3;
       if (length < expectedLength) throw new RangeError("Truncated JPEG component table");
-      foundBaseline = true;
+      foundFrame = true;
     } else if (marker === 238 && length >= 14 && bytes[dataStart] === 65 && bytes[dataStart + 1] === 100 && bytes[dataStart + 2] === 111 && bytes[dataStart + 3] === 98 && bytes[dataStart + 4] === 101) {
       adobeTransform = bytes[dataStart + 11];
     }
     offset = dataEnd;
   }
-  if (!foundBaseline) throw new RangeError("Unable to find a baseline JPEG frame");
+  if (!foundFrame) throw new RangeError("Unable to find a JPEG frame");
   if (width <= 0 || height <= 0) throw new RangeError("JPEG dimensions must be positive");
   if (bitsPerComponent !== 8) throw new RangeError(`Unsupported JPEG precision ${bitsPerComponent}`);
   const colorSpace = components === 1 ? "gray" : components === 3 ? "rgb" : components === 4 ? "cmyk" : null;

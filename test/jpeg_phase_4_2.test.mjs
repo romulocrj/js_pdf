@@ -1,5 +1,5 @@
 /*
- * js_pdf baseline JPEG phase 4.2 tests.
+ * js_pdf JPEG phase 4.2 tests.
  * Copyright (C) 2026, Romulo Campos
  * Licensed under the Apache License, Version 2.0.
  */
@@ -10,6 +10,10 @@ import { readFileSync } from 'node:fs';
 import * as Pdf from '../src/index.ts';
 
 const PROFILE = new Uint8Array(readFileSync(new URL('../examples/assets/profile.jpg', import.meta.url)));
+const PROGRESSIVE = new Uint8Array(Buffer.from(
+  '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wgARCAACAAIDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAVAQEBAAAAAAAAAAAAAAAAAAAFBv/aAAwDAQACEAMQAAABrBDlf//EABcQAAMBAAAAAAAAAAAAAAAAAAECBAP/2gAIAQEAAQUCgzQw/wD/xAAXEQADAQAAAAAAAAAAAAAAAAAAAQMy/9oACAEDAQE/Aa7Z/8QAGBEAAgMAAAAAAAAAAAAAAAAAAAIDM3H/2gAIAQIBAT8BntbT/8QAGhAAAgIDAAAAAAAAAAAAAAAAAQIABBNBYf/aAAgBAQAGPwKsSik411yf/8QAFhABAQEAAAAAAAAAAAAAAAAAASEA/9oACAEBAAE/IWZBlRY3/9oADAMBAAIAAwAAABAL/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAGhsf/aAAgBAwEBPxCl6f/EABcRAAMBAAAAAAAAAAAAAAAAAAABobH/2gAIAQIBAT8Qtaz/xAAXEAEBAQEAAAAAAAAAAAAAAAABEQAh/9oACAEBAAE/EHqSlKbKzrv/2Q==',
+  'base64'
+));
 
 function segment(marker, payload) {
   const length = payload.length + 2;
@@ -63,8 +67,19 @@ test('parseJpeg recognizes grayscale and CMYK Adobe transforms', () => {
   assert.equal(ycck.inverted, true);
 });
 
-test('parseJpeg rejects progressive, truncated and unsupported component data', () => {
-  assert.throws(() => Pdf.parseJpeg(jpeg(sof(0xc2, 10, 10, 3))), /baseline/);
+test('parseJpeg accepts progressive JPEG metadata', () => {
+  assert.deepEqual(Pdf.parseJpeg(PROGRESSIVE), {
+    width: 2,
+    height: 2,
+    bitsPerComponent: 8,
+    components: 3,
+    colorSpace: 'rgb',
+    inverted: false
+  });
+});
+
+test('parseJpeg rejects unsupported frames, truncated data and unsupported components', () => {
+  assert.throws(() => Pdf.parseJpeg(jpeg(sof(0xc3, 10, 10, 3))), /frame marker/);
   assert.throws(() => Pdf.parseJpeg(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 20])), /truncated/i);
   assert.throws(() => Pdf.parseJpeg(jpeg(sof(0xc0, 10, 10, 2))), /component/);
 });

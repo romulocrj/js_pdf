@@ -1124,9 +1124,9 @@ slot in wherever convenient relative to phase 5.
 - **4.1** PNG decoder ✅ *(landed 2026-08-05)* (zlib inflate included — no host
   decompression API is available). `pdf/lib/src/pdf/obj/image.dart`,
   `smask.dart`.
-- **4.2** Baseline JPEG ✅ *(landed 2026-08-05)*: pass through as `/DCTDecode`,
-  parse SOF for dimensions. This is what `examples/assets/profile.jpg`
-  exercises.
+- **4.2** JPEG ✅ *(landed 2026-08-05; progressive support corrected
+  2026-08-06)*: pass through as `/DCTDecode`, parse SOF for dimensions. This
+  is what `examples/assets/profile.jpg` exercises.
 - **4.3** `Image` widget and provider ✅ *(landed 2026-08-05)* —
   `widgets/image.dart`, `image_provider.dart`: `Image`, `ImageProvider`,
   `ImageProxy`, `MemoryImage`, `RawImage`. Bytes are supplied by the caller;
@@ -1146,13 +1146,14 @@ Seven focused tests cover the compression block types, filters, packed palettes,
 a 2,901-byte proof under both Node and bare V8. No upstream example advances
 until the public provider/widget arrives in 4.3.
 
-Phase 4.2 scans the JPEG marker stream through SOS, accepts 8-bit SOF0, derives
-gray/RGB/CMYK colour space, honours Adobe direct-CMYK versus YCCK inversion and
-embeds the original bytes unchanged behind `/DCTDecode`. Four tests exercise the
-real 200×200 profile, gray and CMYK marker variants, malformed/progressive input
-and byte-for-byte PDF pass-through. `examples/jpeg-phase-4.2.mjs` retains that
-real profile as host-free base64 data and currently generates a 37,991-byte
-proof under Node and bare V8.
+Phase 4.2 scans the JPEG marker stream through SOS, accepts 8-bit SOF0 baseline,
+SOF1 extended sequential and SOF2 progressive frames, derives gray/RGB/CMYK
+colour space, honours Adobe direct-CMYK versus YCCK inversion and embeds the
+original bytes unchanged behind `/DCTDecode`. Five tests exercise the real
+200×200 profile, a progressive image, gray and CMYK marker variants, malformed
+or unsupported input and byte-for-byte PDF pass-through.
+`examples/jpeg-phase-4.2.mjs` renders separate SOF0, SOF1 and SOF2 cards from
+host-free bytes and runs under Node and bare V8.
 
 Phase 4.3 ports the image widget/provider layer over that object model:
 `MemoryImage` detects PNG/JPEG bytes synchronously, `Image` performs BoxFit and
