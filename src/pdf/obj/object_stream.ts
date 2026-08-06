@@ -20,14 +20,19 @@ import { PdfObject } from './object.ts';
 import type { PdfObjectRegistry } from './object.ts';
 
 /**
- * An indirect object holding a byte stream — a page's content operators today,
- * embedded font programs and image data later.
+ * An indirect object holding a byte stream — page content operators, embedded
+ * font programs, image data.
  *
  * The dictionary and the data are held apart until write time because `/Length`
- * is derived from the data; `PdfDictStream` joins them.
+ * is derived from the data, and because compression is decided there too;
+ * `PdfDictStream` joins them.
+ *
+ * `compress` is where the document's setting reaches an individual stream. It
+ * defaults to whatever the document asked for, and a subclass holding data that
+ * is already compressed passes `false` instead.
  */
 export class PdfObjectStream extends PdfObject<PdfDictStream> {
-  constructor(document: PdfObjectRegistry, data: Uint8Array) {
-    super(document, new PdfDictStream(data));
+  constructor(document: PdfObjectRegistry, data: Uint8Array, compress?: boolean) {
+    super(document, new PdfDictStream(data, undefined, compress ?? document.settings.compress));
   }
 }

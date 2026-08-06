@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 
 import * as Pdf from '../src/index.ts';
 import { PdfTtfFont } from '../src/pdf/obj/ttf_font.ts';
+import { latin1 } from "./support/pdf-text.mjs";
 
 const asset = name => new Uint8Array(
   readFileSync(new URL(`../examples/assets/${name}`, import.meta.url))
@@ -20,11 +21,6 @@ const asset = name => new Uint8Array(
 const openSans = asset('OpenSans-Regular.ttf');
 const openSansBold = asset('OpenSans-Bold.ttf');
 
-function latin1(bytes) {
-  let output = '';
-  for (const byte of bytes) output += String.fromCharCode(byte);
-  return output;
-}
 
 /** The `/ToUnicode` CMap's CID → code point table, as the reader sees it. */
 function toUnicodeMap(source) {

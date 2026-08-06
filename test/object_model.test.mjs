@@ -29,12 +29,8 @@ import { PdfCanvas } from '../src/pdf/graphics.ts';
 import { PdfType1Font } from '../src/pdf/font/type1_fonts.ts';
 import { PdfGraphicStream } from '../src/pdf/obj/graphic_stream.ts';
 import { PageFormat } from '../src/pdf/page_format.ts';
+import { latin1 } from "./support/pdf-text.mjs";
 
-function latin1(bytes) {
-  let output = '';
-  for (const byte of bytes) output += String.fromCharCode(byte);
-  return output;
-}
 
 function write(value) {
   const stream = new PdfStream();

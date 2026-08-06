@@ -10,8 +10,8 @@ import * as Pdf from '../src/index.ts';
 import { Barcode2DMatrix } from '../src/barcode/barcode_2d.ts';
 import { BarcodePDF417 } from '../src/barcode/pdf417.ts';
 import { BarcodeQR } from '../src/barcode/qrcode.ts';
+import { latin1 } from "./support/pdf-text.mjs";
 
-const latin1 = bytes => Buffer.from(bytes).toString('latin1');
 
 function fnv1a(bits) {
   let hash = 2166136261;

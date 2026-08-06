@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Pdf from '../src/index.ts';
+import { latin1 } from './support/pdf-text.mjs';
 
 const PROFILE = new Uint8Array(readFileSync(new URL('../examples/assets/profile.jpg', import.meta.url)));
 
@@ -30,7 +31,7 @@ test('phase 4.3 image APIs are named, namespaced and callback-visible', () => {
   const bytes = Pdf.createPdf({}, api => new api.Page({
     build: () => new api.Image(new api.MemoryImage(PROFILE), { width: 40, height: 40 })
   }));
-  assert.match(String.fromCharCode(...bytes), /\/DCTDecode/);
+  assert.match(latin1(bytes), /\/DCTDecode/);
 });
 
 test('MemoryImage detects JPEG dimensions and rejects unknown bytes', () => {
@@ -153,7 +154,7 @@ test('Image paint clips a cover crop and draws the full resource behind it', () 
       alignment: 'centerRight'
     })
   }));
-  const source = String.fromCharCode(...document.save());
+  const source = latin1(document.save());
   assert.match(source, /0 [\d.]+ 50 50 re\nW n/);
   assert.match(source, /100 0 0 50 -50 [\d.]+ cm\n\/I1 Do/);
   assert.match(source, /\/SMask \d+ 0 R/);
@@ -162,7 +163,7 @@ test('Image paint clips a cover crop and draws the full resource behind it', () 
 
 test('the same provider reused on one page registers one image resource', () => {
   const provider = rgba(1, 1);
-  const source = String.fromCharCode(...Pdf.createPdf({}, () => new Pdf.Page({
+  const source = latin1(Pdf.createPdf({}, () => new Pdf.Page({
     build: () => new Pdf.Row({
       children: [
         new Pdf.Image(provider, { width: 20, height: 20 }),

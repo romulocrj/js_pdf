@@ -29,6 +29,7 @@ import type {
   SerializedPage,
   SerializedPageLabel
 } from '../pdf/document.ts';
+import type { PdfSettings } from '../pdf/format/object_base.ts';
 import type { Rgb } from '../pdf/color.ts';
 import type { PdfOutlineStyle } from '../pdf/obj/outline.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
@@ -64,6 +65,13 @@ export interface DocumentOptions {
 
   /** Open the viewer's outline pane when the file is opened. */
   readonly pageMode?: PdfPageMode;
+
+  /**
+   * Deflate the document's streams. On by default, and worth leaving on: an
+   * embedded image is raw samples, so the saving is usually an order of
+   * magnitude. Turn it off to trade file size back for generation time.
+   */
+  readonly compress?: boolean;
 }
 
 export interface DocumentOutlineEntry {
@@ -86,6 +94,7 @@ export interface DocumentDestinationEntry {
 
 export class Document {
   readonly metadata: DocumentMetadata;
+  readonly settings: PdfSettings;
   readonly theme: ThemeData;
   readonly pageMode: PdfPageMode;
   readonly sections: Section[] = [];
@@ -117,9 +126,11 @@ export class Document {
     pageLabels = [],
     theme = undefined,
     font = undefined,
-    pageMode = 'none'
+    pageMode = 'none',
+    compress = true
   }: DocumentOptions = {}) {
     this.metadata = { title, author, subject, creator, producer, keywords, xmpMetadata };
+    this.settings = { compress };
     for (const { pageIndex, label } of pageLabels) this.setPageLabel(pageIndex, label);
     this.theme = theme
       ?? (font === undefined
@@ -312,6 +323,8 @@ export class Document {
     const pageLabels: SerializedPageLabel[] = [...this.pageLabelEntries]
       .sort(([a], [b]) => a - b)
       .map(([pageIndex, label]) => ({ pageIndex, label }));
-    return serializePdf(pages, this.metadata, outlines, this.pageMode, destinations, pageLabels);
+    return serializePdf(
+      pages, this.metadata, outlines, this.pageMode, destinations, pageLabels, this.settings
+    );
   }
 }

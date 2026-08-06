@@ -7,8 +7,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Pdf from '../src/index.ts';
+import { latin1 } from "./support/pdf-text.mjs";
 
-const latin1 = bytes => Buffer.from(bytes).toString('latin1');
 
 const values = [
   new Pdf.PointChartValue(0, 0),

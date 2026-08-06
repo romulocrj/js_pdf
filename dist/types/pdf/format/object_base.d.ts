@@ -1,6 +1,18 @@
 import type { PdfDataType } from './base.ts';
 import { PdfIndirect } from './indirect.ts';
 import type { PdfStream } from './stream.ts';
+/** Document-wide output options. */
+export interface PdfSettings {
+    /**
+     * Deflate stream data, keeping the result only when it is actually smaller.
+     *
+     * On by default. Turning it off trades file size for generation time: the
+     * compressor is written in JavaScript, so a document dominated by large
+     * images pays real milliseconds for a very large saving.
+     */
+    readonly compress: boolean;
+}
+export declare const DEFAULT_PDF_SETTINGS: PdfSettings;
 /**
  * An indirect object: a serial number plus the value it wraps.
  *

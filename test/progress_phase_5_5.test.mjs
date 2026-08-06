@@ -8,12 +8,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Pdf from '../src/index.ts';
 import { PdfCanvas } from '../src/pdf/graphics.ts';
+import { latin1 } from "./support/pdf-text.mjs";
 
-function latin1(bytes) {
-  let result = '';
-  for (const byte of bytes) result += String.fromCharCode(byte);
-  return result;
-}
 
 function render(widget, box, pageHeight = 200) {
   const canvas = new PdfCanvas(pageHeight);

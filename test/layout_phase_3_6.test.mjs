@@ -10,6 +10,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as Pdf from '../src/index.ts';
+import { latin1 } from "./support/pdf-text.mjs";
 
 function context(width = 300, height = 300) {
   const document = new Pdf.Document();
@@ -22,11 +23,6 @@ function context(width = 300, height = 300) {
   };
 }
 
-function latin1(bytes) {
-  let value = '';
-  for (const byte of bytes) value += String.fromCharCode(byte);
-  return value;
-}
 
 test('phase 3.6 constructors are on named, namespace and callback APIs', () => {
   for (const name of [

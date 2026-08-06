@@ -14,10 +14,15 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/format/dict_stream.dart
  *
- * PORT GAP: no `/Filter`. Upstream deflates through a caller-supplied callback
- * and can Ascii85-encode binary streams; the port has no compressor of its own
- * and takes no callbacks, so stream data is always stored verbatim. Encryption
- * is out of scope per docs/ROADMAP.md.
+ * Compression follows upstream's rules exactly: data that already declares a
+ * `/Filter` is written through untouched, and otherwise the deflated bytes are
+ * kept only if they came out smaller than the original. Where upstream calls a
+ * deflate callback the caller supplied, the port calls its own compressor —
+ * bare V8 has none to borrow. See `format/deflate.ts`.
+ *
+ * PORT GAP: no Ascii85. Upstream can wrap a binary stream in `/ASCII85Decode`
+ * for hosts that need seven-bit output; the port always writes binary, which is
+ * legal PDF and smaller. Encryption is out of scope per docs/ROADMAP.md.
  *
  * Layout differs from upstream in two places, both to keep phase 0.2's output
  * byte-identical to the string builder it replaced: the port writes a newline
@@ -28,7 +33,9 @@
  */
 
 import type { PdfDataType } from './base.ts';
+import { deflateZlib } from './deflate.ts';
 import { PdfDict } from './dict.ts';
+import { PdfName } from './name.ts';
 import { PdfNum } from './num.ts';
 import type { PdfStream } from './stream.ts';
 
@@ -36,23 +43,42 @@ import type { PdfStream } from './stream.ts';
 export class PdfDictStream extends PdfDict {
   data: Uint8Array;
 
+  /**
+   * Whether this stream may be deflated. Off for data that is already
+   * compressed — a JPEG carries its own `/DCTDecode` — where a second pass
+   * would cost time and give nothing back.
+   */
+  readonly compress: boolean;
+
   constructor(
     data: Uint8Array = new Uint8Array(0),
-    values?: Iterable<readonly [string, PdfDataType]>
+    values?: Iterable<readonly [string, PdfDataType]>,
+    compress = false
   ) {
     super(values);
     this.data = data;
+    this.compress = compress;
   }
 
   override output(s: PdfStream): void {
+    // Data that names its own filter is already in the form the reader wants.
+    let data = this.data;
+    if (this.compress && !this.has('/Filter')) {
+      const deflated = deflateZlib(data);
+      if (deflated.length < data.length) {
+        this.set('/Filter', new PdfName('/FlateDecode'));
+        data = deflated;
+      }
+    }
+
     // `/Length` is derived, so it is set at write time rather than by the
     // caller, and last — the key order is part of the output contract.
-    this.set('/Length', new PdfNum(this.data.length));
+    this.set('/Length', new PdfNum(data.length));
 
     super.output(s);
     s.putString('\nstream\n');
-    s.putBytes(this.data);
-    if (this.data.length === 0 || this.data[this.data.length - 1] !== 0x0a) {
+    s.putBytes(data);
+    if (data.length === 0 || data[data.length - 1] !== 0x0a) {
       s.putByte(0x0a);
     }
     s.putString('endstream');

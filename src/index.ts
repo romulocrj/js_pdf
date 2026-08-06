@@ -302,6 +302,14 @@ export {
 };
 
 export { decodePng, inflateZlib, parseJpeg };
+export { deflateRaw, deflateZlib } from './pdf/format/deflate.ts';
+export {
+  pdfDiagnosticHandler,
+  reportPdfDiagnostic,
+  setPdfDiagnosticHandler
+} from './pdf/diagnostics.ts';
+export type { PdfDiagnosticHandler } from './pdf/diagnostics.ts';
+export type { PdfSettings } from './pdf/format/object_base.ts';
 export type { DecodedPng } from './pdf/image/png.ts';
 export type { JpegColorSpace, JpegInfo } from './pdf/image/jpeg.ts';
 export type { PdfImageOptions, PdfImageOrientation } from './pdf/obj/image.ts';

@@ -237,13 +237,49 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **The implementation roadmap is complete through phase 5.7.** Remaining
-> omissions are either explicitly out of scope or narrower gaps recorded in
-> [PORTING-STATUS.md](PORTING-STATUS.md); define a new phase before expanding
-> scope.
+> **The implementation roadmap is complete through phase 5.7, plus stream
+> compression.** Remaining omissions are either explicitly out of scope or
+> narrower gaps recorded in [PORTING-STATUS.md](PORTING-STATUS.md); define a new
+> phase before expanding scope.
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
 out of scope, and the complete upstream example set still generates end to end.
+
+Stream compression closed the largest gap left in the output path. Upstream
+declares a `DeflateCallback` on `PdfSettings` and expects the caller to pass one
+in — advice the port cannot take, because bare V8 ships no compressor to pass.
+So `src/pdf/format/deflate.ts` is the port's own RFC 1951/1950 encoder, and
+`PdfDictStream` applies upstream's rules around it: a stream that already names
+a `/Filter` is written through untouched, and the deflated bytes are kept only
+when they came out smaller. It is on by default and turned off with
+`new Document({ compress: false })`.
+
+This matters most for images, which are embedded as raw samples: a flat-colour
+logo collapses by two orders of magnitude. `ImageProvider` still resamples only
+when it is given a `dpi`, so an oversized source is embedded at full resolution
+even when it is compressed — `src/pdf/diagnostics.ts` exists to say so, either
+through a sink the caller installs with `setPdfDiagnosticHandler` or, with none
+installed, on the host console.
+
+Compression also exposed a second cost that had been hiding behind the first.
+The PNG inflate accumulated into a `number[]`, which V8 stores eight bytes to
+the element: decoding one 4096x3515 source meant half a gigabyte of JS heap for
+57.6 MB of pixels, and under a constrained heap that fails outright rather than
+merely being wasteful — a 512 MiB ceiling aborted the run before compression or
+resampling could help. It accumulates into a doubling `Uint8Array` now, which
+moves the samples out of the JS heap and into a typed array's backing store.
+Decoding is about twice as fast as a side effect. `utf8Encode` had the same
+shape on a smaller scale and was straightened out with it, and the rule is
+written down as §3 of AGENTS.md so the next one is caught in review.
+
+That console is the one deliberate exception to §2 of AGENTS.md, and it is
+written so the rule stays true anyway: it is reached as `globalThis.console`,
+never as a bare name, and every step of the access is optional, so a host that
+provides no console is not a host the library breaks on. Two tests hold that
+line — one deletes `globalThis.console` outright, the other leaves a console
+with no `warn` on it. The type comes from a three-line local interface rather
+than from widening `lib` to `dom`, which would have brought `document`, `window`
+and `fetch` into `src/` along with it.
 
 ---
 
@@ -423,8 +459,9 @@ attribution: the port URL alone, or `caller value (port URL)`. It also stamps
 Divergences worth knowing, each noted in the file that makes it:
 
 - `output(stream)` takes no settings object and no indent. Upstream's exist for
-  compression, encryption and a verbose pretty-printer; the port has none of the
-  three, so a value never consults its owning object.
+  compression, encryption and a verbose pretty-printer. The port has no
+  encryption and no verbose mode, and it settles compression on the document
+  rather than on every value, so a value never consults its owning object.
 - Dictionaries and arrays keep the port's spacing (`<< /Type /Page >>`,
   `[/A /B]`) rather than upstream's compact form. That is what made byte
   identity achievable, and it is what the tests assert.

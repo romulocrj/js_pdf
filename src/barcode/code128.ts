@@ -112,7 +112,7 @@ export class BarcodeCode128 extends Barcode1D {
    * The walk is backwards, because a switch to table C only pays for itself
    * once four digits are known to follow.
    */
-  shortestCode(data: readonly number[]): number[] {
+  shortestCode(data: Uint16Array): number[] {
     // table is a bit set: 1 = table A, 2 = table B, 4 = table C.
     let table = 0;
     // the last table emitted: 0 none, 1 A, 2 B, 3 C.

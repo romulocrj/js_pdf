@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-06T16:21:02.977Z",
+  "generatedAt": "2026-08-06T19:33:47.915Z",
   "results": [
     {
       "name": "hello-world",
@@ -9,37 +9,37 @@
     {
       "name": "calendar",
       "status": "generated",
-      "bytes": 22147
+      "bytes": 7324
     },
     {
       "name": "certificate",
       "status": "generated",
-      "bytes": 126721
+      "bytes": 38332
     },
     {
       "name": "document",
       "status": "generated",
-      "bytes": 137209
+      "bytes": 36410
     },
     {
       "name": "invoice",
       "status": "generated",
-      "bytes": 102709
+      "bytes": 38464
     },
     {
       "name": "report",
       "status": "generated",
-      "bytes": 30403
+      "bytes": 14739
     },
     {
       "name": "resume",
       "status": "generated",
-      "bytes": 74318
+      "bytes": 55056
     },
     {
       "name": "server",
       "status": "generated",
-      "bytes": 82729
+      "bytes": 34387
     }
   ]
 }

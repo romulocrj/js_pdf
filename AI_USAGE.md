@@ -397,7 +397,7 @@ For a complete module loader, asset host and output conversion, see
 Encoded PNG or baseline JPEG bytes use `MemoryImage`, then `Image`:
 
 ```js
-const provider = new pw.MemoryImage(imageBytes);
+const provider = new pw.MemoryImage(imageBytes, { dpi: 150 });
 const image = new pw.Image(provider, {
   width: 160,
   height: 100,
@@ -405,6 +405,25 @@ const image = new pw.Image(provider, {
   alignment: 'center'
 });
 ```
+
+**Pass a `dpi` whenever the source may be larger than the box that draws it.**
+Without one, the provider embeds every source pixel: a 4096×3515 logo drawn into
+a 30×30 pt square still puts 14 megapixels into the file. With `dpi: 150` the
+provider resamples to what the page actually shows, which is the difference
+between a 59 MB document and a 24 KB one. 150 is right for screen and ordinary
+print; use 300 for a photograph meant to be printed large.
+
+The library warns about oversized sources on the host console by default, so on
+Node or in a browser nothing is needed to see them. Under ClearScript the
+console exists but its output goes wherever the host wired it, which is often
+nowhere — so route the warnings somewhere you control:
+
+```js
+pw.setPdfDiagnosticHandler(message => myLogger.warn(message));
+```
+
+Pass `null` to go back to the console. A handler that does nothing is how you
+silence them.
 
 SVG markup is supplied directly:
 
@@ -432,6 +451,22 @@ features, while checking the TypeScript declarations for exact constructors:
 - Utility widgets: icons, progress indicators, placeholders, logos,
   `Watermark`, `Footer`, `GridPaper`, shapes and geometric annotations.
 - Metadata: title, author, subject, keywords, caller-supplied XMP and page labels.
+
+### Stream compression
+
+Streams are deflated by default, which usually matters more than anything else
+about the file's size: images are embedded as raw samples, so a logo or a flat
+background collapses by one to two orders of magnitude. Nothing is needed to
+turn it on.
+
+```js
+new pw.Document({ compress: false });   // trade file size back for speed
+```
+
+Turn it off only when generation time is the binding constraint — the compressor
+is JavaScript, so a document dominated by large images spends real milliseconds
+in it. Data that already carries its own filter, such as a JPEG, is never
+recompressed, and the XMP metadata packet is always left plain.
 
 ## Important differences and limits
 
@@ -472,6 +507,7 @@ Before returning code, verify that it:
 - returns one widget from `Page.build` and an array from `MultiPage.build`;
 - calls synchronous `document.save()` without `await`;
 - receives external assets as bytes or strings instead of loading them internally;
+- passes a `dpi` to every image provider whose source may exceed its drawn size;
 - uses only APIs exported by the installed version;
 - does not emit Dart syntax, Flutter widgets, React components or JSX;
 - does not use the port-specific `createPdf` helper.
