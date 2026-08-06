@@ -119,7 +119,7 @@ isolate one feature family at a time.
 | [progress-phase-5.5.mjs](examples/progress-phase-5.5.mjs) | Focused | Circular and linear progress indicators |
 | [forms-phase-5.6.mjs](examples/forms-phase-5.6.mjs) | Focused | Text, choice, checkbox and button AcroForm fields plus metadata/page labels |
 | [widgets-phase-5.7.mjs](examples/widgets-phase-5.7.mjs) | Focused | Atomic pagination, lists, shapes, grid paper, context, watermarks/footers, outlines and geometric annotations |
-| [production-pagination.mjs](examples/production-pagination.mjs) | Project | English production-sized report proving a chart title and chart stay together with `Inseparable` |
+| [production-pagination.mjs](examples/production-pagination.mjs) | Project | Report proving a chart title and chart stay together with `Inseparable` |
 
 Runners:
 
