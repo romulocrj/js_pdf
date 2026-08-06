@@ -75,5 +75,13 @@ export declare class Border extends BoxBorder {
     private paintSide;
     paint(context: RenderContext, x: number, y: number, width: number, height: number, { shape, borderRadius }?: BoxBorderPaintOptions): void;
 }
-export type BoxBorderInput = BoxBorder | BorderOptions;
+export type BoxBorderInput = BoxBorder | BorderOptions | BorderSideOptions;
+/**
+ * Accepts either a per-side object or a single side.
+ *
+ * `{ color, width }` describes one side, and upstream spells that
+ * `Border.all(...)`. Treating it as a `BorderOptions` instead would leave every
+ * side `BorderSide.none` and silently drop the border, so the shorthand is
+ * recognised here.
+ */
 export declare function normalizeBoxBorder(value: BoxBorderInput | null | undefined): BoxBorder | null;

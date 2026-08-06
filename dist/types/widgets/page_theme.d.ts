@@ -35,7 +35,13 @@ export declare class PageTheme {
      * than the original with rotated content inside it.
      */
     get resolvedFormat(): PageSize;
-    /** Margins in the resolved orientation; rotated with the paper. */
+    /**
+     * Margins in the resolved orientation; rotated with the paper.
+     *
+     * A page states its own, or inherits the format's — `PageFormat.A4` carries
+     * upstream's 2 cm, the same as `PdfPageFormat.a4`. The flat fallback is for
+     * a bare `{ width, height }` format, which upstream cannot express.
+     */
     get margin(): Insets;
     copyWith(options?: PageThemeOptions): PageTheme;
 }

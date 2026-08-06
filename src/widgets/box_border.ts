@@ -266,9 +266,27 @@ export class Border extends BoxBorder {
   }
 }
 
-export type BoxBorderInput = BoxBorder | BorderOptions;
+export type BoxBorderInput = BoxBorder | BorderOptions | BorderSideOptions;
 
+function isSideOptions(value: BorderOptions | BorderSideOptions): value is BorderSideOptions {
+  const options = value as BorderOptions & BorderSideOptions;
+  return options.top === undefined
+    && options.right === undefined
+    && options.bottom === undefined
+    && options.left === undefined
+    && (options.color !== undefined || options.width !== undefined || options.style !== undefined);
+}
+
+/**
+ * Accepts either a per-side object or a single side.
+ *
+ * `{ color, width }` describes one side, and upstream spells that
+ * `Border.all(...)`. Treating it as a `BorderOptions` instead would leave every
+ * side `BorderSide.none` and silently drop the border, so the shorthand is
+ * recognised here.
+ */
 export function normalizeBoxBorder(value: BoxBorderInput | null | undefined): BoxBorder | null {
   if (value === null || value === undefined) return null;
-  return value instanceof BoxBorder ? value : new Border(value);
+  if (value instanceof BoxBorder) return value;
+  return isSideOptions(value) ? Border.all(value) : new Border(value);
 }

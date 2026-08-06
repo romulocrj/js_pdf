@@ -95,50 +95,6 @@ function textAlign(value: Alignment): TextAlign {
   return value.x < 0 ? 'left' : 'right';
 }
 
-interface TableTextLayoutData {
-  readonly childBox: AnyLayoutBox;
-}
-
-/** Defers the table-specific theme lookup until a render context exists. */
-class TableText extends Widget<TableTextLayoutData> {
-  readonly value: string;
-  readonly header: boolean;
-  readonly style: TextStyle | null;
-  readonly align: TextAlign;
-
-  constructor(value: string, header: boolean, style: TextStyle | null, align: TextAlign) {
-    super();
-    this.value = value;
-    this.header = header;
-    this.style = style;
-    this.align = align;
-  }
-
-  override layout(context: RenderContext, constraints: Constraints): LayoutBox<TableTextLayoutData> {
-    const child = new Text(this.value, {
-      style: this.style ?? (this.header ? context.theme.tableHeader : context.theme.tableCell),
-      align: this.align
-    });
-    const childBox = child.layout(context, constraints);
-    return {
-      widget: this,
-      width: childBox.width,
-      height: childBox.height,
-      data: { childBox }
-    };
-  }
-
-  override paint(context: RenderContext, box: PositionedBox<TableTextLayoutData>): void {
-    const { childBox } = box.data;
-    childBox.widget.paint(context, {
-      ...childBox,
-      x: box.x,
-      y: box.y,
-      width: box.width
-    });
-  }
-}
-
 interface HelperCellLayoutData {
   readonly childBox: AnyLayoutBox;
 }
@@ -150,22 +106,19 @@ class HelperCell extends Widget<HelperCellLayoutData> {
   readonly minimumHeight: number;
   readonly alignment: Alignment;
   readonly decoration: TableDecorationInput | null;
-  readonly expandChildWidth: boolean;
 
   constructor({
     child,
     padding,
     minimumHeight,
     alignment: cellAlignment,
-    decoration,
-    expandChildWidth
+    decoration
   }: {
     readonly child: AnyWidget;
     readonly padding: InsetsInput;
     readonly minimumHeight: number;
     readonly alignment: Alignment;
     readonly decoration: TableDecorationInput | null;
-    readonly expandChildWidth: boolean;
   }) {
     super();
     this.child = child;
@@ -176,7 +129,6 @@ class HelperCell extends Widget<HelperCellLayoutData> {
     );
     this.alignment = cellAlignment;
     this.decoration = decoration;
-    this.expandChildWidth = expandChildWidth;
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<HelperCellLayoutData> {
@@ -202,10 +154,15 @@ class HelperCell extends Widget<HelperCellLayoutData> {
     const { childBox } = box.data;
     const innerWidth = Math.max(0, box.width - insetsHorizontal(this.padding));
     const innerHeight = Math.max(0, box.height - insetsVertical(this.padding));
-    const childWidth = this.expandChildWidth ? innerWidth : childBox.width;
+    /*
+     * Upstream wraps every cell in a `Container(alignment:)`, which places the
+     * child's own box — a shrink-wrapped line of text included. Stretching the
+     * child to the column width instead would pin every cell to the left, since
+     * a text box that did not wrap is only as wide as its longest line.
+     */
     const offset = inscribe(
       this.alignment,
-      childWidth,
+      childBox.width,
       childBox.height,
       innerWidth,
       innerHeight
@@ -213,8 +170,7 @@ class HelperCell extends Widget<HelperCellLayoutData> {
     childBox.widget.paint(context, {
       ...childBox,
       x: box.x + this.padding.left + offset.dx,
-      y: box.y + this.padding.top + offset.dy,
-      width: childWidth
+      y: box.y + this.padding.top + offset.dy
     });
 
     paintTableDecorationBorder(context, this.decoration, box.x, box.y, box.width, box.height);
@@ -235,7 +191,7 @@ export type OnCellTextStyle = (
 ) => TextStyle | null;
 
 export interface TableTextArrayOptions {
-  readonly context?: unknown;
+  readonly context?: RenderContext | null;
   readonly data: readonly (readonly unknown[])[];
   readonly cellPadding?: InsetsInput;
   readonly cellHeight?: number;
@@ -272,13 +228,14 @@ const defaultBorder = TableBorder.all();
 /** Convenience builders that translate scalar arrays into table cells. */
 export class TableHelper {
   static fromTextArray({
+    context = null,
     data,
     cellPadding = 5,
     cellHeight = 0,
     cellAlignment = 'topLeft',
     cellAlignments = null,
     cellStyle = null,
-    oddCellStyle = cellStyle,
+    oddCellStyle = null,
     cellFormat = null,
     cellDecoration = null,
     headerCount = 1,
@@ -303,6 +260,16 @@ export class TableHelper {
     if (!Array.isArray(data)) {
       throw new TypeError('TableHelper.fromTextArray requires a data array');
     }
+    /*
+     * Upstream reads `theme.tableHeader` and `theme.tableCell` only when it is
+     * given a context; without one the cells carry no style of their own and
+     * inherit the ambient default text style. Resolving the theme regardless
+     * would silently shrink every helper table to 0.8 of the body size.
+     */
+    const resolvedHeaderStyle = headerStyle ?? (context === null ? null : context.theme.tableHeader);
+    const resolvedCellStyle = cellStyle ?? (context === null ? null : context.theme.tableCell);
+    const resolvedOddCellStyle = oddCellStyle ?? resolvedCellStyle;
+
     const normalizedHeaderCount = Math.trunc(
       assertFiniteNumber(Number(headerCount), 'headerCount')
     );
@@ -320,7 +287,8 @@ export class TableHelper {
       padding: InsetsInput,
       minimumHeight: number,
       cellAlignmentValue: TableAlignmentInput,
-      decoration: TableDecorationInput | null
+      decoration: TableDecorationInput | null,
+      isHeaderRow = false
     ): AnyWidget => {
       const resolvedAlignment = alignment(cellAlignmentValue);
       if (value instanceof Widget) {
@@ -329,8 +297,7 @@ export class TableHelper {
           padding,
           minimumHeight,
           alignment: resolvedAlignment,
-          decoration,
-          expandChildWidth: false
+          decoration
         });
       }
 
@@ -344,8 +311,7 @@ export class TableHelper {
           padding,
           minimumHeight,
           alignment: resolvedAlignment,
-          decoration,
-          expandChildWidth: false
+          decoration
         });
       }
 
@@ -353,15 +319,21 @@ export class TableHelper {
       const formatted = formatter === null ? String(value) : formatter(column, value);
       const isOdd = (rowNumber - normalizedHeaderCount) % 2 !== 0;
       const style = isHeader
-        ? headerStyle
-        : textStyleBuilder?.(column, value, rowNumber) ?? (isOdd ? oddCellStyle : cellStyle);
+        ? resolvedHeaderStyle
+        : textStyleBuilder?.(column, value, rowNumber) ?? (isOdd ? resolvedOddCellStyle : resolvedCellStyle);
+      const text = new Text(formatted, {
+        ...style === null ? {} : { style },
+        // Upstream leaves the header row's own cells unaligned: the container
+        // alignment already places a single line, and a wrapped one reads
+        // better ragged-right.
+        ...isHeaderRow ? {} : { align: textAlign(resolvedAlignment) }
+      });
       return new HelperCell({
-        child: new TableText(formatted, isHeader, style, textAlign(resolvedAlignment)),
+        child: text,
         padding,
         minimumHeight,
         alignment: resolvedAlignment,
-        decoration,
-        expandChildWidth: true
+        decoration
       });
     };
 
@@ -373,7 +345,8 @@ export class TableHelper {
         headerPadding ?? cellPadding,
         headerHeight ?? cellHeight,
         indexed(headerAlignments, column) ?? headerAlignment,
-        headerCellDecoration
+        headerCellDecoration,
+        true
       ));
       rows.push(new TableRow({ children: cells, repeat: true, decoration: headerDecoration }));
       rowNumber++;

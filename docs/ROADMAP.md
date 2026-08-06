@@ -179,13 +179,13 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 5.1 — charts (`report`).** Port `widgets/chart/*.dart` so
-> `BarDataSet`, `CartesianGrid`, `Chart`, `ChartLegend`, `FixedAxis`,
-> `LineDataSet`, `PieDataSet`, `PieGrid` and `PointChartValue` unlock the
-> report example and advance server.
+> **Phase 5.2 — barcodes (`invoice`).** Port `widgets/barcode.dart` and enough
+> of upstream's `barcode` package for `Barcode` and `BarcodeWidget` to unlock
+> the invoice example and advance resume.
 
-Phase 4 is complete. The gate now waits on charts, barcodes, links,
-icons and progress from phase 5.
+Phase 5.1 is complete: `widgets/chart/*.dart` is ported file for file into
+`src/widgets/chart/`, and `report` generates end to end. The gate now waits on
+barcodes, links, icons and progress.
 
 ---
 
@@ -1102,11 +1102,22 @@ direct CMYK incorrectly; the correction and reproduction are recorded in
 
 The last four examples all land here, one per sub-phase.
 
-### 5.1 Charts ⇒ `report`
+### 5.1 Charts ⇒ `report` ✅
 
-- **Ports:** `widgets/chart/*.dart` (1,989 lines)
-- `Chart`, `CartesianGrid`, `FixedAxis`, `BarDataSet`, `LineDataSet`,
-  `PieDataSet`, `PieGrid`, `ChartLegend`, `PointChartValue`.
+- **Ports:** `widgets/chart/*.dart` (1,989 lines) → `src/widgets/chart/*.ts`
+- `Chart`, `ChartGrid`, `CartesianGrid`, `PieGrid`, `RadialGrid`, `GridAxis`,
+  `FixedAxis`, `Dataset`, `PointDataSet`, `BarDataSet`, `LineDataSet`,
+  `PieDataSet`, `ChartLegend`, `PointChartValue`.
+- The port's pure layout meant three deliberate divergences: a grid resolves a
+  `ChartFrame` (placement plus value mapping) during layout and hands it to its
+  data sets at paint time instead of each widget storing a box; an axis takes
+  its direction and incoming positions as arguments rather than as mutable
+  fields; and `Chart` scopes itself through the render context, the port's
+  stand-in for upstream's `Inherited`.
+- Landed alongside three fixes the charts exposed: `{ color, width }` as a
+  `BoxDecoration.border` is now `Border.all` instead of a silently dropped
+  border, `Container` shrink-wraps unless it is aligned or childless, and text
+  aligns inside a tight parent's width.
 - **Example gate:** ⇒ **`report` generates end to end here** (nine APIs, its
   last dependency). Also advances `server`.
 

@@ -22,7 +22,7 @@
 import type { ColorInput } from '../pdf/color.ts';
 import type { SerializedPage } from '../pdf/document.ts';
 import { PdfCanvas } from '../pdf/graphics.ts';
-import { DEFAULT_MARGIN, PageFormat } from '../pdf/page_format.ts';
+import { PageFormat } from '../pdf/page_format.ts';
 import type { PageSize } from '../pdf/page_format.ts';
 import { BoxConstraints } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
@@ -86,7 +86,7 @@ export class MultiPage implements Section {
   constructor({
     format = undefined,
     pageFormat = undefined,
-    margin = DEFAULT_MARGIN,
+    margin = undefined,
     orientation = 'natural',
     gap = 8,
     theme = undefined,

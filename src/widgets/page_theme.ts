@@ -18,7 +18,7 @@
  * its text inherits, and the widgets painted under and over the body.
  */
 
-import { DEFAULT_MARGIN, PageFormat } from '../pdf/page_format.ts';
+import { DEFAULT_MARGIN, formatMargin, PageFormat } from '../pdf/page_format.ts';
 import type { PageSize } from '../pdf/page_format.ts';
 import { normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
@@ -60,7 +60,13 @@ export class PageTheme {
     margin = null,
     clip = false
   }: PageThemeOptions = {}) {
-    this.pageFormat = { width: Number(pageFormat.width), height: Number(pageFormat.height) };
+    // The margin fields ride along: a page with none of its own takes the
+    // format's, the way `PdfPageFormat` carries them upstream.
+    this.pageFormat = {
+      ...pageFormat,
+      width: Number(pageFormat.width),
+      height: Number(pageFormat.height)
+    };
     this.orientation = orientation;
     this.buildBackground = buildBackground;
     this.buildForeground = buildForeground;
@@ -90,9 +96,17 @@ export class PageTheme {
       : this.pageFormat;
   }
 
-  /** Margins in the resolved orientation; rotated with the paper. */
+  /**
+   * Margins in the resolved orientation; rotated with the paper.
+   *
+   * A page states its own, or inherits the format's — `PageFormat.A4` carries
+   * upstream's 2 cm, the same as `PdfPageFormat.a4`. The flat fallback is for
+   * a bare `{ width, height }` format, which upstream cannot express.
+   */
   get margin(): Insets {
-    const declared = this.declaredMargin ?? normalizeInsets(DEFAULT_MARGIN);
+    const fromFormat = formatMargin(this.pageFormat);
+    const declared = this.declaredMargin
+      ?? (fromFormat === null ? normalizeInsets(DEFAULT_MARGIN) : fromFormat);
 
     return this.mustRotate
       ? {

@@ -13,18 +13,41 @@
  *
  */
 
+const CM = 72 / 2.54;
+
 const PageFormat = Object.freeze({
   A4: Object.freeze({
     width: 595.28,
-    height: 841.89
+    height: 841.89,
+    marginTop: 2 * CM,
+    marginRight: 2 * CM,
+    marginBottom: 2 * CM,
+    marginLeft: 2 * CM
   }),
   LETTER: Object.freeze({
     width: 612,
-    height: 792
+    height: 792,
+    marginTop: 72,
+    marginRight: 72,
+    marginBottom: 72,
+    marginLeft: 72
   })
 });
 
 const DEFAULT_MARGIN = 40;
+
+function formatMargin(format) {
+  const {marginTop, marginRight, marginBottom, marginLeft} = format;
+  if (marginTop === undefined && marginRight === undefined && marginBottom === undefined && marginLeft === undefined) {
+    return null;
+  }
+  return {
+    top: marginTop ?? 0,
+    right: marginRight ?? 0,
+    bottom: marginBottom ?? 0,
+    left: marginLeft ?? 0
+  };
+}
 
 const PageUnit = Object.freeze({
   point: 1,
@@ -1983,6 +2006,21 @@ function normalizeColor(value, fallback = [ 0, 0, 0 ]) {
   throw new TypeError("Color must be [r,g,b] with values from 0 to 1 or #RRGGBB");
 }
 
+function linearizeColorComponent(component) {
+  if (component <= .03928) return component / 12.92;
+  return Math.pow((component + .055) / 1.055, 2.4);
+}
+
+function colorLuminance(color) {
+  const [r, g, b] = normalizeColor(color);
+  return .2126 * linearizeColorComponent(r) + .7152 * linearizeColorComponent(g) + .0722 * linearizeColorComponent(b);
+}
+
+function isLightColor(color) {
+  const relative = colorLuminance(color) + .05;
+  return !(relative * relative > .15);
+}
+
 function colorOperator(color, stroke = false) {
   const [r, g, b] = normalizeColor(color);
   return `${formatNumber(r)} ${formatNumber(g)} ${formatNumber(b)} ${stroke ? "RG" : "rg"}`;
@@ -3563,9 +3601,15 @@ class Border extends BoxBorder {
   }
 }
 
+function isSideOptions(value) {
+  const options = value;
+  return options.top === undefined && options.right === undefined && options.bottom === undefined && options.left === undefined && (options.color !== undefined || options.width !== undefined || options.style !== undefined);
+}
+
 function normalizeBoxBorder(value) {
   if (value === null || value === undefined) return null;
-  return value instanceof BoxBorder ? value : new Border(value);
+  if (value instanceof BoxBorder) return value;
+  return isSideOptions(value) ? Border.all(value) : new Border(value);
 }
 
 function interpolation(start, end) {
@@ -3903,9 +3947,10 @@ class Container extends Widget {
   layout(context, constraints) {
     const parent = BoxConstraints.from(constraints);
     const outer = parent.deflate(this.margin);
+    const fill = this.alignment !== null || this.child === null;
     const desired = outer.tighten({
-      width: this.width ?? (outer.hasBoundedWidth ? outer.maxWidth : null),
-      height: this.height
+      width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
+      height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
     });
     const inner = desired.deflate(this.padding);
     const childBox = this.child?.layout(context, this.alignment === null ? inner : inner.loosen()) ?? null;
@@ -4794,7 +4839,7 @@ class RichText extends SpanningWidget {
     }, context.theme.defaultTextStyle);
     return result;
   }
-  allLines(context, contentWidth) {
+  allLines(context, contentWidth, minContentWidth = 0) {
     const align = this.textAlign ?? context.theme.textAlign ?? "left";
     const softWrap = this.softWrap ?? context.theme.softWrap;
     const maxLines = this.maxLines ?? context.theme.maxLines;
@@ -4850,7 +4895,7 @@ class RichText extends SpanningWidget {
     }
     if (current.tokens.length > 0 || raw.length === 0 || tokens[tokens.length - 1]?.kind === "break") pushLine(false);
     const limited = maxLines === null ? raw : raw.slice(0, Math.max(1, maxLines));
-    const targetWidth = limited.some(line => line.wrapped || align === "justify") ? contentWidth : Math.max(0, ...limited.map(line => line.width));
+    const targetWidth = limited.some(line => line.wrapped || align === "justify") ? contentWidth : Math.max(0, minContentWidth, ...limited.map(line => line.width));
     let y = 0;
     const lines = [];
     for (const line of limited) {
@@ -4863,7 +4908,8 @@ class RichText extends SpanningWidget {
   fragment(context, constraints, lineIndex, spanning) {
     const parent = BoxConstraints.from(constraints);
     const contentWidth = Math.max(1, parent.maxWidth - this.margin.left - this.margin.right);
-    const all = this.allLines(context, contentWidth);
+    const minContentWidth = Math.max(0, parent.minWidth - this.margin.left - this.margin.right);
+    const all = this.allLines(context, contentWidth, minContentWidth);
     const topMargin = lineIndex === 0 ? this.margin.top : 0;
     const availableHeight = Math.max(0, parent.maxHeight - topMargin);
     let end = lineIndex;
@@ -5191,6 +5237,1602 @@ class TableOfContent extends StatelessWidget {
       crossAxisAlignment: "start",
       mainAxisSize: "min",
       children: rows
+    });
+  }
+}
+
+class Positioned extends Widget {
+  constructor({left = null, top = null, right = null, bottom = null, width = null, height = null, child}) {
+    super();
+    this.left = left === null ? null : Number(left);
+    this.top = top === null ? null : Number(top);
+    this.right = right === null ? null : Number(right);
+    this.bottom = bottom === null ? null : Number(bottom);
+    this.width = width === null ? null : Math.max(0, Number(width));
+    this.height = height === null ? null : Math.max(0, Number(height));
+    this.child = child;
+  }
+  static fill({left = 0, top = 0, right = 0, bottom = 0, child}) {
+    return new Positioned({
+      left,
+      top,
+      right,
+      bottom,
+      child
+    });
+  }
+  static directional({textDirection, start = null, top = null, end = null, bottom = null, width = null, height = null, child}) {
+    return new Positioned({
+      left: textDirection === "rtl" ? end : start,
+      right: textDirection === "rtl" ? start : end,
+      top,
+      bottom,
+      width,
+      height,
+      child
+    });
+  }
+  layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints).tighten({
+      width: this.width,
+      height: this.height
+    });
+    const childBox = this.child.layout(context, parent);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class PositionedDirectional extends Positioned {
+  constructor({start = null, top = null, end = null, bottom = null, width = null, height = null, child, textDirection = "ltr"}) {
+    super({
+      left: textDirection === "rtl" ? end : start,
+      right: textDirection === "rtl" ? start : end,
+      top,
+      bottom,
+      width,
+      height,
+      child
+    });
+    this.start = start;
+    this.end = end;
+    this.textDirection = textDirection;
+  }
+  static fill({start = 0, top = 0, end = 0, bottom = 0, child, textDirection = "ltr"}) {
+    return new PositionedDirectional({
+      start,
+      top,
+      end,
+      bottom,
+      child,
+      textDirection
+    });
+  }
+}
+
+class Stack extends Widget {
+  constructor({alignment = Alignment.topLeft, fit = "loose", overflow = "clip", children = []} = {}) {
+    super();
+    this.alignment = resolveBasicAlignment(alignment);
+    if (![ "loose", "expand", "passthrough" ].includes(fit)) {
+      throw new TypeError(`Unknown StackFit: ${fit}`);
+    }
+    if (overflow !== "visible" && overflow !== "clip") {
+      throw new TypeError(`Unknown Stack overflow: ${overflow}`);
+    }
+    this.fit = fit;
+    this.overflow = overflow;
+    this.children = children;
+  }
+  layout(context, incoming) {
+    const constraints = BoxConstraints.from(incoming);
+    const measured = new Map;
+    let width = constraints.minWidth;
+    let height = constraints.minHeight;
+    let hasNonPositioned = false;
+    const nonPositionedConstraints = this.fit === "loose" ? constraints.loosen() : this.fit === "expand" ? BoxConstraints.tight(constraints.biggest) : constraints;
+    for (const child of this.children) {
+      if (child instanceof Positioned) continue;
+      hasNonPositioned = true;
+      const childBox = child.layout(context, nonPositionedConstraints);
+      measured.set(child, childBox);
+      width = Math.max(width, childBox.width);
+      height = Math.max(height, childBox.height);
+    }
+    const size = hasNonPositioned ? constraints.constrain({
+      width,
+      height
+    }) : constraints.constrain({
+      width: constraints.hasBoundedWidth ? constraints.maxWidth : 0,
+      height: constraints.hasBoundedHeight ? constraints.maxHeight : 0
+    });
+    const placed = [];
+    for (const child of this.children) {
+      if (!(child instanceof Positioned)) {
+        const childBox = measured.get(child);
+        const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+        placed.push({
+          box: childBox,
+          dx: offset.dx,
+          dy: offset.dy
+        });
+        continue;
+      }
+      let positionedConstraints = new BoxConstraints;
+      const tightWidth = child.left !== null && child.right !== null ? Math.max(0, size.width - child.left - child.right) : child.width;
+      const tightHeight = child.top !== null && child.bottom !== null ? Math.max(0, size.height - child.top - child.bottom) : child.height;
+      positionedConstraints = positionedConstraints.tighten({
+        width: tightWidth,
+        height: tightHeight
+      });
+      const childBox = child.layout(context, positionedConstraints);
+      const aligned = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+      const dx = child.left !== null ? child.left : child.right !== null ? size.width - child.right - childBox.width : aligned.dx;
+      const dy = child.top !== null ? child.top : child.bottom !== null ? size.height - child.bottom - childBox.height : aligned.dy;
+      placed.push({
+        box: childBox,
+        dx,
+        dy
+      });
+    }
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        children: placed
+      }
+    };
+  }
+  paint(context, box) {
+    if (this.overflow === "clip") {
+      context.canvas.saveContext();
+      context.canvas.drawRect(box.x, context.canvas.pageHeight - box.y - box.height, box.width, box.height);
+      context.canvas.clipPath();
+    }
+    for (const child of box.data.children) {
+      child.box.widget.paint(context, {
+        ...child.box,
+        x: box.x + child.dx,
+        y: box.y + child.dy
+      });
+    }
+    if (this.overflow === "clip") context.canvas.restoreContext();
+  }
+}
+
+const CHART_BLACK = "#000000";
+
+const CHART_WHITE = "#ffffff";
+
+const CHART_BLUE = "#2196f3";
+
+function drawWidget(context, widget, x, top, alignment = null, constraints = new BoxConstraints) {
+  const box = widget.layout(context, constraints);
+  const dx = alignment === null ? 0 : (1 + alignment.x) * box.width / 2;
+  const dy = alignment === null ? 0 : (1 - alignment.y) * box.height / 2;
+  widget.paint(context, {
+    ...box,
+    x: x - dx,
+    y: top - dy
+  });
+}
+
+class ChartFrame {
+  constructor(originX, originPdfY, originTop) {
+    this.originX = originX;
+    this.originPdfY = originPdfY;
+    this.originTop = originTop;
+  }
+  px(x) {
+    return this.originX + x;
+  }
+  py(y) {
+    return this.originPdfY + y;
+  }
+  top(y) {
+    return this.originTop - y;
+  }
+}
+
+function chartOf(context) {
+  const scope = context.chart;
+  if (scope === undefined || scope === null) {
+    throw new Error("This widget must be placed inside a Chart");
+  }
+  return scope;
+}
+
+class Dataset {
+  constructor({legend = null, color = null, borderColor = null, borderWidth = .5} = {}) {
+    this.legend = legend === null || legend === undefined ? null : String(legend);
+    this.color = color === null || color === undefined ? null : normalizeColor(color);
+    this.borderColor = borderColor === null || borderColor === undefined ? null : normalizeColor(borderColor);
+    this.borderWidth = Number(borderWidth);
+  }
+  paintBackground(_context, _frame, _data) {}
+  paint(_context, _frame, _data) {}
+  paintForeground(_context, _frame, _data) {}
+  legendShape(_context) {
+    return new Container({
+      decoration: new BoxDecoration({
+        color: this.color,
+        border: Border.all({
+          color: this.borderColor ?? CHART_BLACK,
+          width: this.borderWidth
+        })
+      })
+    });
+  }
+}
+
+class ChartGrid extends Widget {
+  gridSize(constraints) {
+    return BoxConstraints.from(constraints).biggest;
+  }
+}
+
+class Chart extends Widget {
+  static of(context) {
+    return chartOf(context);
+  }
+  constructor({grid, datasets, overlay = null, title = null, bottom = null, left = null, right = null}) {
+    super();
+    this.grid = grid;
+    this.datasets = [ ...datasets ];
+    this.overlay = overlay;
+    this.title = title;
+    this.bottom = bottom;
+    this.left = left;
+    this.right = right;
+  }
+  computeSize(constraints) {
+    const parent = BoxConstraints.from(constraints);
+    if (parent.isTight) return parent.smallest;
+    const aspectRatio = 1;
+    let width = parent.maxWidth;
+    let height = parent.maxHeight;
+    if (!Number.isFinite(width)) width = height * aspectRatio;
+    if (!Number.isFinite(height)) height = width * aspectRatio;
+    return parent.constrain({
+      width,
+      height
+    });
+  }
+  scope(context) {
+    const scoped = {
+      ...context,
+      chart: {
+        grid: this.grid,
+        datasets: this.datasets
+      }
+    };
+    return scoped;
+  }
+  build() {
+    const stack = new Stack({
+      overflow: "visible",
+      children: this.overlay === null ? [ this.grid ] : [ this.grid, this.overlay ]
+    });
+    const row = [];
+    if (this.left !== null) row.push(this.left);
+    row.push(new Expanded({
+      child: stack
+    }));
+    if (this.right !== null) row.push(this.right);
+    const column = [];
+    if (this.title !== null) column.push(this.title);
+    column.push(new Expanded({
+      child: new Row({
+        children: row
+      })
+    }));
+    if (this.bottom !== null) column.push(this.bottom);
+    return new Column({
+      children: column
+    });
+  }
+  layout(context, constraints) {
+    const size = this.computeSize(constraints);
+    const childBox = this.build().layout(this.scope(context), BoxConstraints.tight(size));
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox.widget.paint(this.scope(context), {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class CartesianFrame extends ChartFrame {
+  constructor(xAxis, yAxis, xLayout, yLayout, gridBox, originX = 0, originPdfY = 0, originTop = 0) {
+    super(originX, originPdfY, originTop);
+    this.xAxis = xAxis;
+    this.yAxis = yAxis;
+    this.xLayout = xLayout;
+    this.yLayout = yLayout;
+    this.gridBox = gridBox;
+  }
+  get xAxisOffset() {
+    return this.xLayout.axisPosition;
+  }
+  get yAxisOffset() {
+    return this.yLayout.axisPosition;
+  }
+  toChart(point) {
+    return {
+      x: this.xAxis.toChart(point.x, this.xLayout),
+      y: this.yAxis.toChart(point.y, this.yLayout)
+    };
+  }
+  withOrigin(originX, originPdfY, originTop) {
+    return new CartesianFrame(this.xAxis, this.yAxis, this.xLayout, this.yLayout, this.gridBox, originX, originPdfY, originTop);
+  }
+}
+
+class CartesianGrid extends ChartGrid {
+  constructor({xAxis, yAxis}) {
+    super();
+    this.xAxis = xAxis;
+    this.yAxis = yAxis;
+  }
+  layout(context, constraints) {
+    const datasets = chartOf(context).datasets;
+    const size = this.gridSize(constraints);
+    let x = {
+      axisPosition: 0,
+      crossAxisPosition: 0,
+      marginEnd: this.xAxis.marginEnd
+    };
+    let y = {
+      axisPosition: 0,
+      crossAxisPosition: 0,
+      marginEnd: this.yAxis.marginEnd
+    };
+    let xLayout = this.xAxis.layout(context, "horizontal", size, x);
+    let yLayout = this.yAxis.layout(context, "vertical", size, y);
+    let count = 5;
+    while (count-- > 0) {
+      x = {
+        axisPosition: Math.max(x.axisPosition, y.crossAxisPosition),
+        crossAxisPosition: y.axisPosition,
+        marginEnd: x.marginEnd
+      };
+      xLayout = this.xAxis.layout(context, "horizontal", size, x);
+      x = {
+        axisPosition: xLayout.axisPosition,
+        crossAxisPosition: xLayout.crossAxisPosition,
+        marginEnd: xLayout.marginEnd
+      };
+      y = {
+        axisPosition: Math.max(y.axisPosition, x.crossAxisPosition),
+        crossAxisPosition: x.axisPosition,
+        marginEnd: y.marginEnd
+      };
+      yLayout = this.yAxis.layout(context, "vertical", size, y);
+      y = {
+        axisPosition: yLayout.axisPosition,
+        crossAxisPosition: yLayout.crossAxisPosition,
+        marginEnd: yLayout.marginEnd
+      };
+      if (y.crossAxisPosition === x.axisPosition && x.crossAxisPosition === y.axisPosition) break;
+    }
+    const left = yLayout.axisPosition;
+    const bottom = xLayout.axisPosition;
+    const gridBox = {
+      left,
+      bottom,
+      width: size.width - left,
+      height: size.height - bottom
+    };
+    const frame = new CartesianFrame(this.xAxis, this.yAxis, xLayout, yLayout, gridBox);
+    const datasetData = datasets.map(dataset => dataset.layout(context, frame));
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        frame,
+        datasetData,
+        width: size.width,
+        height: size.height
+      }
+    };
+  }
+  paint(context, box) {
+    const datasets = chartOf(context).datasets;
+    const canvas = context.canvas;
+    const bottom = box.y + box.height;
+    const frame = box.data.frame.withOrigin(box.x, canvas.toPdfY(bottom), bottom);
+    this.clip(context, frame);
+    datasets.forEach((dataset, index) => dataset.paintBackground(context, frame, box.data.datasetData[index]));
+    canvas.restoreContext();
+    this.xAxis.paintBackground(context, frame, frame.xLayout);
+    this.yAxis.paintBackground(context, frame, frame.yLayout);
+    this.clip(context, frame);
+    datasets.forEach((dataset, index) => dataset.paint(context, frame, box.data.datasetData[index]));
+    canvas.restoreContext();
+    this.xAxis.paint(context, frame, frame.xLayout);
+    this.yAxis.paint(context, frame, frame.yLayout);
+    datasets.forEach((dataset, index) => dataset.paintForeground(context, frame, box.data.datasetData[index]));
+  }
+  clip(context, frame) {
+    const grid = frame.gridBox;
+    context.canvas.saveContext();
+    context.canvas.drawRect(frame.px(grid.left), frame.py(grid.bottom), grid.width, grid.height);
+    context.canvas.clipPath();
+  }
+}
+
+class PointChartValue {
+  constructor(x, y) {
+    this.x = assertFiniteNumber(Number(x), "x");
+    this.y = assertFiniteNumber(Number(y), "y");
+  }
+  get point() {
+    return {
+      x: this.x,
+      y: this.y
+    };
+  }
+}
+
+class PointDataSet extends Dataset {
+  constructor({data, pointSize = 3, drawPoints = true, shape = null, buildValue = null, valuePosition = "auto", color = CHART_BLUE, borderColor = null, borderWidth = 1.5, legend = null}) {
+    super({
+      legend,
+      color,
+      borderColor,
+      borderWidth
+    });
+    this.data = [ ...data ];
+    this.pointSize = Number(pointSize);
+    this.drawPoints = Boolean(drawPoints);
+    this.shape = shape;
+    this.buildValue = buildValue;
+    this.valuePosition = valuePosition;
+  }
+  get delta() {
+    return this.pointSize * .5;
+  }
+  layout(_context, _frame) {
+    return null;
+  }
+  automaticValuePosition(point, size, _previous, _next, box) {
+    if (point.x - size.width / 2 < box.left) return "right";
+    if (point.x + size.width / 2 > box.left + box.width) return "left";
+    if (point.y + size.height + this.delta > box.bottom + box.height) return "bottom";
+    return "top";
+  }
+  paintForeground(context, frame, _data) {
+    if (this.data.length === 0) return;
+    const canvas = context.canvas;
+    if (this.drawPoints) {
+      if (this.shape === null) {
+        for (const value of this.data) {
+          const p = frame.toChart(value.point);
+          canvas.drawEllipse(frame.px(p.x), frame.py(p.y), this.pointSize, this.pointSize);
+        }
+        canvas.setColor(this.color ?? CHART_BLUE);
+        canvas.fillPath();
+      } else {
+        for (const value of this.data) {
+          const p = frame.toChart(value.point);
+          drawWidget(context, new SizedBox({
+            width: this.pointSize * 2,
+            height: this.pointSize * 2,
+            child: this.shape(context)
+          }), frame.px(p.x), frame.top(p.y), Alignment.center);
+        }
+      }
+    }
+    if (this.buildValue === null) return;
+    const box = frame instanceof CartesianFrame ? frame.gridBox : {
+      left: 0,
+      bottom: 0,
+      width: 0,
+      height: 0
+    };
+    let previous = null;
+    let index = 1;
+    for (const value of this.data) {
+      const p = frame.toChart(value.point);
+      const measured = this.buildValue(context, value).layout(context, new BoxConstraints);
+      const size = {
+        width: measured.width,
+        height: measured.height
+      };
+      let position = this.valuePosition;
+      if (position === "auto") {
+        const next = index < this.data.length ? frame.toChart(this.data[index++].point) : null;
+        position = this.automaticValuePosition(p, size, previous, next, box);
+      }
+      let offset;
+      switch (position) {
+       case "left":
+        offset = {
+          x: p.x - size.width / 2 - this.pointSize - this.delta,
+          y: p.y
+        };
+        break;
+
+       case "top":
+        offset = {
+          x: p.x,
+          y: p.y + size.height / 2 + this.pointSize + this.delta
+        };
+        break;
+
+       case "right":
+        offset = {
+          x: p.x + size.width / 2 + this.pointSize + this.delta,
+          y: p.y
+        };
+        break;
+
+       case "bottom":
+        offset = {
+          x: p.x,
+          y: p.y - size.height / 2 - this.pointSize - this.delta
+        };
+        break;
+
+       default:
+        offset = p;
+        break;
+      }
+      drawWidget(context, this.buildValue(context, value), frame.px(offset.x), frame.top(offset.y), Alignment.center);
+      previous = p;
+    }
+  }
+  legendShape(context) {
+    return this.shape === null ? super.legendShape(context) : this.shape(context);
+  }
+}
+
+class BarDataSet extends PointDataSet {
+  constructor({data, legend = null, borderColor = null, borderWidth = 1.5, color = CHART_BLUE, drawBorder = null, drawSurface = true, surfaceOpacity = 1, width = 10, offset = 0, axis = "horizontal", pointColor = null, pointSize = 3, drawPoints = false, shape = null, buildValue = null, valuePosition = "auto"}) {
+    super({
+      data,
+      legend,
+      color: pointColor ?? color,
+      borderColor,
+      borderWidth,
+      pointSize,
+      drawPoints,
+      shape,
+      buildValue,
+      valuePosition
+    });
+    this.surfaceColor = normalizeColor(color);
+    const border = normalizeColor(borderColor ?? CHART_BLACK);
+    this.drawBorder = drawBorder ?? (borderColor !== null && borderColor !== undefined && (border[0] !== this.surfaceColor[0] || border[1] !== this.surfaceColor[1] || border[2] !== this.surfaceColor[2]));
+    if (!this.drawBorder && !drawSurface) {
+      throw new Error("BarDataSet must draw its surface or its border");
+    }
+    this.drawSurface = Boolean(drawSurface);
+    this.surfaceOpacity = Number(surfaceOpacity);
+    this.barWidth = Number(width);
+    this.offset = Number(offset);
+    this.axis = axis;
+  }
+  legendShape(context) {
+    if (this.shape !== null) return this.shape(context);
+    return new Container({
+      decoration: new BoxDecoration({
+        color: this.surfaceColor,
+        border: Border.all({
+          color: this.borderColor ?? CHART_BLACK,
+          width: this.borderWidth
+        })
+      })
+    });
+  }
+  drawBar(context, frame, value) {
+    const canvas = context.canvas;
+    const cartesian = frame instanceof CartesianFrame ? frame : null;
+    if (this.axis === "horizontal") {
+      const base = cartesian === null ? 0 : cartesian.xAxisOffset;
+      const p = frame.toChart(value.point);
+      const x = p.x + this.offset - this.barWidth / 2;
+      canvas.drawRect(frame.px(x), frame.py(base), this.barWidth, p.y - base);
+      return;
+    }
+    const base = cartesian === null ? 0 : cartesian.yAxisOffset;
+    const p = frame.toChart(value.point);
+    const y = p.y + this.offset - this.barWidth / 2;
+    canvas.drawRect(frame.px(base), frame.py(y), p.x - base, this.barWidth);
+  }
+  paint(context, frame, _data) {
+    if (this.data.length === 0) return;
+    const canvas = context.canvas;
+    if (this.drawSurface) {
+      for (const value of this.data) this.drawBar(context, frame, value);
+      if (this.surfaceOpacity !== 1) {
+        canvas.saveContext();
+        canvas.setGraphicState(new PdfGraphicState({
+          opacity: this.surfaceOpacity
+        }));
+      }
+      canvas.setFillColor(this.surfaceColor);
+      canvas.fillPath();
+      if (this.surfaceOpacity !== 1) canvas.restoreContext();
+    }
+    if (this.drawBorder) {
+      for (const value of this.data) this.drawBar(context, frame, value);
+      canvas.setStrokeColor(this.borderColor ?? this.surfaceColor);
+      canvas.setLineWidth(this.borderWidth);
+      canvas.strokePath();
+    }
+  }
+  automaticValuePosition(point, size, previous, next, box) {
+    const position = super.automaticValuePosition(point, size, previous, next, box);
+    if (position === "right" || position === "left") return "top";
+    return position;
+  }
+}
+
+const GREY = "#9e9e9e";
+
+class GridAxis {
+  constructor({format = null, buildLabel = null, textStyle = null, margin = null, marginStart = null, marginEnd = null, color = null, width = null, divisions = null, divisionsWidth = null, divisionsColor = null, divisionsDashed = null, ticks = null, axisTick = null, angle = 0} = {}) {
+    this.format = format ?? (value => String(value));
+    this.buildLabel = buildLabel;
+    this.textStyle = textStyle;
+    this.margin = margin === null ? null : Number(margin);
+    this.marginStart = marginStart ?? 0;
+    this.marginEnd = marginEnd ?? 0;
+    this.color = normalizeColor(color ?? CHART_BLACK);
+    this.width = width ?? 1;
+    this.divisions = divisions ?? false;
+    this.divisionsWidth = divisionsWidth ?? .5;
+    this.divisionsColor = normalizeColor(divisionsColor ?? GREY);
+    this.divisionsDashed = divisionsDashed ?? false;
+    this.ticks = ticks ?? false;
+    this.axisTick = axisTick;
+    this.angle = assertFiniteNumber(Number(angle), "angle");
+  }
+  transfer(input) {
+    return input;
+  }
+  label(value) {
+    const text = this.buildLabel === null ? new Text(this.format(value), this.textStyle === null ? {} : {
+      style: this.textStyle
+    }) : this.buildLabel(value);
+    if (this.angle === 0) return text;
+    return new Transform({
+      rotateBox: this.angle,
+      child: text
+    });
+  }
+  angleDirection() {
+    if (this.angle === 0) return 0;
+    if (this.angle % Math.PI > Math.PI / 2) return -1;
+    return 1;
+  }
+}
+
+class FixedAxis extends GridAxis {
+  constructor(values, options = {}) {
+    super(options);
+    this.values = values.map((value, index) => assertFiniteNumber(Number(value), `values[${index}]`));
+    if (!FixedAxis.isSortedAscending(this.values)) {
+      throw new RangeError("FixedAxis values must be sorted ascending");
+    }
+  }
+  static fromStrings(values, options = {}) {
+    const labels = values.map(value => String(value));
+    return new FixedAxis(labels.map((_, index) => index), {
+      ...options,
+      format: value => labels[Math.trunc(value)] ?? String(value)
+    });
+  }
+  static isSortedAscending(values) {
+    let previous = values[0] ?? 0;
+    for (const value of values) {
+      if (previous > value) return false;
+      previous = value;
+    }
+    return true;
+  }
+  layout(context, direction, size, incoming) {
+    let maxWidth = 0;
+    let maxHeight = 0;
+    let first = null;
+    let last = null;
+    for (const value of this.values) {
+      const measured = this.label(value).layout(context, new BoxConstraints);
+      last = {
+        width: measured.width,
+        height: measured.height
+      };
+      maxWidth = Math.max(maxWidth, last.width);
+      maxHeight = Math.max(maxHeight, last.height);
+      if (first === null) first = last;
+    }
+    const firstSize = first ?? {
+      width: 0,
+      height: 0
+    };
+    const lastSize = last ?? {
+      width: 0
+    };
+    const ad = this.angleDirection();
+    if (direction === "horizontal") {
+      const textMargin = this.margin ?? 2;
+      const minStart = ad === 0 ? firstSize.width / 2 : ad > 0 ? firstSize.width : 0;
+      const marginEnd = Math.max(incoming.marginEnd, ad === 0 ? lastSize.width / 2 : ad > 0 ? 0 : lastSize.width);
+      const crossAxisPosition = Math.max(incoming.crossAxisPosition, minStart);
+      const axisPosition = Math.max(incoming.axisPosition, maxHeight + textMargin);
+      return {
+        direction,
+        axisPosition,
+        crossAxisPosition,
+        marginEnd,
+        textMargin,
+        axisTick: this.axisTick ?? false,
+        boxWidth: size.width,
+        boxHeight: axisPosition
+      };
+    }
+    const textMargin = this.margin ?? 10;
+    const marginEnd = Math.max(incoming.marginEnd, ad === 0 ? lastSize.width / 2 : ad < 0 ? lastSize.width : 0);
+    const minStart = ad === 0 ? firstSize.height / 2 : ad > 0 ? firstSize.width : 0;
+    const crossAxisPosition = Math.max(incoming.crossAxisPosition, minStart);
+    const axisPosition = Math.max(incoming.axisPosition, maxWidth + textMargin);
+    return {
+      direction,
+      axisPosition,
+      crossAxisPosition,
+      marginEnd,
+      textMargin,
+      axisTick: this.axisTick ?? true,
+      boxWidth: axisPosition,
+      boxHeight: size.height
+    };
+  }
+  toChart(input, layout) {
+    const offset = this.transfer(this.values[0] ?? 0);
+    const total = this.transfer(this.values[this.values.length - 1] ?? 0) - offset;
+    const start = layout.crossAxisPosition + this.marginStart;
+    const extent = layout.direction === "horizontal" ? layout.boxWidth : layout.boxHeight;
+    if (total === 0) return start;
+    return start + (extent - start - layout.marginEnd) * (this.transfer(input) - offset) / total;
+  }
+  paintBackground(context, frame, layout) {
+    if (!this.divisions) return;
+    const canvas = context.canvas;
+    const grid = frame.gridBox;
+    const values = this.values.slice(this.marginStart > 0 ? 0 : 1);
+    if (layout.direction === "horizontal") {
+      for (const value of values) {
+        const p = this.toChart(value, layout);
+        canvas.drawLine(frame.px(p), frame.py(grid.bottom + grid.height), frame.px(p), frame.py(grid.bottom));
+      }
+    } else {
+      for (const value of values) {
+        const p = this.toChart(value, layout);
+        canvas.drawLine(frame.px(grid.left), frame.py(p), frame.px(grid.left + grid.width), frame.py(p));
+      }
+    }
+    if (this.divisionsDashed) canvas.setLineDashPattern([ 4, 2 ]);
+    canvas.setStrokeColor(this.divisionsColor);
+    canvas.setLineWidth(this.divisionsWidth);
+    canvas.setLineJoin("miter");
+    canvas.strokePath();
+    if (this.divisionsDashed) canvas.setLineDashPattern();
+  }
+  paint(context, frame, layout) {
+    if (layout.direction === "horizontal") {
+      this.drawXValues(context, frame, layout);
+    } else {
+      this.drawYValues(context, frame, layout);
+    }
+  }
+  drawXValues(context, frame, layout) {
+    const canvas = context.canvas;
+    const axis = layout.axisPosition;
+    canvas.moveTo(frame.px(layout.crossAxisPosition), frame.py(axis));
+    canvas.lineTo(frame.px(layout.boxWidth), frame.py(axis));
+    if (layout.axisTick && layout.textMargin > 0) {
+      canvas.moveTo(frame.px(layout.crossAxisPosition), frame.py(axis));
+      canvas.lineTo(frame.px(layout.crossAxisPosition), frame.py(axis - layout.textMargin));
+    }
+    if (this.ticks && layout.textMargin > 0) {
+      for (const value of this.values) {
+        const p = this.toChart(value, layout);
+        canvas.moveTo(frame.px(p), frame.py(axis));
+        canvas.lineTo(frame.px(p), frame.py(axis - layout.textMargin));
+      }
+    }
+    canvas.setStrokeColor(this.color);
+    canvas.setLineWidth(this.width);
+    canvas.setLineJoin("bevel");
+    canvas.strokePath();
+    const ad = this.angleDirection();
+    const alignment = ad === 0 ? Alignment.topCenter : ad > 0 ? Alignment.topRight : Alignment.topLeft;
+    for (const value of this.values) {
+      const p = this.toChart(value, layout);
+      drawWidget(context, this.label(value), frame.px(p), frame.top(axis - layout.textMargin), alignment);
+    }
+  }
+  drawYValues(context, frame, layout) {
+    const canvas = context.canvas;
+    const axis = layout.axisPosition;
+    canvas.moveTo(frame.px(axis), frame.py(layout.boxHeight));
+    canvas.lineTo(frame.px(axis), frame.py(layout.crossAxisPosition));
+    if (layout.axisTick && layout.textMargin > 0) {
+      canvas.moveTo(frame.px(axis), frame.py(layout.crossAxisPosition));
+      canvas.lineTo(frame.px(axis - layout.textMargin / 2), frame.py(layout.crossAxisPosition));
+    }
+    if (this.ticks && layout.textMargin > 0) {
+      for (const value of this.values) {
+        const p = this.toChart(value, layout);
+        canvas.moveTo(frame.px(axis), frame.py(p));
+        canvas.lineTo(frame.px(axis - layout.textMargin / 2), frame.py(p));
+      }
+    }
+    canvas.setStrokeColor(this.color);
+    canvas.setLineWidth(this.width);
+    canvas.setLineJoin("bevel");
+    canvas.strokePath();
+    const ad = this.angleDirection();
+    const alignment = ad === 0 ? Alignment.centerRight : ad > 0 ? Alignment.topRight : Alignment.bottomRight;
+    for (const value of this.values) {
+      const p = this.toChart(value, layout);
+      drawWidget(context, this.label(value), frame.px(axis - layout.textMargin), frame.top(p), alignment);
+    }
+  }
+}
+
+class RadialFrame extends ChartFrame {
+  constructor(width, height, originX = 0, originPdfY = 0, originTop = 0) {
+    super(originX, originPdfY, originTop);
+    this.width = width;
+    this.height = height;
+  }
+  toChart(point) {
+    const z = 3;
+    return {
+      x: z * point.y * Math.cos(point.x / 7 * Math.PI * 2) + this.width / 2,
+      y: z * point.y * Math.sin(point.x / 7 * Math.PI * 2) + this.height / 2
+    };
+  }
+  withOrigin(originX, originPdfY, originTop) {
+    return new RadialFrame(this.width, this.height, originX, originPdfY, originTop);
+  }
+}
+
+class RadialGrid extends ChartGrid {
+  layout(context, constraints) {
+    const datasets = chartOf(context).datasets;
+    const size = this.gridSize(constraints);
+    const frame = new RadialFrame(size.width, size.height);
+    const datasetData = datasets.map(dataset => dataset.layout(context, frame));
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        frame,
+        datasetData
+      }
+    };
+  }
+  paint(context, box) {
+    const datasets = chartOf(context).datasets;
+    const canvas = context.canvas;
+    const bottom = box.y + box.height;
+    const frame = box.data.frame.withOrigin(box.x, canvas.toPdfY(bottom), bottom);
+    this.clip(context, frame, box.width, box.height);
+    datasets.forEach((dataset, index) => dataset.paintBackground(context, frame, box.data.datasetData[index]));
+    canvas.restoreContext();
+    this.clip(context, frame, box.width, box.height);
+    datasets.forEach((dataset, index) => dataset.paint(context, frame, box.data.datasetData[index]));
+    canvas.restoreContext();
+    datasets.forEach((dataset, index) => dataset.paintForeground(context, frame, box.data.datasetData[index]));
+  }
+  clip(context, frame, width, height) {
+    context.canvas.saveContext();
+    context.canvas.drawRect(frame.px(0), frame.py(0), width, height);
+    context.canvas.clipPath();
+  }
+}
+
+function validateAlignment(value, name) {
+  if (![ "start", "end", "center", "spaceBetween", "spaceAround", "spaceEvenly" ].includes(value)) {
+    throw new TypeError(`Unknown ${name}: ${value}`);
+  }
+}
+
+function spaces(alignment, free, count) {
+  switch (alignment) {
+   case "end":
+    return [ free, 0 ];
+
+   case "center":
+    return [ free / 2, 0 ];
+
+   case "spaceBetween":
+    return [ 0, count > 1 ? free / (count - 1) : 0 ];
+
+   case "spaceAround":
+    {
+      const between = count > 0 ? free / count : 0;
+      return [ between / 2, between ];
+    }
+
+   case "spaceEvenly":
+    {
+      const between = free / (count + 1);
+      return [ between, between ];
+    }
+
+   default:
+    return [ 0, 0 ];
+  }
+}
+
+class Wrap extends SpanningWidget {
+  constructor({direction = "horizontal", alignment = "start", spacing = 0, runAlignment = "start", runSpacing = 0, crossAxisAlignment = "start", verticalDirection = "down", children = []} = {}) {
+    super();
+    if (direction !== "horizontal" && direction !== "vertical") {
+      throw new TypeError(`Unknown Wrap axis: ${direction}`);
+    }
+    validateAlignment(alignment, "WrapAlignment");
+    validateAlignment(runAlignment, "runAlignment");
+    if (![ "start", "end", "center" ].includes(crossAxisAlignment)) {
+      throw new TypeError(`Unknown WrapCrossAlignment: ${crossAxisAlignment}`);
+    }
+    if (verticalDirection !== "down" && verticalDirection !== "up") {
+      throw new TypeError(`Unknown verticalDirection: ${verticalDirection}`);
+    }
+    this.direction = direction;
+    this.alignment = alignment;
+    this.spacing = Math.max(0, Number(spacing));
+    this.runAlignment = runAlignment;
+    this.runSpacing = Math.max(0, Number(runSpacing));
+    this.crossAxisAlignment = crossAxisAlignment;
+    this.verticalDirection = verticalDirection;
+    this.children = children;
+  }
+  initialSpanState() {
+    return {
+      firstChild: 0
+    };
+  }
+  fragment(context, incoming, state) {
+    const constraints = BoxConstraints.from(incoming);
+    const horizontal = this.direction === "horizontal";
+    const maxMain = horizontal ? constraints.maxWidth : constraints.maxHeight;
+    const maxCross = horizontal ? constraints.maxHeight : constraints.maxWidth;
+    const childConstraints = horizontal ? new BoxConstraints({
+      maxWidth: maxMain
+    }) : new BoxConstraints({
+      maxHeight: maxMain
+    });
+    const runs = [];
+    let current = [];
+    let currentMain = 0;
+    let currentCross = 0;
+    const closeRun = () => {
+      if (current.length === 0) return;
+      runs.push({
+        children: current,
+        main: currentMain,
+        cross: currentCross
+      });
+      current = [];
+      currentMain = 0;
+      currentCross = 0;
+    };
+    for (let index = state.firstChild; index < this.children.length; index++) {
+      const box = this.children[index].layout(context, childConstraints);
+      const main = horizontal ? box.width : box.height;
+      const cross = horizontal ? box.height : box.width;
+      if (current.length > 0 && currentMain + this.spacing + main > maxMain) {
+        closeRun();
+      }
+      const nextCrossTotal = runs.reduce((sum, run) => sum + run.cross, 0) + this.runSpacing * runs.length + Math.max(currentCross, cross);
+      if (current.length === 0 && runs.length > 0 && nextCrossTotal > maxCross + 1e-6) {
+        break;
+      }
+      current.push({
+        index,
+        box,
+        main,
+        cross
+      });
+      currentMain += (current.length > 1 ? this.spacing : 0) + main;
+      currentCross = Math.max(currentCross, cross);
+    }
+    closeRun();
+    let usedCross = runs.reduce((sum, run) => sum + run.cross, 0) + this.runSpacing * Math.max(0, runs.length - 1);
+    while (runs.length > 0 && Number.isFinite(maxCross) && usedCross > maxCross + 1e-6) {
+      const removed = runs.pop();
+      usedCross -= removed.cross + (runs.length > 0 ? this.runSpacing : 0);
+    }
+    const maxRunMain = runs.reduce((value, run) => Math.max(value, run.main), 0);
+    const natural = horizontal ? {
+      width: maxRunMain,
+      height: usedCross
+    } : {
+      width: usedCross,
+      height: maxRunMain
+    };
+    const size = constraints.constrain(natural);
+    const containerMain = horizontal ? size.width : size.height;
+    const containerCross = horizontal ? size.height : size.width;
+    const [runLeading, runBetweenExtra] = spaces(this.runAlignment, Math.max(0, containerCross - usedCross), runs.length);
+    const reverseRuns = horizontal && this.verticalDirection === "up";
+    let crossCursor = reverseRuns ? containerCross - runLeading : runLeading;
+    const placed = [];
+    for (const run of runs) {
+      if (reverseRuns) crossCursor -= run.cross;
+      const [childLeading, childBetweenExtra] = spaces(this.alignment, Math.max(0, containerMain - run.main), run.children.length);
+      const reverseChildren = !horizontal && this.verticalDirection === "up";
+      let mainCursor = reverseChildren ? containerMain - childLeading : childLeading;
+      for (const child of run.children) {
+        if (reverseChildren) mainCursor -= child.main;
+        const freeCross = run.cross - child.cross;
+        const childCross = this.crossAxisAlignment === "end" ? freeCross : this.crossAxisAlignment === "center" ? freeCross / 2 : 0;
+        placed.push({
+          box: child.box,
+          dx: horizontal ? mainCursor : crossCursor + childCross,
+          dy: horizontal ? crossCursor + childCross : mainCursor
+        });
+        const advance = child.main + this.spacing + childBetweenExtra;
+        mainCursor += reverseChildren ? -advance : advance;
+      }
+      const runAdvance = run.cross + this.runSpacing + runBetweenExtra;
+      crossCursor += reverseRuns ? -runAdvance : runAdvance;
+    }
+    const lastChild = placed.length === 0 ? state.firstChild : Math.max(...runs.flatMap(run => run.children.map(child => child.index))) + 1;
+    const data = {
+      children: placed,
+      firstChild: state.firstChild,
+      lastChild,
+      runCount: runs.length
+    };
+    const nextState = {
+      firstChild: lastChild
+    };
+    return {
+      box: {
+        widget: this,
+        width: size.width,
+        height: size.height,
+        data
+      },
+      nextState,
+      hasMore: lastChild < this.children.length
+    };
+  }
+  layout(context, constraints) {
+    return this.fragment(context, constraints, this.initialSpanState()).box;
+  }
+  layoutSpan(context, constraints, state) {
+    return this.fragment(context, constraints, state);
+  }
+  paint(context, box) {
+    for (const child of box.data.children) {
+      child.box.widget.paint(context, {
+        ...child.box,
+        x: box.x + child.dx,
+        y: box.y + child.dy
+      });
+    }
+  }
+}
+
+function resolveLegendPosition(value) {
+  if (Array.isArray(value)) return {
+    x: Number(value[0]),
+    y: Number(value[1])
+  };
+  return resolveBasicAlignment(value);
+}
+
+class ChartLegend extends StatelessWidget {
+  constructor({textStyle = null, position = Alignment.topRight, direction = "vertical", decoration = null, padding = EdgeInsets.all(5)} = {}) {
+    super();
+    this.textStyle = textStyle;
+    this.position = resolveLegendPosition(position);
+    this.direction = direction;
+    this.decoration = normalizeBoxDecoration(decoration);
+    this.padding = normalizeInsets(padding);
+  }
+  buildLegend(context, dataset) {
+    const style = context.theme.defaultTextStyle.merge(this.textStyle);
+    return new Row({
+      mainAxisSize: "min",
+      children: [ new Container({
+        width: style.fontSize ?? undefined,
+        height: style.fontSize ?? undefined,
+        margin: EdgeInsets.only({
+          right: 5
+        }),
+        child: dataset.legendShape(context)
+      }), new Text(dataset.legend ?? "", this.textStyle === null ? {} : {
+        style: this.textStyle
+      }) ]
+    });
+  }
+  build(context) {
+    const datasets = chartOf(context).datasets;
+    const wrap = new Wrap({
+      direction: this.direction,
+      spacing: 10,
+      runSpacing: 10,
+      crossAxisAlignment: this.direction === "horizontal" ? "center" : "start",
+      children: datasets.filter(dataset => dataset.legend !== null).map(dataset => this.buildLegend(context, dataset))
+    });
+    return new Align({
+      alignment: this.position,
+      child: new Container({
+        decoration: this.decoration ?? new BoxDecoration({
+          color: CHART_WHITE
+        }),
+        padding: this.padding,
+        child: wrap
+      })
+    });
+  }
+}
+
+class LineDataSet extends PointDataSet {
+  constructor({data, legend = null, pointColor = null, pointSize = 3, color = CHART_BLUE, lineWidth = 2, drawLine = true, lineColor = null, drawPoints = true, shape = null, buildValue = null, valuePosition = "auto", drawSurface = false, surfaceOpacity = .2, surfaceColor = null, isCurved = false, smoothness = .35, borderColor = null, borderWidth = 1.5}) {
+    super({
+      data,
+      legend,
+      color: pointColor ?? color,
+      borderColor,
+      borderWidth,
+      pointSize,
+      drawPoints,
+      shape,
+      buildValue,
+      valuePosition
+    });
+    if (!drawLine && !drawPoints && !drawSurface) {
+      throw new Error("LineDataSet must draw its line, its points or its surface");
+    }
+    this.lineWidth = Number(lineWidth);
+    this.drawLine = Boolean(drawLine);
+    this.lineColor = lineColor === null ? null : normalizeColor(lineColor);
+    this.drawSurface = Boolean(drawSurface);
+    this.surfaceColor = surfaceColor === null ? null : normalizeColor(surfaceColor);
+    this.surfaceOpacity = Number(surfaceOpacity);
+    this.isCurved = Boolean(isCurved);
+    this.smoothness = Number(smoothness);
+  }
+  legendShape(context) {
+    if (this.shape !== null) return this.shape(context);
+    return new Container({
+      decoration: new BoxDecoration({
+        color: this.lineColor ?? this.color,
+        border: Border.all({
+          color: this.borderColor ?? CHART_BLACK,
+          width: this.borderWidth
+        })
+      })
+    });
+  }
+  drawPath(context, frame, moveTo) {
+    if (this.data.length < 2) return;
+    const canvas = context.canvas;
+    let t = {
+      x: 0,
+      y: 0
+    };
+    const first = frame.toChart(this.data[0].point);
+    if (moveTo) {
+      canvas.moveTo(frame.px(first.x), frame.py(first.y));
+    } else {
+      canvas.lineTo(frame.px(first.x), frame.py(first.y));
+    }
+    for (let index = 1; index < this.data.length; index++) {
+      const p = frame.toChart(this.data[index].point);
+      if (!this.isCurved) {
+        canvas.lineTo(frame.px(p.x), frame.py(p.y));
+        continue;
+      }
+      const pp = frame.toChart(this.data[index - 1].point);
+      const pn = frame.toChart(this.data[index + 1 < this.data.length ? index + 1 : index].point);
+      const c1 = {
+        x: pp.x + t.x,
+        y: pp.y + t.y
+      };
+      t = {
+        x: (pn.x - pp.x) / 2 * this.smoothness,
+        y: (pn.y - pp.y) / 2 * this.smoothness
+      };
+      const c2 = {
+        x: p.x - t.x,
+        y: p.y - t.y
+      };
+      canvas.curveTo(frame.px(c1.x), frame.py(c1.y), frame.px(c2.x), frame.py(c2.y), frame.px(p.x), frame.py(p.y));
+    }
+  }
+  drawArea(context, frame) {
+    if (this.data.length < 2) return;
+    const canvas = context.canvas;
+    const base = frame instanceof CartesianFrame ? frame.xAxisOffset : 0;
+    this.drawPath(context, frame, true);
+    const last = frame.toChart(this.data[this.data.length - 1].point);
+    canvas.lineTo(frame.px(last.x), frame.py(base));
+    const first = frame.toChart(this.data[0].point);
+    canvas.lineTo(frame.px(first.x), frame.py(base));
+  }
+  paintBackground(context, frame, _data) {
+    if (this.data.length === 0 || !this.drawSurface) return;
+    const canvas = context.canvas;
+    this.drawArea(context, frame);
+    if (this.surfaceOpacity !== 1) {
+      canvas.saveContext();
+      canvas.setGraphicState(new PdfGraphicState({
+        opacity: this.surfaceOpacity
+      }));
+    }
+    canvas.setFillColor(this.surfaceColor ?? this.color ?? CHART_BLUE);
+    canvas.fillPath();
+    if (this.surfaceOpacity !== 1) canvas.restoreContext();
+  }
+  paint(context, frame, _data) {
+    if (this.data.length === 0 || !this.drawLine) return;
+    const canvas = context.canvas;
+    this.drawPath(context, frame, true);
+    canvas.setStrokeColor(this.lineColor ?? this.color ?? CHART_BLUE);
+    canvas.setLineWidth(this.lineWidth);
+    canvas.setLineCap("round");
+    canvas.setLineJoin("round");
+    canvas.strokePath();
+  }
+}
+
+class PieFrame extends ChartFrame {
+  constructor(radius, angleStart, angleEnd, originX = 0, originPdfY = 0, originTop = 0) {
+    super(originX, originPdfY, originTop);
+    this.radius = radius;
+    this.angleStart = angleStart;
+    this.angleEnd = angleEnd;
+  }
+  toChart(point) {
+    return point;
+  }
+  withOrigin(originX, originPdfY, originTop) {
+    return new PieFrame(this.radius, this.angleStart, this.angleEnd, originX, originPdfY, originTop);
+  }
+}
+
+class PieDataSet extends Dataset {
+  constructor({value, legend = null, color, borderColor = CHART_WHITE, borderWidth = 1.5, drawBorder = null, drawSurface = true, surfaceOpacity = 1, offset = 0, legendStyle = null, legendAlign = null, legendPosition = "auto", legendLineWidth = 1, legendLineColor = null, legendOffset = 20, innerRadius = 0}) {
+    super({
+      legend,
+      color: color ?? CHART_BLUE,
+      borderColor,
+      borderWidth
+    });
+    if (innerRadius < 0) throw new RangeError("PieDataSet innerRadius must not be negative");
+    if (offset < 0) throw new RangeError("PieDataSet offset must not be negative");
+    this.value = Number(value);
+    const fill = this.color ?? normalizeColor(CHART_BLUE);
+    const border = this.borderColor;
+    this.drawBorder = drawBorder ?? (border !== null && (border[0] !== fill[0] || border[1] !== fill[1] || border[2] !== fill[2]));
+    if (!this.drawBorder && !drawSurface) {
+      throw new Error("PieDataSet must draw its surface or its border");
+    }
+    this.drawSurface = Boolean(drawSurface);
+    this.surfaceOpacity = Number(surfaceOpacity);
+    this.offset = Number(offset);
+    this.legendStyle = legendStyle;
+    this.legendAlign = legendAlign;
+    this.legendPosition = legendPosition;
+    this.legendLineWidth = Number(legendLineWidth);
+    this.legendLineColor = legendLineColor === null ? fill : normalizeColor(legendLineColor);
+    this.legendOffset = Number(legendOffset);
+    this.innerRadius = Number(innerRadius);
+  }
+  isFullCircle(frame) {
+    return frame.angleEnd - frame.angleStart >= Math.PI * 2;
+  }
+  layout(context, frame) {
+    if (!(frame instanceof PieFrame)) {
+      throw new Error("Use only PieDataSet with a PieGrid");
+    }
+    const fullCircle = this.isFullCircle(frame);
+    const offset = fullCircle ? 0 : this.offset;
+    const len = frame.radius + offset;
+    let w = len * 2;
+    let h = len * 2;
+    const position = this.legendPosition === "auto" ? frame.angleEnd - frame.angleStart > Math.PI / 6 ? "inside" : "outside" : this.legendPosition;
+    const bisect = fullCircle ? Math.PI / 4 : (frame.angleStart + frame.angleEnd) / 2;
+    const align = this.legendAlign ?? (position === "inside" ? "center" : bisect > Math.PI ? "right" : "left");
+    const legend = this.legend === null ? null : new RichText({
+      text: new TextSpan({
+        children: [ new TextSpan({
+          text: this.legend,
+          style: this.legendStyle ?? undefined
+        }) ],
+        style: new TextStyle({
+          color: position === "inside" ? isLightColor(this.color ?? CHART_BLUE) ? normalizeColor(CHART_WHITE) : normalizeColor(CHART_BLACK) : null
+        })
+      }),
+      textAlign: align
+    });
+    let legendBox = null;
+    let legendLeft = 0;
+    let legendBottom = 0;
+    let anchor = null;
+    let pivot = null;
+    let start = null;
+    if (legend !== null) {
+      legendBox = legend.layout(context, new BoxConstraints({
+        maxWidth: frame.radius,
+        maxHeight: frame.radius
+      }));
+      const ls = {
+        width: legendBox.width,
+        height: legendBox.height
+      };
+      if (position === "outside") {
+        const o = frame.radius + this.legendOffset;
+        const cx = Math.sin(bisect) * (offset + o);
+        const cy = Math.cos(bisect) * (offset + o);
+        start = {
+          x: Math.sin(bisect) * (offset + frame.radius + this.legendOffset * .1),
+          y: Math.cos(bisect) * (offset + frame.radius + this.legendOffset * .1)
+        };
+        pivot = {
+          x: cx,
+          y: cy
+        };
+        if (bisect > Math.PI) {
+          anchor = {
+            x: cx - this.legendOffset / 2 * .8,
+            y: cy
+          };
+          legendLeft = cx - this.legendOffset / 2 - ls.width;
+          legendBottom = cy - ls.height / 2;
+          w = Math.max(w, (-cx + this.legendOffset / 2 + ls.width) * 2);
+          h = Math.max(h, Math.abs(cy) * 2 + ls.height);
+        } else {
+          anchor = {
+            x: cx + this.legendOffset / 2 * .8,
+            y: cy
+          };
+          legendLeft = cx + this.legendOffset / 2;
+          legendBottom = cy - ls.height / 2;
+          w = Math.max(w, (cx + this.legendOffset / 2 + ls.width) * 2);
+          h = Math.max(h, Math.abs(cy) * 2 + ls.height);
+        }
+      } else if (position === "inside") {
+        let o;
+        let cx;
+        let cy;
+        if (this.innerRadius === 0) {
+          o = fullCircle ? 0 : frame.radius * 2 / 3;
+          cx = Math.sin(bisect) * (offset + o);
+          cy = Math.cos(bisect) * (offset + o);
+        } else {
+          o = (frame.radius + this.innerRadius) / 2;
+          if (fullCircle) {
+            cx = 0;
+            cy = o;
+          } else {
+            cx = Math.sin(bisect) * (offset + o);
+            cy = Math.cos(bisect) * (offset + o);
+          }
+        }
+        legendLeft = cx - ls.width / 2;
+        legendBottom = cy - ls.height / 2;
+      }
+    }
+    return {
+      legend,
+      legendBox,
+      legendLeft,
+      legendBottom,
+      anchor,
+      pivot,
+      start,
+      boxWidth: w,
+      boxHeight: h
+    };
+  }
+  appendSlice(context, frame) {
+    const canvas = context.canvas;
+    const bisect = (frame.angleStart + frame.angleEnd) / 2;
+    const cx = Math.sin(bisect) * this.offset;
+    const cy = Math.cos(bisect) * this.offset;
+    const sx = cx + Math.sin(frame.angleStart) * frame.radius;
+    const sy = cy + Math.cos(frame.angleStart) * frame.radius;
+    const ex = cx + Math.sin(frame.angleEnd) * frame.radius;
+    const ey = cy + Math.cos(frame.angleEnd) * frame.radius;
+    if (this.isFullCircle(frame)) {
+      canvas.drawEllipse(frame.px(0), frame.py(0), frame.radius, frame.radius);
+      return;
+    }
+    canvas.moveTo(frame.px(cx), frame.py(cy));
+    canvas.lineTo(frame.px(sx), frame.py(sy));
+    canvas.bezierArc(frame.px(sx), frame.py(sy), frame.radius, frame.radius, frame.px(ex), frame.py(ey), {
+      large: frame.angleEnd - frame.angleStart > Math.PI
+    });
+  }
+  appendDonut(context, frame) {
+    const canvas = context.canvas;
+    const bisect = (frame.angleStart + frame.angleEnd) / 2;
+    const cx = Math.sin(bisect) * this.offset;
+    const cy = Math.cos(bisect) * this.offset;
+    const stx = cx + Math.sin(frame.angleStart) * frame.radius;
+    const sty = cy + Math.cos(frame.angleStart) * frame.radius;
+    const etx = cx + Math.sin(frame.angleEnd) * frame.radius;
+    const ety = cy + Math.cos(frame.angleEnd) * frame.radius;
+    const sbx = cx + Math.sin(frame.angleStart) * this.innerRadius;
+    const sby = cy + Math.cos(frame.angleStart) * this.innerRadius;
+    const ebx = cx + Math.sin(frame.angleEnd) * this.innerRadius;
+    const eby = cy + Math.cos(frame.angleEnd) * this.innerRadius;
+    if (this.isFullCircle(frame)) {
+      canvas.drawEllipse(frame.px(0), frame.py(0), frame.radius, frame.radius);
+      canvas.drawEllipse(frame.px(0), frame.py(0), this.innerRadius, this.innerRadius, false);
+      return;
+    }
+    const large = frame.angleEnd - frame.angleStart > Math.PI;
+    canvas.moveTo(frame.px(stx), frame.py(sty));
+    canvas.bezierArc(frame.px(stx), frame.py(sty), frame.radius, frame.radius, frame.px(etx), frame.py(ety), {
+      large
+    });
+    canvas.lineTo(frame.px(ebx), frame.py(eby));
+    canvas.bezierArc(frame.px(ebx), frame.py(eby), this.innerRadius, this.innerRadius, frame.px(sbx), frame.py(sby), {
+      large,
+      sweep: true
+    });
+    canvas.lineTo(frame.px(stx), frame.py(sty));
+  }
+  appendShape(context, frame) {
+    if (this.innerRadius === 0) {
+      this.appendSlice(context, frame);
+    } else {
+      this.appendDonut(context, frame);
+    }
+  }
+  paintBackground(context, frame, _data) {
+    if (!(frame instanceof PieFrame) || !this.drawSurface) return;
+    const canvas = context.canvas;
+    this.appendShape(context, frame);
+    if (this.surfaceOpacity !== 1) {
+      canvas.saveContext();
+      canvas.setGraphicState(new PdfGraphicState({
+        opacity: this.surfaceOpacity
+      }));
+    }
+    canvas.setFillColor(this.color ?? CHART_BLUE);
+    canvas.fillPath();
+    if (this.surfaceOpacity !== 1) canvas.restoreContext();
+  }
+  paint(context, frame, _data) {
+    if (!(frame instanceof PieFrame) || !this.drawBorder) return;
+    const canvas = context.canvas;
+    this.appendShape(context, frame);
+    canvas.setLineWidth(this.borderWidth);
+    canvas.setLineJoin("round");
+    canvas.setStrokeColor(this.borderColor ?? this.color ?? CHART_BLUE);
+    canvas.strokePath({
+      close: true
+    });
+  }
+  paintLegend(context, frame, data) {
+    if (this.legendPosition === "none" || data.legend === null || data.legendBox === null) return;
+    const canvas = context.canvas;
+    if (data.anchor !== null && data.pivot !== null && data.start !== null) {
+      canvas.saveContext();
+      canvas.moveTo(frame.px(data.start.x), frame.py(data.start.y));
+      canvas.lineTo(frame.px(data.pivot.x), frame.py(data.pivot.y));
+      canvas.lineTo(frame.px(data.anchor.x), frame.py(data.anchor.y));
+      canvas.setLineWidth(this.legendLineWidth);
+      canvas.setLineCap("round");
+      canvas.setLineJoin("round");
+      canvas.setStrokeColor(this.legendLineColor);
+      canvas.strokePath();
+      canvas.restoreContext();
+    }
+    data.legend.paint(context, {
+      ...data.legendBox,
+      x: frame.px(data.legendLeft),
+      y: frame.top(data.legendBottom + data.legendBox.height)
+    });
+  }
+}
+
+class PieGrid extends ChartGrid {
+  constructor({startAngle = 0} = {}) {
+    super();
+    this.startAngle = Number(startAngle);
+  }
+  layout(context, constraints) {
+    const datasets = chartOf(context).datasets;
+    const size = this.gridSize(constraints);
+    let total = 0;
+    for (const dataset of datasets) {
+      if (!(dataset instanceof PieDataSet)) throw new Error("Use only PieDataSet with a PieGrid");
+      total += dataset.value;
+    }
+    const unit = total === 0 ? 0 : Math.PI / total * 2;
+    let angle = this.startAngle;
+    const angles = datasets.map(dataset => {
+      const start = angle;
+      angle += dataset.value * unit;
+      return {
+        start,
+        end: angle
+      };
+    });
+    let radius = Math.min(size.width / 2, size.height / 2);
+    let datasetData = [];
+    let reduce = false;
+    do {
+      reduce = false;
+      datasetData = [];
+      for (let index = 0; index < datasets.length; index++) {
+        const slice = angles[index];
+        const frame = new PieFrame(radius, slice.start, slice.end);
+        const data = datasets[index].layout(context, frame);
+        datasetData.push(data);
+        if (radius > 20 && (data.boxWidth > size.width || data.boxHeight > size.height)) {
+          radius -= 10;
+          reduce = true;
+          break;
+        }
+      }
+    } while (reduce);
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        radius,
+        angles,
+        datasetData
+      }
+    };
+  }
+  paint(context, box) {
+    const datasets = chartOf(context).datasets;
+    const canvas = context.canvas;
+    const centreTop = box.y + box.height / 2;
+    const originX = box.x + box.width / 2;
+    const originPdfY = canvas.toPdfY(centreTop);
+    const frames = box.data.angles.map(slice => new PieFrame(box.data.radius, slice.start, slice.end, originX, originPdfY, centreTop));
+    datasets.forEach((dataset, index) => dataset.paintBackground(context, frames[index], box.data.datasetData[index]));
+    datasets.forEach((dataset, index) => dataset.paint(context, frames[index], box.data.datasetData[index]));
+    datasets.forEach((dataset, index) => {
+      if (dataset instanceof PieDataSet) {
+        dataset.paintLegend(context, frames[index], box.data.datasetData[index]);
+      }
     });
   }
 }
@@ -5989,6 +7631,7 @@ class PdfCanvas {
 class PageTheme {
   constructor({pageFormat = PageFormat.A4, buildBackground = null, buildForeground = null, theme = null, orientation = "natural", margin = null, clip = false} = {}) {
     this.pageFormat = {
+      ...pageFormat,
       width: Number(pageFormat.width),
       height: Number(pageFormat.height)
     };
@@ -6009,7 +7652,8 @@ class PageTheme {
     } : this.pageFormat;
   }
   get margin() {
-    const declared = this.declaredMargin ?? normalizeInsets(DEFAULT_MARGIN);
+    const fromFormat = formatMargin(this.pageFormat);
+    const declared = this.declaredMargin ?? (fromFormat === null ? normalizeInsets(DEFAULT_MARGIN) : fromFormat);
     return this.mustRotate ? {
       left: declared.bottom,
       top: declared.left,
@@ -6031,7 +7675,7 @@ class PageTheme {
 }
 
 class MultiPage {
-  constructor({format = undefined, pageFormat = undefined, margin = DEFAULT_MARGIN, orientation = "natural", gap = 8, theme = undefined, build, header = null, footer = null, background = null, maxPages = 20}) {
+  constructor({format = undefined, pageFormat = undefined, margin = undefined, orientation = "natural", gap = 8, theme = undefined, build, header = null, footer = null, background = null, maxPages = 20}) {
     if (typeof build !== "function") throw new TypeError("MultiPage.build must be a function");
     this.pageTheme = new PageTheme({
       pageFormat: pageFormat ?? format ?? PageFormat.A4,
@@ -9679,180 +11323,6 @@ class Vector extends Widget {
   }
 }
 
-class Positioned extends Widget {
-  constructor({left = null, top = null, right = null, bottom = null, width = null, height = null, child}) {
-    super();
-    this.left = left === null ? null : Number(left);
-    this.top = top === null ? null : Number(top);
-    this.right = right === null ? null : Number(right);
-    this.bottom = bottom === null ? null : Number(bottom);
-    this.width = width === null ? null : Math.max(0, Number(width));
-    this.height = height === null ? null : Math.max(0, Number(height));
-    this.child = child;
-  }
-  static fill({left = 0, top = 0, right = 0, bottom = 0, child}) {
-    return new Positioned({
-      left,
-      top,
-      right,
-      bottom,
-      child
-    });
-  }
-  static directional({textDirection, start = null, top = null, end = null, bottom = null, width = null, height = null, child}) {
-    return new Positioned({
-      left: textDirection === "rtl" ? end : start,
-      right: textDirection === "rtl" ? start : end,
-      top,
-      bottom,
-      width,
-      height,
-      child
-    });
-  }
-  layout(context, constraints) {
-    const parent = BoxConstraints.from(constraints).tighten({
-      width: this.width,
-      height: this.height
-    });
-    const childBox = this.child.layout(context, parent);
-    return {
-      widget: this,
-      width: childBox.width,
-      height: childBox.height,
-      data: {
-        childBox
-      }
-    };
-  }
-  paint(context, box) {
-    const {childBox} = box.data;
-    childBox.widget.paint(context, {
-      ...childBox,
-      x: box.x,
-      y: box.y
-    });
-  }
-}
-
-class PositionedDirectional extends Positioned {
-  constructor({start = null, top = null, end = null, bottom = null, width = null, height = null, child, textDirection = "ltr"}) {
-    super({
-      left: textDirection === "rtl" ? end : start,
-      right: textDirection === "rtl" ? start : end,
-      top,
-      bottom,
-      width,
-      height,
-      child
-    });
-    this.start = start;
-    this.end = end;
-    this.textDirection = textDirection;
-  }
-  static fill({start = 0, top = 0, end = 0, bottom = 0, child, textDirection = "ltr"}) {
-    return new PositionedDirectional({
-      start,
-      top,
-      end,
-      bottom,
-      child,
-      textDirection
-    });
-  }
-}
-
-class Stack extends Widget {
-  constructor({alignment = Alignment.topLeft, fit = "loose", overflow = "clip", children = []} = {}) {
-    super();
-    this.alignment = resolveBasicAlignment(alignment);
-    if (![ "loose", "expand", "passthrough" ].includes(fit)) {
-      throw new TypeError(`Unknown StackFit: ${fit}`);
-    }
-    if (overflow !== "visible" && overflow !== "clip") {
-      throw new TypeError(`Unknown Stack overflow: ${overflow}`);
-    }
-    this.fit = fit;
-    this.overflow = overflow;
-    this.children = children;
-  }
-  layout(context, incoming) {
-    const constraints = BoxConstraints.from(incoming);
-    const measured = new Map;
-    let width = constraints.minWidth;
-    let height = constraints.minHeight;
-    let hasNonPositioned = false;
-    const nonPositionedConstraints = this.fit === "loose" ? constraints.loosen() : this.fit === "expand" ? BoxConstraints.tight(constraints.biggest) : constraints;
-    for (const child of this.children) {
-      if (child instanceof Positioned) continue;
-      hasNonPositioned = true;
-      const childBox = child.layout(context, nonPositionedConstraints);
-      measured.set(child, childBox);
-      width = Math.max(width, childBox.width);
-      height = Math.max(height, childBox.height);
-    }
-    const size = hasNonPositioned ? constraints.constrain({
-      width,
-      height
-    }) : constraints.constrain({
-      width: constraints.hasBoundedWidth ? constraints.maxWidth : 0,
-      height: constraints.hasBoundedHeight ? constraints.maxHeight : 0
-    });
-    const placed = [];
-    for (const child of this.children) {
-      if (!(child instanceof Positioned)) {
-        const childBox = measured.get(child);
-        const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
-        placed.push({
-          box: childBox,
-          dx: offset.dx,
-          dy: offset.dy
-        });
-        continue;
-      }
-      let positionedConstraints = new BoxConstraints;
-      const tightWidth = child.left !== null && child.right !== null ? Math.max(0, size.width - child.left - child.right) : child.width;
-      const tightHeight = child.top !== null && child.bottom !== null ? Math.max(0, size.height - child.top - child.bottom) : child.height;
-      positionedConstraints = positionedConstraints.tighten({
-        width: tightWidth,
-        height: tightHeight
-      });
-      const childBox = child.layout(context, positionedConstraints);
-      const aligned = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
-      const dx = child.left !== null ? child.left : child.right !== null ? size.width - child.right - childBox.width : aligned.dx;
-      const dy = child.top !== null ? child.top : child.bottom !== null ? size.height - child.bottom - childBox.height : aligned.dy;
-      placed.push({
-        box: childBox,
-        dx,
-        dy
-      });
-    }
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: {
-        children: placed
-      }
-    };
-  }
-  paint(context, box) {
-    if (this.overflow === "clip") {
-      context.canvas.saveContext();
-      context.canvas.drawRect(box.x, context.canvas.pageHeight - box.y - box.height, box.width, box.height);
-      context.canvas.clipPath();
-    }
-    for (const child of box.data.children) {
-      child.box.widget.paint(context, {
-        ...child.box,
-        x: box.x + child.dx,
-        y: box.y + child.dy
-      });
-    }
-    if (this.overflow === "clip") context.canvas.restoreContext();
-  }
-}
-
 function side(input) {
   if (input === null || input === undefined) {
     return null;
@@ -10275,49 +11745,14 @@ function textAlign(value) {
   return value.x < 0 ? "left" : "right";
 }
 
-class TableText extends Widget {
-  constructor(value, header, style, align) {
-    super();
-    this.value = value;
-    this.header = header;
-    this.style = style;
-    this.align = align;
-  }
-  layout(context, constraints) {
-    const child = new Text(this.value, {
-      style: this.style ?? (this.header ? context.theme.tableHeader : context.theme.tableCell),
-      align: this.align
-    });
-    const childBox = child.layout(context, constraints);
-    return {
-      widget: this,
-      width: childBox.width,
-      height: childBox.height,
-      data: {
-        childBox
-      }
-    };
-  }
-  paint(context, box) {
-    const {childBox} = box.data;
-    childBox.widget.paint(context, {
-      ...childBox,
-      x: box.x,
-      y: box.y,
-      width: box.width
-    });
-  }
-}
-
 class HelperCell extends Widget {
-  constructor({child, padding, minimumHeight, alignment: cellAlignment, decoration, expandChildWidth}) {
+  constructor({child, padding, minimumHeight, alignment: cellAlignment, decoration}) {
     super();
     this.child = child;
     this.padding = normalizeInsets(padding);
     this.minimumHeight = Math.max(0, assertFiniteNumber(Number(minimumHeight), "table cell height"));
     this.alignment = cellAlignment;
     this.decoration = decoration;
-    this.expandChildWidth = expandChildWidth;
   }
   layout(context, constraints) {
     const parent = BoxConstraints.from(constraints);
@@ -10342,13 +11777,11 @@ class HelperCell extends Widget {
     const {childBox} = box.data;
     const innerWidth = Math.max(0, box.width - insetsHorizontal(this.padding));
     const innerHeight = Math.max(0, box.height - insetsVertical(this.padding));
-    const childWidth = this.expandChildWidth ? innerWidth : childBox.width;
-    const offset = inscribe(this.alignment, childWidth, childBox.height, innerWidth, innerHeight);
+    const offset = inscribe(this.alignment, childBox.width, childBox.height, innerWidth, innerHeight);
     childBox.widget.paint(context, {
       ...childBox,
       x: box.x + this.padding.left + offset.dx,
-      y: box.y + this.padding.top + offset.dy,
-      width: childWidth
+      y: box.y + this.padding.top + offset.dy
     });
     paintTableDecorationBorder(context, this.decoration, box.x, box.y, box.width, box.height);
   }
@@ -10357,17 +11790,20 @@ class HelperCell extends Widget {
 const defaultBorder = TableBorder.all();
 
 class TableHelper {
-  static fromTextArray({data, cellPadding = 5, cellHeight = 0, cellAlignment = "topLeft", cellAlignments = null, cellStyle = null, oddCellStyle = cellStyle, cellFormat = null, cellDecoration = null, headerCount = 1, headers = null, headerPadding = cellPadding, headerHeight = cellHeight, headerAlignment = "center", headerAlignments = cellAlignments, headerStyle = null, headerFormat = null, border = defaultBorder, columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max", headerDecoration = null, headerCellDecoration = null, rowDecoration = null, oddRowDecoration = rowDecoration, cellBuilder = null, textStyleBuilder = null}) {
+  static fromTextArray({context = null, data, cellPadding = 5, cellHeight = 0, cellAlignment = "topLeft", cellAlignments = null, cellStyle = null, oddCellStyle = null, cellFormat = null, cellDecoration = null, headerCount = 1, headers = null, headerPadding = cellPadding, headerHeight = cellHeight, headerAlignment = "center", headerAlignments = cellAlignments, headerStyle = null, headerFormat = null, border = defaultBorder, columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max", headerDecoration = null, headerCellDecoration = null, rowDecoration = null, oddRowDecoration = rowDecoration, cellBuilder = null, textStyleBuilder = null}) {
     if (!Array.isArray(data)) {
       throw new TypeError("TableHelper.fromTextArray requires a data array");
     }
+    const resolvedHeaderStyle = headerStyle ?? (context === null ? null : context.theme.tableHeader);
+    const resolvedCellStyle = cellStyle ?? (context === null ? null : context.theme.tableCell);
+    const resolvedOddCellStyle = oddCellStyle ?? resolvedCellStyle;
     const normalizedHeaderCount = Math.trunc(assertFiniteNumber(Number(headerCount), "headerCount"));
     if (normalizedHeaderCount < 0) {
       throw new RangeError("headerCount must not be negative");
     }
     const rows = [];
     let rowNumber = 0;
-    const makeCell = (value, column, isHeader, padding, minimumHeight, cellAlignmentValue, decoration) => {
+    const makeCell = (value, column, isHeader, padding, minimumHeight, cellAlignmentValue, decoration, isHeaderRow = false) => {
       const resolvedAlignment = alignment(cellAlignmentValue);
       if (value instanceof Widget) {
         return new HelperCell({
@@ -10375,8 +11811,7 @@ class TableHelper {
           padding,
           minimumHeight,
           alignment: resolvedAlignment,
-          decoration,
-          expandChildWidth: false
+          decoration
         });
       }
       const built = !isHeader ? cellBuilder?.(column, value, rowNumber) ?? null : null;
@@ -10389,25 +11824,31 @@ class TableHelper {
           padding,
           minimumHeight,
           alignment: resolvedAlignment,
-          decoration,
-          expandChildWidth: false
+          decoration
         });
       }
       const formatter = isHeader ? headerFormat : cellFormat;
       const formatted = formatter === null ? String(value) : formatter(column, value);
       const isOdd = (rowNumber - normalizedHeaderCount) % 2 !== 0;
-      const style = isHeader ? headerStyle : textStyleBuilder?.(column, value, rowNumber) ?? (isOdd ? oddCellStyle : cellStyle);
+      const style = isHeader ? resolvedHeaderStyle : textStyleBuilder?.(column, value, rowNumber) ?? (isOdd ? resolvedOddCellStyle : resolvedCellStyle);
+      const text = new Text(formatted, {
+        ...style === null ? {} : {
+          style
+        },
+        ...isHeaderRow ? {} : {
+          align: textAlign(resolvedAlignment)
+        }
+      });
       return new HelperCell({
-        child: new TableText(formatted, isHeader, style, textAlign(resolvedAlignment)),
+        child: text,
         padding,
         minimumHeight,
         alignment: resolvedAlignment,
-        decoration,
-        expandChildWidth: true
+        decoration
       });
     };
     if (headers !== null) {
-      const cells = headers.map((value, column) => makeCell(value, column, true, headerPadding ?? cellPadding, headerHeight ?? cellHeight, indexed(headerAlignments, column) ?? headerAlignment, headerCellDecoration));
+      const cells = headers.map((value, column) => makeCell(value, column, true, headerPadding ?? cellPadding, headerHeight ?? cellHeight, indexed(headerAlignments, column) ?? headerAlignment, headerCellDecoration, true));
       rows.push(new TableRow({
         children: cells,
         repeat: true,
@@ -10437,192 +11878,6 @@ class TableHelper {
   }
 }
 
-function validateAlignment(value, name) {
-  if (![ "start", "end", "center", "spaceBetween", "spaceAround", "spaceEvenly" ].includes(value)) {
-    throw new TypeError(`Unknown ${name}: ${value}`);
-  }
-}
-
-function spaces(alignment, free, count) {
-  switch (alignment) {
-   case "end":
-    return [ free, 0 ];
-
-   case "center":
-    return [ free / 2, 0 ];
-
-   case "spaceBetween":
-    return [ 0, count > 1 ? free / (count - 1) : 0 ];
-
-   case "spaceAround":
-    {
-      const between = count > 0 ? free / count : 0;
-      return [ between / 2, between ];
-    }
-
-   case "spaceEvenly":
-    {
-      const between = free / (count + 1);
-      return [ between, between ];
-    }
-
-   default:
-    return [ 0, 0 ];
-  }
-}
-
-class Wrap extends SpanningWidget {
-  constructor({direction = "horizontal", alignment = "start", spacing = 0, runAlignment = "start", runSpacing = 0, crossAxisAlignment = "start", verticalDirection = "down", children = []} = {}) {
-    super();
-    if (direction !== "horizontal" && direction !== "vertical") {
-      throw new TypeError(`Unknown Wrap axis: ${direction}`);
-    }
-    validateAlignment(alignment, "WrapAlignment");
-    validateAlignment(runAlignment, "runAlignment");
-    if (![ "start", "end", "center" ].includes(crossAxisAlignment)) {
-      throw new TypeError(`Unknown WrapCrossAlignment: ${crossAxisAlignment}`);
-    }
-    if (verticalDirection !== "down" && verticalDirection !== "up") {
-      throw new TypeError(`Unknown verticalDirection: ${verticalDirection}`);
-    }
-    this.direction = direction;
-    this.alignment = alignment;
-    this.spacing = Math.max(0, Number(spacing));
-    this.runAlignment = runAlignment;
-    this.runSpacing = Math.max(0, Number(runSpacing));
-    this.crossAxisAlignment = crossAxisAlignment;
-    this.verticalDirection = verticalDirection;
-    this.children = children;
-  }
-  initialSpanState() {
-    return {
-      firstChild: 0
-    };
-  }
-  fragment(context, incoming, state) {
-    const constraints = BoxConstraints.from(incoming);
-    const horizontal = this.direction === "horizontal";
-    const maxMain = horizontal ? constraints.maxWidth : constraints.maxHeight;
-    const maxCross = horizontal ? constraints.maxHeight : constraints.maxWidth;
-    const childConstraints = horizontal ? new BoxConstraints({
-      maxWidth: maxMain
-    }) : new BoxConstraints({
-      maxHeight: maxMain
-    });
-    const runs = [];
-    let current = [];
-    let currentMain = 0;
-    let currentCross = 0;
-    const closeRun = () => {
-      if (current.length === 0) return;
-      runs.push({
-        children: current,
-        main: currentMain,
-        cross: currentCross
-      });
-      current = [];
-      currentMain = 0;
-      currentCross = 0;
-    };
-    for (let index = state.firstChild; index < this.children.length; index++) {
-      const box = this.children[index].layout(context, childConstraints);
-      const main = horizontal ? box.width : box.height;
-      const cross = horizontal ? box.height : box.width;
-      if (current.length > 0 && currentMain + this.spacing + main > maxMain) {
-        closeRun();
-      }
-      const nextCrossTotal = runs.reduce((sum, run) => sum + run.cross, 0) + this.runSpacing * runs.length + Math.max(currentCross, cross);
-      if (current.length === 0 && runs.length > 0 && nextCrossTotal > maxCross + 1e-6) {
-        break;
-      }
-      current.push({
-        index,
-        box,
-        main,
-        cross
-      });
-      currentMain += (current.length > 1 ? this.spacing : 0) + main;
-      currentCross = Math.max(currentCross, cross);
-    }
-    closeRun();
-    let usedCross = runs.reduce((sum, run) => sum + run.cross, 0) + this.runSpacing * Math.max(0, runs.length - 1);
-    while (runs.length > 0 && Number.isFinite(maxCross) && usedCross > maxCross + 1e-6) {
-      const removed = runs.pop();
-      usedCross -= removed.cross + (runs.length > 0 ? this.runSpacing : 0);
-    }
-    const maxRunMain = runs.reduce((value, run) => Math.max(value, run.main), 0);
-    const natural = horizontal ? {
-      width: maxRunMain,
-      height: usedCross
-    } : {
-      width: usedCross,
-      height: maxRunMain
-    };
-    const size = constraints.constrain(natural);
-    const containerMain = horizontal ? size.width : size.height;
-    const containerCross = horizontal ? size.height : size.width;
-    const [runLeading, runBetweenExtra] = spaces(this.runAlignment, Math.max(0, containerCross - usedCross), runs.length);
-    const reverseRuns = horizontal && this.verticalDirection === "up";
-    let crossCursor = reverseRuns ? containerCross - runLeading : runLeading;
-    const placed = [];
-    for (const run of runs) {
-      if (reverseRuns) crossCursor -= run.cross;
-      const [childLeading, childBetweenExtra] = spaces(this.alignment, Math.max(0, containerMain - run.main), run.children.length);
-      const reverseChildren = !horizontal && this.verticalDirection === "up";
-      let mainCursor = reverseChildren ? containerMain - childLeading : childLeading;
-      for (const child of run.children) {
-        if (reverseChildren) mainCursor -= child.main;
-        const freeCross = run.cross - child.cross;
-        const childCross = this.crossAxisAlignment === "end" ? freeCross : this.crossAxisAlignment === "center" ? freeCross / 2 : 0;
-        placed.push({
-          box: child.box,
-          dx: horizontal ? mainCursor : crossCursor + childCross,
-          dy: horizontal ? crossCursor + childCross : mainCursor
-        });
-        const advance = child.main + this.spacing + childBetweenExtra;
-        mainCursor += reverseChildren ? -advance : advance;
-      }
-      const runAdvance = run.cross + this.runSpacing + runBetweenExtra;
-      crossCursor += reverseRuns ? -runAdvance : runAdvance;
-    }
-    const lastChild = placed.length === 0 ? state.firstChild : Math.max(...runs.flatMap(run => run.children.map(child => child.index))) + 1;
-    const data = {
-      children: placed,
-      firstChild: state.firstChild,
-      lastChild,
-      runCount: runs.length
-    };
-    const nextState = {
-      firstChild: lastChild
-    };
-    return {
-      box: {
-        widget: this,
-        width: size.width,
-        height: size.height,
-        data
-      },
-      nextState,
-      hasMore: lastChild < this.children.length
-    };
-  }
-  layout(context, constraints) {
-    return this.fragment(context, constraints, this.initialSpanState()).box;
-  }
-  layoutSpan(context, constraints, state) {
-    return this.fragment(context, constraints, state);
-  }
-  paint(context, box) {
-    for (const child of box.data.children) {
-      child.box.widget.paint(context, {
-        ...child.box,
-        x: box.x + child.dx,
-        y: box.y + child.dy
-      });
-    }
-  }
-}
-
 const publicApi = Object.freeze({
   Document,
   Page,
@@ -10636,6 +11891,24 @@ const publicApi = Object.freeze({
   Paragraph,
   Bullet,
   TableOfContent,
+  Chart,
+  ChartGrid,
+  ChartFrame,
+  CartesianGrid,
+  CartesianFrame,
+  PieGrid,
+  PieFrame,
+  RadialGrid,
+  RadialFrame,
+  GridAxis,
+  FixedAxis,
+  PointChartValue,
+  Dataset,
+  PointDataSet,
+  BarDataSet,
+  LineDataSet,
+  PieDataSet,
+  ChartLegend,
   ClipRect,
   ClipRRect,
   ClipOval,
@@ -10738,4 +12011,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AspectRatio, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, Center, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridView, Header, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LinearGradient, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, Placeholder, Positioned, PositionedDirectional, RadialGradient, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AspectRatio, BarDataSet, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridAxis, GridView, Header, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

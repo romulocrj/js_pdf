@@ -106,9 +106,10 @@ test('a landscape page offers its body the wider content area', () => {
       orientation: 'landscape',
       margin: 40,
       build: context => {
-        // A Container with no stated width fills the constraint it is handed,
-        // which is the resolved page width less the margins.
-        const container = new api.Container({ child: new api.Text('x') });
+        // An aligned Container fills the constraint it is handed — upstream
+        // wraps the child in an Align, which expands on a bounded axis — so its
+        // width is the resolved page width less the margins.
+        const container = new api.Container({ alignment: 'center', child: new api.Text('x') });
         width = container.layout(context, {
           maxWidth: context.pageFormat.width - 80,
           maxHeight: context.pageFormat.height - 80

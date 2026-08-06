@@ -1,20 +1,20 @@
 {
-  "generatedAt": "2026-08-05T22:38:17.385Z",
+  "generatedAt": "2026-08-06T01:23:12.306Z",
   "results": [
     {
       "name": "hello-world",
       "status": "generated",
-      "bytes": 736
+      "bytes": 743
     },
     {
       "name": "calendar",
       "status": "generated",
-      "bytes": 21030
+      "bytes": 22027
     },
     {
       "name": "certificate",
       "status": "generated",
-      "bytes": 126806
+      "bytes": 126677
     },
     {
       "name": "document",
@@ -28,8 +28,8 @@
     },
     {
       "name": "report",
-      "status": "failed",
-      "error": "report requires unported js_pdf APIs: BarDataSet, CartesianGrid, Chart, ChartLegend, FixedAxis, LineDataSet, PieDataSet, PieGrid, PointChartValue"
+      "status": "generated",
+      "bytes": 30332
     },
     {
       "name": "resume",
@@ -39,7 +39,7 @@
     {
       "name": "server",
       "status": "failed",
-      "error": "server requires unported js_pdf APIs: AnnotationUrl, BarDataSet, CartesianGrid, Chart, FixedAxis, PointChartValue, UrlLink"
+      "error": "server requires unported js_pdf APIs: AnnotationUrl, UrlLink"
     }
   ]
 }

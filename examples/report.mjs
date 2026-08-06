@@ -25,10 +25,18 @@ export function generateReport(pageFormat = pw.PageFormat.A4, _data = customData
   const expense = dataTable.reduce((sum, row) => sum + row[2], 0);
   const baseColor = '#00bcd4';
   const document = new pw.Document();
-  const theme = pw.ThemeData.withFont({
-    base: pw.Font.ttf(resources.openSans),
-    bold: pw.Font.ttf(resources.openSansBold)
-  });
+  /*
+   * The upstream demo always loads Open Sans. Falling back to the base theme —
+   * the standard Helvetica — when no font is supplied is what lets the runner
+   * generate a second copy comparable with a reference PDF whose Google Fonts
+   * download never happened.
+   */
+  const theme = resources.openSans == null
+    ? pw.ThemeData.base()
+    : pw.ThemeData.withFont({
+      base: pw.Font.ttf(resources.openSans),
+      bold: pw.Font.ttf(resources.openSansBold)
+    });
 
   const chart1 = new pw.Chart({
     left: new pw.Container({

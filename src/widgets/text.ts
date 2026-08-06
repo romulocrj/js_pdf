@@ -582,7 +582,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
     return result;
   }
 
-  private allLines(context: RenderContext, contentWidth: number): RichTextLineLayout[] {
+  private allLines(context: RenderContext, contentWidth: number, minContentWidth = 0): RichTextLineLayout[] {
     const align = this.textAlign ?? context.theme.textAlign ?? 'left';
     const softWrap = this.softWrap ?? context.theme.softWrap;
     const maxLines = this.maxLines ?? context.theme.maxLines;
@@ -630,9 +630,15 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
     if (current.tokens.length > 0 || raw.length === 0 || tokens[tokens.length - 1]?.kind === 'break') pushLine(false);
 
     const limited = maxLines === null ? raw : raw.slice(0, Math.max(1, maxLines));
+    /*
+     * Upstream aligns inside `max(constraints.minWidth, longest line)`, and
+     * inside the full width once a line wrapped. A tight-width parent — a table
+     * cell, say — therefore gets its text aligned across the whole cell, not
+     * across the text's own extent.
+     */
     const targetWidth = limited.some(line => line.wrapped || align === 'justify')
       ? contentWidth
-      : Math.max(0, ...limited.map(line => line.width));
+      : Math.max(0, minContentWidth, ...limited.map(line => line.width));
     let y = 0;
     const lines: RichTextLineLayout[] = [];
     for (const line of limited) {
@@ -651,7 +657,8 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
   ): SpanLayout<RichTextLayoutData, RichTextState> {
     const parent = BoxConstraints.from(constraints);
     const contentWidth = Math.max(1, parent.maxWidth - this.margin.left - this.margin.right);
-    const all = this.allLines(context, contentWidth);
+    const minContentWidth = Math.max(0, parent.minWidth - this.margin.left - this.margin.right);
+    const all = this.allLines(context, contentWidth, minContentWidth);
     const topMargin = lineIndex === 0 ? this.margin.top : 0;
     const availableHeight = Math.max(0, parent.maxHeight - topMargin);
     let end = lineIndex;

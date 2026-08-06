@@ -50,6 +50,30 @@ export function normalizeColor(value: ColorInput | null | undefined, fallback: R
   throw new TypeError('Color must be [r,g,b] with values from 0 to 1 or #RRGGBB');
 }
 
+function linearizeColorComponent(component: number): number {
+  if (component <= 0.03928) return component / 12.92;
+  return Math.pow((component + 0.055) / 1.055, 2.4);
+}
+
+/** Upstream `PdfColor.luminance`: the WCAG relative luminance of a color. */
+export function colorLuminance(color: ColorInput): number {
+  const [r, g, b] = normalizeColor(color);
+  return 0.2126 * linearizeColorComponent(r)
+    + 0.7152 * linearizeColorComponent(g)
+    + 0.0722 * linearizeColorComponent(b);
+}
+
+/**
+ * Upstream `PdfColor.isLight`, quirk included: the test is
+ * `(luminance + .05)² > .15`, which puts the cut at a luminance near .337 and
+ * not the .5 the name suggests. Chart labels choose their color with this, so
+ * the threshold is rendered output, not taste.
+ */
+export function isLightColor(color: ColorInput): boolean {
+  const relative = colorLuminance(color) + 0.05;
+  return !(relative * relative > 0.15);
+}
+
 /** The `rg` (non-stroking) or `RG` (stroking) color operator. */
 export function colorOperator(color: ColorInput, stroke = false): string {
   const [r, g, b] = normalizeColor(color);

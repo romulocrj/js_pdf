@@ -124,7 +124,7 @@ test('TableHelper marks headers repeatable and applies minimum row heights', () 
   assert.equal(box.height, 110);
 });
 
-test('TableHelper uses header/cell themes, formats values and honours alignments', () => {
+test('TableHelper formats values and, with no context, leaves cells unstyled', () => {
   const calls = [];
   const table = Pdf.TableHelper.fromTextArray({
     headers: ['Item', 'Amount'],
@@ -146,9 +146,44 @@ test('TableHelper uses header/cell themes, formats values and honours alignments
   assert.match(source, /\(1:Amount\) Tj/);
   assert.match(source, /\(Tea\) Tj/);
   assert.match(source, /\(\$3\.50\) Tj/);
-  assert.match(source, /\/BaseFont \/Helvetica-Bold/);
+  // Upstream only reaches for theme.tableHeader/tableCell when handed a
+  // context; without one the cells inherit the ambient 12pt regular style.
+  assert.doesNotMatch(source, /\/BaseFont \/Helvetica-Bold/);
   assert.match(source, /\/BaseFont \/Helvetica\b/);
+  assert.match(source, /\/F\d+ 12 Tf/);
   assert.doesNotMatch(source, /\bre S\b/);
+});
+
+test('TableHelper applies the table theme when it is given a context', () => {
+  const source = latin1(Pdf.createPdf({}, () => new Pdf.Page({
+    margin: 20,
+    build: context => Pdf.TableHelper.fromTextArray({
+      context,
+      headers: ['Item'],
+      data: [['Tea']],
+      border: null
+    })
+  })));
+
+  assert.match(source, /\/BaseFont \/Helvetica-Bold/);
+  assert.match(source, /\/F\d+ 9\.6 Tf/);
+});
+
+test('a right-aligned cell places its text at the column edge', () => {
+  const source = latin1(Pdf.createPdf({}, () => new Pdf.Page({
+    margin: 0,
+    build: () => Pdf.TableHelper.fromTextArray({
+      headerCount: 0,
+      data: [['x', 'y']],
+      cellAlignment: 'centerRight',
+      border: null
+    })
+  })));
+
+  // The first column is half of an unmargined A4, so a right-aligned glyph
+  // lands near 297.64 rather than on the cell's left padding.
+  const [, first] = source.match(/1 0 0 1 ([\d.]+) [\d.]+ Tm \(x\) Tj/) ?? [];
+  assert.ok(Number(first) > 250, `expected the cell text near the right edge, got ${first}`);
 });
 
 test('table decorations and borders paint in widget-space coordinates', () => {

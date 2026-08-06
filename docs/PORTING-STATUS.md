@@ -2,9 +2,9 @@
 
 Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
-**Last updated:** 2026-08-05
+**Last updated:** 2026-08-06
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 87 `.ts` files, ~18,900 lines (TypeScript)
+**Ported:** 98 `.ts` files, ~21,500 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -22,16 +22,16 @@ table. Run `npm run examples`; current state, from
 
 | Example | Status | Missing APIs | Unlocks at |
 |---|---|---:|---|
-| `hello-world` | ✅ generated (736 bytes) | 0 | — |
-| `calendar` | ✅ generated (21,030 bytes) | 0 | 3.6 |
-| `certificate` | ✅ generated (126,786 bytes) | 0 | 3.9 |
-| `report` | failed | 9 | 5.1 |
+| `hello-world` | ✅ generated (743 bytes) | 0 | — |
+| `calendar` | ✅ generated (22,027 bytes) | 0 | 3.6 |
+| `certificate` | ✅ generated (126,677 bytes) | 0 | 3.9 |
+| `report` | ✅ generated (30,332 bytes) | 0 | 5.1 |
 | `invoice` | failed | 2 | 5.2 |
 | `document` | failed | 1 | 5.3 |
 | `server` | failed | 7 | 5.3 |
 | `resume` | failed | 6 | 5.5 |
 
-**3 of 8**, with the missing-API total down from 124 to 25 — phase 1.4 cleared
+**4 of 8**, with the missing-API total down from 124 to 25 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
 from every one of the seven, phase 2.7 cleared `SvgImage` from six, and phase
 3.1 cleared `TableHelper` from four. Phase 3.3 then cleared the composition
@@ -177,7 +177,7 @@ both, and will grow the shape factories in 2.5.
 | `widgets/border_radius.dart` | 466 | `src/widgets/border_radius.ts` | done — physical/directional circular or elliptical radii, with oversized radii scaled to a valid path |
 | `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | `src/widgets/stack.ts`, `wrap.ts`, `grid_view.ts`, `partitions.ts` | done — positioned overlays/clipping, multi-run wrap, fixed-track grid and parallel partitions; immutable continuation for wrap/grid/partitions |
 | `widgets/clip.dart` | 134 | `src/widgets/clip.ts` | done — rectangular, scaled rounded-rectangle and elliptical clip scopes over immutable child layout |
-| `widgets/chart/*.dart` | 1989 | — | — `Chart`, grids, data sets — **phase 5.1** |
+| `widgets/chart/*.dart` | 1989 | `src/widgets/chart/*.ts` | done — `Chart`, `CartesianGrid`, `PieGrid`, `RadialGrid`, `FixedAxis`, `ChartLegend`, `PointDataSet`, `BarDataSet`, `LineDataSet`, `PieDataSet`; grids resolve a frame at layout and hand it to the data sets, in place of upstream's mutable boxes |
 | `widgets/annotations.dart`, `forms.dart` | 1244 | — | — `UrlLink`, `AnnotationUrl` — **phase 5.3**; forms 5.6 |
 | `widgets/barcode.dart` | 298 | — | — `Barcode`, `BarcodeWidget` — **phase 5.2** |
 | `widgets/content.dart` | 360 | `src/widgets/content.ts` | partial — `Header`, `Paragraph`, `Bullet`, `TableOfContent`, named destinations and conditional two-pass TOC; no `Watermark` or `Footer` |
@@ -206,8 +206,9 @@ Type0/CIDFontType2 composite with `/Identity-H`, and selected through `Font`,
 — it is drawn from the embedded font and stays searchable through the
 `/ToUnicode` CMap. The public SVG pipeline now reaches PDF shading patterns.
 
-**Phase 4 is complete.** What now limits the five remaining examples is their
-dedicated document features in phase 5 (charts, barcodes, links, icons and
+**Phase 5.1 is complete**, and `report` generates: the chart widgets are a
+file-per-upstream-file port under `src/widgets/chart/`. What now limits the four
+remaining examples is the rest of phase 5 (barcodes, links, icons and
 progress).
 See
 [ROADMAP.md](ROADMAP.md).

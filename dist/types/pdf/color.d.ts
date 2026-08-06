@@ -7,5 +7,14 @@ export type ColorInput = string | Rgb;
  * subclasses; the port keeps DeviceRGB as the only color space.
  */
 export declare function normalizeColor(value: ColorInput | null | undefined, fallback?: Rgb): Rgb;
+/** Upstream `PdfColor.luminance`: the WCAG relative luminance of a color. */
+export declare function colorLuminance(color: ColorInput): number;
+/**
+ * Upstream `PdfColor.isLight`, quirk included: the test is
+ * `(luminance + .05)² > .15`, which puts the cut at a luminance near .337 and
+ * not the .5 the name suggests. Chart labels choose their color with this, so
+ * the threshold is rendered output, not taste.
+ */
+export declare function isLightColor(color: ColorInput): boolean;
 /** The `rg` (non-stroking) or `RG` (stroking) color operator. */
 export declare function colorOperator(color: ColorInput, stroke?: boolean): string;

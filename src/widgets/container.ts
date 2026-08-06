@@ -145,9 +145,16 @@ export class Container extends Widget<ContainerLayoutData> {
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<ContainerLayoutData> {
     const parent = BoxConstraints.from(constraints);
     const outer = parent.deflate(this.margin);
+    /*
+     * Upstream wraps the child in `Align` when an alignment is given, and in an
+     * expanding `ConstrainedBox` when there is no child; both fill a bounded
+     * axis. With neither, upstream shrink-wraps the child — a container that
+     * always filled would stretch every decorated box to the full line width.
+     */
+    const fill = this.alignment !== null || this.child === null;
     const desired = outer.tighten({
-      width: this.width ?? (outer.hasBoundedWidth ? outer.maxWidth : null),
-      height: this.height
+      width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
+      height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
     });
     const inner = desired.deflate(this.padding);
     const childBox = this.child?.layout(context, this.alignment === null ? inner : inner.loosen()) ?? null;

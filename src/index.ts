@@ -51,6 +51,15 @@ import { Border, BorderSide, BorderStyle, BoxBorder } from './widgets/box_border
 import { Container, DecoratedBox } from './widgets/container.ts';
 import { ClipOval, ClipRect, ClipRRect } from './widgets/clip.ts';
 import { Bullet, Header, Paragraph, TableOfContent } from './widgets/content.ts';
+import { BarDataSet } from './widgets/chart/bar_chart.ts';
+import { Chart, ChartFrame, ChartGrid, Dataset } from './widgets/chart/chart.ts';
+import { FixedAxis, GridAxis } from './widgets/chart/grid_axis.ts';
+import { CartesianFrame, CartesianGrid } from './widgets/chart/grid_cartesian.ts';
+import { RadialFrame, RadialGrid } from './widgets/chart/grid_radial.ts';
+import { ChartLegend } from './widgets/chart/legend.ts';
+import { LineDataSet } from './widgets/chart/line_chart.ts';
+import { PieDataSet, PieFrame, PieGrid } from './widgets/chart/pie_chart.ts';
+import { PointChartValue, PointDataSet } from './widgets/chart/point_chart.ts';
 import { BoxDecoration, BoxShadow, Gradient, LinearGradient, RadialGradient } from './widgets/decoration.ts';
 import { Document } from './widgets/document.ts';
 import { Column, Expanded, Flex, Flexible, Row, Spacer } from './widgets/flex.ts';
@@ -101,8 +110,15 @@ export {
   BoxDecoration,
   BoxShadow,
   Bullet,
+  BarDataSet,
   Builder,
+  CartesianFrame,
+  CartesianGrid,
   Center,
+  Chart,
+  ChartFrame,
+  ChartGrid,
+  ChartLegend,
   ClipOval,
   ClipRect,
   ClipRRect,
@@ -110,6 +126,7 @@ export {
   ConstrainedBox,
   Container,
   CustomPaint,
+  Dataset,
   DefaultTextStyle,
   DecoratedBox,
   Divider,
@@ -123,9 +140,11 @@ export {
   Flexible,
   Font,
   FlutterLogo,
+  FixedAxis,
   FractionColumnWidth,
   FullPage,
   Gradient,
+  GridAxis,
   GridView,
   Header,
   Image,
@@ -133,6 +152,7 @@ export {
   ImageProxy,
   IntrinsicColumnWidth,
   LayoutBuilder,
+  LineDataSet,
   LimitedBox,
   LinearGradient,
   Lorem,
@@ -152,7 +172,14 @@ export {
   PdfImage,
   PdfTtfFont,
   PdfType1Font,
+  PieDataSet,
+  PieFrame,
+  PieGrid,
+  PointChartValue,
+  PointDataSet,
+  RadialFrame,
   RadialGradient,
+  RadialGrid,
   Radius,
   Positioned,
   PositionedDirectional,
@@ -317,6 +344,43 @@ export type {
   ParagraphOptions,
   TableOfContentOptions
 } from './widgets/content.ts';
+export type { BarDataSetOptions } from './widgets/chart/bar_chart.ts';
+export type {
+  AnyChartGrid,
+  AnyDataset,
+  ChartGridLayoutData,
+  ChartLayoutData,
+  ChartOptions,
+  ChartPoint,
+  ChartRect,
+  ChartScope,
+  DatasetOptions
+} from './widgets/chart/chart.ts';
+export type {
+  AxisLayout,
+  AxisPositions,
+  FixedAxisOptions,
+  GridAxisBuildLabel,
+  GridAxisFormat,
+  GridAxisOptions
+} from './widgets/chart/grid_axis.ts';
+export type { CartesianGridLayoutData, CartesianGridOptions } from './widgets/chart/grid_cartesian.ts';
+export type { RadialGridLayoutData } from './widgets/chart/grid_radial.ts';
+export type { ChartLegendOptions, LegendPosition } from './widgets/chart/legend.ts';
+export type { LineDataSetOptions } from './widgets/chart/line_chart.ts';
+export type {
+  PieDataSetOptions,
+  PieGridLayoutData,
+  PieGridOptions,
+  PieLegendPosition,
+  PieSliceLayout
+} from './widgets/chart/pie_chart.ts';
+export type {
+  PointDataSetOptions,
+  PointShapeBuilder,
+  PointValueBuilder,
+  ValuePosition
+} from './widgets/chart/point_chart.ts';
 export type {
   BorderRadiusDirectionalOnlyOptions,
   BorderRadiusOnlyOptions,
@@ -467,6 +531,24 @@ export interface PublicApi {
   readonly Paragraph: typeof Paragraph;
   readonly Bullet: typeof Bullet;
   readonly TableOfContent: typeof TableOfContent;
+  readonly Chart: typeof Chart;
+  readonly ChartGrid: typeof ChartGrid;
+  readonly ChartFrame: typeof ChartFrame;
+  readonly CartesianGrid: typeof CartesianGrid;
+  readonly CartesianFrame: typeof CartesianFrame;
+  readonly PieGrid: typeof PieGrid;
+  readonly PieFrame: typeof PieFrame;
+  readonly RadialGrid: typeof RadialGrid;
+  readonly RadialFrame: typeof RadialFrame;
+  readonly GridAxis: typeof GridAxis;
+  readonly FixedAxis: typeof FixedAxis;
+  readonly PointChartValue: typeof PointChartValue;
+  readonly Dataset: typeof Dataset;
+  readonly PointDataSet: typeof PointDataSet;
+  readonly BarDataSet: typeof BarDataSet;
+  readonly LineDataSet: typeof LineDataSet;
+  readonly PieDataSet: typeof PieDataSet;
+  readonly ChartLegend: typeof ChartLegend;
   readonly ClipRect: typeof ClipRect;
   readonly ClipRRect: typeof ClipRRect;
   readonly ClipOval: typeof ClipOval;
@@ -564,6 +646,24 @@ const publicApi: PublicApi = Object.freeze({
   Paragraph,
   Bullet,
   TableOfContent,
+  Chart,
+  ChartGrid,
+  ChartFrame,
+  CartesianGrid,
+  CartesianFrame,
+  PieGrid,
+  PieFrame,
+  RadialGrid,
+  RadialFrame,
+  GridAxis,
+  FixedAxis,
+  PointChartValue,
+  Dataset,
+  PointDataSet,
+  BarDataSet,
+  LineDataSet,
+  PieDataSet,
+  ChartLegend,
   ClipRect,
   ClipRRect,
   ClipOval,
