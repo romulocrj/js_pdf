@@ -1,10 +1,10 @@
 /*
- * Ported to JavaScript from DavBfr/dart_pdf.
+ * Ported to JavaScript from https://github.com/DavBfr/dart_pdf
  *
  * Original work:
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
- * JavaScript port:
+ * JavaScript port: https://github.com/romulocrj/js_pdf
  * Copyright (C) 2026, Romulo Campos
  *
  * This file has been substantially modified from the original Dart source.
@@ -194,6 +194,7 @@ export class Document {
     level,
     pageNumber,
     y,
+    anchor = null,
     color = null,
     style = 'normal'
   }: {
@@ -201,6 +202,7 @@ export class Document {
     readonly level: number;
     readonly pageNumber: number;
     readonly y: number;
+    readonly anchor?: string | null;
     readonly color?: Rgb | null;
     readonly style?: PdfOutlineStyle;
   }): void {
@@ -214,7 +216,7 @@ export class Document {
         this.outlineEntries.push({
           title,
           level,
-          anchor: `outline-${this.outlineCursor + 1}`,
+          anchor: anchor ?? `outline-${this.outlineCursor + 1}`,
           page,
           y,
           color,
@@ -228,7 +230,7 @@ export class Document {
     this.outlineEntries.push({
       title,
       level,
-      anchor: `outline-${this.outlineEntries.length + 1}`,
+      anchor: anchor ?? `outline-${this.outlineEntries.length + 1}`,
       page,
       y,
       color,

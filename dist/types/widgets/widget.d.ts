@@ -13,10 +13,9 @@ export interface DocumentContext {
 /**
  * The context threaded through `layout` and `paint`.
  *
- * `theme` is the port's stand-in for upstream's inherited values: a widget that
- * scopes something for its subtree hands the child a context with that field
- * replaced, instead of registering an `InheritedWidget` the child looks up. See
- * `theme.ts`.
+ * Frequently read theme data keeps its direct field, while general inherited
+ * values use an immutable constructor-keyed map. A scoping widget hands its
+ * child a copied context; no layout state is retained on the widget instance.
  */
 export interface RenderContext extends DocumentContext {
     readonly canvas: PdfCanvas;
@@ -26,6 +25,10 @@ export interface RenderContext extends DocumentContext {
     readonly pageLabel: string;
     readonly pagesCount: number;
     readonly theme: ThemeData;
+    /** Values scoped by `InheritedWidget`, keyed by their concrete constructor. */
+    readonly inherited?: ReadonlyMap<Function, Inherited>;
+    /** Text direction scoped by `Directionality`; individual text may override it. */
+    readonly textDirection?: 'ltr' | 'rtl';
 }
 export interface Constraints {
     readonly minWidth?: number;
@@ -74,6 +77,9 @@ export declare abstract class Widget<TData = unknown> {
     abstract layout(context: RenderContext, constraints: Constraints): LayoutBox<TData>;
     abstract paint(context: RenderContext, box: PositionedBox<TData>): void;
 }
+/** Marker base for values supplied to a subtree through `InheritedWidget`. */
+export declare class Inherited {
+}
 /** One page-sized fragment and the immutable state needed for the next one. */
 export interface SpanLayout<TData, TState> {
     readonly box: LayoutBox<TData>;
@@ -118,5 +124,67 @@ export declare abstract class StatelessWidget extends SpanningWidget<StatelessLa
     initialSpanState(): StatelessState;
     layoutSpan(context: RenderContext, constraints: Constraints, state: StatelessState): SpanLayout<StatelessLayoutData, StatelessState>;
     layout(context: RenderContext, constraints: Constraints): LayoutBox<StatelessLayoutData>;
+    paint(context: RenderContext, box: PositionedBox<StatelessLayoutData>): void;
+}
+export interface InheritedWidgetOptions {
+    readonly build: (context: RenderContext) => AnyWidget;
+    readonly inherited?: Inherited | null;
+}
+export interface InheritedWidgetLayoutData {
+    readonly childBox: AnyLayoutBox;
+    readonly child: AnyWidget;
+}
+export interface InheritedWidgetState {
+    readonly child: AnyWidget | null;
+    readonly childState: unknown;
+}
+/** Builds a subtree with one additional inherited context value. */
+export declare class InheritedWidget extends SpanningWidget<InheritedWidgetLayoutData, InheritedWidgetState> {
+    readonly builder: (context: RenderContext) => AnyWidget;
+    readonly inheritedValue: Inherited | null;
+    constructor({ build, inherited }: InheritedWidgetOptions);
+    static of<T extends Inherited>(context: RenderContext, type: abstract new (...args: never[]) => T): T | null;
+    private scope;
+    initialSpanState(): InheritedWidgetState;
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<InheritedWidgetLayoutData>;
+    paint(context: RenderContext, box: PositionedBox<InheritedWidgetLayoutData>): void;
+    layoutSpan(context: RenderContext, constraints: Constraints, state: InheritedWidgetState): SpanLayout<InheritedWidgetLayoutData, InheritedWidgetState>;
+}
+export interface DelayedWidgetOptions {
+    readonly build: (context: RenderContext) => AnyWidget;
+}
+export interface DelayedWidgetLayoutData extends StatelessLayoutData {
+    readonly childState: unknown;
+    readonly spanning: boolean;
+}
+export interface DelayedWidgetState {
+    readonly child: AnyWidget | null;
+    readonly childState: unknown;
+}
+/** Rebuilds its child immediately before paint using the final page context. */
+export declare class DelayedWidget extends SpanningWidget<DelayedWidgetLayoutData, DelayedWidgetState> {
+    readonly builder: (context: RenderContext) => AnyWidget;
+    constructor({ build }: DelayedWidgetOptions);
+    initialSpanState(): DelayedWidgetState;
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<DelayedWidgetLayoutData>;
+    layoutSpan(context: RenderContext, constraints: Constraints, state: DelayedWidgetState): SpanLayout<DelayedWidgetLayoutData, DelayedWidgetState>;
+    paint(context: RenderContext, box: PositionedBox<DelayedWidgetLayoutData>): void;
+}
+export interface InseparableOptions {
+    readonly child: AnyWidget;
+    readonly canSpan?: boolean;
+}
+export interface InseparableState {
+    readonly childState: unknown;
+}
+/** Keeps its child on one page unless `canSpan` explicitly delegates continuation. */
+export declare class Inseparable extends SpanningWidget<StatelessLayoutData, InseparableState> {
+    readonly child: AnyWidget;
+    readonly allowSpan: boolean;
+    constructor({ child, canSpan }: InseparableOptions);
+    get canSpan(): boolean;
+    initialSpanState(): InseparableState;
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<StatelessLayoutData>;
+    layoutSpan(context: RenderContext, constraints: Constraints, state: InseparableState): SpanLayout<StatelessLayoutData, InseparableState>;
     paint(context: RenderContext, box: PositionedBox<StatelessLayoutData>): void;
 }

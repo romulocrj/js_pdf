@@ -49,7 +49,7 @@ export declare class WidgetSpan extends InlineSpan {
 export interface RichTextOptions {
     readonly text: InlineSpan;
     readonly textAlign?: TextAlign | null;
-    readonly textDirection?: TextDirection;
+    readonly textDirection?: TextDirection | null;
     readonly softWrap?: boolean | null;
     readonly tightBounds?: boolean;
     readonly textScaleFactor?: number;
@@ -64,7 +64,7 @@ export interface TextOptions {
     readonly color?: ColorInput;
     readonly align?: TextAlign;
     readonly textAlign?: TextAlign;
-    readonly textDirection?: TextDirection;
+    readonly textDirection?: TextDirection | null;
     readonly softWrap?: boolean;
     readonly tightBounds?: boolean;
     readonly textScaleFactor?: number;
@@ -134,6 +134,7 @@ export interface RichTextLayoutData {
     readonly lines: readonly RichTextLineLayout[];
     readonly contentWidth: number;
     readonly clip: boolean;
+    readonly textDirection: TextDirection;
 }
 export interface RichTextState {
     readonly lineIndex: number;
@@ -145,7 +146,7 @@ export declare function wrapText(value: string, maxWidth: number, fontSize: numb
 export declare class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> {
     readonly text: InlineSpan;
     readonly textAlign: TextAlign | null;
-    readonly textDirection: TextDirection;
+    readonly textDirection: TextDirection | null;
     readonly softWrap: boolean | null;
     readonly tightBounds: boolean;
     readonly textScaleFactor: number;

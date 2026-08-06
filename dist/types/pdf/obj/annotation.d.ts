@@ -18,6 +18,27 @@ export interface PdfNamedLinkAnnotation {
     readonly destination: string;
 }
 export type PdfLinkAnnotation = PdfUrlLinkAnnotation | PdfNamedLinkAnnotation;
+export type PdfGeometricAnnotationKind = 'square' | 'circle' | 'polygon' | 'polyline' | 'ink';
+export interface PdfGeometricAnnotation {
+    readonly kind: 'geometric';
+    readonly shape: PdfGeometricAnnotationKind;
+    readonly rect: PdfRect;
+    readonly points?: readonly {
+        readonly x: number;
+        readonly y: number;
+    }[];
+    readonly inkList?: readonly (readonly {
+        readonly x: number;
+        readonly y: number;
+    }[])[];
+    readonly color?: Rgb | null;
+    readonly interiorColor?: Rgb | null;
+    readonly borderWidth?: number;
+    readonly author?: string | null;
+    readonly subject?: string | null;
+    readonly content?: string | null;
+    readonly date?: string | null;
+}
 export type PdfFormFieldType = 'text' | 'choice' | 'checkbox' | 'button';
 export type PdfFormHighlighting = 'none' | 'invert' | 'outline' | 'push' | 'toggle';
 export type PdfTextFieldAlign = 'left' | 'center' | 'right';
@@ -63,7 +84,7 @@ export interface PdfFormFieldAnnotation {
     readonly textColor?: Rgb;
     readonly appearances?: PdfFormAppearances;
 }
-export type PdfAnnotationSpec = PdfLinkAnnotation | PdfFormFieldAnnotation;
+export type PdfAnnotationSpec = PdfLinkAnnotation | PdfFormFieldAnnotation | PdfGeometricAnnotation;
 /** One invisible clickable rectangle in a page's `/Annots` array. */
 export declare class PdfAnnotation extends PdfObject<PdfDict> {
     readonly page: PdfPage;
@@ -72,5 +93,6 @@ export declare class PdfAnnotation extends PdfObject<PdfDict> {
     readonly appearances: PdfResolvedFormAppearances | null;
     constructor(document: PdfObjectRegistry, page: PdfPage, annotation: PdfAnnotationSpec, defaultAppearanceName?: string | null, appearances?: PdfResolvedFormAppearances | null);
     prepare(): void;
+    private prepareGeometric;
     private prepareForm;
 }

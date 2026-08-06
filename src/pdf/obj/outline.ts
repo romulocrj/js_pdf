@@ -1,10 +1,10 @@
 /*
- * Ported to JavaScript from DavBfr/dart_pdf.
+ * Ported to JavaScript from https://github.com/DavBfr/dart_pdf
  *
  * Original work:
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
- * JavaScript port:
+ * JavaScript port: https://github.com/romulocrj/js_pdf
  * Copyright (C) 2026, Romulo Campos
  *
  * This file has been substantially modified from the original Dart source.

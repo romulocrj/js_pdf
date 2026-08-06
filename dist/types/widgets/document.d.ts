@@ -79,11 +79,12 @@ export declare class Document {
     /** Current first-pass outline data, consumed by `TableOfContent`. */
     get outlines(): readonly DocumentOutlineEntry[];
     requestOutlineRerender(): void;
-    registerOutline({ title, level, pageNumber, y, color, style }: {
+    registerOutline({ title, level, pageNumber, y, anchor, color, style }: {
         readonly title: string;
         readonly level: number;
         readonly pageNumber: number;
         readonly y: number;
+        readonly anchor?: string | null;
         readonly color?: Rgb | null;
         readonly style?: PdfOutlineStyle;
     }): void;

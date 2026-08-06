@@ -1,10 +1,10 @@
 /*
  * romulocrj/js_pdf — JavaScript port of DavBfr/dart_pdf.
  *
- * Original work:
+ * Original work: https://github.com/DavBfr/dart_pdf
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
- * JavaScript port:
+ * JavaScript port: https://github.com/romulocrj/js_pdf
  * Copyright (C) 2026, Romulo Campos
  *
  * This file has been substantially modified from the original Dart source.
@@ -5821,6 +5821,8 @@ function normalizeBoxBorder(value) {
 
 class Widget {}
 
+class Inherited {}
+
 class SpanningWidget extends Widget {
   get canSpan() {
     return true;
@@ -5909,6 +5911,290 @@ class StatelessWidget extends SpanningWidget {
       data: {
         childBox
       }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class InheritedWidget extends SpanningWidget {
+  constructor({build, inherited = null}) {
+    super();
+    if (typeof build !== "function") throw new TypeError("InheritedWidget.build must be a function");
+    this.builder = build;
+    this.inheritedValue = inherited;
+  }
+  static of(context, type) {
+    return context.inherited?.get(type) ?? null;
+  }
+  scope(context) {
+    if (this.inheritedValue === null) return context;
+    const inherited = new Map(context.inherited ?? []);
+    inherited.set(this.inheritedValue.constructor, this.inheritedValue);
+    return {
+      ...context,
+      inherited
+    };
+  }
+  initialSpanState() {
+    return {
+      child: null,
+      childState: null
+    };
+  }
+  layout(context, constraints) {
+    const scoped = this.scope(context);
+    const child = this.builder(scoped);
+    const childBox = child.layout(scoped, constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox,
+        child
+      }
+    };
+  }
+  paint(context, box) {
+    const scoped = this.scope(context);
+    box.data.child.paint(scoped, {
+      ...box.data.childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+  layoutSpan(context, constraints, state) {
+    const scoped = this.scope(context);
+    const child = state.child ?? this.builder(scoped);
+    if (child instanceof SpanningWidget && child.canSpan) {
+      const childState = state.child === null ? child.initialSpanState() : state.childState;
+      const fragment = child.layoutSpan(scoped, constraints, childState);
+      return {
+        box: {
+          widget: this,
+          width: fragment.box.width,
+          height: fragment.box.height,
+          data: {
+            childBox: fragment.box,
+            child
+          }
+        },
+        nextState: {
+          child,
+          childState: fragment.nextState
+        },
+        hasMore: fragment.hasMore
+      };
+    }
+    const parent = BoxConstraints.from(constraints);
+    const childBox = child.layout(scoped, parent.copyWith({
+      minHeight: 0,
+      maxHeight: Infinity
+    }));
+    if (childBox.height > parent.maxHeight + .001) {
+      return {
+        box: {
+          widget: this,
+          width: parent.constrainWidth(childBox.width),
+          height: 0,
+          data: {
+            childBox: {
+              ...childBox,
+              height: 0
+            },
+            child
+          }
+        },
+        nextState: {
+          child,
+          childState: null
+        },
+        hasMore: true
+      };
+    }
+    return {
+      box: {
+        widget: this,
+        width: childBox.width,
+        height: childBox.height,
+        data: {
+          childBox,
+          child
+        }
+      },
+      nextState: {
+        child,
+        childState: null
+      },
+      hasMore: false
+    };
+  }
+}
+
+class DelayedWidget extends SpanningWidget {
+  constructor({build}) {
+    super();
+    if (typeof build !== "function") throw new TypeError("DelayedWidget.build must be a function");
+    this.builder = build;
+  }
+  initialSpanState() {
+    return {
+      child: null,
+      childState: null
+    };
+  }
+  layout(context, constraints) {
+    const childBox = this.builder(context).layout(context, constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox,
+        childState: null,
+        spanning: false
+      }
+    };
+  }
+  layoutSpan(context, constraints, state) {
+    const child = state.child ?? this.builder(context);
+    if (child instanceof SpanningWidget && child.canSpan) {
+      const childState = state.child === null ? child.initialSpanState() : state.childState;
+      const fragment = child.layoutSpan(context, constraints, childState);
+      return {
+        box: {
+          widget: this,
+          width: fragment.box.width,
+          height: fragment.box.height,
+          data: {
+            childBox: fragment.box,
+            childState,
+            spanning: true
+          }
+        },
+        nextState: {
+          child,
+          childState: fragment.nextState
+        },
+        hasMore: fragment.hasMore
+      };
+    }
+    const parent = BoxConstraints.from(constraints);
+    const childBox = child.layout(context, parent.copyWith({
+      minHeight: 0,
+      maxHeight: Infinity
+    }));
+    if (childBox.height > parent.maxHeight + .001) {
+      return {
+        box: {
+          widget: this,
+          width: parent.constrainWidth(childBox.width),
+          height: 0,
+          data: {
+            childBox: {
+              ...childBox,
+              height: 0
+            },
+            childState: null,
+            spanning: false
+          }
+        },
+        nextState: {
+          child,
+          childState: null
+        },
+        hasMore: true
+      };
+    }
+    return {
+      box: {
+        widget: this,
+        width: childBox.width,
+        height: childBox.height,
+        data: {
+          childBox,
+          childState: null,
+          spanning: false
+        }
+      },
+      nextState: {
+        child,
+        childState: null
+      },
+      hasMore: false
+    };
+  }
+  paint(context, box) {
+    const child = this.builder(context);
+    const childBox = box.data.spanning && child instanceof SpanningWidget && child.canSpan ? child.layoutSpan(context, new BoxConstraints({
+      maxWidth: box.width,
+      maxHeight: box.height
+    }), box.data.childState).box : child.layout(context, BoxConstraints.tight({
+      width: box.width,
+      height: box.height
+    }));
+    child.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class Inseparable extends SpanningWidget {
+  constructor({child, canSpan = false}) {
+    super();
+    this.child = child;
+    this.allowSpan = Boolean(canSpan);
+  }
+  get canSpan() {
+    return this.allowSpan && this.child instanceof SpanningWidget && this.child.canSpan;
+  }
+  initialSpanState() {
+    return {
+      childState: this.child instanceof SpanningWidget ? this.child.initialSpanState() : null
+    };
+  }
+  layout(context, constraints) {
+    const childBox = this.child.layout(context, constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  layoutSpan(context, constraints, state) {
+    if (!(this.child instanceof SpanningWidget) || !this.canSpan) {
+      return {
+        box: this.layout(context, constraints),
+        nextState: state,
+        hasMore: false
+      };
+    }
+    const fragment = this.child.layoutSpan(context, constraints, state.childState);
+    return {
+      box: {
+        widget: this,
+        width: fragment.box.width,
+        height: fragment.box.height,
+        data: {
+          childBox: fragment.box
+        }
+      },
+      nextState: {
+        childState: fragment.nextState
+      },
+      hasMore: fragment.hasMore
     };
   }
   paint(context, box) {
@@ -7960,6 +8246,239 @@ class Column extends Flex {
   }
 }
 
+class ListView extends StatelessWidget {
+  constructor({direction = "vertical", reverse = false, spacing = 0, padding = null, children = [], itemBuilder = null, separatorBuilder = null, itemCount = undefined} = {}) {
+    super();
+    this.direction = direction;
+    this.reverse = Boolean(reverse);
+    this.spacing = spacing === null ? null : finiteNonNegative$1(Number(spacing), "spacing");
+    this.padding = padding;
+    this.children = itemBuilder === null ? children : null;
+    this.itemBuilder = itemBuilder;
+    this.separatorBuilder = separatorBuilder;
+    this.itemCount = itemCount === undefined ? children.length : Math.trunc(Number(itemCount));
+    if (this.itemCount < 0 || !Number.isFinite(this.itemCount)) {
+      throw new RangeError("ListView.itemCount must be a finite non-negative integer");
+    }
+    if (this.children === null && this.itemBuilder === null) {
+      throw new TypeError("ListView.builder requires itemBuilder");
+    }
+    if (this.spacing === null && this.separatorBuilder === null) {
+      throw new TypeError("ListView.separated requires separatorBuilder");
+    }
+  }
+  static builder(options) {
+    return new ListView({
+      ...options,
+      children: [],
+      separatorBuilder: null
+    });
+  }
+  static separated(options) {
+    return new ListView({
+      ...options,
+      children: [],
+      spacing: null
+    });
+  }
+  item(context, index) {
+    return this.children === null ? this.itemBuilder(context, index) : this.children[index];
+  }
+  separator(context, index) {
+    if (this.spacing === null) return this.separatorBuilder(context, index);
+    return this.direction === "vertical" ? new SizedBox({
+      height: this.spacing
+    }) : new SizedBox({
+      width: this.spacing
+    });
+  }
+  build(context) {
+    const children = [];
+    const indexes = Array.from({
+      length: this.itemCount
+    }, (_, index) => index);
+    if (this.reverse) indexes.reverse();
+    for (let position = 0; position < indexes.length; position++) {
+      const index = indexes[position];
+      children.push(this.item(context, index));
+      if (position < indexes.length - 1 && this.spacing !== 0) {
+        children.push(this.separator(context, index));
+      }
+    }
+    const list = new Flex({
+      direction: this.direction,
+      mainAxisAlignment: "start",
+      mainAxisSize: "max",
+      crossAxisAlignment: "center",
+      verticalDirection: "down",
+      children
+    });
+    return this.padding === null ? list : new Padding({
+      padding: this.padding,
+      child: list
+    });
+  }
+}
+
+class Vector extends Widget {
+  constructor({width, height, draw}) {
+    super();
+    this.width = Number(width);
+    this.height = Number(height);
+    this.draw = draw;
+  }
+  layout(_context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const scale = Math.min(1, parent.maxWidth / this.width, parent.maxHeight / this.height);
+    const size = parent.constrain({
+      width: this.width * scale,
+      height: this.height * scale
+    });
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        scale
+      }
+    };
+  }
+  paint(context, box) {
+    const scale = box.data.scale;
+    const api = {
+      rect: ({x, y, width, height, fill = null, stroke = null, lineWidth = 1}) => {
+        if (fill) context.canvas.fillRect(box.x + x * scale, box.y + y * scale, width * scale, height * scale, fill);
+        if (stroke) context.canvas.strokeRect(box.x + x * scale, box.y + y * scale, width * scale, height * scale, stroke, lineWidth * scale);
+      },
+      line: ({x1, y1, x2, y2, color = "#000000", lineWidth = 1}) => {
+        context.canvas.line(box.x + x1 * scale, box.y + y1 * scale, box.x + x2 * scale, box.y + y2 * scale, color, lineWidth * scale);
+      },
+      circle: ({cx, cy, radius, fill = null, stroke = null, lineWidth = 1}) => {
+        context.canvas.circle(box.x + cx * scale, box.y + cy * scale, radius * scale, {
+          fill,
+          stroke,
+          lineWidth: lineWidth * scale
+        });
+      },
+      text: ({value, x, y, fontSize = 12, color = "#000000", font}) => {
+        context.canvas.text(String(value), box.x + x * scale, box.y + y * scale, {
+          fontSize: fontSize * scale,
+          color: normalizeColor(color),
+          font: font ?? context.document.font
+        });
+      }
+    };
+    this.draw(api);
+  }
+}
+
+function constrainedCanvas(constraints) {
+  const parent = BoxConstraints.from(constraints);
+  return {
+    width: parent.hasBoundedWidth ? parent.maxWidth : parent.minWidth,
+    height: parent.hasBoundedHeight ? parent.maxHeight : parent.minHeight
+  };
+}
+
+function paintPath(context, fillColor, strokeColor, strokeWidth) {
+  if (fillColor !== null) context.canvas.setFillColor(fillColor);
+  if (strokeColor !== null) context.canvas.setStrokeColor(strokeColor);
+  context.canvas.setLineWidth(strokeWidth);
+  if (fillColor !== null && strokeColor !== null) context.canvas.fillAndStrokePath(); else if (strokeColor !== null) context.canvas.strokePath(); else context.canvas.fillPath();
+}
+
+class PaintedShape extends Widget {
+  constructor({fillColor = null, strokeColor = null, strokeWidth = 1} = {}) {
+    super();
+    this.fillColor = fillColor;
+    this.strokeColor = strokeColor;
+    this.strokeWidth = Number(strokeWidth);
+    if (!Number.isFinite(this.strokeWidth) || this.strokeWidth < 0) {
+      throw new RangeError("strokeWidth must be a finite non-negative number");
+    }
+  }
+  layout(_context, constraints) {
+    const size = constrainedCanvas(constraints);
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: null
+    };
+  }
+}
+
+class Circle extends PaintedShape {
+  paint(context, box) {
+    context.canvas.saveContext();
+    context.canvas.drawEllipse(box.x + box.width / 2, context.canvas.toPdfY(box.y + box.height / 2), box.width / 2, box.height / 2);
+    paintPath(context, this.fillColor, this.strokeColor, this.strokeWidth);
+    context.canvas.restoreContext();
+  }
+}
+
+class Rectangle extends PaintedShape {
+  paint(context, box) {
+    context.canvas.saveContext();
+    context.canvas.drawRect(box.x, context.canvas.toPdfY(box.y + box.height), box.width, box.height);
+    paintPath(context, this.fillColor, this.strokeColor, this.strokeWidth);
+    context.canvas.restoreContext();
+  }
+}
+
+class Polygon extends PaintedShape {
+  constructor({points, close = true, ...options}) {
+    super(options);
+    this.points = points;
+    this.close = Boolean(close);
+  }
+  paint(context, box) {
+    if (this.points.length < 3) return;
+    context.canvas.saveContext();
+    const first = this.points[0];
+    context.canvas.moveTo(box.x + first.x, context.canvas.toPdfY(box.y + first.y));
+    for (const point of this.points) {
+      context.canvas.lineTo(box.x + point.x, context.canvas.toPdfY(box.y + point.y));
+    }
+    if (this.close) context.canvas.closePath();
+    paintPath(context, this.fillColor, this.strokeColor, this.strokeWidth);
+    context.canvas.restoreContext();
+  }
+}
+
+class InkList extends Widget {
+  constructor({points, strokeColor = null, strokeWidth = 1}) {
+    super();
+    this.points = points;
+    this.strokeColor = strokeColor;
+    this.strokeWidth = Number(strokeWidth);
+  }
+  layout(_context, constraints) {
+    const size = constrainedCanvas(constraints);
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: null
+    };
+  }
+  paint(context, box) {
+    context.canvas.saveContext();
+    if (this.strokeColor !== null) context.canvas.setStrokeColor(this.strokeColor);
+    context.canvas.setLineWidth(this.strokeWidth);
+    for (const line of this.points) {
+      const first = line[0];
+      if (first === undefined) continue;
+      context.canvas.moveTo(box.x + first.x, context.canvas.toPdfY(box.y + first.y));
+      for (const point of line) {
+        context.canvas.lineTo(box.x + point.x, context.canvas.toPdfY(box.y + point.y));
+      }
+    }
+    context.canvas.strokePath();
+    context.canvas.restoreContext();
+  }
+}
+
 class AnnotationBuilder {}
 
 class AnnotationLink extends AnnotationBuilder {
@@ -8077,6 +8596,269 @@ class Anchor extends Widget {
       x: this.setX ? point.x : null,
       y: point.y,
       zoom: this.zoom
+    });
+  }
+}
+
+class GeometricAnnotationBuilder extends AnnotationBuilder {
+  constructor(shape, {color = null, interiorColor = null, border = null, author = null, date = null, subject = null, content = null} = {}) {
+    super();
+    this.shape = shape;
+    this.color = color === null ? null : normalizeColor(color);
+    this.interiorColor = interiorColor === null ? null : normalizeColor(interiorColor);
+    this.borderWidth = Number(border?.width ?? 1);
+    this.author = author;
+    this.date = date;
+    this.subject = subject;
+    this.content = content;
+  }
+  base(context, rect) {
+    const corners = [ context.canvas.transformWidgetPoint(rect.x, rect.y), context.canvas.transformWidgetPoint(rect.x + rect.width, rect.y), context.canvas.transformWidgetPoint(rect.x, rect.y + rect.height), context.canvas.transformWidgetPoint(rect.x + rect.width, rect.y + rect.height) ];
+    const xs = corners.map(point => point.x);
+    const ys = corners.map(point => point.y);
+    const minimumX = Math.min(...xs);
+    const minimumY = Math.min(...ys);
+    return {
+      rect: {
+        x: minimumX,
+        y: minimumY,
+        width: Math.max(...xs) - minimumX,
+        height: Math.max(...ys) - minimumY
+      },
+      color: this.color,
+      interiorColor: this.interiorColor,
+      borderWidth: this.borderWidth,
+      author: this.author,
+      subject: this.subject,
+      content: this.content,
+      date: this.date === null ? null : `D:${this.date.toISOString().replace(/[-:T]/gu, "").slice(0, 14)}Z`
+    };
+  }
+}
+
+class AnnotationSquare extends GeometricAnnotationBuilder {
+  constructor(options = {}) {
+    super("square", options);
+  }
+  build(context, rect) {
+    context.canvas.addAnnotation({
+      kind: "geometric",
+      shape: this.shape,
+      ...this.base(context, rect)
+    });
+  }
+}
+
+class AnnotationCircle extends GeometricAnnotationBuilder {
+  constructor(options = {}) {
+    super("circle", options);
+  }
+  build(context, rect) {
+    context.canvas.addAnnotation({
+      kind: "geometric",
+      shape: this.shape,
+      ...this.base(context, rect)
+    });
+  }
+}
+
+class AnnotationPolygon extends GeometricAnnotationBuilder {
+  constructor({points, ...options}, shape = "polygon") {
+    super(shape, options);
+    if (points.length === 0) throw new RangeError("A point annotation needs at least one point");
+    this.points = points;
+  }
+  build(context, rect) {
+    const points = this.points.map(point => context.canvas.transformWidgetPoint(rect.x + point.x, rect.y + point.y));
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const minimumX = Math.min(...xs);
+    const minimumY = Math.min(...ys);
+    context.canvas.addAnnotation({
+      kind: "geometric",
+      shape: this.shape,
+      ...this.base(context, rect),
+      rect: {
+        x: minimumX,
+        y: minimumY,
+        width: Math.max(...xs) - minimumX,
+        height: Math.max(...ys) - minimumY
+      },
+      points
+    });
+  }
+}
+
+class AnnotationInk extends GeometricAnnotationBuilder {
+  constructor({points, ...options}) {
+    super("ink", options);
+    if (points.flat().length === 0) throw new RangeError("An ink annotation needs at least one point");
+    this.points = points;
+  }
+  build(context, rect) {
+    const inkList = this.points.map(line => line.map(point => context.canvas.transformWidgetPoint(rect.x + point.x, rect.y + point.y)));
+    const allPoints = inkList.flat();
+    const xs = allPoints.map(point => point.x);
+    const ys = allPoints.map(point => point.y);
+    const minimumX = Math.min(...xs);
+    const minimumY = Math.min(...ys);
+    context.canvas.addAnnotation({
+      kind: "geometric",
+      shape: this.shape,
+      ...this.base(context, rect),
+      rect: {
+        x: minimumX,
+        y: minimumY,
+        width: Math.max(...xs) - minimumX,
+        height: Math.max(...ys) - minimumY
+      },
+      inkList
+    });
+  }
+}
+
+class SquareAnnotation extends Annotation {
+  constructor({child = null, color = null, interiorColor = null, border = null, ...options} = {}) {
+    super({
+      child: child ?? new Rectangle({
+        fillColor: interiorColor,
+        strokeColor: color,
+        strokeWidth: border?.width ?? 1
+      }),
+      builder: new AnnotationSquare({
+        color,
+        interiorColor,
+        border,
+        ...options
+      })
+    });
+  }
+}
+
+class CircleAnnotation extends Annotation {
+  constructor({child = null, color = null, interiorColor = null, border = null, ...options} = {}) {
+    super({
+      child: child ?? new Circle({
+        fillColor: interiorColor,
+        strokeColor: color,
+        strokeWidth: border?.width ?? 1
+      }),
+      builder: new AnnotationCircle({
+        color,
+        interiorColor,
+        border,
+        ...options
+      })
+    });
+  }
+}
+
+class PolygonAnnotation extends Annotation {
+  constructor({points, child = null, color = null, interiorColor = null, border = null, ...options}) {
+    super({
+      child: child ?? new Polygon({
+        points,
+        fillColor: interiorColor,
+        strokeColor: color,
+        strokeWidth: border?.width ?? 1
+      }),
+      builder: new AnnotationPolygon({
+        points,
+        color,
+        interiorColor,
+        border,
+        ...options
+      })
+    });
+  }
+}
+
+class PolyLineAnnotation extends Annotation {
+  constructor({points, color = null, border = null, ...options}) {
+    super({
+      child: new Polygon({
+        points,
+        close: false,
+        strokeColor: color,
+        strokeWidth: border?.width ?? 1
+      }),
+      builder: new AnnotationPolygon({
+        points,
+        color,
+        border,
+        ...options
+      }, "polyline")
+    });
+  }
+}
+
+class InkAnnotation extends Annotation {
+  constructor({points, child = null, color = null, border = null, ...options}) {
+    super({
+      child: child ?? new InkList({
+        points,
+        strokeColor: color,
+        strokeWidth: border?.width ?? 1
+      }),
+      builder: new AnnotationInk({
+        points,
+        color,
+        border,
+        ...options
+      })
+    });
+  }
+}
+
+class Outline extends Anchor {
+  constructor({title, level = 0, color = null, style = "normal", ...anchor}) {
+    super({
+      ...anchor,
+      setX: true
+    });
+    if (!Number.isInteger(level) || level < 0) throw new RangeError("Outline.level must be a non-negative integer");
+    this.title = String(title);
+    this.level = level;
+    this.color = color === null ? null : normalizeColor(color);
+    this.style = style;
+  }
+  paint(context, box) {
+    super.paint(context, box);
+    context.document.registerOutline({
+      title: this.title,
+      level: this.level,
+      pageNumber: context.pageNumber,
+      y: context.canvas.transformWidgetPoint(box.x, box.y).y,
+      anchor: this.name,
+      color: this.color,
+      style: this.style
+    });
+  }
+}
+
+class InheritedDirectionality extends Inherited {
+  constructor(textDirection) {
+    super();
+    this.textDirection = textDirection;
+  }
+}
+
+class Directionality extends StatelessWidget {
+  constructor({textDirection, child}) {
+    super();
+    if (textDirection !== "ltr" && textDirection !== "rtl") {
+      throw new TypeError(`Unknown text direction: ${String(textDirection)}`);
+    }
+    this.textDirection = textDirection;
+    this.child = child;
+  }
+  static of(context) {
+    return InheritedWidget.of(context, InheritedDirectionality)?.textDirection ?? context.textDirection ?? "ltr";
+  }
+  build(_context) {
+    return new InheritedWidget({
+      inherited: new InheritedDirectionality(this.textDirection),
+      build: () => this.child
     });
   }
 }
@@ -8290,7 +9072,7 @@ function rebaseLines(lines, top) {
 }
 
 class RichText extends SpanningWidget {
-  constructor({text, textAlign = null, textDirection = "ltr", softWrap = null, tightBounds = false, textScaleFactor = 1, maxLines = null, overflow = null, margin = 0}) {
+  constructor({text, textAlign = null, textDirection = null, softWrap = null, tightBounds = false, textScaleFactor = 1, maxLines = null, overflow = null, margin = 0}) {
     super();
     this.text = text;
     this.textAlign = textAlign;
@@ -8431,8 +9213,9 @@ class RichText extends SpanningWidget {
     const targetWidth = limited.some(line => line.wrapped || align === "justify") ? contentWidth : Math.max(0, minContentWidth, ...limited.map(line => line.width));
     let y = 0;
     const lines = [];
+    const textDirection = this.textDirection ?? Directionality.of(context);
     for (const line of limited) {
-      const positioned = positionLine(line, y, targetWidth, align, this.textDirection);
+      const positioned = positionLine(line, y, targetWidth, align, textDirection);
       lines.push(positioned);
       y += positioned.height;
     }
@@ -8482,7 +9265,8 @@ class RichText extends SpanningWidget {
         data: {
           lines: selected,
           contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
-          clip: effectiveOverflow === "clip" || naturalHeight > size.height + 1e-5
+          clip: effectiveOverflow === "clip" || naturalHeight > size.height + 1e-5,
+          textDirection: this.textDirection ?? Directionality.of(context)
         }
       },
       nextState: {
@@ -8517,7 +9301,7 @@ class RichText extends SpanningWidget {
           });
         }
         if (run.style.background !== null && run.width > 0) {
-          run.style.background.paint(context, x, y, run.width, run.height, "all", this.textDirection);
+          run.style.background.paint(context, x, y, run.width, run.height, "all", box.data.textDirection);
         }
       }
     }
@@ -8561,7 +9345,7 @@ class RichText extends SpanningWidget {
 }
 
 class Text extends RichText {
-  constructor(value, {style = undefined, fontSize = undefined, lineHeight = undefined, color = undefined, align = undefined, textAlign = undefined, textDirection = "ltr", softWrap = undefined, tightBounds = false, textScaleFactor = 1, margin = 0, maxLines = undefined, overflow = undefined, font = undefined} = {}) {
+  constructor(value, {style = undefined, fontSize = undefined, lineHeight = undefined, color = undefined, align = undefined, textAlign = undefined, textDirection = null, softWrap = undefined, tightBounds = false, textScaleFactor = 1, margin = 0, maxLines = undefined, overflow = undefined, font = undefined} = {}) {
     const overrides = new TextStyle({
       color: color === undefined ? null : normalizeColor(color),
       font: font === undefined ? null : undefined,
@@ -8788,6 +9572,66 @@ class TableOfContent extends StatelessWidget {
       crossAxisAlignment: "start",
       mainAxisSize: "min",
       children: rows
+    });
+  }
+}
+
+class Watermark extends StatelessWidget {
+  constructor({child, fit = "contain", angle = 0}) {
+    super();
+    this.child = child;
+    this.fit = fit;
+    this.angle = Number(angle);
+  }
+  static text(text, {style = null, fit = "contain", angle = Math.PI / 4} = {}) {
+    return new Watermark({
+      fit,
+      angle,
+      child: new Text(text, {
+        style: style ?? new TextStyle({
+          color: "#eeeeee",
+          fontWeight: "bold"
+        })
+      })
+    });
+  }
+  build(_context) {
+    return new LayoutBuilder({
+      builder: (_context, constraints) => new SizedBox({
+        width: constraints.maxWidth,
+        height: constraints.maxHeight,
+        child: new FittedBox({
+          fit: this.fit,
+          child: new Transform({
+            rotateBox: this.angle,
+            child: this.child
+          })
+        })
+      })
+    });
+  }
+}
+
+class Footer extends StatelessWidget {
+  constructor({leading = null, title = null, trailing = null, margin = 0, padding = 0, decoration = null} = {}) {
+    super();
+    this.leading = leading;
+    this.title = title;
+    this.trailing = trailing;
+    this.margin = margin;
+    this.padding = padding;
+    this.decoration = decoration;
+  }
+  build(_context) {
+    return new Container({
+      margin: this.margin,
+      padding: this.padding,
+      decoration: this.decoration,
+      child: new Row({
+        mainAxisSize: "max",
+        mainAxisAlignment: "spaceBetween",
+        children: [ this.leading ?? new SizedBox, this.title ?? new SizedBox, this.trailing ?? new SizedBox ]
+      })
     });
   }
 }
@@ -10679,6 +11523,10 @@ class PdfAnnotation extends PdfObject {
       this.prepareForm(this.annotation);
       return;
     }
+    if (this.annotation.kind === "geometric") {
+      this.prepareGeometric(this.annotation);
+      return;
+    }
     const {rect, destination, kind} = this.annotation;
     this.params.set("/Subtype", new PdfName("/Link"));
     this.params.set("/Rect", PdfArray.fromNum([ rect.x, rect.y, rect.x + rect.width, rect.y + rect.height ]));
@@ -10686,6 +11534,36 @@ class PdfAnnotation extends PdfObject {
     this.params.set("/Border", PdfArray.fromNum([ 0, 0, 0 ]));
     this.params.set("/F", new PdfNum(4));
     this.params.set("/A", new PdfDict([ [ "/S", new PdfName(kind === "url" ? "/URI" : "/GoTo") ], [ kind === "url" ? "/URI" : "/D", new PdfString(destination) ] ]));
+  }
+  prepareGeometric(annotation) {
+    const subtypes = {
+      square: "/Square",
+      circle: "/Circle",
+      polygon: "/Polygon",
+      polyline: "/PolyLine",
+      ink: "/Ink"
+    };
+    this.params.set("/Subtype", new PdfName(subtypes[annotation.shape]));
+    this.params.set("/Rect", PdfArray.fromNum([ annotation.rect.x, annotation.rect.y, annotation.rect.x + annotation.rect.width, annotation.rect.y + annotation.rect.height ]));
+    this.params.set("/P", this.page.ref());
+    this.params.set("/F", new PdfNum(4));
+    this.params.set("/BS", new PdfDict([ [ "/W", new PdfNum(annotation.borderWidth ?? 1) ], [ "/S", new PdfName("/S") ] ]));
+    if (annotation.color !== null && annotation.color !== undefined) {
+      this.params.set("/C", PdfArray.fromNum(annotation.color));
+    }
+    if (annotation.interiorColor !== null && annotation.interiorColor !== undefined) {
+      this.params.set("/IC", PdfArray.fromNum(annotation.interiorColor));
+    }
+    if (annotation.author) this.params.set("/T", new PdfString(annotation.author));
+    if (annotation.subject) this.params.set("/Subj", new PdfString(annotation.subject));
+    if (annotation.content) this.params.set("/Contents", new PdfString(annotation.content));
+    if (annotation.date) this.params.set("/M", new PdfString(annotation.date));
+    if (annotation.points !== undefined) {
+      this.params.set("/Vertices", PdfArray.fromNum(annotation.points.flatMap(point => [ point.x, point.y ])));
+    }
+    if (annotation.inkList !== undefined) {
+      this.params.set("/InkList", new PdfArray(annotation.inkList.map(points => PdfArray.fromNum(points.flatMap(point => [ point.x, point.y ])))));
+    }
   }
   prepareForm(field) {
     const fieldNames = {
@@ -11021,6 +11899,9 @@ class PdfCanvas {
   }
   get annotations() {
     return this.pageAnnotations;
+  }
+  addAnnotation(annotation) {
+    this.pageAnnotations.push(annotation);
   }
   addUrlLink(destination, x, top, width, height) {
     this.addLink("url", destination, x, top, width, height);
@@ -11473,6 +12354,25 @@ class PageTheme {
   }
 }
 
+class NewPage extends Widget {
+  constructor({freeSpace = null} = {}) {
+    super();
+    this.freeSpace = freeSpace === null ? null : Number(freeSpace);
+  }
+  newPageNeeded(availableSpace) {
+    return this.freeSpace === null || availableSpace < this.freeSpace;
+  }
+  layout(_context, _constraints) {
+    return {
+      widget: this,
+      width: 0,
+      height: 0,
+      data: null
+    };
+  }
+  paint(_context, _box) {}
+}
+
 class MultiPage {
   constructor({pageTheme = undefined, format = undefined, pageFormat = undefined, margin = undefined, orientation = undefined, gap = 0, theme = undefined, build, header = null, footer = null, background = null, maxPages = 50}) {
     this.renderedPages = [];
@@ -11554,6 +12454,10 @@ class MultiPage {
     const children = this.build(page.context);
     if (!Array.isArray(children)) throw new TypeError("MultiPage.build must return an array of widgets");
     for (const child of children) {
+      if (child instanceof NewPage) {
+        if (child.newPageNeeded(page.bottom - page.cursor)) page = startPage();
+        continue;
+      }
       if (child instanceof SpanningWidget && child.canSpan) {
         let state = child.initialSpanState();
         const natural = child.layout(page.context, new BoxConstraints({
@@ -12109,7 +13013,7 @@ class Document {
   requestOutlineRerender() {
     this.outlineRerenderRequested = true;
   }
-  registerOutline({title, level, pageNumber, y, color = null, style = "normal"}) {
+  registerOutline({title, level, pageNumber, y, anchor = null, color = null, style = "normal"}) {
     const page = pageNumber;
     if (this.outlineReplay) {
       const existing = this.outlineEntries[this.outlineCursor];
@@ -12120,7 +13024,7 @@ class Document {
         this.outlineEntries.push({
           title,
           level,
-          anchor: `outline-${this.outlineCursor + 1}`,
+          anchor: anchor ?? `outline-${this.outlineCursor + 1}`,
           page,
           y,
           color,
@@ -12133,7 +13037,7 @@ class Document {
     this.outlineEntries.push({
       title,
       level,
-      anchor: `outline-${this.outlineEntries.length + 1}`,
+      anchor: anchor ?? `outline-${this.outlineEntries.length + 1}`,
       page,
       y,
       color,
@@ -12358,6 +13262,155 @@ class GridView extends SpanningWidget {
   }
 }
 
+const GRID_COLOR = "#c3e8f3";
+
+class GridPaper extends Widget {
+  constructor({color = GRID_COLOR, horizontalColor = color, verticalColor = color, interval = 100, horizontalInterval = interval, verticalInterval = interval, divisions = 5, horizontalDivisions = divisions, verticalDivisions = divisions, subdivisions = 2, horizontalSubdivisions = subdivisions, verticalSubdivisions = subdivisions, margin = 0, horizontalOffset = 0, verticalOffset = 0, border = new Border, scale = 1, opacity = .5, child = null} = {}) {
+    super();
+    for (const value of [ horizontalDivisions, verticalDivisions, horizontalSubdivisions, verticalSubdivisions ]) {
+      if (!Number.isInteger(value) || value <= 0) throw new RangeError("GridPaper divisions must be positive integers");
+    }
+    this.horizontalColor = horizontalColor;
+    this.verticalColor = verticalColor;
+    this.horizontalInterval = Number(horizontalInterval);
+    this.verticalInterval = Number(verticalInterval);
+    this.horizontalDivisions = horizontalDivisions;
+    this.verticalDivisions = verticalDivisions;
+    this.horizontalSubdivisions = horizontalSubdivisions;
+    this.verticalSubdivisions = verticalSubdivisions;
+    this.margin = normalizeInsets(margin);
+    this.horizontalOffset = Math.trunc(horizontalOffset);
+    this.verticalOffset = Math.trunc(verticalOffset);
+    this.border = border;
+    this.scale = Number(scale);
+    this.opacity = Number(opacity);
+    this.child = child;
+  }
+  static millimeter({color = GRID_COLOR, child = null} = {}) {
+    return new GridPaper({
+      color,
+      interval: 5 * PageUnit.cm,
+      divisions: 5,
+      subdivisions: 10,
+      child
+    });
+  }
+  static seyes({margin = {
+    top: 20 * PageUnit.mm,
+    bottom: 10 * PageUnit.mm,
+    left: 36 * PageUnit.mm
+  }, child = null} = {}) {
+    return new GridPaper({
+      color: "#c8c8de",
+      horizontalInterval: 8 * PageUnit.mm,
+      verticalInterval: 8 * PageUnit.mm,
+      horizontalDivisions: 1,
+      verticalDivisions: 4,
+      subdivisions: 1,
+      margin,
+      verticalOffset: 1,
+      border: new Border({
+        left: new BorderSide({
+          color: "#f6bbcf"
+        })
+      }),
+      opacity: 1,
+      child
+    });
+  }
+  static collegeRuled({margin = {
+    top: PageUnit.inch,
+    bottom: .6 * PageUnit.inch,
+    left: 1.25 * PageUnit.inch
+  }, child = null} = {}) {
+    return new GridPaper({
+      horizontalInterval: Infinity,
+      verticalInterval: 9 / 32 * PageUnit.inch,
+      divisions: 1,
+      subdivisions: 1,
+      margin,
+      verticalOffset: 1,
+      border: new Border({
+        left: new BorderSide({
+          color: "#ff0000"
+        })
+      }),
+      opacity: 1,
+      child
+    });
+  }
+  static quad({color = GRID_COLOR, child = null} = {}) {
+    return new GridPaper({
+      color,
+      interval: PageUnit.inch,
+      divisions: 4,
+      subdivisions: 1,
+      child
+    });
+  }
+  static engineering({color = GRID_COLOR, child = null} = {}) {
+    return new GridPaper({
+      color,
+      interval: PageUnit.inch,
+      divisions: 5,
+      subdivisions: 2,
+      child
+    });
+  }
+  layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const size = {
+      width: parent.hasBoundedWidth ? parent.maxWidth : parent.minWidth,
+      height: parent.hasBoundedHeight ? parent.maxHeight : parent.minHeight
+    };
+    const childBox = this.child?.layout(context, new BoxConstraints({
+      maxWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
+      maxHeight: Math.max(0, size.height - this.margin.top - this.margin.bottom)
+    })) ?? null;
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const childBox = box.data.childBox;
+    childBox?.widget.paint(context, {
+      ...childBox,
+      x: box.x + this.margin.left,
+      y: box.y + this.margin.top
+    });
+    const canvas = context.canvas;
+    canvas.saveContext();
+    canvas.setGraphicState(new PdfGraphicState({
+      opacity: this.opacity
+    }));
+    const widths = [ this.scale, this.scale / 2, this.scale / 4 ];
+    const draw = (interval, divisions, subdivisions, offset, color, vertical) => {
+      if (!Number.isFinite(interval)) return;
+      const step = interval / (divisions * subdivisions);
+      if (!(step > 0)) return;
+      canvas.setStrokeColor(color);
+      let n = offset;
+      const start = vertical ? box.x + this.margin.left : box.y + this.margin.top;
+      const end = vertical ? box.x + box.width - this.margin.right : box.y + box.height - this.margin.bottom;
+      for (let position = start; position <= end + .001; position += step) {
+        canvas.setLineWidth(n % (subdivisions * divisions) === 0 ? widths[0] : n % subdivisions === 0 ? widths[1] : widths[2]);
+        if (vertical) canvas.drawLine(position, canvas.toPdfY(box.y), position, canvas.toPdfY(box.y + box.height)); else canvas.drawLine(box.x, canvas.toPdfY(position), box.x + box.width, canvas.toPdfY(position));
+        canvas.strokePath();
+        n++;
+      }
+    };
+    draw(this.horizontalInterval, this.horizontalDivisions, this.horizontalSubdivisions, this.horizontalOffset, this.horizontalColor, true);
+    draw(this.verticalInterval, this.verticalDivisions, this.verticalSubdivisions, this.verticalOffset, this.verticalColor, false);
+    this.border.paint(context, box.x, box.y, box.width, box.height);
+    canvas.restoreContext();
+  }
+}
+
 class Partition extends SpanningWidget {
   constructor({child, width = null, flex = 1}) {
     super();
@@ -12531,714 +13584,72 @@ class Partitions extends SpanningWidget {
   }
 }
 
-class Image extends Widget {
-  constructor(image, {fit = "contain", alignment = "center", width = null, height = null, dpi = null} = {}) {
-    super();
-    applyBoxFit$1(fit, {
-      width: 1,
-      height: 1
-    }, {
-      width: 1,
-      height: 1
-    });
-    if (width !== null && (!Number.isFinite(width) || width < 0)) throw new RangeError("Image width must be non-negative");
-    if (height !== null && (!Number.isFinite(height) || height < 0)) throw new RangeError("Image height must be non-negative");
-    if (dpi !== null && (!Number.isFinite(dpi) || dpi <= 0)) throw new RangeError("Image DPI must be positive");
-    this.image = image;
-    this.fit = fit;
-    this.alignment = resolveBasicAlignment(alignment);
-    this.width = width;
-    this.height = height;
-    this.dpi = dpi;
-  }
-  layout(_context, constraints) {
-    const parent = BoxConstraints.from(constraints);
-    const offered = {
-      width: parent.constrainWidth(this.width ?? (parent.hasBoundedWidth ? parent.maxWidth : this.image.width)),
-      height: parent.constrainHeight(this.height ?? (parent.hasBoundedHeight ? parent.maxHeight : this.image.height))
-    };
-    const layoutFit = applyBoxFit$1(this.fit, {
-      width: this.image.width,
-      height: this.image.height
-    }, offered);
-    const image = this.image.resolve({
-      x: layoutFit.destination.width,
-      y: layoutFit.destination.height
-    }, this.dpi);
-    const fitted = applyBoxFit$1(this.fit, {
-      width: image.width,
-      height: image.height
-    }, layoutFit.destination);
-    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, image.width, image.height);
-    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, layoutFit.destination.width, layoutFit.destination.height);
-    return {
-      widget: this,
-      width: layoutFit.destination.width,
-      height: layoutFit.destination.height,
-      data: {
-        image,
-        source: fitted.source,
-        destination: fitted.destination,
-        sourceX: sourceOffset.dx,
-        sourceY: sourceOffset.dy,
-        destinationX: destinationOffset.dx,
-        destinationY: destinationOffset.dy
-      }
-    };
-  }
-  paint(context, box) {
-    const data = box.data;
-    if (data.source.width <= 0 || data.source.height <= 0) return;
-    const scaleX = data.destination.width / data.source.width;
-    const scaleY = data.destination.height / data.source.height;
-    const destinationX = box.x + data.destinationX;
-    const destinationY = box.y + data.destinationY;
-    const fullWidth = data.image.width * scaleX;
-    const fullHeight = data.image.height * scaleY;
-    const fullX = destinationX - data.sourceX * scaleX;
-    const fullTop = destinationY - data.sourceY * scaleY;
-    context.canvas.saveContext();
-    context.canvas.drawRect(destinationX, context.canvas.toPdfY(destinationY + data.destination.height), data.destination.width, data.destination.height);
-    context.canvas.clipPath();
-    context.canvas.drawImage(data.image, fullX, context.canvas.toPdfY(fullTop + fullHeight), fullWidth, fullHeight);
-    context.canvas.restoreContext();
-  }
-}
-
-function validateDpi(dpi) {
-  if (dpi !== null && (!Number.isFinite(dpi) || dpi <= 0)) {
-    throw new RangeError("Image DPI must be positive");
-  }
-  return dpi;
-}
-
-function resizeDecodedImage(image, width) {
-  const pixels = image.pixels;
-  if (pixels === null || width === image.sourceWidth) return image;
-  const height = Math.max(1, Math.round(image.sourceHeight * width / image.sourceWidth));
-  const resized = new Uint8Array(width * height * 4);
-  for (let y = 0; y < height; y++) {
-    const sourceY = Math.min(image.sourceHeight - 1, Math.floor(y * image.sourceHeight / height));
-    for (let x = 0; x < width; x++) {
-      const sourceX = Math.min(image.sourceWidth - 1, Math.floor(x * image.sourceWidth / width));
-      const source = (sourceY * image.sourceWidth + sourceX) * 4;
-      const destination = (y * width + x) * 4;
-      resized[destination] = pixels[source];
-      resized[destination + 1] = pixels[source + 1];
-      resized[destination + 2] = pixels[source + 2];
-      resized[destination + 3] = pixels[source + 3];
-    }
-  }
-  return new PdfImage({
-    pixels: resized,
-    width,
-    height,
-    orientation: image.orientation,
-    hasAlpha: image.hasAlpha
-  });
-}
-
-class ImageProvider {
-  constructor(width, height, orientation, dpi) {
-    this.cache = new Map;
-    this.sourceWidth = width;
-    this.sourceHeight = height;
-    this.orientation = orientation;
-    this.dpi = validateDpi(dpi);
-  }
-  get width() {
-    return this.orientation === "leftTop" || this.orientation === "rightTop" || this.orientation === "rightBottom" || this.orientation === "leftBottom" ? this.sourceHeight : this.sourceWidth;
-  }
-  get height() {
-    return this.orientation === "leftTop" || this.orientation === "rightTop" || this.orientation === "rightBottom" || this.orientation === "leftBottom" ? this.sourceWidth : this.sourceHeight;
-  }
-  resolve(size, dpi = null) {
-    const effectiveDpi = validateDpi(dpi ?? this.dpi);
-    if (effectiveDpi === null || size === undefined) {
-      let image = this.cache.get(0);
-      if (image === undefined) {
-        image = this.buildImage();
-        this.cache.set(0, image);
-      }
-      return image;
-    }
-    if (!Number.isFinite(size.x) || size.x < 0 || !Number.isFinite(size.y) || size.y < 0) {
-      throw new RangeError("Image resolve size must be finite and non-negative");
-    }
-    const width = Math.max(1, Math.trunc(size.x / PageUnit.inch * effectiveDpi));
-    let image = this.cache.get(width);
-    if (image === undefined) {
-      image = this.buildImage(width);
-      this.cache.set(width, image);
-    }
-    return image;
-  }
-}
-
-class ImageProxy extends ImageProvider {
-  constructor(image, {dpi = null} = {}) {
-    super(image.sourceWidth, image.sourceHeight, image.orientation, dpi);
-    this.image = image;
-  }
-  buildImage(_width) {
-    return this.image;
-  }
-}
-
-class MemoryImage extends ImageProvider {
-  constructor(bytes, {orientation = "topLeft", dpi = null} = {}) {
-    let image;
-    if (bytes[0] === 255 && bytes[1] === 216) {
-      image = PdfImage.fromJpeg(bytes, orientation);
-    } else if (bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71) {
-      image = PdfImage.fromPng(bytes, orientation);
-    } else {
-      throw new TypeError(`Unable to determine image type from ${bytes.length} bytes`);
-    }
-    super(image.sourceWidth, image.sourceHeight, orientation, dpi);
-    this.bytes = bytes.slice();
-    this.image = image;
-  }
-  buildImage(width) {
-    return width === undefined ? this.image : resizeDecodedImage(this.image, width);
-  }
-}
-
-class RawImage extends ImageProvider {
-  constructor({bytes, width, height, orientation = "topLeft", dpi = null}) {
-    const image = new PdfImage({
-      pixels: bytes,
-      width,
-      height,
-      orientation,
-      hasAlpha: true
-    });
-    super(width, height, orientation, dpi);
-    this.image = image;
-  }
-  buildImage(width) {
-    return width === undefined ? this.image : resizeDecodedImage(this.image, width);
-  }
-}
-
-const DEFAULT_CIRCULAR_COLOR = "#3f51b5";
-
-const DEFAULT_LINEAR_COLOR = "#2196f3";
-
-function finiteNumber(value, name) {
-  const resolved = Number(value);
-  if (!Number.isFinite(resolved)) {
-    throw new TypeError(`${name} must be a finite number`);
-  }
-  return resolved;
-}
-
-function nonNegativeNumber(value, name) {
-  const resolved = finiteNumber(value, name);
-  if (resolved < 0) {
-    throw new RangeError(`${name} must be non-negative`);
-  }
-  return resolved;
-}
-
-function hueFor(red, green, blue, maximum, delta) {
-  if (delta === 0 || maximum === 0) return 0;
-  let hue;
-  if (maximum === red) {
-    hue = 60 * ((green - blue) / delta % 6);
-  } else if (maximum === green) {
-    hue = 60 * ((blue - red) / delta + 2);
-  } else {
-    hue = 60 * ((red - green) / delta + 4);
-  }
-  return hue < 0 ? hue + 360 : hue;
-}
-
-function shadeColor(color, strength) {
-  const [red, green, blue] = normalizeColor(color);
-  const maximum = Math.max(red, green, blue);
-  const minimum = Math.min(red, green, blue);
-  const delta = maximum - minimum;
-  const hue = hueFor(red, green, blue, maximum, delta);
-  const lightness = (maximum + minimum) / 2;
-  const saturation = lightness === 1 ? 0 : Math.min(1, Math.max(0, delta / (1 - Math.abs(2 * lightness - 1))));
-  const shadedLightness = Math.min(1, Math.max(0, lightness * (1.5 - strength)));
-  const chroma = (1 - Math.abs(2 * shadedLightness - 1)) * saturation;
-  const secondary = chroma * (1 - Math.abs(hue / 60 % 2 - 1));
-  const match = shadedLightness - chroma / 2;
-  let resolved;
-  if (hue < 60) resolved = [ chroma, secondary, 0 ]; else if (hue < 120) resolved = [ secondary, chroma, 0 ]; else if (hue < 180) resolved = [ 0, chroma, secondary ]; else if (hue < 240) resolved = [ 0, secondary, chroma ]; else if (hue < 300) resolved = [ secondary, 0, chroma ]; else resolved = [ chroma, 0, secondary ];
-  return [ Math.min(1, Math.max(0, resolved[0] + match)), Math.min(1, Math.max(0, resolved[1] + match)), Math.min(1, Math.max(0, resolved[2] + match)) ];
-}
-
-class CircularProgressIndicator extends Widget {
-  constructor({value, color = null, strokeWidth = 4, backgroundColor = null}) {
-    super();
-    this.value = finiteNumber(value, "CircularProgressIndicator.value");
-    this.color = color;
-    this.strokeWidth = nonNegativeNumber(strokeWidth, "CircularProgressIndicator.strokeWidth");
-    this.backgroundColor = backgroundColor;
-  }
-  layout(_context, constraints) {
-    const size = BoxConstraints.from(constraints).biggest;
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: null
-    };
-  }
-  paint(context, box) {
-    const adjustedValue = Math.min(.99999, Math.max(1e-5, this.value));
-    const left = box.x;
-    const bottom = context.canvas.pageHeight - box.y - box.height;
-    const rx = box.width / 2;
-    const ry = box.height / 2;
-    const angleStart = Math.PI / 2;
-    const angleEnd = angleStart - Math.PI * 2 * adjustedValue;
-    const startTop = {
-      x: left + rx + Math.cos(angleStart) * rx,
-      y: bottom + ry + Math.sin(angleStart) * ry
-    };
-    const endTop = {
-      x: left + rx + Math.cos(angleEnd) * rx,
-      y: bottom + ry + Math.sin(angleEnd) * ry
-    };
-    const startBottom = {
-      x: left + rx + Math.cos(angleStart) * (rx - this.strokeWidth),
-      y: bottom + ry + Math.sin(angleStart) * (ry - this.strokeWidth)
-    };
-    const endBottom = {
-      x: left + rx + Math.cos(angleEnd) * (rx - this.strokeWidth),
-      y: bottom + ry + Math.sin(angleEnd) * (ry - this.strokeWidth)
-    };
-    const {canvas} = context;
-    if (this.backgroundColor !== null && this.value < 1) {
-      canvas.moveTo(startTop.x, startTop.y);
-      canvas.bezierArc(startTop.x, startTop.y, rx, ry, endTop.x, endTop.y, {
-        large: adjustedValue < .5,
-        sweep: true
-      });
-      canvas.lineTo(endBottom.x, endBottom.y);
-      canvas.bezierArc(endBottom.x, endBottom.y, rx - this.strokeWidth, ry - this.strokeWidth, startBottom.x, startBottom.y, {
-        large: adjustedValue < .5
-      });
-      canvas.lineTo(startTop.x, startTop.y);
-      canvas.setFillColor(this.backgroundColor);
-      canvas.fillPath();
-    }
-    if (this.value > 0) {
-      canvas.moveTo(startTop.x, startTop.y);
-      canvas.bezierArc(startTop.x, startTop.y, rx, ry, endTop.x, endTop.y, {
-        large: adjustedValue > .5
-      });
-      canvas.lineTo(endBottom.x, endBottom.y);
-      canvas.bezierArc(endBottom.x, endBottom.y, rx - this.strokeWidth, ry - this.strokeWidth, startBottom.x, startBottom.y, {
-        large: adjustedValue > .5,
-        sweep: true
-      });
-      canvas.lineTo(startTop.x, startTop.y);
-      canvas.setFillColor(this.color ?? DEFAULT_CIRCULAR_COLOR);
-      canvas.fillPath();
-    }
-  }
-}
-
-class LinearProgressIndicator extends Widget {
-  constructor({value, backgroundColor = null, valueColor = null, minHeight = null}) {
-    super();
-    this.value = finiteNumber(value, "LinearProgressIndicator.value");
-    this.backgroundColor = backgroundColor;
-    this.valueColor = valueColor;
-    this.minHeight = minHeight === null ? null : nonNegativeNumber(minHeight, "LinearProgressIndicator.minHeight");
-  }
-  layout(_context, constraints) {
-    const size = new BoxConstraints({
-      minWidth: Infinity,
-      minHeight: this.minHeight ?? 4
-    }).enforce(constraints).smallest;
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: null
-    };
-  }
-  paint(context, box) {
-    const value = Math.min(1, Math.max(0, this.value));
-    const valueColor = this.valueColor ?? DEFAULT_LINEAR_COLOR;
-    const backgroundColor = this.backgroundColor ?? shadeColor(valueColor, .1);
-    const bottom = context.canvas.pageHeight - box.y - box.height;
-    if (value < 1) {
-      const epsilon = value === 0 ? 0 : .01;
-      context.canvas.drawRect(box.x + box.width * value - epsilon, bottom, box.width * (1 - value) + epsilon, box.height);
-      context.canvas.setFillColor(backgroundColor);
-      context.canvas.fillPath();
-    }
-    if (value > 0) {
-      context.canvas.drawRect(box.x, bottom, box.width * value, box.height);
-      context.canvas.setFillColor(valueColor);
-      context.canvas.fillPath();
-    }
-  }
-}
-
-const fieldFlagBits = {
-  readOnly: 0,
-  mandatory: 1,
-  noExport: 2,
-  multiline: 12,
-  password: 13,
-  noToggleToOff: 14,
-  radio: 15,
-  pushButton: 16,
-  combo: 17,
-  edit: 18,
-  sort: 19,
-  fileSelect: 20,
-  multiSelect: 21,
-  doNotSpellCheck: 22,
-  doNotScroll: 23,
-  comb: 24,
-  radiosInUnison: 25,
-  commitOnSelChange: 26
-};
-
-function fieldFlagsValue(flags) {
-  let value = 0;
-  for (const flag of flags) {
-    const bit = fieldFlagBits[flag];
-    if (bit === undefined) throw new TypeError(`Unknown form field flag: ${String(flag)}`);
-    value |= 1 << bit;
-  }
-  return value;
-}
-
-function requireName(name) {
-  const result = String(name);
-  if (result.length === 0) throw new RangeError("Form field name cannot be empty");
-  return result;
-}
-
-function resolvedStyle(context, style) {
-  return context.theme.defaultTextStyle.merge(style);
-}
-
-function appearanceFor(context, width, height, child) {
-  const canvas = new PdfCanvas(height);
-  const scoped = {
-    ...context,
-    canvas,
-    pageFormat: {
-      width,
-      height
-    }
-  };
-  const childBox = child.layout(scoped, BoxConstraints.tight({
-    width,
-    height
-  }));
-  childBox.widget.paint(scoped, {
-    ...childBox,
+const PdfPoint = Object.freeze({
+  zero: Object.freeze({
     x: 0,
     y: 0
-  });
-  return {
-    width,
-    height,
-    content: canvas.output(),
-    fonts: canvas.fonts,
-    graphicStates: canvas.graphicStates,
-    patterns: canvas.patterns,
-    images: canvas.images
-  };
-}
-
-class ChoiceField extends Widget {
-  constructor({name, items, value = null, width = 120, height = 13, textStyle = null}) {
-    super();
-    this.name = requireName(name);
-    this.items = items.map(String);
-    this.value = value;
-    this.width = Number(width);
-    this.height = Number(height);
-    this.textStyle = textStyle;
-    if (value !== null && !this.items.includes(value)) {
-      throw new RangeError("ChoiceField value must be one of its items");
-    }
-  }
-  child() {
-    return new Container({
-      width: this.width,
-      height: this.height,
-      padding: {
-        left: 4,
-        right: 16,
-        top: 2,
-        bottom: 2
-      },
-      borderColor: "#777777",
-      background: "#ffffff",
-      child: null
-    });
-  }
-  layout(context, constraints) {
-    const childBox = this.child().layout(context, BoxConstraints.from(constraints));
+  }),
+  translate(point, dx, dy) {
     return {
-      widget: this,
-      width: childBox.width,
-      height: childBox.height,
-      data: {
-        childBox
-      }
+      x: point.x + dx,
+      y: point.y + dy
     };
   }
-  paint(context, box) {
-    box.data.childBox.widget.paint(context, {
-      ...box.data.childBox,
-      x: box.x,
-      y: box.y
-    });
-    const style = resolvedStyle(context, this.textStyle);
-    context.canvas.addFormField({
-      kind: "form",
-      fieldType: "choice",
-      name: this.name,
-      items: this.items,
-      value: this.value,
-      fieldFlags: fieldFlagsValue([ "combo" ]),
-      font: style.font === null ? context.document.font : context.document.resolveFont(style.font),
-      fontSize: style.fontSize ?? 12,
-      textColor: style.color ?? [ 0, 0, 0 ],
-      appearances: this.value === null ? undefined : {
-        normal: appearanceFor(context, box.width, box.height, new Container({
-          padding: {
-            left: 4,
-            right: 16,
-            top: 2,
-            bottom: 2
-          },
-          child: new Text(this.value, {
-            style: this.textStyle ?? undefined
-          })
-        }))
-      }
-    }, box.x, box.y, box.width, box.height);
-  }
-}
+});
 
-class Checkbox extends Widget {
-  constructor({name, value, tristate = false, width = 13, height = 13, activeColor = "#2196f3", checkColor = "#ffffff", borderColor = "#757575"}) {
-    super();
-    this.name = requireName(name);
-    this.value = Boolean(value);
-    this.tristate = Boolean(tristate);
-    this.width = Number(width);
-    this.height = Number(height);
-    this.activeColor = normalizeColor(activeColor);
-    this.checkColor = normalizeColor(checkColor);
-    this.borderColor = normalizeColor(borderColor);
-  }
-  layout(_context, constraints) {
-    const size = BoxConstraints.from(constraints).constrain({
-      width: this.width,
-      height: this.height
-    });
+const PdfRect = Object.freeze({
+  zero: Object.freeze({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0
+  }),
+  fromLTRB(left, bottom, right, top) {
     return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: null
+      x: left,
+      y: bottom,
+      width: right - left,
+      height: top - bottom
+    };
+  },
+  left(rect) {
+    return rect.x;
+  },
+  bottom(rect) {
+    return rect.y;
+  },
+  right(rect) {
+    return rect.x + rect.width;
+  },
+  top(rect) {
+    return rect.y + rect.height;
+  },
+  horizontalCenter(rect) {
+    return rect.x + rect.width / 2;
+  },
+  verticalCenter(rect) {
+    return rect.y + rect.height / 2;
+  },
+  inflate(rect, delta) {
+    return {
+      x: rect.x - delta,
+      y: rect.y - delta,
+      width: rect.width + delta * 2,
+      height: rect.height + delta * 2
+    };
+  },
+  deflate(rect, delta) {
+    return PdfRect.inflate(rect, -delta);
+  },
+  scale(rect, factor) {
+    return {
+      x: rect.x * factor,
+      y: rect.y * factor,
+      width: rect.width * factor,
+      height: rect.height * factor
     };
   }
-  paint(context, box) {
-    this.paintState(context, box, this.value);
-    const on = new CheckboxAppearance(this.activeColor, this.checkColor, this.borderColor, true);
-    const off = new CheckboxAppearance(this.activeColor, this.checkColor, this.borderColor, false);
-    context.canvas.addFormField({
-      kind: "form",
-      fieldType: "checkbox",
-      name: this.name,
-      value: this.value ? "/Yes" : null,
-      defaultValue: this.value ? "/Yes" : null,
-      appearances: {
-        normalStates: new Map([ [ "/Yes", appearanceFor(context, box.width, box.height, on) ], [ "/Off", appearanceFor(context, box.width, box.height, off) ] ])
-      }
-    }, box.x, box.y, box.width, box.height);
-  }
-  paintState(context, box, selected) {
-    paintCheckbox(context, box.x, box.y, box.width, box.height, selected, this.activeColor, this.checkColor, this.borderColor);
-  }
-}
-
-function paintCheckbox(context, x, y, width, height, selected, activeColor, checkColor, borderColor) {
-  context.canvas.fillRect(x, y, width, height, selected ? activeColor : "#ffffff");
-  if (selected) {
-    context.canvas.line(x + 2, y + height * .55, x + width * .42, y + height - 3, checkColor, 2);
-    context.canvas.line(x + width * .42, y + height - 3, x + width - 2, y + 3, checkColor, 2);
-  }
-  context.canvas.strokeRect(x, y, width, height, borderColor, 1);
-}
-
-class CheckboxAppearance extends Widget {
-  constructor(activeColor, checkColor, borderColor, selected) {
-    super();
-    this.activeColor = activeColor;
-    this.checkColor = checkColor;
-    this.borderColor = borderColor;
-    this.selected = selected;
-  }
-  layout(_context, constraints) {
-    const size = BoxConstraints.from(constraints).biggest;
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: null
-    };
-  }
-  paint(context, box) {
-    paintCheckbox(context, box.x, box.y, box.width, box.height, this.selected, this.activeColor, this.checkColor, this.borderColor);
-  }
-}
-
-class FlatButton extends Widget {
-  constructor({name, child, textColor = "#ffffff", color = "#2196f3", colorDown = "#f44336", colorRollover = "#448aff", padding = {
-    left: 20,
-    right: 20,
-    top: 5,
-    bottom: 5
-  }, fieldFlags = [ "pushButton" ]}) {
-    super();
-    this.name = requireName(name);
-    this.childWidget = child;
-    this.textColor = normalizeColor(textColor);
-    this.color = normalizeColor(color);
-    this.colorDown = normalizeColor(colorDown);
-    this.colorRollover = normalizeColor(colorRollover);
-    this.padding = padding;
-    this.fieldFlags = fieldFlags;
-  }
-  child(color = this.color) {
-    return new Container({
-      background: color,
-      padding: this.padding,
-      child: new DefaultTextStyle({
-        style: new TextStyle({
-          color: this.textColor
-        }),
-        child: this.childWidget
-      })
-    });
-  }
-  layout(context, constraints) {
-    const childBox = this.child().layout(context, constraints);
-    return {
-      widget: this,
-      width: childBox.width,
-      height: childBox.height,
-      data: {
-        childBox
-      }
-    };
-  }
-  paint(context, box) {
-    box.data.childBox.widget.paint(context, {
-      ...box.data.childBox,
-      x: box.x,
-      y: box.y
-    });
-    context.canvas.addFormField({
-      kind: "form",
-      fieldType: "button",
-      name: this.name,
-      fieldFlags: fieldFlagsValue(this.fieldFlags),
-      highlighting: "push",
-      appearances: {
-        normal: appearanceFor(context, box.width, box.height, this.child()),
-        down: appearanceFor(context, box.width, box.height, this.child(this.colorDown)),
-        rollover: appearanceFor(context, box.width, box.height, this.child(this.colorRollover))
-      }
-    }, box.x, box.y, box.width, box.height);
-  }
-}
-
-class TextField extends Widget {
-  constructor(options) {
-    super();
-    this.options = options;
-    this.name = requireName(options.name);
-    if (options.maxLength !== null && options.maxLength !== undefined && (!Number.isInteger(options.maxLength) || options.maxLength < 0)) {
-      throw new RangeError("TextField maxLength must be a non-negative integer");
-    }
-  }
-  child() {
-    if (this.options.child !== null && this.options.child !== undefined) return this.options.child;
-    return new Container({
-      width: this.options.width ?? 120,
-      height: this.options.height ?? 13,
-      padding: {
-        left: 4,
-        right: 4,
-        top: 2,
-        bottom: 2
-      },
-      borderColor: this.options.color ?? "#777777",
-      background: this.options.backgroundColor ?? "#ffffff",
-      child: null
-    });
-  }
-  layout(context, constraints) {
-    const childBox = this.child().layout(context, constraints);
-    return {
-      widget: this,
-      width: childBox.width,
-      height: childBox.height,
-      data: {
-        childBox
-      }
-    };
-  }
-  paint(context, box) {
-    box.data.childBox.widget.paint(context, {
-      ...box.data.childBox,
-      x: box.x,
-      y: box.y
-    });
-    const style = resolvedStyle(context, this.options.textStyle ?? null);
-    context.canvas.addFormField({
-      kind: "form",
-      fieldType: "text",
-      name: this.name,
-      value: this.options.value ?? null,
-      defaultValue: this.options.defaultValue ?? null,
-      maxLength: this.options.maxLength ?? null,
-      alternateName: this.options.alternateName ?? null,
-      mappingName: this.options.mappingName ?? null,
-      fieldFlags: fieldFlagsValue(this.options.fieldFlags ?? []),
-      textAlign: this.options.textAlign ?? null,
-      borderColor: this.options.color == null ? null : normalizeColor(this.options.color),
-      backgroundColor: this.options.backgroundColor == null ? null : normalizeColor(this.options.backgroundColor),
-      highlighting: this.options.highlighting ?? null,
-      font: style.font === null ? context.document.font : context.document.resolveFont(style.font),
-      fontSize: style.fontSize ?? 12,
-      textColor: style.color ?? [ 0, 0, 0 ],
-      appearances: this.options.value === null || this.options.value === undefined ? undefined : {
-        normal: appearanceFor(context, box.width, box.height, new Container({
-          padding: {
-            left: 4,
-            right: 4,
-            top: 2,
-            bottom: 2
-          },
-          child: new Text(this.options.value, {
-            style: this.options.textStyle ?? undefined
-          })
-        }))
-      }
-    }, box.x, box.y, box.width, box.height);
-  }
-}
+});
 
 const svgColors = Object.freeze({
   indigo: "#4b0082",
@@ -13389,73 +13800,6 @@ const svgColors = Object.freeze({
   azure: "#f0ffff",
   lightsteelblue: "#b0c4de",
   oldlace: "#fdf5e6"
-});
-
-const PdfPoint = Object.freeze({
-  zero: Object.freeze({
-    x: 0,
-    y: 0
-  }),
-  translate(point, dx, dy) {
-    return {
-      x: point.x + dx,
-      y: point.y + dy
-    };
-  }
-});
-
-const PdfRect = Object.freeze({
-  zero: Object.freeze({
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0
-  }),
-  fromLTRB(left, bottom, right, top) {
-    return {
-      x: left,
-      y: bottom,
-      width: right - left,
-      height: top - bottom
-    };
-  },
-  left(rect) {
-    return rect.x;
-  },
-  bottom(rect) {
-    return rect.y;
-  },
-  right(rect) {
-    return rect.x + rect.width;
-  },
-  top(rect) {
-    return rect.y + rect.height;
-  },
-  horizontalCenter(rect) {
-    return rect.x + rect.width / 2;
-  },
-  verticalCenter(rect) {
-    return rect.y + rect.height / 2;
-  },
-  inflate(rect, delta) {
-    return {
-      x: rect.x - delta,
-      y: rect.y - delta,
-      width: rect.width + delta * 2,
-      height: rect.height + delta * 2
-    };
-  },
-  deflate(rect, delta) {
-    return PdfRect.inflate(rect, -delta);
-  },
-  scale(rect, factor) {
-    return {
-      x: rect.x * factor,
-      y: rect.y * factor,
-      width: rect.width * factor,
-      height: rect.height * factor
-    };
-  }
 });
 
 const UNIT_SUFFIXES = Object.freeze({
@@ -14274,54 +14618,6 @@ class SvgOperation {
     }
     this.drawShape(canvas);
     canvas.restoreContext();
-  }
-}
-
-class SvgGroup extends SvgOperation {
-  constructor(children, brush, clip, transform, painter) {
-    super(brush, clip, transform, painter);
-    this.children = children;
-  }
-  static fromXml(element, painter, parent) {
-    const brush = SvgBrush.fromXml(element, parent, painter.parser);
-    const children = [];
-    for (const child of element.elements) {
-      if (child.name.local === "symbol") {
-        continue;
-      }
-      const operation = painter.operationFromXml(child, brush);
-      if (operation !== null) {
-        children.push(operation);
-      }
-    }
-    return new SvgGroup(children, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
-  }
-  paintShape(canvas) {
-    for (const child of this.children) {
-      child.paint(canvas);
-    }
-  }
-  drawShape(canvas) {
-    for (const child of this.children) {
-      child.draw(canvas);
-    }
-  }
-  boundingBox() {
-    if (this.children.length === 0) {
-      return PdfRect.zero;
-    }
-    let left = Infinity;
-    let bottom = Infinity;
-    let right = -Infinity;
-    let top = -Infinity;
-    for (const child of this.children) {
-      const box = child.boundingBox();
-      left = Math.min(left, PdfRect.left(box));
-      bottom = Math.min(bottom, PdfRect.bottom(box));
-      right = Math.max(right, PdfRect.right(box));
-      top = Math.max(top, PdfRect.top(box));
-    }
-    return PdfRect.fromLTRB(left, bottom, right, top);
   }
 }
 
@@ -15148,6 +15444,818 @@ class SvgPath extends SvgOperation {
   }
 }
 
+class Image extends Widget {
+  constructor(image, {fit = "contain", alignment = "center", width = null, height = null, dpi = null} = {}) {
+    super();
+    applyBoxFit$1(fit, {
+      width: 1,
+      height: 1
+    }, {
+      width: 1,
+      height: 1
+    });
+    if (width !== null && (!Number.isFinite(width) || width < 0)) throw new RangeError("Image width must be non-negative");
+    if (height !== null && (!Number.isFinite(height) || height < 0)) throw new RangeError("Image height must be non-negative");
+    if (dpi !== null && (!Number.isFinite(dpi) || dpi <= 0)) throw new RangeError("Image DPI must be positive");
+    this.image = image;
+    this.fit = fit;
+    this.alignment = resolveBasicAlignment(alignment);
+    this.width = width;
+    this.height = height;
+    this.dpi = dpi;
+  }
+  layout(_context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const offered = {
+      width: parent.constrainWidth(this.width ?? (parent.hasBoundedWidth ? parent.maxWidth : this.image.width)),
+      height: parent.constrainHeight(this.height ?? (parent.hasBoundedHeight ? parent.maxHeight : this.image.height))
+    };
+    const layoutFit = applyBoxFit$1(this.fit, {
+      width: this.image.width,
+      height: this.image.height
+    }, offered);
+    const image = this.image.resolve({
+      x: layoutFit.destination.width,
+      y: layoutFit.destination.height
+    }, this.dpi);
+    const fitted = applyBoxFit$1(this.fit, {
+      width: image.width,
+      height: image.height
+    }, layoutFit.destination);
+    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, image.width, image.height);
+    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, layoutFit.destination.width, layoutFit.destination.height);
+    return {
+      widget: this,
+      width: layoutFit.destination.width,
+      height: layoutFit.destination.height,
+      data: {
+        image,
+        source: fitted.source,
+        destination: fitted.destination,
+        sourceX: sourceOffset.dx,
+        sourceY: sourceOffset.dy,
+        destinationX: destinationOffset.dx,
+        destinationY: destinationOffset.dy
+      }
+    };
+  }
+  paint(context, box) {
+    const data = box.data;
+    if (data.source.width <= 0 || data.source.height <= 0) return;
+    const scaleX = data.destination.width / data.source.width;
+    const scaleY = data.destination.height / data.source.height;
+    const destinationX = box.x + data.destinationX;
+    const destinationY = box.y + data.destinationY;
+    const fullWidth = data.image.width * scaleX;
+    const fullHeight = data.image.height * scaleY;
+    const fullX = destinationX - data.sourceX * scaleX;
+    const fullTop = destinationY - data.sourceY * scaleY;
+    context.canvas.saveContext();
+    context.canvas.drawRect(destinationX, context.canvas.toPdfY(destinationY + data.destination.height), data.destination.width, data.destination.height);
+    context.canvas.clipPath();
+    context.canvas.drawImage(data.image, fullX, context.canvas.toPdfY(fullTop + fullHeight), fullWidth, fullHeight);
+    context.canvas.restoreContext();
+  }
+}
+
+class Shape extends Widget {
+  constructor(shape, {strokeColor = null, fillColor = null, width = null, height = null, fit = "contain"} = {}) {
+    super();
+    this.shape = String(shape);
+    this.strokeColor = strokeColor;
+    this.fillColor = fillColor;
+    this.width = width;
+    this.height = height;
+    this.fit = fit;
+    if (width !== null && width <= 0) throw new RangeError("Shape width must be positive");
+    if (height !== null && height <= 0) throw new RangeError("Shape height must be positive");
+  }
+  layout(_context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const measured = this.width === null || this.height === null ? shapeBoundingBox(this.shape) : {
+      x: 0,
+      y: 0,
+      width: this.width,
+      height: this.height
+    };
+    const offered = {
+      width: parent.hasBoundedWidth ? parent.maxWidth : parent.constrainWidth(measured.width),
+      height: parent.hasBoundedHeight ? parent.maxHeight : parent.constrainHeight(measured.height)
+    };
+    const fitted = applyBoxFit$1(this.fit, measured, offered);
+    return {
+      widget: this,
+      width: fitted.destination.width,
+      height: fitted.destination.height,
+      data: {
+        boundingBox: measured
+      }
+    };
+  }
+  paint(context, box) {
+    const bounds = box.data.boundingBox;
+    if (bounds.width <= 0 || bounds.height <= 0) return;
+    const scaleX = box.width / bounds.width;
+    const scaleY = box.height / bounds.height;
+    context.canvas.saveContext();
+    context.canvas.setTransform([ scaleX, 0, 0, scaleY, box.x - bounds.x * scaleX, context.canvas.pageHeight - box.y - (bounds.y + bounds.height) * scaleY ]);
+    if (this.fillColor !== null) {
+      context.canvas.setFillColor(this.fillColor);
+      drawShape(context.canvas, this.shape);
+      context.canvas.fillPath();
+    }
+    if (this.strokeColor !== null) {
+      context.canvas.setStrokeColor(this.strokeColor);
+      drawShape(context.canvas, this.shape);
+      context.canvas.strokePath();
+    }
+    context.canvas.restoreContext();
+  }
+}
+
+function validateDpi(dpi) {
+  if (dpi !== null && (!Number.isFinite(dpi) || dpi <= 0)) {
+    throw new RangeError("Image DPI must be positive");
+  }
+  return dpi;
+}
+
+function resizeDecodedImage(image, width) {
+  const pixels = image.pixels;
+  if (pixels === null || width === image.sourceWidth) return image;
+  const height = Math.max(1, Math.round(image.sourceHeight * width / image.sourceWidth));
+  const resized = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const sourceY = Math.min(image.sourceHeight - 1, Math.floor(y * image.sourceHeight / height));
+    for (let x = 0; x < width; x++) {
+      const sourceX = Math.min(image.sourceWidth - 1, Math.floor(x * image.sourceWidth / width));
+      const source = (sourceY * image.sourceWidth + sourceX) * 4;
+      const destination = (y * width + x) * 4;
+      resized[destination] = pixels[source];
+      resized[destination + 1] = pixels[source + 1];
+      resized[destination + 2] = pixels[source + 2];
+      resized[destination + 3] = pixels[source + 3];
+    }
+  }
+  return new PdfImage({
+    pixels: resized,
+    width,
+    height,
+    orientation: image.orientation,
+    hasAlpha: image.hasAlpha
+  });
+}
+
+class ImageProvider {
+  constructor(width, height, orientation, dpi) {
+    this.cache = new Map;
+    this.sourceWidth = width;
+    this.sourceHeight = height;
+    this.orientation = orientation;
+    this.dpi = validateDpi(dpi);
+  }
+  get width() {
+    return this.orientation === "leftTop" || this.orientation === "rightTop" || this.orientation === "rightBottom" || this.orientation === "leftBottom" ? this.sourceHeight : this.sourceWidth;
+  }
+  get height() {
+    return this.orientation === "leftTop" || this.orientation === "rightTop" || this.orientation === "rightBottom" || this.orientation === "leftBottom" ? this.sourceWidth : this.sourceHeight;
+  }
+  resolve(size, dpi = null) {
+    const effectiveDpi = validateDpi(dpi ?? this.dpi);
+    if (effectiveDpi === null || size === undefined) {
+      let image = this.cache.get(0);
+      if (image === undefined) {
+        image = this.buildImage();
+        this.cache.set(0, image);
+      }
+      return image;
+    }
+    if (!Number.isFinite(size.x) || size.x < 0 || !Number.isFinite(size.y) || size.y < 0) {
+      throw new RangeError("Image resolve size must be finite and non-negative");
+    }
+    const width = Math.max(1, Math.trunc(size.x / PageUnit.inch * effectiveDpi));
+    let image = this.cache.get(width);
+    if (image === undefined) {
+      image = this.buildImage(width);
+      this.cache.set(width, image);
+    }
+    return image;
+  }
+}
+
+class ImageProxy extends ImageProvider {
+  constructor(image, {dpi = null} = {}) {
+    super(image.sourceWidth, image.sourceHeight, image.orientation, dpi);
+    this.image = image;
+  }
+  buildImage(_width) {
+    return this.image;
+  }
+}
+
+class MemoryImage extends ImageProvider {
+  constructor(bytes, {orientation = "topLeft", dpi = null} = {}) {
+    let image;
+    if (bytes[0] === 255 && bytes[1] === 216) {
+      image = PdfImage.fromJpeg(bytes, orientation);
+    } else if (bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71) {
+      image = PdfImage.fromPng(bytes, orientation);
+    } else {
+      throw new TypeError(`Unable to determine image type from ${bytes.length} bytes`);
+    }
+    super(image.sourceWidth, image.sourceHeight, orientation, dpi);
+    this.bytes = bytes.slice();
+    this.image = image;
+  }
+  buildImage(width) {
+    return width === undefined ? this.image : resizeDecodedImage(this.image, width);
+  }
+}
+
+class RawImage extends ImageProvider {
+  constructor({bytes, width, height, orientation = "topLeft", dpi = null}) {
+    const image = new PdfImage({
+      pixels: bytes,
+      width,
+      height,
+      orientation,
+      hasAlpha: true
+    });
+    super(width, height, orientation, dpi);
+    this.image = image;
+  }
+  buildImage(width) {
+    return width === undefined ? this.image : resizeDecodedImage(this.image, width);
+  }
+}
+
+const DEFAULT_CIRCULAR_COLOR = "#3f51b5";
+
+const DEFAULT_LINEAR_COLOR = "#2196f3";
+
+function finiteNumber(value, name) {
+  const resolved = Number(value);
+  if (!Number.isFinite(resolved)) {
+    throw new TypeError(`${name} must be a finite number`);
+  }
+  return resolved;
+}
+
+function nonNegativeNumber(value, name) {
+  const resolved = finiteNumber(value, name);
+  if (resolved < 0) {
+    throw new RangeError(`${name} must be non-negative`);
+  }
+  return resolved;
+}
+
+function hueFor(red, green, blue, maximum, delta) {
+  if (delta === 0 || maximum === 0) return 0;
+  let hue;
+  if (maximum === red) {
+    hue = 60 * ((green - blue) / delta % 6);
+  } else if (maximum === green) {
+    hue = 60 * ((blue - red) / delta + 2);
+  } else {
+    hue = 60 * ((red - green) / delta + 4);
+  }
+  return hue < 0 ? hue + 360 : hue;
+}
+
+function shadeColor(color, strength) {
+  const [red, green, blue] = normalizeColor(color);
+  const maximum = Math.max(red, green, blue);
+  const minimum = Math.min(red, green, blue);
+  const delta = maximum - minimum;
+  const hue = hueFor(red, green, blue, maximum, delta);
+  const lightness = (maximum + minimum) / 2;
+  const saturation = lightness === 1 ? 0 : Math.min(1, Math.max(0, delta / (1 - Math.abs(2 * lightness - 1))));
+  const shadedLightness = Math.min(1, Math.max(0, lightness * (1.5 - strength)));
+  const chroma = (1 - Math.abs(2 * shadedLightness - 1)) * saturation;
+  const secondary = chroma * (1 - Math.abs(hue / 60 % 2 - 1));
+  const match = shadedLightness - chroma / 2;
+  let resolved;
+  if (hue < 60) resolved = [ chroma, secondary, 0 ]; else if (hue < 120) resolved = [ secondary, chroma, 0 ]; else if (hue < 180) resolved = [ 0, chroma, secondary ]; else if (hue < 240) resolved = [ 0, secondary, chroma ]; else if (hue < 300) resolved = [ secondary, 0, chroma ]; else resolved = [ chroma, 0, secondary ];
+  return [ Math.min(1, Math.max(0, resolved[0] + match)), Math.min(1, Math.max(0, resolved[1] + match)), Math.min(1, Math.max(0, resolved[2] + match)) ];
+}
+
+class CircularProgressIndicator extends Widget {
+  constructor({value, color = null, strokeWidth = 4, backgroundColor = null}) {
+    super();
+    this.value = finiteNumber(value, "CircularProgressIndicator.value");
+    this.color = color;
+    this.strokeWidth = nonNegativeNumber(strokeWidth, "CircularProgressIndicator.strokeWidth");
+    this.backgroundColor = backgroundColor;
+  }
+  layout(_context, constraints) {
+    const size = BoxConstraints.from(constraints).biggest;
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: null
+    };
+  }
+  paint(context, box) {
+    const adjustedValue = Math.min(.99999, Math.max(1e-5, this.value));
+    const left = box.x;
+    const bottom = context.canvas.pageHeight - box.y - box.height;
+    const rx = box.width / 2;
+    const ry = box.height / 2;
+    const angleStart = Math.PI / 2;
+    const angleEnd = angleStart - Math.PI * 2 * adjustedValue;
+    const startTop = {
+      x: left + rx + Math.cos(angleStart) * rx,
+      y: bottom + ry + Math.sin(angleStart) * ry
+    };
+    const endTop = {
+      x: left + rx + Math.cos(angleEnd) * rx,
+      y: bottom + ry + Math.sin(angleEnd) * ry
+    };
+    const startBottom = {
+      x: left + rx + Math.cos(angleStart) * (rx - this.strokeWidth),
+      y: bottom + ry + Math.sin(angleStart) * (ry - this.strokeWidth)
+    };
+    const endBottom = {
+      x: left + rx + Math.cos(angleEnd) * (rx - this.strokeWidth),
+      y: bottom + ry + Math.sin(angleEnd) * (ry - this.strokeWidth)
+    };
+    const {canvas} = context;
+    if (this.backgroundColor !== null && this.value < 1) {
+      canvas.moveTo(startTop.x, startTop.y);
+      canvas.bezierArc(startTop.x, startTop.y, rx, ry, endTop.x, endTop.y, {
+        large: adjustedValue < .5,
+        sweep: true
+      });
+      canvas.lineTo(endBottom.x, endBottom.y);
+      canvas.bezierArc(endBottom.x, endBottom.y, rx - this.strokeWidth, ry - this.strokeWidth, startBottom.x, startBottom.y, {
+        large: adjustedValue < .5
+      });
+      canvas.lineTo(startTop.x, startTop.y);
+      canvas.setFillColor(this.backgroundColor);
+      canvas.fillPath();
+    }
+    if (this.value > 0) {
+      canvas.moveTo(startTop.x, startTop.y);
+      canvas.bezierArc(startTop.x, startTop.y, rx, ry, endTop.x, endTop.y, {
+        large: adjustedValue > .5
+      });
+      canvas.lineTo(endBottom.x, endBottom.y);
+      canvas.bezierArc(endBottom.x, endBottom.y, rx - this.strokeWidth, ry - this.strokeWidth, startBottom.x, startBottom.y, {
+        large: adjustedValue > .5,
+        sweep: true
+      });
+      canvas.lineTo(startTop.x, startTop.y);
+      canvas.setFillColor(this.color ?? DEFAULT_CIRCULAR_COLOR);
+      canvas.fillPath();
+    }
+  }
+}
+
+class LinearProgressIndicator extends Widget {
+  constructor({value, backgroundColor = null, valueColor = null, minHeight = null}) {
+    super();
+    this.value = finiteNumber(value, "LinearProgressIndicator.value");
+    this.backgroundColor = backgroundColor;
+    this.valueColor = valueColor;
+    this.minHeight = minHeight === null ? null : nonNegativeNumber(minHeight, "LinearProgressIndicator.minHeight");
+  }
+  layout(_context, constraints) {
+    const size = new BoxConstraints({
+      minWidth: Infinity,
+      minHeight: this.minHeight ?? 4
+    }).enforce(constraints).smallest;
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: null
+    };
+  }
+  paint(context, box) {
+    const value = Math.min(1, Math.max(0, this.value));
+    const valueColor = this.valueColor ?? DEFAULT_LINEAR_COLOR;
+    const backgroundColor = this.backgroundColor ?? shadeColor(valueColor, .1);
+    const bottom = context.canvas.pageHeight - box.y - box.height;
+    if (value < 1) {
+      const epsilon = value === 0 ? 0 : .01;
+      context.canvas.drawRect(box.x + box.width * value - epsilon, bottom, box.width * (1 - value) + epsilon, box.height);
+      context.canvas.setFillColor(backgroundColor);
+      context.canvas.fillPath();
+    }
+    if (value > 0) {
+      context.canvas.drawRect(box.x, bottom, box.width * value, box.height);
+      context.canvas.setFillColor(valueColor);
+      context.canvas.fillPath();
+    }
+  }
+}
+
+const fieldFlagBits = {
+  readOnly: 0,
+  mandatory: 1,
+  noExport: 2,
+  multiline: 12,
+  password: 13,
+  noToggleToOff: 14,
+  radio: 15,
+  pushButton: 16,
+  combo: 17,
+  edit: 18,
+  sort: 19,
+  fileSelect: 20,
+  multiSelect: 21,
+  doNotSpellCheck: 22,
+  doNotScroll: 23,
+  comb: 24,
+  radiosInUnison: 25,
+  commitOnSelChange: 26
+};
+
+function fieldFlagsValue(flags) {
+  let value = 0;
+  for (const flag of flags) {
+    const bit = fieldFlagBits[flag];
+    if (bit === undefined) throw new TypeError(`Unknown form field flag: ${String(flag)}`);
+    value |= 1 << bit;
+  }
+  return value;
+}
+
+function requireName(name) {
+  const result = String(name);
+  if (result.length === 0) throw new RangeError("Form field name cannot be empty");
+  return result;
+}
+
+function resolvedStyle(context, style) {
+  return context.theme.defaultTextStyle.merge(style);
+}
+
+function appearanceFor(context, width, height, child) {
+  const canvas = new PdfCanvas(height);
+  const scoped = {
+    ...context,
+    canvas,
+    pageFormat: {
+      width,
+      height
+    }
+  };
+  const childBox = child.layout(scoped, BoxConstraints.tight({
+    width,
+    height
+  }));
+  childBox.widget.paint(scoped, {
+    ...childBox,
+    x: 0,
+    y: 0
+  });
+  return {
+    width,
+    height,
+    content: canvas.output(),
+    fonts: canvas.fonts,
+    graphicStates: canvas.graphicStates,
+    patterns: canvas.patterns,
+    images: canvas.images
+  };
+}
+
+class ChoiceField extends Widget {
+  constructor({name, items, value = null, width = 120, height = 13, textStyle = null}) {
+    super();
+    this.name = requireName(name);
+    this.items = items.map(String);
+    this.value = value;
+    this.width = Number(width);
+    this.height = Number(height);
+    this.textStyle = textStyle;
+    if (value !== null && !this.items.includes(value)) {
+      throw new RangeError("ChoiceField value must be one of its items");
+    }
+  }
+  child() {
+    return new Container({
+      width: this.width,
+      height: this.height,
+      padding: {
+        left: 4,
+        right: 16,
+        top: 2,
+        bottom: 2
+      },
+      borderColor: "#777777",
+      background: "#ffffff",
+      child: null
+    });
+  }
+  layout(context, constraints) {
+    const childBox = this.child().layout(context, BoxConstraints.from(constraints));
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    box.data.childBox.widget.paint(context, {
+      ...box.data.childBox,
+      x: box.x,
+      y: box.y
+    });
+    const style = resolvedStyle(context, this.textStyle);
+    context.canvas.addFormField({
+      kind: "form",
+      fieldType: "choice",
+      name: this.name,
+      items: this.items,
+      value: this.value,
+      fieldFlags: fieldFlagsValue([ "combo" ]),
+      font: style.font === null ? context.document.font : context.document.resolveFont(style.font),
+      fontSize: style.fontSize ?? 12,
+      textColor: style.color ?? [ 0, 0, 0 ],
+      appearances: this.value === null ? undefined : {
+        normal: appearanceFor(context, box.width, box.height, new Container({
+          padding: {
+            left: 4,
+            right: 16,
+            top: 2,
+            bottom: 2
+          },
+          child: new Text(this.value, {
+            style: this.textStyle ?? undefined
+          })
+        }))
+      }
+    }, box.x, box.y, box.width, box.height);
+  }
+}
+
+class Checkbox extends Widget {
+  constructor({name, value, tristate = false, width = 13, height = 13, activeColor = "#2196f3", checkColor = "#ffffff", borderColor = "#757575"}) {
+    super();
+    this.name = requireName(name);
+    this.value = Boolean(value);
+    this.tristate = Boolean(tristate);
+    this.width = Number(width);
+    this.height = Number(height);
+    this.activeColor = normalizeColor(activeColor);
+    this.checkColor = normalizeColor(checkColor);
+    this.borderColor = normalizeColor(borderColor);
+  }
+  layout(_context, constraints) {
+    const size = BoxConstraints.from(constraints).constrain({
+      width: this.width,
+      height: this.height
+    });
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: null
+    };
+  }
+  paint(context, box) {
+    this.paintState(context, box, this.value);
+    const on = new CheckboxAppearance(this.activeColor, this.checkColor, this.borderColor, true);
+    const off = new CheckboxAppearance(this.activeColor, this.checkColor, this.borderColor, false);
+    context.canvas.addFormField({
+      kind: "form",
+      fieldType: "checkbox",
+      name: this.name,
+      value: this.value ? "/Yes" : null,
+      defaultValue: this.value ? "/Yes" : null,
+      appearances: {
+        normalStates: new Map([ [ "/Yes", appearanceFor(context, box.width, box.height, on) ], [ "/Off", appearanceFor(context, box.width, box.height, off) ] ])
+      }
+    }, box.x, box.y, box.width, box.height);
+  }
+  paintState(context, box, selected) {
+    paintCheckbox(context, box.x, box.y, box.width, box.height, selected, this.activeColor, this.checkColor, this.borderColor);
+  }
+}
+
+function paintCheckbox(context, x, y, width, height, selected, activeColor, checkColor, borderColor) {
+  context.canvas.fillRect(x, y, width, height, selected ? activeColor : "#ffffff");
+  if (selected) {
+    context.canvas.line(x + 2, y + height * .55, x + width * .42, y + height - 3, checkColor, 2);
+    context.canvas.line(x + width * .42, y + height - 3, x + width - 2, y + 3, checkColor, 2);
+  }
+  context.canvas.strokeRect(x, y, width, height, borderColor, 1);
+}
+
+class CheckboxAppearance extends Widget {
+  constructor(activeColor, checkColor, borderColor, selected) {
+    super();
+    this.activeColor = activeColor;
+    this.checkColor = checkColor;
+    this.borderColor = borderColor;
+    this.selected = selected;
+  }
+  layout(_context, constraints) {
+    const size = BoxConstraints.from(constraints).biggest;
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: null
+    };
+  }
+  paint(context, box) {
+    paintCheckbox(context, box.x, box.y, box.width, box.height, this.selected, this.activeColor, this.checkColor, this.borderColor);
+  }
+}
+
+class FlatButton extends Widget {
+  constructor({name, child, textColor = "#ffffff", color = "#2196f3", colorDown = "#f44336", colorRollover = "#448aff", padding = {
+    left: 20,
+    right: 20,
+    top: 5,
+    bottom: 5
+  }, fieldFlags = [ "pushButton" ]}) {
+    super();
+    this.name = requireName(name);
+    this.childWidget = child;
+    this.textColor = normalizeColor(textColor);
+    this.color = normalizeColor(color);
+    this.colorDown = normalizeColor(colorDown);
+    this.colorRollover = normalizeColor(colorRollover);
+    this.padding = padding;
+    this.fieldFlags = fieldFlags;
+  }
+  child(color = this.color) {
+    return new Container({
+      background: color,
+      padding: this.padding,
+      child: new DefaultTextStyle({
+        style: new TextStyle({
+          color: this.textColor
+        }),
+        child: this.childWidget
+      })
+    });
+  }
+  layout(context, constraints) {
+    const childBox = this.child().layout(context, constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    box.data.childBox.widget.paint(context, {
+      ...box.data.childBox,
+      x: box.x,
+      y: box.y
+    });
+    context.canvas.addFormField({
+      kind: "form",
+      fieldType: "button",
+      name: this.name,
+      fieldFlags: fieldFlagsValue(this.fieldFlags),
+      highlighting: "push",
+      appearances: {
+        normal: appearanceFor(context, box.width, box.height, this.child()),
+        down: appearanceFor(context, box.width, box.height, this.child(this.colorDown)),
+        rollover: appearanceFor(context, box.width, box.height, this.child(this.colorRollover))
+      }
+    }, box.x, box.y, box.width, box.height);
+  }
+}
+
+class TextField extends Widget {
+  constructor(options) {
+    super();
+    this.options = options;
+    this.name = requireName(options.name);
+    if (options.maxLength !== null && options.maxLength !== undefined && (!Number.isInteger(options.maxLength) || options.maxLength < 0)) {
+      throw new RangeError("TextField maxLength must be a non-negative integer");
+    }
+  }
+  child() {
+    if (this.options.child !== null && this.options.child !== undefined) return this.options.child;
+    return new Container({
+      width: this.options.width ?? 120,
+      height: this.options.height ?? 13,
+      padding: {
+        left: 4,
+        right: 4,
+        top: 2,
+        bottom: 2
+      },
+      borderColor: this.options.color ?? "#777777",
+      background: this.options.backgroundColor ?? "#ffffff",
+      child: null
+    });
+  }
+  layout(context, constraints) {
+    const childBox = this.child().layout(context, constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    box.data.childBox.widget.paint(context, {
+      ...box.data.childBox,
+      x: box.x,
+      y: box.y
+    });
+    const style = resolvedStyle(context, this.options.textStyle ?? null);
+    context.canvas.addFormField({
+      kind: "form",
+      fieldType: "text",
+      name: this.name,
+      value: this.options.value ?? null,
+      defaultValue: this.options.defaultValue ?? null,
+      maxLength: this.options.maxLength ?? null,
+      alternateName: this.options.alternateName ?? null,
+      mappingName: this.options.mappingName ?? null,
+      fieldFlags: fieldFlagsValue(this.options.fieldFlags ?? []),
+      textAlign: this.options.textAlign ?? null,
+      borderColor: this.options.color == null ? null : normalizeColor(this.options.color),
+      backgroundColor: this.options.backgroundColor == null ? null : normalizeColor(this.options.backgroundColor),
+      highlighting: this.options.highlighting ?? null,
+      font: style.font === null ? context.document.font : context.document.resolveFont(style.font),
+      fontSize: style.fontSize ?? 12,
+      textColor: style.color ?? [ 0, 0, 0 ],
+      appearances: this.options.value === null || this.options.value === undefined ? undefined : {
+        normal: appearanceFor(context, box.width, box.height, new Container({
+          padding: {
+            left: 4,
+            right: 4,
+            top: 2,
+            bottom: 2
+          },
+          child: new Text(this.options.value, {
+            style: this.options.textStyle ?? undefined
+          })
+        }))
+      }
+    }, box.x, box.y, box.width, box.height);
+  }
+}
+
+class SvgGroup extends SvgOperation {
+  constructor(children, brush, clip, transform, painter) {
+    super(brush, clip, transform, painter);
+    this.children = children;
+  }
+  static fromXml(element, painter, parent) {
+    const brush = SvgBrush.fromXml(element, parent, painter.parser);
+    const children = [];
+    for (const child of element.elements) {
+      if (child.name.local === "symbol") {
+        continue;
+      }
+      const operation = painter.operationFromXml(child, brush);
+      if (operation !== null) {
+        children.push(operation);
+      }
+    }
+    return new SvgGroup(children, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+  }
+  paintShape(canvas) {
+    for (const child of this.children) {
+      child.paint(canvas);
+    }
+  }
+  drawShape(canvas) {
+    for (const child of this.children) {
+      child.draw(canvas);
+    }
+  }
+  boundingBox() {
+    if (this.children.length === 0) {
+      return PdfRect.zero;
+    }
+    let left = Infinity;
+    let bottom = Infinity;
+    let right = -Infinity;
+    let top = -Infinity;
+    for (const child of this.children) {
+      const box = child.boundingBox();
+      left = Math.min(left, PdfRect.left(box));
+      bottom = Math.min(bottom, PdfRect.bottom(box));
+      right = Math.max(right, PdfRect.right(box));
+      top = Math.max(top, PdfRect.top(box));
+    }
+    return PdfRect.fromLTRB(left, bottom, right, top);
+  }
+}
+
 class SvgSymbol extends SvgGroup {
   static fromXml(element, painter, parent) {
     const brush = painter.brushFor(element, parent);
@@ -15887,58 +16995,6 @@ class Lorem extends StatelessWidget {
   }
 }
 
-class Vector extends Widget {
-  constructor({width, height, draw}) {
-    super();
-    this.width = Number(width);
-    this.height = Number(height);
-    this.draw = draw;
-  }
-  layout(_context, constraints) {
-    const parent = BoxConstraints.from(constraints);
-    const scale = Math.min(1, parent.maxWidth / this.width, parent.maxHeight / this.height);
-    const size = parent.constrain({
-      width: this.width * scale,
-      height: this.height * scale
-    });
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: {
-        scale
-      }
-    };
-  }
-  paint(context, box) {
-    const scale = box.data.scale;
-    const api = {
-      rect: ({x, y, width, height, fill = null, stroke = null, lineWidth = 1}) => {
-        if (fill) context.canvas.fillRect(box.x + x * scale, box.y + y * scale, width * scale, height * scale, fill);
-        if (stroke) context.canvas.strokeRect(box.x + x * scale, box.y + y * scale, width * scale, height * scale, stroke, lineWidth * scale);
-      },
-      line: ({x1, y1, x2, y2, color = "#000000", lineWidth = 1}) => {
-        context.canvas.line(box.x + x1 * scale, box.y + y1 * scale, box.x + x2 * scale, box.y + y2 * scale, color, lineWidth * scale);
-      },
-      circle: ({cx, cy, radius, fill = null, stroke = null, lineWidth = 1}) => {
-        context.canvas.circle(box.x + cx * scale, box.y + cy * scale, radius * scale, {
-          fill,
-          stroke,
-          lineWidth: lineWidth * scale
-        });
-      },
-      text: ({value, x, y, fontSize = 12, color = "#000000", font}) => {
-        context.canvas.text(String(value), box.x + x * scale, box.y + y * scale, {
-          fontSize: fontSize * scale,
-          color: normalizeColor(color),
-          font: font ?? context.document.font
-        });
-      }
-    };
-    this.draw(api);
-  }
-}
-
 function side(input) {
   if (input === null || input === undefined) {
     return null;
@@ -16514,12 +17570,23 @@ const publicApi = Object.freeze({
   Anchor,
   Annotation,
   AnnotationBuilder,
+  AnnotationCircle,
+  AnnotationInk,
   AnnotationLink,
+  AnnotationPolygon,
+  AnnotationSquare,
   AnnotationUrl,
+  CircleAnnotation,
+  InkAnnotation,
   Link,
+  Outline,
+  PolygonAnnotation,
+  PolyLineAnnotation,
+  SquareAnnotation,
   UrlLink,
   Page,
   MultiPage,
+  NewPage,
   Text,
   InlineSpan,
   RichText,
@@ -16529,6 +17596,8 @@ const publicApi = Object.freeze({
   Paragraph,
   Bullet,
   TableOfContent,
+  Footer,
+  Watermark,
   Chart,
   ChartGrid,
   ChartFrame,
@@ -16560,6 +17629,7 @@ const publicApi = Object.freeze({
   Flex,
   Flexible,
   Expanded,
+  ListView,
   Container,
   DecoratedBox,
   BoxDecoration,
@@ -16576,6 +17646,7 @@ const publicApi = Object.freeze({
   BorderRadiusDirectional,
   Radius,
   GridView,
+  GridPaper,
   Stack,
   Positioned,
   PositionedDirectional,
@@ -16584,6 +17655,11 @@ const publicApi = Object.freeze({
   Partitions,
   Spacer,
   Vector,
+  Circle,
+  Rectangle,
+  Polygon,
+  InkList,
+  Shape,
   Padding,
   Align,
   Center,
@@ -16617,6 +17693,12 @@ const publicApi = Object.freeze({
   FractionColumnWidth,
   TableHelper,
   SpanningWidget,
+  Inherited,
+  InheritedWidget,
+  Inseparable,
+  DelayedWidget,
+  Directionality,
+  InheritedDirectionality,
   Alignment,
   BoxConstraints,
   EdgeInsets,
@@ -16650,4 +17732,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationLink, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridAxis, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
