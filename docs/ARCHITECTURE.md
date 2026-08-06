@@ -155,7 +155,8 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   slots, `ThemeData` and the widgets that scope it, and the lazy `Font`
   declaration a style names.
 - **`flex.ts`** — full `Flex` allocation, `Column`, `Row`, `Expanded`,
-  `Flexible`, proportional `Spacer`, plus `gap` and weighted row tracks.
+  `Flexible`, proportional `Spacer`, `ListView`, plus `gap` and weighted row
+  tracks.
 - **`stack.ts` / `wrap.ts` / `grid_view.ts` / `partitions.ts`** — overlays,
   positioned children, wrapping runs, fixed-track grids and parallel columns;
   the latter three paginate through immutable continuation cursors.
@@ -165,7 +166,8 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   rectangle paths.
 - **`basic.ts`** — composition, fitting, transforms, opacity, builders,
   custom painting and basic sizing widgets.
-- **`shape.ts`** — `Vector`, the imperative drawing surface.
+- **`shape.ts` / `image.ts` / `grid_paper.ts`** — geometric widgets,
+  path-data `Shape`, `Vector`, raster images and configurable paper grids.
 - **`table.ts` / `table_helper.ts`** — shared column tracks, table painting and
   the scalar-array convenience builder; tables span pages through immutable
   continuation state.
@@ -234,19 +236,18 @@ interface RenderContext {
   pageFormat: PageSize;
   pageNumber: number;
   theme: ThemeData;
+  inherited?: ReadonlyMap<Function, Inherited>;
 }
 ```
 
 A section builds this from a `DocumentContext` (`{ document }`) once it has a
 canvas.
 
-Upstream carries inherited values in an `InheritedWidget` map a child looks up
-with `Context.dependsOn`. **The port puts them on the context directly:** a
-widget that scopes something for its subtree lays out and paints its child with
-a copy of the context carrying the new value. `Theme` and `DefaultTextStyle`
-(phase 1.4) are the first two, which is why `theme` is a field rather than a
-lookup and `Theme.of(context)` is a field read. Adding another inherited value
-means adding another field, not another mechanism.
+Upstream carries inherited values in a context registry a child looks up with
+`Context.dependsOn`. The port uses an immutable constructor-keyed map on the
+render context: `InheritedWidget` lays out and paints its child with a copied
+context carrying the scoped value. Frequently read theme data retains its
+direct field, so `Theme.of(context)` remains a field read.
 
 ## 4. Coordinates
 
@@ -268,7 +269,7 @@ divergences or narrower compatibility gaps between the port and upstream.
 | Area | dart_pdf | js_pdf |
 |---|---|---|
 | Embedded TTF | Type0 for `0x00010000` fonts, WinAnsi `/TrueType` otherwise | Type0 only; a non-`0x00010000` or `CFF ` font is rejected at construction |
-| Inherited values | `InheritedWidget` plus `Context.dependsOn` | Fields on `RenderContext`, replaced for the subtree (§3) |
+| Inherited values | Mutable context registry plus dependency lookup | `InheritedWidget` copies an immutable constructor-keyed map; theme keeps a direct context field (§3) |
 | Text layout | Full breaker with rich text, Unicode bidi, Arabic shaping, justification and decorations | Rich text, fallback fonts, justification, decorations and explicit RTL placement; no Unicode bidi reordering or Arabic shaping |
 | Page orientation | Content rotated through the CTM, paper size unchanged | Paper dimensions are swapped per section so `/MediaBox` reports the resolved physical orientation |
 | Object serialization | A value consults its owning object for compression, encryption and a verbose pretty-printer | `output(stream)` only, no `PdfSettings`; dictionaries and arrays keep the port's `<< /Type /Page >>` spacing |

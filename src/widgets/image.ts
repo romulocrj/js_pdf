@@ -1,10 +1,10 @@
 /*
- * Ported to JavaScript from DavBfr/dart_pdf.
+ * Ported to JavaScript from https://github.com/DavBfr/dart_pdf
  *
  * Original work:
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
- * JavaScript port:
+ * JavaScript port: https://github.com/romulocrj/js_pdf
  * Copyright (C) 2026, Romulo Campos
  *
  * This file has been substantially modified from the original Dart source.
@@ -19,6 +19,9 @@
  */
 
 import type { PdfImage } from '../pdf/obj/image.ts';
+import type { ColorInput } from '../pdf/color.ts';
+import type { PdfRect } from '../pdf/rect.ts';
+import { drawShape, shapeBoundingBox } from '../svg/path.ts';
 import { applyBoxFit, resolveBasicAlignment } from './basic.ts';
 import type { BasicAlignmentInput, FitSize } from './basic.ts';
 import { BoxConstraints, inscribe } from './geometry.ts';
@@ -150,6 +153,91 @@ export class Image extends Widget<ImageLayoutData> {
       fullWidth,
       fullHeight
     );
+    context.canvas.restoreContext();
+  }
+}
+
+export interface ShapeOptions {
+  readonly strokeColor?: ColorInput | null;
+  readonly fillColor?: ColorInput | null;
+  readonly width?: number | null;
+  readonly height?: number | null;
+  readonly fit?: BoxFit;
+}
+
+export interface ShapeLayoutData {
+  readonly boundingBox: PdfRect;
+}
+
+/** Draws an SVG path-data string fitted into the available widget box. */
+export class Shape extends Widget<ShapeLayoutData> {
+  readonly shape: string;
+  readonly strokeColor: ColorInput | null;
+  readonly fillColor: ColorInput | null;
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly fit: BoxFit;
+
+  constructor(shape: string, {
+    strokeColor = null,
+    fillColor = null,
+    width = null,
+    height = null,
+    fit = 'contain'
+  }: ShapeOptions = {}) {
+    super();
+    this.shape = String(shape);
+    this.strokeColor = strokeColor;
+    this.fillColor = fillColor;
+    this.width = width;
+    this.height = height;
+    this.fit = fit;
+    if (width !== null && width <= 0) throw new RangeError('Shape width must be positive');
+    if (height !== null && height <= 0) throw new RangeError('Shape height must be positive');
+  }
+
+  override layout(_context: RenderContext, constraints: Constraints): LayoutBox<ShapeLayoutData> {
+    const parent = BoxConstraints.from(constraints);
+    const measured = this.width === null || this.height === null
+      ? shapeBoundingBox(this.shape)
+      : { x: 0, y: 0, width: this.width, height: this.height };
+    const offered = {
+      width: parent.hasBoundedWidth ? parent.maxWidth : parent.constrainWidth(measured.width),
+      height: parent.hasBoundedHeight ? parent.maxHeight : parent.constrainHeight(measured.height)
+    };
+    const fitted = applyBoxFit(this.fit, measured, offered);
+    return {
+      widget: this,
+      width: fitted.destination.width,
+      height: fitted.destination.height,
+      data: { boundingBox: measured }
+    };
+  }
+
+  override paint(context: RenderContext, box: PositionedBox<ShapeLayoutData>): void {
+    const bounds = box.data.boundingBox;
+    if (bounds.width <= 0 || bounds.height <= 0) return;
+    const scaleX = box.width / bounds.width;
+    const scaleY = box.height / bounds.height;
+    context.canvas.saveContext();
+    context.canvas.setTransform([
+      scaleX,
+      0,
+      0,
+      scaleY,
+      box.x - bounds.x * scaleX,
+      context.canvas.pageHeight - box.y - (bounds.y + bounds.height) * scaleY
+    ]);
+    if (this.fillColor !== null) {
+      context.canvas.setFillColor(this.fillColor);
+      drawShape(context.canvas, this.shape);
+      context.canvas.fillPath();
+    }
+    if (this.strokeColor !== null) {
+      context.canvas.setStrokeColor(this.strokeColor);
+      drawShape(context.canvas, this.shape);
+      context.canvas.strokePath();
+    }
     context.canvas.restoreContext();
   }
 }

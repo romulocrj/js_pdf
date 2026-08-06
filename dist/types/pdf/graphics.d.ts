@@ -123,6 +123,8 @@ export declare class PdfCanvas {
     get images(): ReadonlyMap<PdfImage, string>;
     /** Clickable rectangles registered while this page was painted. */
     get annotations(): readonly PdfAnnotationSpec[];
+    /** Registers an annotation whose coordinates are already in PDF space. */
+    addAnnotation(annotation: PdfAnnotationSpec): void;
     addUrlLink(destination: string, x: number, top: number, width: number, height: number): void;
     addNamedLink(destination: string, x: number, top: number, width: number, height: number): void;
     private addLink;

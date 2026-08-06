@@ -1,10 +1,10 @@
 /*
- * Ported to JavaScript from DavBfr/dart_pdf.
+ * Ported to JavaScript from https://github.com/DavBfr/dart_pdf
  *
  * Original work:
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
- * JavaScript port:
+ * JavaScript port: https://github.com/romulocrj/js_pdf
  * Copyright (C) 2026, Romulo Campos
  *
  * This file has been substantially modified from the original Dart source.
@@ -57,14 +57,24 @@ import { Border, BorderSide, BorderStyle, BoxBorder } from './widgets/box_border
 import { BarcodeWidget } from './widgets/barcode.ts';
 import { Container, DecoratedBox } from './widgets/container.ts';
 import { ClipOval, ClipRect, ClipRRect } from './widgets/clip.ts';
-import { Bullet, Header, Paragraph, TableOfContent } from './widgets/content.ts';
+import { Bullet, Footer, Header, Paragraph, TableOfContent, Watermark } from './widgets/content.ts';
 import {
   Anchor,
   Annotation,
   AnnotationBuilder,
+  AnnotationCircle,
+  AnnotationInk,
   AnnotationLink,
+  AnnotationPolygon,
+  AnnotationSquare,
   AnnotationUrl,
+  CircleAnnotation,
+  InkAnnotation,
   Link,
+  Outline,
+  PolygonAnnotation,
+  PolyLineAnnotation,
+  SquareAnnotation,
   UrlLink
 } from './widgets/annotations.ts';
 import { BarDataSet } from './widgets/chart/bar_chart.ts';
@@ -78,22 +88,23 @@ import { PieDataSet, PieFrame, PieGrid } from './widgets/chart/pie_chart.ts';
 import { PointChartValue, PointDataSet } from './widgets/chart/point_chart.ts';
 import { BoxDecoration, BoxShadow, Gradient, LinearGradient, RadialGradient } from './widgets/decoration.ts';
 import { Document } from './widgets/document.ts';
-import { Column, Expanded, Flex, Flexible, Row, Spacer } from './widgets/flex.ts';
+import { Column, Expanded, Flex, Flexible, ListView, Row, Spacer } from './widgets/flex.ts';
 import { Font } from './widgets/font.ts';
 import { Alignment, BoxConstraints, EdgeInsets } from './widgets/geometry.ts';
-import { MultiPage } from './widgets/multi_page.ts';
+import { MultiPage, NewPage } from './widgets/multi_page.ts';
 import { GridView } from './widgets/grid_view.ts';
+import { GridPaper } from './widgets/grid_paper.ts';
 import { Partition, Partitions } from './widgets/partitions.ts';
 import { Page } from './widgets/page.ts';
 import type { Section } from './widgets/page.ts';
 import { PageTheme } from './widgets/page_theme.ts';
-import { Image } from './widgets/image.ts';
+import { Image, Shape } from './widgets/image.ts';
 import { ImageProvider, ImageProxy, MemoryImage, RawImage } from './widgets/image_provider.ts';
 import { Icon, IconData, IconThemeData } from './widgets/icon.ts';
 import { CircularProgressIndicator, LinearProgressIndicator } from './widgets/progress.ts';
 import { Checkbox, ChoiceField, FlatButton, TextField } from './widgets/forms.ts';
 import { FlutterLogo, Lorem, LoremText, PdfLogo, Placeholder } from './widgets/placeholders.ts';
-import { Vector } from './widgets/shape.ts';
+import { Circle, InkList, Polygon, Rectangle, Vector } from './widgets/shape.ts';
 import { Positioned, PositionedDirectional, Stack } from './widgets/stack.ts';
 import { SvgImage } from './widgets/svg.ts';
 import {
@@ -109,8 +120,17 @@ import {
 import { TableHelper } from './widgets/table_helper.ts';
 import { InlineSpan, RichText, Text, TextSpan, WidgetSpan } from './widgets/text.ts';
 import { TextStyle } from './widgets/text_style.ts';
+import { Directionality, InheritedDirectionality } from './widgets/directionality.ts';
 import { DefaultTextStyle, Theme, ThemeData } from './widgets/theme.ts';
-import { SpanningWidget, StatelessWidget, Widget } from './widgets/widget.ts';
+import {
+  DelayedWidget,
+  Inherited,
+  InheritedWidget,
+  Inseparable,
+  SpanningWidget,
+  StatelessWidget,
+  Widget
+} from './widgets/widget.ts';
 import { Wrap } from './widgets/wrap.ts';
 import type { DocumentOptions } from './widgets/document.ts';
 
@@ -120,7 +140,11 @@ export {
   Anchor,
   Annotation,
   AnnotationBuilder,
+  AnnotationCircle,
+  AnnotationInk,
   AnnotationLink,
+  AnnotationPolygon,
+  AnnotationSquare,
   AnnotationUrl,
   AspectRatio,
   BarcodeFactory as Barcode,
@@ -144,6 +168,8 @@ export {
   CartesianFrame,
   CartesianGrid,
   Center,
+  Circle,
+  CircleAnnotation,
   CircularProgressIndicator,
   Chart,
   ChartFrame,
@@ -160,8 +186,10 @@ export {
   CustomPaint,
   Dataset,
   DefaultTextStyle,
+  DelayedWidget,
   DecoratedBox,
   Divider,
+  Directionality,
   Document,
   EdgeInsets,
   Expanded,
@@ -172,12 +200,14 @@ export {
   Flexible,
   FlatButton,
   Font,
+  Footer,
   FlutterLogo,
   FixedAxis,
   FractionColumnWidth,
   FullPage,
   Gradient,
   GridAxis,
+  GridPaper,
   GridView,
   Header,
   Icon,
@@ -186,9 +216,16 @@ export {
   Image,
   ImageProvider,
   ImageProxy,
+  Inherited,
+  InheritedDirectionality,
+  InheritedWidget,
+  InkAnnotation,
+  InkList,
+  Inseparable,
   IntrinsicColumnWidth,
   LayoutBuilder,
   Link,
+  ListView,
   LineDataSet,
   LimitedBox,
   LinearProgressIndicator,
@@ -197,7 +234,9 @@ export {
   LoremText,
   MemoryImage,
   MultiPage,
+  NewPage,
   Opacity,
+  Outline,
   OverflowBox,
   Padding,
   Paragraph,
@@ -217,6 +256,9 @@ export {
   PieGrid,
   PointChartValue,
   PointDataSet,
+  Polygon,
+  PolygonAnnotation,
+  PolyLineAnnotation,
   RadialFrame,
   RadialGradient,
   RadialGrid,
@@ -248,8 +290,12 @@ export {
   Transform,
   UrlLink,
   RawImage,
+  Rectangle,
+  Shape,
+  SquareAnnotation,
   Vector,
   VerticalDivider,
+  Watermark,
   Widget,
   WidgetSpan,
   Wrap
@@ -281,7 +327,15 @@ export type {
   AnnotationLayoutData,
   AnnotationOptions,
   AnnotationRect,
-  LinkOptions
+  GeometricAnnotationOptions,
+  InkAnnotationBuilderOptions,
+  InkAnnotationOptions,
+  LinkOptions,
+  OutlineOptions,
+  PdfBorder,
+  PointAnnotationOptions,
+  PolygonAnnotationOptions,
+  ShapeAnnotationOptions
 } from './widgets/annotations.ts';
 
 export type { ColorInput, Rgb } from './pdf/color.ts';
@@ -355,7 +409,14 @@ export type {
   PositionedBox,
   RenderContext,
   SpanLayout,
-  StatelessLayoutData
+  StatelessLayoutData,
+  DelayedWidgetLayoutData,
+  DelayedWidgetOptions,
+  DelayedWidgetState,
+  InheritedWidgetLayoutData,
+  InheritedWidgetOptions,
+  InheritedWidgetState,
+  InseparableOptions
 } from './widgets/widget.ts';
 export type {
   AlignLayoutData,
@@ -397,6 +458,8 @@ export type {
   FlexFit,
   FlexLayoutData,
   FlexOptions,
+  IndexedWidgetBuilder,
+  ListViewOptions,
   MainAxisAlignment,
   MainAxisSize,
   RowOptions,
@@ -408,7 +471,9 @@ export type {
   BulletOptions,
   HeaderOptions,
   ParagraphOptions,
-  TableOfContentOptions
+  TableOfContentOptions,
+  FooterOptions,
+  WatermarkOptions
 } from './widgets/content.ts';
 export type { BarDataSetOptions } from './widgets/chart/bar_chart.ts';
 export type {
@@ -551,11 +616,21 @@ export type {
   TextSpanOptions,
   WidgetSpanOptions
 } from './widgets/text.ts';
-export type { VectorApi, VectorOptions } from './widgets/shape.ts';
+export type {
+  InkListOptions,
+  PaintedShapeOptions,
+  PolygonOptions,
+  VectorApi,
+  VectorOptions
+} from './widgets/shape.ts';
 export type {
   ImageLayoutData,
-  ImageOptions
+  ImageOptions,
+  ShapeLayoutData,
+  ShapeOptions
 } from './widgets/image.ts';
+export type { DirectionalityOptions } from './widgets/directionality.ts';
+export type { GridPaperLayoutData, GridPaperOptions } from './widgets/grid_paper.ts';
 export type {
   IconDataOptions,
   IconOptions,
@@ -578,7 +653,7 @@ export type {
   SvgImageOptions
 } from './widgets/svg.ts';
 export type { PageOptions, Section } from './widgets/page.ts';
-export type { MultiPageOptions } from './widgets/multi_page.ts';
+export type { MultiPageOptions, NewPageOptions } from './widgets/multi_page.ts';
 export type {
   FlutterLogoOptions,
   LoremOptions,
@@ -622,12 +697,23 @@ export interface PublicApi {
   readonly Anchor: typeof Anchor;
   readonly Annotation: typeof Annotation;
   readonly AnnotationBuilder: typeof AnnotationBuilder;
+  readonly AnnotationCircle: typeof AnnotationCircle;
+  readonly AnnotationInk: typeof AnnotationInk;
   readonly AnnotationLink: typeof AnnotationLink;
+  readonly AnnotationPolygon: typeof AnnotationPolygon;
+  readonly AnnotationSquare: typeof AnnotationSquare;
   readonly AnnotationUrl: typeof AnnotationUrl;
+  readonly CircleAnnotation: typeof CircleAnnotation;
+  readonly InkAnnotation: typeof InkAnnotation;
   readonly Link: typeof Link;
+  readonly Outline: typeof Outline;
+  readonly PolygonAnnotation: typeof PolygonAnnotation;
+  readonly PolyLineAnnotation: typeof PolyLineAnnotation;
+  readonly SquareAnnotation: typeof SquareAnnotation;
   readonly UrlLink: typeof UrlLink;
   readonly Page: typeof Page;
   readonly MultiPage: typeof MultiPage;
+  readonly NewPage: typeof NewPage;
   readonly Text: typeof Text;
   readonly InlineSpan: typeof InlineSpan;
   readonly RichText: typeof RichText;
@@ -637,6 +723,8 @@ export interface PublicApi {
   readonly Paragraph: typeof Paragraph;
   readonly Bullet: typeof Bullet;
   readonly TableOfContent: typeof TableOfContent;
+  readonly Footer: typeof Footer;
+  readonly Watermark: typeof Watermark;
   readonly Chart: typeof Chart;
   readonly ChartGrid: typeof ChartGrid;
   readonly ChartFrame: typeof ChartFrame;
@@ -668,6 +756,7 @@ export interface PublicApi {
   readonly Flex: typeof Flex;
   readonly Flexible: typeof Flexible;
   readonly Expanded: typeof Expanded;
+  readonly ListView: typeof ListView;
   readonly Container: typeof Container;
   readonly DecoratedBox: typeof DecoratedBox;
   readonly BoxDecoration: typeof BoxDecoration;
@@ -684,6 +773,7 @@ export interface PublicApi {
   readonly BorderRadiusDirectional: typeof BorderRadiusDirectional;
   readonly Radius: typeof Radius;
   readonly GridView: typeof GridView;
+  readonly GridPaper: typeof GridPaper;
   readonly Stack: typeof Stack;
   readonly Positioned: typeof Positioned;
   readonly PositionedDirectional: typeof PositionedDirectional;
@@ -692,6 +782,11 @@ export interface PublicApi {
   readonly Partitions: typeof Partitions;
   readonly Spacer: typeof Spacer;
   readonly Vector: typeof Vector;
+  readonly Circle: typeof Circle;
+  readonly Rectangle: typeof Rectangle;
+  readonly Polygon: typeof Polygon;
+  readonly InkList: typeof InkList;
+  readonly Shape: typeof Shape;
   readonly Padding: typeof Padding;
   readonly Align: typeof Align;
   readonly Center: typeof Center;
@@ -725,6 +820,12 @@ export interface PublicApi {
   readonly FractionColumnWidth: typeof FractionColumnWidth;
   readonly TableHelper: typeof TableHelper;
   readonly SpanningWidget: typeof SpanningWidget;
+  readonly Inherited: typeof Inherited;
+  readonly InheritedWidget: typeof InheritedWidget;
+  readonly Inseparable: typeof Inseparable;
+  readonly DelayedWidget: typeof DelayedWidget;
+  readonly Directionality: typeof Directionality;
+  readonly InheritedDirectionality: typeof InheritedDirectionality;
   readonly Alignment: typeof Alignment;
   readonly BoxConstraints: typeof BoxConstraints;
   readonly EdgeInsets: typeof EdgeInsets;
@@ -760,12 +861,23 @@ const publicApi: PublicApi = Object.freeze({
   Anchor,
   Annotation,
   AnnotationBuilder,
+  AnnotationCircle,
+  AnnotationInk,
   AnnotationLink,
+  AnnotationPolygon,
+  AnnotationSquare,
   AnnotationUrl,
+  CircleAnnotation,
+  InkAnnotation,
   Link,
+  Outline,
+  PolygonAnnotation,
+  PolyLineAnnotation,
+  SquareAnnotation,
   UrlLink,
   Page,
   MultiPage,
+  NewPage,
   Text,
   InlineSpan,
   RichText,
@@ -775,6 +887,8 @@ const publicApi: PublicApi = Object.freeze({
   Paragraph,
   Bullet,
   TableOfContent,
+  Footer,
+  Watermark,
   Chart,
   ChartGrid,
   ChartFrame,
@@ -806,6 +920,7 @@ const publicApi: PublicApi = Object.freeze({
   Flex,
   Flexible,
   Expanded,
+  ListView,
   Container,
   DecoratedBox,
   BoxDecoration,
@@ -822,6 +937,7 @@ const publicApi: PublicApi = Object.freeze({
   BorderRadiusDirectional,
   Radius,
   GridView,
+  GridPaper,
   Stack,
   Positioned,
   PositionedDirectional,
@@ -830,6 +946,11 @@ const publicApi: PublicApi = Object.freeze({
   Partitions,
   Spacer,
   Vector,
+  Circle,
+  Rectangle,
+  Polygon,
+  InkList,
+  Shape,
   Padding,
   Align,
   Center,
@@ -863,6 +984,12 @@ const publicApi: PublicApi = Object.freeze({
   FractionColumnWidth,
   TableHelper,
   SpanningWidget,
+  Inherited,
+  InheritedWidget,
+  Inseparable,
+  DelayedWidget,
+  Directionality,
+  InheritedDirectionality,
   Alignment,
   BoxConstraints,
   EdgeInsets,

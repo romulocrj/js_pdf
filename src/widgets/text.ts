@@ -1,10 +1,10 @@
 /*
- * Ported to JavaScript from DavBfr/dart_pdf.
+ * Ported to JavaScript from https://github.com/DavBfr/dart_pdf
  *
  * Original work:
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
- * JavaScript port:
+ * JavaScript port: https://github.com/romulocrj/js_pdf
  * Copyright (C) 2026, Romulo Campos
  *
  * This file has been substantially modified from the original Dart source.
@@ -33,6 +33,7 @@ import { defaultPdfFont } from '../pdf/font/type1_fonts.ts';
 import { BoxConstraints, normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import type { AnnotationBuilder } from './annotations.ts';
+import { Directionality } from './directionality.ts';
 import { DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT, TextStyle } from './text_style.ts';
 import type { TextDecorationName } from './text_style.ts';
 import { SpanningWidget } from './widget.ts';
@@ -167,7 +168,7 @@ export class WidgetSpan extends InlineSpan {
 export interface RichTextOptions {
   readonly text: InlineSpan;
   readonly textAlign?: TextAlign | null;
-  readonly textDirection?: TextDirection;
+  readonly textDirection?: TextDirection | null;
   readonly softWrap?: boolean | null;
   readonly tightBounds?: boolean;
   readonly textScaleFactor?: number;
@@ -183,7 +184,7 @@ export interface TextOptions {
   readonly color?: ColorInput;
   readonly align?: TextAlign;
   readonly textAlign?: TextAlign;
-  readonly textDirection?: TextDirection;
+  readonly textDirection?: TextDirection | null;
   readonly softWrap?: boolean;
   readonly tightBounds?: boolean;
   readonly textScaleFactor?: number;
@@ -262,6 +263,7 @@ export interface RichTextLayoutData {
   readonly lines: readonly RichTextLineLayout[];
   readonly contentWidth: number;
   readonly clip: boolean;
+  readonly textDirection: TextDirection;
 }
 
 export interface RichTextState {
@@ -511,7 +513,7 @@ function rebaseLines(lines: readonly RichTextLineLayout[], top: number): RichTex
 export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> {
   readonly text: InlineSpan;
   readonly textAlign: TextAlign | null;
-  readonly textDirection: TextDirection;
+  readonly textDirection: TextDirection | null;
   readonly softWrap: boolean | null;
   readonly tightBounds: boolean;
   readonly textScaleFactor: number;
@@ -522,7 +524,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
   constructor({
     text,
     textAlign = null,
-    textDirection = 'ltr',
+    textDirection = null,
     softWrap = null,
     tightBounds = false,
     textScaleFactor = 1,
@@ -670,8 +672,9 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
       : Math.max(0, minContentWidth, ...limited.map(line => line.width));
     let y = 0;
     const lines: RichTextLineLayout[] = [];
+    const textDirection = this.textDirection ?? Directionality.of(context);
     for (const line of limited) {
-      const positioned = positionLine(line, y, targetWidth, align, this.textDirection);
+      const positioned = positionLine(line, y, targetWidth, align, textDirection);
       lines.push(positioned);
       y += positioned.height;
     }
@@ -727,7 +730,8 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
         data: {
           lines: selected,
           contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
-          clip: effectiveOverflow === 'clip' || naturalHeight > size.height + 0.00001
+          clip: effectiveOverflow === 'clip' || naturalHeight > size.height + 0.00001,
+          textDirection: this.textDirection ?? Directionality.of(context)
         }
       },
       nextState: { lineIndex: end },
@@ -763,7 +767,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
           run.annotation.build(context, { x, y, width: run.width, height: run.height });
         }
         if (run.style.background !== null && run.width > 0) {
-          run.style.background.paint(context, x, y, run.width, run.height, 'all', this.textDirection);
+          run.style.background.paint(context, x, y, run.width, run.height, 'all', box.data.textDirection);
         }
       }
     }
@@ -823,7 +827,7 @@ export class Text extends RichText {
     color = undefined,
     align = undefined,
     textAlign = undefined,
-    textDirection = 'ltr',
+    textDirection = null,
     softWrap = undefined,
     tightBounds = false,
     textScaleFactor = 1,

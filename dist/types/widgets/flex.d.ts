@@ -1,5 +1,5 @@
 import type { Insets, InsetsInput } from './geometry.ts';
-import { SpanningWidget, Widget } from './widget.ts';
+import { SpanningWidget, StatelessWidget, Widget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext, SpanLayout } from './widget.ts';
 export type Axis = 'horizontal' | 'vertical';
 export type FlexFit = 'tight' | 'loose';
@@ -88,4 +88,39 @@ export declare class Row extends Flex {
 }
 export declare class Column extends Flex {
     constructor(options?: ColumnOptions);
+}
+export type IndexedWidgetBuilder = (context: RenderContext, index: number) => AnyWidget;
+export interface ListViewOptions {
+    readonly direction?: Axis;
+    readonly reverse?: boolean;
+    readonly spacing?: number | null;
+    readonly padding?: InsetsInput | null;
+    readonly children?: readonly AnyWidget[];
+    readonly itemBuilder?: IndexedWidgetBuilder | null;
+    readonly separatorBuilder?: IndexedWidgetBuilder | null;
+    readonly itemCount?: number;
+}
+/** A flex list that can be supplied eagerly, by builder, or with separators. */
+export declare class ListView extends StatelessWidget {
+    readonly direction: Axis;
+    readonly reverse: boolean;
+    readonly spacing: number | null;
+    readonly padding: InsetsInput | null;
+    readonly children: readonly AnyWidget[] | null;
+    readonly itemBuilder: IndexedWidgetBuilder | null;
+    readonly separatorBuilder: IndexedWidgetBuilder | null;
+    readonly itemCount: number;
+    constructor({ direction, reverse, spacing, padding, children, itemBuilder, separatorBuilder, itemCount }?: ListViewOptions);
+    static builder(options: Omit<ListViewOptions, 'children' | 'separatorBuilder'> & {
+        readonly itemBuilder: IndexedWidgetBuilder;
+        readonly itemCount: number;
+    }): ListView;
+    static separated(options: Omit<ListViewOptions, 'children' | 'spacing'> & {
+        readonly itemBuilder: IndexedWidgetBuilder;
+        readonly separatorBuilder: IndexedWidgetBuilder;
+        readonly itemCount: number;
+    }): ListView;
+    private item;
+    private separator;
+    build(context: RenderContext): AnyWidget;
 }

@@ -1,10 +1,10 @@
 /*
- * Ported to JavaScript from DavBfr/dart_pdf.
+ * Ported to JavaScript from https://github.com/DavBfr/dart_pdf
  *
  * Original work:
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
- * JavaScript port:
+ * JavaScript port: https://github.com/romulocrj/js_pdf
  * Copyright (C) 2026, Romulo Campos
  *
  * This file has been substantially modified from the original Dart source.
@@ -22,7 +22,8 @@
 
 import { BoxConstraints, normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
-import { SpanningWidget, Widget } from './widget.ts';
+import { Padding, SizedBox } from './basic.ts';
+import { SpanningWidget, StatelessWidget, Widget } from './widget.ts';
 import type {
   AnyLayoutBox,
   AnyWidget,
@@ -500,5 +501,108 @@ export class Row extends Flex {
 export class Column extends Flex {
   constructor(options: ColumnOptions = {}) {
     super({ ...options, direction: 'vertical' });
+  }
+}
+
+export type IndexedWidgetBuilder = (context: RenderContext, index: number) => AnyWidget;
+
+export interface ListViewOptions {
+  readonly direction?: Axis;
+  readonly reverse?: boolean;
+  readonly spacing?: number | null;
+  readonly padding?: InsetsInput | null;
+  readonly children?: readonly AnyWidget[];
+  readonly itemBuilder?: IndexedWidgetBuilder | null;
+  readonly separatorBuilder?: IndexedWidgetBuilder | null;
+  readonly itemCount?: number;
+}
+
+/** A flex list that can be supplied eagerly, by builder, or with separators. */
+export class ListView extends StatelessWidget {
+  readonly direction: Axis;
+  readonly reverse: boolean;
+  readonly spacing: number | null;
+  readonly padding: InsetsInput | null;
+  readonly children: readonly AnyWidget[] | null;
+  readonly itemBuilder: IndexedWidgetBuilder | null;
+  readonly separatorBuilder: IndexedWidgetBuilder | null;
+  readonly itemCount: number;
+
+  constructor({
+    direction = 'vertical',
+    reverse = false,
+    spacing = 0,
+    padding = null,
+    children = [],
+    itemBuilder = null,
+    separatorBuilder = null,
+    itemCount = undefined
+  }: ListViewOptions = {}) {
+    super();
+    this.direction = direction;
+    this.reverse = Boolean(reverse);
+    this.spacing = spacing === null ? null : finiteNonNegative(Number(spacing), 'spacing');
+    this.padding = padding;
+    this.children = itemBuilder === null ? children : null;
+    this.itemBuilder = itemBuilder;
+    this.separatorBuilder = separatorBuilder;
+    this.itemCount = itemCount === undefined ? children.length : Math.trunc(Number(itemCount));
+    if (this.itemCount < 0 || !Number.isFinite(this.itemCount)) {
+      throw new RangeError('ListView.itemCount must be a finite non-negative integer');
+    }
+    if (this.children === null && this.itemBuilder === null) {
+      throw new TypeError('ListView.builder requires itemBuilder');
+    }
+    if (this.spacing === null && this.separatorBuilder === null) {
+      throw new TypeError('ListView.separated requires separatorBuilder');
+    }
+  }
+
+  static builder(options: Omit<ListViewOptions, 'children' | 'separatorBuilder'> & {
+    readonly itemBuilder: IndexedWidgetBuilder;
+    readonly itemCount: number;
+  }): ListView {
+    return new ListView({ ...options, children: [], separatorBuilder: null });
+  }
+
+  static separated(options: Omit<ListViewOptions, 'children' | 'spacing'> & {
+    readonly itemBuilder: IndexedWidgetBuilder;
+    readonly separatorBuilder: IndexedWidgetBuilder;
+    readonly itemCount: number;
+  }): ListView {
+    return new ListView({ ...options, children: [], spacing: null });
+  }
+
+  private item(context: RenderContext, index: number): AnyWidget {
+    return this.children === null ? this.itemBuilder!(context, index) : this.children[index]!;
+  }
+
+  private separator(context: RenderContext, index: number): AnyWidget {
+    if (this.spacing === null) return this.separatorBuilder!(context, index);
+    return this.direction === 'vertical'
+      ? new SizedBox({ height: this.spacing })
+      : new SizedBox({ width: this.spacing });
+  }
+
+  override build(context: RenderContext): AnyWidget {
+    const children: AnyWidget[] = [];
+    const indexes = Array.from({ length: this.itemCount }, (_, index) => index);
+    if (this.reverse) indexes.reverse();
+    for (let position = 0; position < indexes.length; position++) {
+      const index = indexes[position]!;
+      children.push(this.item(context, index));
+      if (position < indexes.length - 1 && this.spacing !== 0) {
+        children.push(this.separator(context, index));
+      }
+    }
+    const list = new Flex({
+      direction: this.direction,
+      mainAxisAlignment: 'start',
+      mainAxisSize: 'max',
+      crossAxisAlignment: 'center',
+      verticalDirection: 'down',
+      children
+    });
+    return this.padding === null ? list : new Padding({ padding: this.padding, child: list });
   }
 }

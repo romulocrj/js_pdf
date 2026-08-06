@@ -21,7 +21,7 @@ clipping and PDF shading-pattern gradients, tables lay out fixed, intrinsic and
 flexible tracks across as many pages as their rows require, and raster images
 flow through the public `Image` widget/provider surface.
 
-**Phases 0 through 5.6 are complete.** The
+**Phases 0 through 5.7 are complete.** The
 foundations, layout system, SVG/raster pipelines and every API required by the
 ported upstream examples are in place; all eight examples now generate.
 
@@ -145,6 +145,16 @@ now receives a complete themed render context and page background/foreground
 layers paint on every physical page. `resume.pdf` generates 74,273 bytes and
 the complete upstream example gate reaches 8/8 with zero missing APIs.
 
+**Phase 5.7 — remaining widgets — landed 2026-08-06.** The retained public
+surface now includes `Inseparable`, `NewPage`, `ListView`, `Watermark`,
+`Footer`, `Directionality`, all `GridPaper` presets, vector shape widgets,
+SVG path-data `Shape`, five geometric annotation widgets, `Outline`,
+`InheritedWidget` and `DelayedWidget`. Native square, circle, polygon,
+polyline and ink annotations serialize into each page's `/Annots` array.
+Six focused tests and `examples/widgets-phase-5.7.mjs` cover every added widget.
+`Signature` remains intentionally out of scope with encryption and digital
+signatures.
+
 **Upstream example parity follow-up — landed 2026-08-06.** Comparison against
 the retained original PDFs completed the pure continuation protocol for
 `Flex`/`Column`, `Container` and `StatelessWidget`; `MultiPage` now measures a
@@ -227,13 +237,13 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **The implementation roadmap is complete through phase 5.6.** Remaining
+> **The implementation roadmap is complete through phase 5.7.** Remaining
 > omissions are either explicitly out of scope or narrower gaps recorded in
 > [PORTING-STATUS.md](PORTING-STATUS.md); define a new phase before expanding
 > scope.
 
-Phase 5.6 is complete: interactive forms, page labels, keywords and XMP are in,
-and the complete upstream example set still generates end to end.
+Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
+out of scope, and the complete upstream example set still generates end to end.
 
 ---
 
@@ -293,7 +303,7 @@ npm run examples     # build, then try to generate all of them
 Successful runs write `examples/out/<name>.pdf`; failures land in
 `examples/generation-results.json` with the list of missing APIs, and one
 failure does not stop the rest. During implementation, a non-zero exit was the
-expected capability signal. With phase 5.6 complete, the current run must exit
+expected capability signal. With phase 5.7 complete, the current run must exit
 zero with all eight examples generated.
 
 Every phase below carries an **Example gate** line naming the examples it
@@ -338,7 +348,8 @@ not need another gallery:
 Phases 2.8, every 3.x and 4.x phase, and every 5.x phase now have a dedicated
 visual PDF. Metadata, XMP and viewer page labels from 5.6 are object-level
 features, so focused serialization tests cover them; only the form controls add
-a new visual proof.
+a visual proof there. Phase 5.7 adds both the three-page remaining-widget
+gallery and the retained production pagination regression.
 
 ---
 
@@ -591,11 +602,11 @@ Landed with the four font slots (`fontNormal`/`fontBold`/`fontItalic`/
 `fontBoldItalic`) that make `fontWeight` and `fontStyle` work, `TextStyle.merge`
 with upstream's `inherit` rule, and the full `ThemeData` style set.
 
-The port has no `InheritedWidget` and no `Context.dependsOn`. **Inherited values
-ride on the render context instead:** `RenderContext` gained a `theme` field, and
-`Theme` and `DefaultTextStyle` lay out and paint their child with a context
-carrying a different one. That is the same scoping with none of the machinery,
-and `Theme.of(context)` is a field read.
+The initial port scoped only theme values directly on `RenderContext`. Phase
+5.7 added the general `Inherited`/`InheritedWidget` surface while retaining
+immutable context maps instead of upstream's dependency registration.
+`Theme.of(context)` remains a direct field read; custom inherited values and
+`Directionality` use the general scoped map.
 
 Other divergences worth knowing:
 
@@ -1179,8 +1190,9 @@ direct CMYK incorrectly; the correction and reproduction are recorded in
 
 ## Phase 5 — document features
 
-The remaining five examples land across phases 5.1–5.5. Phase 5.3 unlocks both
-`document` and `server`, while phase 5.4 prepares `resume` for completion in 5.5.
+The remaining five examples land across phases 5.1–5.5. Phase 5.6 adds document
+metadata and forms, and phase 5.7 closes the retained widget surface that those
+examples did not exercise.
 
 ### 5.1 Charts ⇒ `report` ✅
 
@@ -1273,6 +1285,30 @@ The remaining five examples land across phases 5.1–5.5. Phase 5.3 unlocks both
 - `examples/forms-phase-5.6.mjs` is the retained visual proof; metadata, XMP and
   page labels have focused object-serialization tests because they do not alter
   page drawing.
+- **Example gate:** none — all eight upstream examples already generated before
+  this phase.
+
+### 5.7 Remaining widgets ✅ *(landed 2026-08-06)*
+
+- **Ports:** `widgets/widget.dart`, `multi_page.dart`, `flex.dart`,
+  `content.dart`, `text_style.dart`, `grid_paper.dart`, `shape.dart`,
+  `image.dart`, `annotations.dart` and geometric support from
+  `obj/annotation.dart`.
+- `Inseparable` keeps a heading and chart together during `MultiPage` layout;
+  `NewPage` adds unconditional or remaining-space page breaks; `ListView`
+  supports eager children, builders and separators.
+- `Watermark`, `Footer`, `Directionality`, `InheritedWidget`, `DelayedWidget`,
+  all five `GridPaper` presets, `Circle`, `Rectangle`, `Polygon`, `InkList` and
+  path-data `Shape` complete the remaining visual/composition surface.
+- `SquareAnnotation`, `CircleAnnotation`, `PolygonAnnotation`,
+  `PolyLineAnnotation`, `InkAnnotation` and `Outline` emit native PDF
+  annotation/navigation objects while retaining visible widget content.
+- `examples/widgets-phase-5.7.mjs` is the retained three-page visual proof and
+  exercises every widget added by this phase. The English-only
+  `examples/production-pagination.mjs` is the production regression proof for
+  `Inseparable`.
+- `Signature` is not ported: it depends on encryption and digital signatures,
+  which remain outside this project's scope.
 - **Example gate:** none — all eight upstream examples already generated before
   this phase.
 

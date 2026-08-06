@@ -1,10 +1,10 @@
 /*
- * Ported to JavaScript from DavBfr/dart_pdf.
+ * Ported to JavaScript from https://github.com/DavBfr/dart_pdf
  *
  * Original work:
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
- * JavaScript port:
+ * JavaScript port: https://github.com/romulocrj/js_pdf
  * Copyright (C) 2026, Romulo Campos
  *
  * This file has been substantially modified from the original Dart source.
@@ -23,7 +23,8 @@ import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput, Rgb } from '../pdf/color.ts';
 import { PageUnit } from '../pdf/page_format.ts';
 import type { PdfOutlineStyle } from '../pdf/obj/outline.ts';
-import { Divider, Padding, SizedBox } from './basic.ts';
+import { Divider, FittedBox, LayoutBuilder, Padding, SizedBox, Transform } from './basic.ts';
+import type { BoxFit } from './svg.ts';
 import { Border, BorderSide } from './box_border.ts';
 import { Container } from './container.ts';
 import { BoxDecoration } from './decoration.ts';
@@ -34,6 +35,7 @@ import { Link } from './annotations.ts';
 import { Text } from './text.ts';
 import type { TextAlign } from './text.ts';
 import type { TextStyle } from './text_style.ts';
+import { TextStyle as ConcreteTextStyle } from './text_style.ts';
 import { StatelessWidget } from './widget.ts';
 import type {
   AnyWidget,
@@ -307,5 +309,108 @@ export class TableOfContent extends StatelessWidget {
     }));
 
     return new Column({ crossAxisAlignment: 'start', mainAxisSize: 'min', children: rows });
+  }
+}
+
+export interface WatermarkOptions {
+  readonly child: AnyWidget;
+  readonly fit?: BoxFit;
+  readonly angle?: number;
+}
+
+/** Expands, fits and rotates a child across the available box. */
+export class Watermark extends StatelessWidget {
+  readonly child: AnyWidget;
+  readonly fit: BoxFit;
+  readonly angle: number;
+
+  constructor({ child, fit = 'contain', angle = 0 }: WatermarkOptions) {
+    super();
+    this.child = child;
+    this.fit = fit;
+    this.angle = Number(angle);
+  }
+
+  static text(
+    text: string,
+    { style = null, fit = 'contain', angle = Math.PI / 4 }: {
+      readonly style?: TextStyle | null;
+      readonly fit?: BoxFit;
+      readonly angle?: number;
+    } = {}
+  ): Watermark {
+    return new Watermark({
+      fit,
+      angle,
+      child: new Text(text, {
+        style: style ?? new ConcreteTextStyle({ color: '#eeeeee', fontWeight: 'bold' })
+      })
+    });
+  }
+
+  override build(_context: RenderContext): AnyWidget {
+    return new LayoutBuilder({
+      builder: (_context, constraints) => new SizedBox({
+        width: constraints.maxWidth,
+        height: constraints.maxHeight,
+        child: new FittedBox({
+          fit: this.fit,
+          child: new Transform({ rotateBox: this.angle, child: this.child })
+        })
+      })
+    });
+  }
+}
+
+export interface FooterOptions {
+  readonly leading?: AnyWidget | null;
+  readonly title?: AnyWidget | null;
+  readonly trailing?: AnyWidget | null;
+  readonly margin?: InsetsInput;
+  readonly padding?: InsetsInput;
+  readonly decoration?: BoxDecorationInput | null;
+}
+
+/** Three-part footer laid out with space between its slots. */
+export class Footer extends StatelessWidget {
+  readonly leading: AnyWidget | null;
+  readonly title: AnyWidget | null;
+  readonly trailing: AnyWidget | null;
+  readonly margin: InsetsInput;
+  readonly padding: InsetsInput;
+  readonly decoration: BoxDecorationInput | null;
+
+  constructor({
+    leading = null,
+    title = null,
+    trailing = null,
+    margin = 0,
+    padding = 0,
+    decoration = null
+  }: FooterOptions = {}) {
+    super();
+    this.leading = leading;
+    this.title = title;
+    this.trailing = trailing;
+    this.margin = margin;
+    this.padding = padding;
+    this.decoration = decoration;
+  }
+
+  override build(_context: RenderContext): AnyWidget {
+    return new Container({
+      margin: this.margin,
+      padding: this.padding,
+      decoration: this.decoration,
+      child: new Row({
+        mainAxisSize: 'max',
+        mainAxisAlignment: 'spaceBetween',
+        children: [
+          this.leading ?? new SizedBox(),
+          this.title ?? new SizedBox(),
+          this.trailing ?? new SizedBox()
+        ]
+      })
+    });
   }
 }

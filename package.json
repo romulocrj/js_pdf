@@ -1,6 +1,6 @@
 {
   "name": "js_pdf",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "JavaScript port of DavBfr/dart_pdf. Dependency-free PDF composition for pure ECMAScript hosts (browser importmap, ClearScript, Node).",
   "type": "module",
   "license": "Apache-2.0",
@@ -61,6 +61,7 @@
     "example": "npm run build && node examples/run-example.mjs",
     "examples": "npm run build && node examples/run-upstream-examples.mjs",
     "phase-examples": "npm run build && node examples/run-phase-examples.mjs",
+    "example:production-pagination": "npm run build && node examples/run-production-pagination.mjs",
     "verify": "npm run check && npm run build && npm test"
   },
   "devDependencies": {

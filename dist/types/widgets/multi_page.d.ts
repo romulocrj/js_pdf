@@ -6,7 +6,19 @@ import { PageTheme } from './page_theme.ts';
 import type { PageOrientation } from './page_theme.ts';
 import type { Section } from './page.ts';
 import type { ThemeData } from './theme.ts';
-import type { AnyWidget, DocumentContext, RenderContext } from './widget.ts';
+import { Widget } from './widget.ts';
+import type { AnyWidget, Constraints, DocumentContext, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
+export interface NewPageOptions {
+    readonly freeSpace?: number | null;
+}
+/** Triggers a page break, optionally only below a remaining-space threshold. */
+export declare class NewPage extends Widget<null> {
+    readonly freeSpace: number | null;
+    constructor({ freeSpace }?: NewPageOptions);
+    newPageNeeded(availableSpace: number): boolean;
+    layout(_context: RenderContext, _constraints: Constraints): LayoutBox<null>;
+    paint(_context: RenderContext, _box: PositionedBox<null>): void;
+}
 export interface MultiPageOptions {
     /** Everything about each physical page but its body. */
     readonly pageTheme?: PageTheme;

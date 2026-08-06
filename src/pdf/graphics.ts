@@ -1,10 +1,10 @@
 /*
- * Ported to JavaScript from DavBfr/dart_pdf.
+ * Ported to JavaScript from https://github.com/DavBfr/dart_pdf
  *
  * Original work:
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
- * JavaScript port:
+ * JavaScript port: https://github.com/romulocrj/js_pdf
  * Copyright (C) 2026, Romulo Campos
  *
  * This file has been substantially modified from the original Dart source.
@@ -232,6 +232,11 @@ export class PdfCanvas {
   /** Clickable rectangles registered while this page was painted. */
   get annotations(): readonly PdfAnnotationSpec[] {
     return this.pageAnnotations;
+  }
+
+  /** Registers an annotation whose coordinates are already in PDF space. */
+  addAnnotation(annotation: PdfAnnotationSpec): void {
+    this.pageAnnotations.push(annotation);
   }
 
   addUrlLink(destination: string, x: number, top: number, width: number, height: number): void {

@@ -118,6 +118,8 @@ isolate one feature family at a time.
 | [icons-phase-5.4.mjs](examples/icons-phase-5.4.mjs) | Focused | Material icon font, inherited icon theme and RTL mirroring |
 | [progress-phase-5.5.mjs](examples/progress-phase-5.5.mjs) | Focused | Circular and linear progress indicators |
 | [forms-phase-5.6.mjs](examples/forms-phase-5.6.mjs) | Focused | Text, choice, checkbox and button AcroForm fields plus metadata/page labels |
+| [widgets-phase-5.7.mjs](examples/widgets-phase-5.7.mjs) | Focused | Atomic pagination, lists, shapes, grid paper, context, watermarks/footers, outlines and geometric annotations |
+| [production-pagination.mjs](examples/production-pagination.mjs) | Project | English production-sized report proving a chart title and chart stay together with `Inseparable` |
 
 Runners:
 
@@ -126,6 +128,9 @@ Runners:
   eight retained upstream examples independently.
 - [run-phase-examples.mjs](examples/run-phase-examples.mjs) generates all
   focused phase examples.
+- [run-production-pagination.mjs](examples/run-production-pagination.mjs)
+  generates the production pagination proof with
+  `npm run example:production-pagination`.
 
 ## Translating familiar dart_pdf patterns
 
@@ -181,6 +186,25 @@ Headers and footers belong to `MultiPage.header` and `MultiPage.footer`. The
 render context exposes `pageNumber`, `pagesCount`, `pageLabel`, `pageFormat` and
 the active theme.
 
+Wrap content that must move as one unit in `Inseparable`. This is the correct
+parent for a heading and chart that must never be split across pages:
+
+```js
+new pw.Inseparable({
+  child: new pw.Column({
+    children: [
+      new pw.Text('Area chart'),
+      new pw.SizedBox({ height: 8 }),
+      new pw.Container({ height: 210, child: chart })
+    ]
+  })
+})
+```
+
+The complete block must fit within one page's content area. Use `NewPage()` for
+an unconditional break, or `NewPage({ freeSpace: 200 })` to break only when
+less than 200 points remain.
+
 ## Layout vocabulary
 
 Prefer the same composition strategy used by `dart_pdf`:
@@ -191,7 +215,7 @@ Prefer the same composition strategy used by `dart_pdf`:
 - `Container`, `Padding`, `Align`, `Center`, `SizedBox` and `ConstrainedBox` for
   sizing and decoration.
 - `Stack` and `Positioned` for overlays.
-- `Wrap`, `GridView` and `Partitions` for repeated or parallel layouts.
+- `Wrap`, `GridView`, `ListView` and `Partitions` for repeated or parallel layouts.
 - `Table` for widget cells, or `TableHelper.fromTextArray` for scalar data.
 - `Header`, `Paragraph`, `Bullet` and `TableOfContent` for long documents.
 
@@ -404,7 +428,8 @@ features, while checking the TypeScript declarations for exact constructors:
 - Navigation: `UrlLink`, `Link`, `Anchor`, headers, outlines and table of content.
 - Forms: `TextField`, `ChoiceField`, `Checkbox` and `FlatButton`.
 - Decorations: borders, radii, gradients, opacity, clipping and vector shadows.
-- Utility widgets: icons, progress indicators, placeholders and logos.
+- Utility widgets: icons, progress indicators, placeholders, logos,
+  `Watermark`, `Footer`, `GridPaper`, shapes and geometric annotations.
 - Metadata: title, author, subject, keywords, caller-supplied XMP and page labels.
 
 ## Important differences and limits
@@ -416,9 +441,6 @@ features, while checking the TypeScript declarations for exact constructors:
 - Encryption, digital signatures and `Signature` are out of scope.
 - Full Unicode bidi reordering and Arabic shaping are not implemented.
 - SVG text and embedded SVG raster images are not implemented.
-- `ListView`, `Watermark`, the `Footer` widget and `GridPaper` are not ported.
-  Use `Column`/`MultiPage`, page layers or the `MultiPage.footer` callback where
-  appropriate.
 - An indivisible widget or table row taller than a complete page cannot paginate.
 
 ## Output handling

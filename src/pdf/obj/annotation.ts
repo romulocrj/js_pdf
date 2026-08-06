@@ -1,10 +1,10 @@
 /*
- * Ported to JavaScript from DavBfr/dart_pdf.
+ * Ported to JavaScript from https://github.com/DavBfr/dart_pdf
  *
  * Original work:
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
- * JavaScript port:
+ * JavaScript port: https://github.com/romulocrj/js_pdf
  * Copyright (C) 2026, Romulo Campos
  *
  * This file has been substantially modified from the original Dart source.
@@ -14,9 +14,8 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/obj/annotation.dart
  *
- * Link annotations landed in phase 5.3. Phase 5.6 adds the four form-field
- * kinds used by widgets/forms.dart; text notes and geometric annotations are
- * still omitted because no retained widget consumes them.
+ * Link annotations landed in phase 5.3, form fields in phase 5.6, and phase
+ * 5.7 adds the geometric annotations consumed by the remaining widgets.
  */
 
 import { PdfArray } from '../format/array.ts';
@@ -46,6 +45,23 @@ export interface PdfNamedLinkAnnotation {
 }
 
 export type PdfLinkAnnotation = PdfUrlLinkAnnotation | PdfNamedLinkAnnotation;
+
+export type PdfGeometricAnnotationKind = 'square' | 'circle' | 'polygon' | 'polyline' | 'ink';
+
+export interface PdfGeometricAnnotation {
+  readonly kind: 'geometric';
+  readonly shape: PdfGeometricAnnotationKind;
+  readonly rect: PdfRect;
+  readonly points?: readonly { readonly x: number; readonly y: number }[];
+  readonly inkList?: readonly (readonly { readonly x: number; readonly y: number }[])[];
+  readonly color?: Rgb | null;
+  readonly interiorColor?: Rgb | null;
+  readonly borderWidth?: number;
+  readonly author?: string | null;
+  readonly subject?: string | null;
+  readonly content?: string | null;
+  readonly date?: string | null;
+}
 
 export type PdfFormFieldType = 'text' | 'choice' | 'checkbox' | 'button';
 export type PdfFormHighlighting = 'none' | 'invert' | 'outline' | 'push' | 'toggle';
@@ -97,7 +113,7 @@ export interface PdfFormFieldAnnotation {
   readonly appearances?: PdfFormAppearances;
 }
 
-export type PdfAnnotationSpec = PdfLinkAnnotation | PdfFormFieldAnnotation;
+export type PdfAnnotationSpec = PdfLinkAnnotation | PdfFormFieldAnnotation | PdfGeometricAnnotation;
 
 /** One invisible clickable rectangle in a page's `/Annots` array. */
 export class PdfAnnotation extends PdfObject<PdfDict> {
@@ -126,6 +142,10 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
       this.prepareForm(this.annotation);
       return;
     }
+    if (this.annotation.kind === 'geometric') {
+      this.prepareGeometric(this.annotation);
+      return;
+    }
     const { rect, destination, kind } = this.annotation;
     this.params.set('/Subtype', new PdfName('/Link'));
     this.params.set('/Rect', PdfArray.fromNum([
@@ -141,6 +161,47 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
       ['/S', new PdfName(kind === 'url' ? '/URI' : '/GoTo')],
       [kind === 'url' ? '/URI' : '/D', new PdfString(destination)]
     ]));
+  }
+
+  private prepareGeometric(annotation: PdfGeometricAnnotation): void {
+    const subtypes: Readonly<Record<PdfGeometricAnnotationKind, string>> = {
+      square: '/Square',
+      circle: '/Circle',
+      polygon: '/Polygon',
+      polyline: '/PolyLine',
+      ink: '/Ink'
+    };
+    this.params.set('/Subtype', new PdfName(subtypes[annotation.shape]));
+    this.params.set('/Rect', PdfArray.fromNum([
+      annotation.rect.x,
+      annotation.rect.y,
+      annotation.rect.x + annotation.rect.width,
+      annotation.rect.y + annotation.rect.height
+    ]));
+    this.params.set('/P', this.page.ref());
+    this.params.set('/F', new PdfNum(4));
+    this.params.set('/BS', new PdfDict([
+      ['/W', new PdfNum(annotation.borderWidth ?? 1)],
+      ['/S', new PdfName('/S')]
+    ]));
+    if (annotation.color !== null && annotation.color !== undefined) {
+      this.params.set('/C', PdfArray.fromNum(annotation.color));
+    }
+    if (annotation.interiorColor !== null && annotation.interiorColor !== undefined) {
+      this.params.set('/IC', PdfArray.fromNum(annotation.interiorColor));
+    }
+    if (annotation.author) this.params.set('/T', new PdfString(annotation.author));
+    if (annotation.subject) this.params.set('/Subj', new PdfString(annotation.subject));
+    if (annotation.content) this.params.set('/Contents', new PdfString(annotation.content));
+    if (annotation.date) this.params.set('/M', new PdfString(annotation.date));
+    if (annotation.points !== undefined) {
+      this.params.set('/Vertices', PdfArray.fromNum(annotation.points.flatMap(point => [point.x, point.y])));
+    }
+    if (annotation.inkList !== undefined) {
+      this.params.set('/InkList', new PdfArray(annotation.inkList.map(points =>
+        PdfArray.fromNum(points.flatMap(point => [point.x, point.y]))
+      )));
+    }
   }
 
   private prepareForm(field: PdfFormFieldAnnotation): void {

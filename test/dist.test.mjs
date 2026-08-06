@@ -13,6 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { banner as BANNER } from '../rollup.config.mjs';
 
 const { version } = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8')
@@ -30,22 +31,6 @@ const skip = ARTIFACTS.every(({ name }) => existsSync(urlOf(name)))
   ? false
   : 'run `npm run build` first';
 
-const BANNER = `/*
- * romulocrj/js_pdf — JavaScript port of DavBfr/dart_pdf.
- *
- * Original work:
- * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
- *
- * JavaScript port:
- * Copyright (C) 2026, Romulo Campos
- *
- * This file has been substantially modified from the original Dart source.
- *
- * Licensed under the Apache License, Version 2.0.
- *
- */
-`;
-
 for (const { name, minified } of ARTIFACTS) {
   test(`${name} is self-contained and host-free`, { skip }, async () => {
     const source = await readFile(urlOf(name), 'utf8');
@@ -55,7 +40,11 @@ for (const { name, minified } of ARTIFACTS) {
       (source.match(/\/\*/g) ?? []).length, 1,
       'the banner must be the only block comment left in the bundle'
     );
-    assert.equal(source.includes('//'), false, 'no line comments in the bundle');
+    assert.equal(
+      /(?:^|[\r\n])\s*\/\//u.test(source),
+      false,
+      'no line comments in the bundle'
+    );
 
     assert.equal(/^\s*import[\s{'"]/m.test(source), false, 'no remaining imports');
     for (const token of ['require(', 'process.', 'node:', 'Buffer.', 'TextEncoder', 'setTimeout', 'fetch(']) {

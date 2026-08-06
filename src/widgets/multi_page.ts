@@ -1,10 +1,10 @@
 /*
- * Ported to JavaScript from DavBfr/dart_pdf.
+ * Ported to JavaScript from https://github.com/DavBfr/dart_pdf
  *
  * Original work:
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
- * JavaScript port:
+ * JavaScript port: https://github.com/romulocrj/js_pdf
  * Copyright (C) 2026, Romulo Campos
  *
  * This file has been substantially modified from the original Dart source.
@@ -31,8 +31,39 @@ import { PageTheme } from './page_theme.ts';
 import type { PageOrientation } from './page_theme.ts';
 import type { Section } from './page.ts';
 import type { ThemeData } from './theme.ts';
-import { SpanningWidget } from './widget.ts';
-import type { AnyWidget, DocumentContext, RenderContext } from './widget.ts';
+import { SpanningWidget, Widget } from './widget.ts';
+import type {
+  AnyWidget,
+  Constraints,
+  DocumentContext,
+  LayoutBox,
+  PositionedBox,
+  RenderContext
+} from './widget.ts';
+
+export interface NewPageOptions {
+  readonly freeSpace?: number | null;
+}
+
+/** Triggers a page break, optionally only below a remaining-space threshold. */
+export class NewPage extends Widget<null> {
+  readonly freeSpace: number | null;
+
+  constructor({ freeSpace = null }: NewPageOptions = {}) {
+    super();
+    this.freeSpace = freeSpace === null ? null : Number(freeSpace);
+  }
+
+  newPageNeeded(availableSpace: number): boolean {
+    return this.freeSpace === null || availableSpace < this.freeSpace;
+  }
+
+  override layout(_context: RenderContext, _constraints: Constraints): LayoutBox<null> {
+    return { widget: this, width: 0, height: 0, data: null };
+  }
+
+  override paint(_context: RenderContext, _box: PositionedBox<null>): void {}
+}
 
 export interface MultiPageOptions {
   /** Everything about each physical page but its body. */
@@ -185,6 +216,11 @@ export class MultiPage implements Section {
     if (!Array.isArray(children)) throw new TypeError('MultiPage.build must return an array of widgets');
 
     for (const child of children) {
+      if (child instanceof NewPage) {
+        if (child.newPageNeeded(page.bottom - page.cursor)) page = startPage();
+        continue;
+      }
+
       if (child instanceof SpanningWidget && child.canSpan) {
         let state: unknown = child.initialSpanState();
         const natural = child.layout(page.context, new BoxConstraints({

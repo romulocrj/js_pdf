@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-06
 **Upstream reference:** `pdf/lib/` — 136 Dart files, ~31,800 lines
-**Ported:** 136 `.ts` files, ~30,500 lines (TypeScript)
+**Ported:** 138 `.ts` files, ~31,900 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -113,7 +113,7 @@ on: an object registers itself with the document, hands out references through
 | `obj/object_stream.dart` | 51 | `src/pdf/obj/object_stream.ts` | partial — no Ascii85 flag, no deflate |
 | `obj/catalog.dart` | 178 | `src/pdf/obj/catalog.ts` | partial — pages, names, outlines, XML metadata, page labels and `/AcroForm`; no PDF/A output intents |
 | `obj/page_list.dart` | 46 | `src/pdf/obj/page_list.ts` | done — flat page tree |
-| `obj/page.dart` | 164 | `src/pdf/obj/page.ts` | partial — `/Resources` inherited from `PdfGraphicStream`, link and form `/Annots`; no `/Rotate` |
+| `obj/page.dart` | 164 | `src/pdf/obj/page.ts` | partial — `/Resources` inherited from `PdfGraphicStream`, link, geometric and form `/Annots`; no `/Rotate` |
 | `obj/info.dart` | 69 | `src/pdf/obj/info.ts` | partial — title, author, subject, keywords, creator and producer; no `/CreationDate` (no clock) |
 | `obj/array.dart` | 30 | — | — |
 | `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; `resourceDict(registry)` returns a `PdfDict` and may create the objects it references |
@@ -124,7 +124,7 @@ on: an object registers itself with the document, hands out references through
 | `obj/image.dart`, `smask.dart` | 347 | `src/pdf/obj/image.ts`, `src/pdf/image/png.ts`, `src/pdf/image/jpeg.ts` | partial — **4.1–4.2 done:** PNG decode, baseline/extended/progressive JPEG pass-through, RGB/gray/CMYK colour spaces and image alpha `/SMask`; generic luminosity form masks remain |
 | `obj/shading.dart`, `pattern.dart`, `function.dart` | 349 | `src/pdf/obj/shading.ts`, `pattern.ts`, `function.ts` | partial — axial/radial DeviceRGB shadings, type-2 interpolation and type-3 stitching, direct shading-pattern dictionaries; no sampled streams or tiling patterns |
 | `obj/names.dart`, `outline.dart` | 296 | `src/pdf/obj/names.ts`, `outline.ts` | done — sorted named destinations and hierarchical outline tree with title, style, colour, siblings and closed descendants |
-| `obj/annotation.dart`, `border.dart` | 1070 | `src/pdf/obj/annotation.ts` | partial — links and text/choice/checkbox/push-button fields with `/AP`; text notes, geometric annotations and custom borders remain |
+| `obj/annotation.dart`, `border.dart` | 1070 | `src/pdf/obj/annotation.ts` | partial — links, square/circle/polygon/polyline/ink annotations and text/choice/checkbox/push-button fields with `/AP`; text notes and the complete custom-border surface remain |
 | `obj/metadata.dart`, `page_label.dart` | 248 | `src/pdf/obj/metadata.ts`, `page_label.ts` | done — caller-supplied UTF-8 XMP and all five page-label styles |
 | `obj/encryption.dart`, `signature.dart` | 151 | — | — |
 | `obj/pdfa/*.dart` | 342 | — | — |
@@ -168,30 +168,30 @@ both the grammar and the shape factories landed in phase 2.5.
 
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
-| `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | partial — pure layout protocol, spanning `StatelessWidget`, immutable continuation state and theme on the render context; no `InheritedWidget` |
+| `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | done — pure layout protocol, spanning `StatelessWidget`, immutable continuation state, `Inherited`/`InheritedWidget`, `DelayedWidget` and `Inseparable` |
 | `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — `BoxConstraints` with factories/transforms, `EdgeInsets`, `Alignment`, `inscribe`; no directional geometry or `TextDirection` |
-| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, font-metric line boxes, between-line spacing, inherited per-run styles, annotations and fallback fonts, wrapping, immutable page continuation, LTR/explicit RTL placement, justification, backgrounds and combined decorations; no Arabic shaping or Unicode bidi reordering |
-| `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — full `Flex`/`Row`/`Column` allocation and vertical continuation, all main/cross alignments, `mainAxisSize`, vertical direction, `Expanded`, `Flexible`, proportional `Spacer`, plus `gap`/weighted-row extensions; no `ListView`, bidi direction or baseline alignment |
+| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts`, `src/widgets/directionality.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, scoped `Directionality`, font-metric line boxes, inherited per-run styles, annotations and fallback fonts, wrapping, immutable page continuation, LTR/explicit RTL placement, justification, backgrounds and combined decorations; no Arabic shaping or Unicode bidi reordering |
+| `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — full `Flex`/`Row`/`Column` allocation and vertical continuation, all main/cross alignments, `mainAxisSize`, vertical direction, `Expanded`, `Flexible`, proportional `Spacer`, eager/builder/separated `ListView`, plus `gap`/weighted-row extensions; no bidi direction or baseline alignment |
 | `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts`, `decoration.ts`, `box_border.ts` | partial — spanning `Container`, `DecoratedBox`, background/foreground `BoxDecoration`, per-side/dashed borders, axial/radial gradients and vector shadows; no decoration image painter yet |
 | `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground; **one document may mix orientations and paper sizes**, per section; no `clip` |
-| `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — global page totals, post-processed header/footer, atomic page breaks, intrinsic-first spanning children, `maxPages` and per-section `orientation` |
+| `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — global page totals, post-processed header/footer, `NewPage`, atomic page breaks, intrinsic-first spanning children, `maxPages` and per-section `orientation` |
 | `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`, metadata/XMP, page labels, theme and per-document font cache; loading is out of scope |
-| `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts`, `src/widgets/svg.ts` | partial — imperative `Vector`; public `SvgImage` with all `BoxFit` modes, alignment, clipping and colour filter; no SVG text or embedded raster content |
+| `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts`, `src/widgets/svg.ts` | partial — `Circle`, `Rectangle`, `Polygon`, `InkList`, imperative `Vector`; public `SvgImage` with all `BoxFit` modes, alignment, clipping and colour filter; no SVG text or embedded raster content |
 | `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | done — all upstream public classes, including tight `SizedBox`, `ConstrainedBox`, minimum-preserving `LimitedBox` and aligned `OverflowBox`; dividers paint the equivalent rule directly |
 | `widgets/table.dart`, `table_helper.dart` | 834 | `src/widgets/table.ts`, `table_helper.ts` | partial — fixed/flex/intrinsic/fraction tracks, alignment, decorations, borders, `TableHelper`, page spanning and repeatable headers; no bidi direction |
 | `widgets/theme.dart`, `font.dart` | 461 | `src/widgets/theme.ts`, `src/widgets/font.ts` | partial — `Font`, `ThemeData`, `Theme`, `DefaultTextStyle` and `iconTheme`; no `DefaultTextStyle.merge` |
-| `widgets/image.dart`, `image_provider.dart` | 423 | `src/widgets/image.ts`, `src/widgets/image_provider.ts` | partial — `Image`, all seven `BoxFit` modes, alignment, DPI-aware decoded PNG/Raw resizing, `ImageProvider`, `ImageProxy`, `MemoryImage`, `RawImage`; bytes are caller-supplied and encoded JPEGs remain pass-through |
+| `widgets/image.dart`, `image_provider.dart` | 423 | `src/widgets/image.ts`, `src/widgets/image_provider.ts` | partial — `Image`, SVG path-data `Shape`, all seven `BoxFit` modes, alignment, DPI-aware decoded PNG/Raw resizing, `ImageProvider`, `ImageProxy`, `MemoryImage`, `RawImage`; bytes are caller-supplied and encoded JPEGs remain pass-through |
 | `widgets/border_radius.dart` | 466 | `src/widgets/border_radius.ts` | done — physical/directional circular or elliptical radii, with oversized radii scaled to a valid path |
 | `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | `src/widgets/stack.ts`, `wrap.ts`, `grid_view.ts`, `partitions.ts` | done — positioned overlays/clipping, multi-run wrap, fixed-track grid and parallel partitions; immutable continuation for wrap/grid/partitions |
 | `widgets/clip.dart` | 134 | `src/widgets/clip.ts` | done — rectangular, scaled rounded-rectangle and elliptical clip scopes over immutable child layout |
 | `widgets/chart/*.dart` | 1989 | `src/widgets/chart/*.ts` | partial — complete chart rendering through `Chart`, `CartesianGrid`, `PieGrid`, `RadialGrid`, `FixedAxis`, `ChartLegend`, `PointDataSet`, `BarDataSet`, `LineDataSet` and `PieDataSet`; the upstream `ChartValue` base and deprecated `LineChartValue` compatibility alias are omitted |
-| `widgets/annotations.dart`, `forms.dart` | 1244 | `src/widgets/annotations.ts`, `forms.ts` | partial — links plus `ChoiceField`, `Checkbox`, `FlatButton` and `TextField`; `Signature` is out of scope with digital signatures |
+| `widgets/annotations.dart`, `forms.dart` | 1244 | `src/widgets/annotations.ts`, `forms.ts` | partial — links, `Outline`, all five geometric annotation widgets, plus `ChoiceField`, `Checkbox`, `FlatButton` and `TextField`; `Signature` is intentionally out of scope with digital signatures |
 | `widgets/barcode.dart` | 298 | `src/widgets/barcode.ts` | done — `Barcode`, `BarcodeWidget`; symbol operations are immutable layout data |
-| `widgets/content.dart` | 360 | `src/widgets/content.ts` | partial — `Header`, `Paragraph`, `Bullet`, clickable `TableOfContent`, named destinations and conditional two-pass TOC; no `Watermark` or `Footer` |
+| `widgets/content.dart` | 360 | `src/widgets/content.ts` | done — `Header`, `Paragraph`, `Bullet`, `Watermark`, `Footer`, clickable `TableOfContent`, named destinations and conditional two-pass TOC |
 | `widgets/placeholders.dart` | 187 | `src/widgets/placeholders.ts` | done — `Placeholder`, vector `PdfLogo`, SVG `FlutterLogo`, deterministic `LoremText` and stable `Lorem` widget |
 | `widgets/icon.dart` | 146 | `src/widgets/icon.ts` | done — `Icon`, `IconData`, `IconThemeData`, themed size/color/opacity and RTL mirroring over a caller-supplied font |
 | `widgets/progress.dart` | 202 | `src/widgets/progress.ts` | done — `CircularProgressIndicator`, `LinearProgressIndicator`, clamped values, defaults and custom colours/thickness |
-| `widgets/grid_paper.dart` | 338 | — | — no example depends on it |
+| `widgets/grid_paper.dart` | 338 | `src/widgets/grid_paper.ts` | done — configurable grid plus millimeter, Seyes, college-ruled, quad and engineering presets |
 
 ---
 
@@ -204,16 +204,18 @@ both the grammar and the shape factories landed in phase 2.5.
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
 | SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping and gradients done; SVG text and embedded raster content remain |
-| Widgets | ~14,000 | ~85 public widget/value constructors, plus tables, rich styles, content and themes |
+| Widgets | ~14,000 | the remaining public widget constructors through phase 5.7, plus tables, rich styles, content and themes |
 
-**Roadmap phases 0 through 5.6 are complete.** The WinAnsi ceiling is gone: a
+**Roadmap phases 0 through 5.7 are complete.** The WinAnsi ceiling is gone: a
 TrueType font is parsed, subset to the glyphs a document used, embedded as a
 Type0/CIDFontType2 composite with `/Identity-H`, and selected through `Font`,
 `TextStyle` and `ThemeData`. Text outside Latin-1 is no longer replaced with `?`
 — it is drawn from the embedded font and stays searchable through the
 `/ToUnicode` CMap. The public SVG pipeline now reaches PDF shading patterns.
 
-**Phase 5.6 is complete.** The four non-signature form widgets emit interactive
-AcroForm fields with explicit appearances; page labels, keywords and
-caller-supplied XMP are serialized. All eight upstream examples still generate
-with zero missing APIs. See [ROADMAP.md](ROADMAP.md).
+**Phase 5.7 is complete.** The remaining retained widgets now cover atomic
+pagination, list composition, inherited/delayed builds, directionality, vector
+shapes, grid paper, watermarks, footers, outlines and geometric annotations.
+`Signature` remains intentionally excluded with encryption and digital
+signatures. All eight upstream examples still generate with zero missing APIs.
+See [ROADMAP.md](ROADMAP.md).

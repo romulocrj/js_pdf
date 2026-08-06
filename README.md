@@ -1,10 +1,10 @@
-# js_pdf
+# PDF for pure JavaScript
 
-An independent JavaScript port of [dart_pdf](https://github.com/DavBfr/dart_pdf)
+This is an independent JavaScript port of [dart_pdf](https://github.com/DavBfr/dart_pdf)
 by David PHAM-VAN.
 
 This port is based on **dart_pdf 3.13.0**, specifically upstream commit
-[`0833cd2fc8cf3e62b0228732e81402afca5cc542`](https://github.com/DavBfr/dart_pdf/commit/0833cd2fc8cf3e62b0228732e81402afca5cc542).
+[`5cc542`](https://github.com/DavBfr/dart_pdf/commit/0833cd2fc8cf3e62b0228732e81402afca5cc542).
 
 js_pdf is an independent and unofficial JavaScript port of dart_pdf.
 It is not affiliated with or endorsed by the original project maintainers.
@@ -39,7 +39,7 @@ project of this scale feasible.
 
 ## Status
 
-The implementation roadmap is complete through phase 5.6. The port includes
+The implementation roadmap is complete through phase 5.7. The port includes
 the PDF object model, Type1 and embedded TrueType fonts, declarative layout and
 pagination, SVG, raster images, tables, charts, barcodes, links, forms, page
 labels and metadata/XMP. All eight retained upstream examples generate end to
@@ -64,8 +64,8 @@ The build emits four single-file ES modules plus declarations:
 |---|---|
 | `dist/js_pdf.mjs` | readable, canonical — what `import 'js_pdf'` resolves to |
 | `dist/js_pdf.min.mjs` | minified, canonical — `import 'js_pdf/min'` |
-| `dist/js_pdf-0.1.0.mjs` | readable, versioned — for vendoring into a host directory |
-| `dist/js_pdf-0.1.0.min.mjs` | minified, versioned |
+| `dist/js_pdf-0.1.2.mjs` | readable, versioned — for vendoring into a host directory |
+| `dist/js_pdf-0.1.2.min.mjs` | minified, versioned |
 | `dist/types/**.d.ts` | type declarations |
 
 Each JavaScript artifact carries the attribution banner and no other comment.
@@ -127,7 +127,8 @@ depends on your ClearScript version and host binding strategy.
 
 Highlights include `Document`, `Page`, `MultiPage`, `Text`,
 `Column`, `Row`, `Container`, `Table`, `Chart`, `SvgImage`, `Image`,
-`BarcodeWidget`, `TextField`, `ChoiceField`, `Checkbox`, `FlatButton`,
+`BarcodeWidget`, `Inseparable`, `ListView`, `GridPaper`, geometric annotation
+widgets, `TextField`, `ChoiceField`, `Checkbox`, `FlatButton`,
 `PageFormat`, `PdfType1Font`, `PdfTtfFont` and `Widget`.
 
 See [docs/PORTING-STATUS.md](docs/PORTING-STATUS.md) for the complete implemented
@@ -138,6 +139,12 @@ surface and the remaining upstream gaps.
 [examples/create-sales-report.mjs](examples/create-sales-report.mjs) builds a
 paginated sales report with a header, footer, metric cards, a bar chart and a
 table using the `Document`/`MultiPage` API. Run it with `npm run example`.
+
+[examples/widgets-phase-5.7.mjs](examples/widgets-phase-5.7.mjs) exercises all
+widgets added in phase 5.7. The English-only
+[examples/production-pagination.mjs](examples/production-pagination.mjs) is a
+production-sized regression example showing how `Inseparable` keeps a chart
+heading and chart on the same page.
 
 ## Current limitations
 

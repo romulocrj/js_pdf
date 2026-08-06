@@ -51,8 +51,9 @@ const ASYNC = [
 ];
 
 const REQUIRED_HEADER_LINES = [
-  'Ported to JavaScript from DavBfr/dart_pdf.',
+  'Ported to JavaScript from https://github.com/DavBfr/dart_pdf',
   'Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>',
+  'JavaScript port: https://github.com/romulocrj/js_pdf',
   'Copyright (C) 2026, Romulo Campos',
   'Licensed under the Apache License, Version 2.0.',
   'Original Dart sources ported into this file:'

@@ -1,10 +1,10 @@
 /*
- * Ported to JavaScript from DavBfr/dart_pdf.
+ * Ported to JavaScript from https://github.com/DavBfr/dart_pdf
  *
  * Original work:
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
  *
- * JavaScript port:
+ * JavaScript port: https://github.com/romulocrj/js_pdf
  * Copyright (C) 2026, Romulo Campos
  *
  * This file has been substantially modified from the original Dart source.
@@ -23,6 +23,7 @@
 import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
+import type { PdfPoint } from '../pdf/rect.ts';
 import { BoxConstraints } from './geometry.ts';
 import { Widget } from './widget.ts';
 import type { Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
@@ -134,5 +135,150 @@ export class Vector extends Widget<VectorLayoutData> {
     };
 
     this.draw(api);
+  }
+}
+
+export interface PaintedShapeOptions {
+  readonly fillColor?: ColorInput | null;
+  readonly strokeColor?: ColorInput | null;
+  readonly strokeWidth?: number;
+}
+
+function constrainedCanvas(constraints: Constraints): { readonly width: number; readonly height: number } {
+  const parent = BoxConstraints.from(constraints);
+  return {
+    width: parent.hasBoundedWidth ? parent.maxWidth : parent.minWidth,
+    height: parent.hasBoundedHeight ? parent.maxHeight : parent.minHeight
+  };
+}
+
+function paintPath(
+  context: RenderContext,
+  fillColor: ColorInput | null,
+  strokeColor: ColorInput | null,
+  strokeWidth: number
+): void {
+  if (fillColor !== null) context.canvas.setFillColor(fillColor);
+  if (strokeColor !== null) context.canvas.setStrokeColor(strokeColor);
+  context.canvas.setLineWidth(strokeWidth);
+  if (fillColor !== null && strokeColor !== null) context.canvas.fillAndStrokePath();
+  else if (strokeColor !== null) context.canvas.strokePath();
+  else context.canvas.fillPath();
+}
+
+abstract class PaintedShape extends Widget<null> {
+  readonly fillColor: ColorInput | null;
+  readonly strokeColor: ColorInput | null;
+  readonly strokeWidth: number;
+
+  constructor({ fillColor = null, strokeColor = null, strokeWidth = 1 }: PaintedShapeOptions = {}) {
+    super();
+    this.fillColor = fillColor;
+    this.strokeColor = strokeColor;
+    this.strokeWidth = Number(strokeWidth);
+    if (!Number.isFinite(this.strokeWidth) || this.strokeWidth < 0) {
+      throw new RangeError('strokeWidth must be a finite non-negative number');
+    }
+  }
+
+  override layout(_context: RenderContext, constraints: Constraints): LayoutBox<null> {
+    const size = constrainedCanvas(constraints);
+    return { widget: this, width: size.width, height: size.height, data: null };
+  }
+}
+
+/** An ellipse that fills the widget's box. */
+export class Circle extends PaintedShape {
+  override paint(context: RenderContext, box: PositionedBox<null>): void {
+    context.canvas.saveContext();
+    context.canvas.drawEllipse(
+      box.x + box.width / 2,
+      context.canvas.toPdfY(box.y + box.height / 2),
+      box.width / 2,
+      box.height / 2
+    );
+    paintPath(context, this.fillColor, this.strokeColor, this.strokeWidth);
+    context.canvas.restoreContext();
+  }
+}
+
+/** A rectangle that fills the widget's box. */
+export class Rectangle extends PaintedShape {
+  override paint(context: RenderContext, box: PositionedBox<null>): void {
+    context.canvas.saveContext();
+    context.canvas.drawRect(box.x, context.canvas.toPdfY(box.y + box.height), box.width, box.height);
+    paintPath(context, this.fillColor, this.strokeColor, this.strokeWidth);
+    context.canvas.restoreContext();
+  }
+}
+
+export interface PolygonOptions extends PaintedShapeOptions {
+  readonly points: readonly PdfPoint[];
+  readonly close?: boolean;
+}
+
+/** A polygon whose points use widget-local, top-left coordinates. */
+export class Polygon extends PaintedShape {
+  readonly points: readonly PdfPoint[];
+  readonly close: boolean;
+
+  constructor({ points, close = true, ...options }: PolygonOptions) {
+    super(options);
+    this.points = points;
+    this.close = Boolean(close);
+  }
+
+  override paint(context: RenderContext, box: PositionedBox<null>): void {
+    if (this.points.length < 3) return;
+    context.canvas.saveContext();
+    const first = this.points[0]!;
+    context.canvas.moveTo(box.x + first.x, context.canvas.toPdfY(box.y + first.y));
+    for (const point of this.points) {
+      context.canvas.lineTo(box.x + point.x, context.canvas.toPdfY(box.y + point.y));
+    }
+    if (this.close) context.canvas.closePath();
+    paintPath(context, this.fillColor, this.strokeColor, this.strokeWidth);
+    context.canvas.restoreContext();
+  }
+}
+
+export interface InkListOptions {
+  readonly points: readonly (readonly PdfPoint[])[];
+  readonly strokeColor?: ColorInput | null;
+  readonly strokeWidth?: number;
+}
+
+/** One or more freehand strokes in widget-local, top-left coordinates. */
+export class InkList extends Widget<null> {
+  readonly points: readonly (readonly PdfPoint[])[];
+  readonly strokeColor: ColorInput | null;
+  readonly strokeWidth: number;
+
+  constructor({ points, strokeColor = null, strokeWidth = 1 }: InkListOptions) {
+    super();
+    this.points = points;
+    this.strokeColor = strokeColor;
+    this.strokeWidth = Number(strokeWidth);
+  }
+
+  override layout(_context: RenderContext, constraints: Constraints): LayoutBox<null> {
+    const size = constrainedCanvas(constraints);
+    return { widget: this, width: size.width, height: size.height, data: null };
+  }
+
+  override paint(context: RenderContext, box: PositionedBox<null>): void {
+    context.canvas.saveContext();
+    if (this.strokeColor !== null) context.canvas.setStrokeColor(this.strokeColor);
+    context.canvas.setLineWidth(this.strokeWidth);
+    for (const line of this.points) {
+      const first = line[0];
+      if (first === undefined) continue;
+      context.canvas.moveTo(box.x + first.x, context.canvas.toPdfY(box.y + first.y));
+      for (const point of line) {
+        context.canvas.lineTo(box.x + point.x, context.canvas.toPdfY(box.y + point.y));
+      }
+    }
+    context.canvas.strokePath();
+    context.canvas.restoreContext();
   }
 }

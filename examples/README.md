@@ -23,13 +23,15 @@ These files are JavaScript ports of the examples at upstream commit
 The ports retain the complete feature surface used by their Dart originals.
 They are parity probes, not reduced visual approximations. `requireFeatures()`
 validates the required public APIs before each document is built; since phase
-5.6, all requirements of the retained example set are satisfied.
+5.7, all requirements of the retained example set are satisfied and the
+remaining retained widget surface has a dedicated visual proof.
 
 Run all examples:
 
 ```sh
 npm run examples        # builds first
 npm run phase-examples  # retained visual proofs for completed phases
+npm run example:production-pagination  # Inseparable production regression
 ```
 
 Successful PDFs are written to `out/`. Failures are collected in
@@ -47,6 +49,12 @@ links, inline span annotations and internal named destinations.
 mirroring using the retained Material Icons font.
 `progress-phase-5.5.mjs` compares circular values, track colours, stroke widths,
 elliptical constraints and linear values/heights.
+`forms-phase-5.6.mjs` covers AcroForm fields and document metadata.
+`widgets-phase-5.7.mjs` covers every widget added in phase 5.7, including
+atomic pagination, lists, shape/path widgets, grid-paper presets, inherited and
+delayed builds, directionality, watermarks, footers, outlines and native
+geometric annotations. `production-pagination.mjs` is the English production
+case proving that `Inseparable` moves a chart title and chart together.
 
 `npm run examples` now generates the complete 8/8 upstream set.
 
