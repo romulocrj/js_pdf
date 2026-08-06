@@ -47,7 +47,7 @@ function reportIfOversized(image: PdfImage): void {
   if (pixels < LARGE_IMAGE_PIXELS) return;
 
   reportPdfDiagnostic(
-    `js_pdf: decoded a ${image.sourceWidth}x${image.sourceHeight} image ` +
+    `js_pdf (MemoryImage): decoded a ${image.sourceWidth}x${image.sourceHeight} image ` +
     `(${Math.round(pixels / 1000000)} megapixels). Every source pixel is embedded ` +
     'at full resolution unless the provider is given a dpi, so pass ' +
     '{ dpi: 150 } to resample it down to what the page actually draws.'
