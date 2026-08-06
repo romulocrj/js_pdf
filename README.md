@@ -157,6 +157,10 @@ remaining gap.
 
 Apache License 2.0. See [LICENSE](LICENSE).
 
+Bundled example fonts and visual resources retain their respective licenses.
+See [examples/assets/THIRD-PARTY-NOTICES.md](examples/assets/THIRD-PARTY-NOTICES.md)
+for copyright, license and provenance details.
+
 ## Notice
 
 This project contains a JavaScript port of portions of dart_pdf.

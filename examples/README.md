@@ -20,10 +20,10 @@ These files are JavaScript ports of the examples at upstream commit
 | `resume.mjs` | `demo/lib/examples/resume.dart` |
 | `server.mjs` | `demo/lib/examples/server.dart` |
 
-The ports intentionally retain references to widgets and PDF features that are
-not implemented by `js_pdf` yet. They are capability probes for porting work,
-not reduced visual approximations. `requireFeatures()` reports the missing
-public APIs before each document is built.
+The ports retain the complete feature surface used by their Dart originals.
+They are parity probes, not reduced visual approximations. `requireFeatures()`
+validates the required public APIs before each document is built; since phase
+5.6, all requirements of the retained example set are satisfied.
 
 Run all examples:
 
@@ -36,6 +36,10 @@ Successful PDFs are written to `out/`. Failures are collected in
 `generation-results.json`; one failure does not stop the remaining examples.
 The assets and fonts are the same resources referenced by the Dart examples.
 Both runners place generated PDFs in `out/`.
+
+Licenses, copyright notices and provenance for the bundled fonts and visual
+resources are recorded in
+[`assets/THIRD-PARTY-NOTICES.md`](assets/THIRD-PARTY-NOTICES.md).
 
 `annotations-phase-5.3.mjs` is the focused visual proof for whole-widget URL
 links, inline span annotations and internal named destinations.

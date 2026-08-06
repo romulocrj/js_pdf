@@ -8,7 +8,14 @@
   "contributors": [
     "David PHAM-VAN (original Dart implementation, dart_pdf)"
   ],
-  "homepage": "https://github.com/DavBfr/dart_pdf",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/romulocrj/js_pdf.git"
+  },
+  "homepage": "https://github.com/romulocrj/js_pdf#readme",
+  "bugs": {
+    "url": "https://github.com/romulocrj/js_pdf/issues"
+  },
   "keywords": [
     "pdf",
     "dart_pdf",

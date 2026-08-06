@@ -48,3 +48,14 @@ Portions of the barcode subsystem are derived from dart_barcode:
 
 The QR encoder is an independent js_pdf implementation. It does not contain
 source code from dart_barcode's separately licensed qr dependency.
+
+--------------------------------------------------------------------------
+
+Third-party fonts and visual resources used only by the examples are listed,
+with their licenses and provenance, in:
+
+    examples/assets/THIRD-PARTY-NOTICES.md
+
+The SIL Open Font License 1.1 covering the applicable example fonts is in:
+
+    examples/assets/licenses/OFL-1.1.txt
