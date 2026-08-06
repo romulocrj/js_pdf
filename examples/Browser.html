@@ -1,0 +1,692 @@
+<!--
+  romulocrj/js_pdf browser example.
+  Copyright (C) 2026, Romulo Campos
+  Licensed under the Apache License, Version 2.0.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>romulocrj/js_pdf — generate and display a PDF in the browser</title>
+
+<!--
+  Module resolution.
+  By default, this points to jsDelivr serving dist/ directly from GitHub.
+  To use a local copy, replace the URL with "./vendor/js_pdf.mjs"
+  (copy dist/js_pdf.mjs to vendor/) and serve the directory over HTTP.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "js_pdf": "https://cdn.jsdelivr.net/gh/romulocrj/js_pdf/dist/js_pdf.min.mjs"
+  }
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --ink: #0b1220;
+    --blue: #1d4ed8;
+    --blue-deep: #1e3a8a;
+    --slate: #5b6478;
+    --paper: #ffffff;
+    --canvas: #e9ebf0;
+    --rule: #d3d8e0;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  /* Viewer state: exactly one child is visible at a time.
+     Do not use the [hidden] attribute here — .empty/.error use display:flex
+     and would override the browser's default rule. */
+  .viewer.is-empty > iframe,
+  .viewer.is-error > iframe,
+  .viewer.is-ready > .empty,
+  .viewer.is-ready > .error { display: none; }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- header ---------- */
+
+  header {
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper);
+    padding: 18px 24px;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  h1 span { color: var(--blue); }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--slate);
+  }
+
+  /* ---------- layout ---------- */
+
+  main {
+    display: grid;
+    grid-template-columns: 380px minmax(0, 1fr);
+    gap: 24px;
+    padding: 24px;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+  }
+
+  .panel-head {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--slate);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .panel-body { padding: 16px; }
+
+  /* ---------- form ---------- */
+
+  label {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--slate);
+    margin-bottom: 5px;
+  }
+
+  input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    font: inherit;
+    color: var(--ink);
+    background: var(--paper);
+  }
+
+  input:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 1px;
+    border-color: var(--blue);
+  }
+
+  input[type="number"] { font-family: var(--mono); text-align: right; }
+
+  .field { margin-bottom: 14px; }
+
+  .items-head,
+  .item-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 56px 84px 26px;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .items-head {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--slate);
+    margin-bottom: 6px;
+  }
+
+  .items-head span:nth-child(2),
+  .items-head span:nth-child(3) { text-align: right; }
+
+  .item-row { margin-bottom: 6px; }
+
+  .remove {
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    color: var(--slate);
+    border-radius: 3px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+  }
+
+  .remove:hover { border-color: var(--blue); color: var(--blue); }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  button.primary,
+  button.ghost {
+    font: inherit;
+    font-weight: 500;
+    padding: 9px 16px;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+
+  button.primary {
+    background: var(--blue);
+    color: #fff;
+    flex: 1;
+  }
+
+  button.primary:hover { background: var(--blue-deep); }
+
+  button.ghost {
+    background: var(--paper);
+    border-color: var(--rule);
+    color: var(--ink);
+  }
+
+  button.ghost:hover { border-color: var(--blue); color: var(--blue); }
+
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  button:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+
+  .link-add {
+    background: none;
+    border: none;
+    padding: 4px 0;
+    color: var(--blue);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  /* ---------- viewer ---------- */
+
+  .viewer {
+    height: calc(100vh - 168px);
+    min-height: 520px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  iframe {
+    flex: 1;
+    width: 100%;
+    border: none;
+    background: var(--canvas);
+  }
+
+  /* Readout strip: bytes, time, and file signature. */
+  .readout {
+    display: flex;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .readout div {
+    padding: 9px 14px;
+    border-right: 1px solid var(--rule);
+  }
+
+  .readout dt {
+    margin: 0;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--slate);
+  }
+
+  .readout dd {
+    margin: 2px 0 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .readout.fresh dd { color: var(--blue); }
+
+  .empty, .error {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 32px;
+    color: var(--slate);
+  }
+
+  .error { color: #b42318; }
+
+  .error code {
+    display: block;
+    margin-top: 10px;
+    max-width: 520px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink);
+    background: var(--canvas);
+    padding: 10px;
+    border-radius: 3px;
+    text-align: left;
+    white-space: pre-wrap;
+  }
+
+  .hint {
+    font-size: 12px;
+    color: var(--slate);
+    margin: 12px 0 0;
+  }
+
+  .hint code { font-family: var(--mono); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .readout.fresh dd { animation: tick 0.5s ease-out; }
+    @keyframes tick { from { opacity: 0.25; } to { opacity: 1; } }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>romulocrj/<span>js_pdf</span></h1>
+  <p class="eyebrow">ES module · no dependencies · no server · synchronous document.save()</p>
+</header>
+
+<main>
+  <!-- ---------- controls ---------- -->
+  <section class="panel">
+    <div class="panel-head"><span>Report data</span></div>
+    <div class="panel-body">
+      <div class="field">
+        <label for="title">Title</label>
+        <input id="title" value="Sales Report">
+      </div>
+      <div class="field">
+        <label for="subtitle">Subtitle</label>
+        <input id="subtitle" value="Generated entirely in the browser">
+      </div>
+
+      <div class="items-head">
+        <span>Item</span><span>Qty</span><span>Price</span><span></span>
+      </div>
+      <div id="items"></div>
+      <button class="link-add" id="add" type="button">+ add item</button>
+
+      <div class="actions">
+        <button class="primary" id="generate" type="button">Generate PDF</button>
+        <button class="ghost" id="download" type="button" disabled>Download</button>
+        <button class="ghost" id="newtab" type="button" disabled>Open in new tab</button>
+      </div>
+
+      <p class="hint">
+        The file is returned as a <code>Uint8Array</code> and displayed with
+        <code>URL.createObjectURL</code> — nothing is sent to a server.
+      </p>
+    </div>
+  </section>
+
+  <!-- ---------- viewer ---------- -->
+  <section class="panel viewer is-empty" id="viewer">
+    <div class="panel-head">
+      <span>Preview</span>
+      <span id="status">waiting</span>
+    </div>
+
+    <div class="empty" id="placeholder">Click “Generate PDF” to build the document.</div>
+    <iframe id="frame" title="Generated PDF"></iframe>
+
+    <dl class="readout" id="readout">
+      <div><dt>Size</dt><dd id="r-size">—</dd></div>
+      <div><dt>Time</dt><dd id="r-time">—</dd></div>
+      <div><dt>Signature</dt><dd id="r-magic">—</dd></div>
+    </dl>
+  </section>
+</main>
+
+<script type="module">
+/* ------------------------------------------------------------------
+   1. Module loading
+   ------------------------------------------------------------------ */
+
+let pw = null;
+let loadError = null;
+
+try {
+  pw = await import('js_pdf');
+} catch (error) {
+  loadError = error;
+}
+
+/* ------------------------------------------------------------------
+   2. Document construction — ported dart_pdf API
+   ------------------------------------------------------------------ */
+
+const money = value =>
+  value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+function metricCard(label, value) {
+  return new pw.Container({
+    padding: 10,
+    background: '#f8fafc',
+    borderColor: '#cbd5e1',
+    child: new pw.Column({
+      gap: 4,
+      crossAxisAlignment: 'center',
+      children: [
+        new pw.Text(label, { fontSize: 9, color: '#64748b', align: 'center' }),
+        new pw.Text(value, { fontSize: 16, color: '#0f172a', align: 'center' })
+      ]
+    })
+  });
+}
+
+function barChart(items) {
+  const highest = Math.max(1, ...items.map(item => item.total));
+  const top = Math.ceil(highest / 1000) * 1000 || 1000;
+  const tickStyle = new pw.TextStyle({ fontSize: 8, color: '#475569' });
+
+  return new pw.Container({
+    height: 170,
+    child: new pw.Chart({
+      grid: new pw.CartesianGrid({
+        xAxis: pw.FixedAxis.fromStrings(items.map(item => item.name.slice(0, 10)), {
+          textStyle: tickStyle,
+          color: '#94a3b8',
+          marginStart: 22,
+          marginEnd: 22,
+          ticks: true
+        }),
+        yAxis: new pw.FixedAxis([0, top / 2, top], {
+          textStyle: tickStyle,
+          color: '#94a3b8',
+          divisions: true,
+          divisionsColor: '#e2e8f0',
+          format: value => `${value / 1000}k`
+        })
+      }),
+      datasets: [
+        new pw.BarDataSet({
+          color: '#2563eb',
+          drawBorder: false,
+          width: 22,
+          data: items.map((item, index) => new pw.PointChartValue(index, item.total))
+        })
+      ]
+    })
+  });
+}
+
+function detailTable(context, items) {
+  return pw.TableHelper.fromTextArray({
+    context,
+    headers: ['Item', 'Qty', 'Unit price', 'Subtotal'],
+    data: items.map(item => [
+      item.name,
+      String(item.qty),
+      money(item.price),
+      money(item.total)
+    ]),
+    border: null,
+    columnWidths: {
+      0: new pw.FlexColumnWidth(3),
+      1: new pw.FixedColumnWidth(46),
+      2: new pw.FixedColumnWidth(84),
+      3: new pw.FixedColumnWidth(90)
+    },
+    headerStyle: new pw.TextStyle({ fontSize: 10, fontWeight: 'bold', color: '#ffffff' }),
+    cellStyle: new pw.TextStyle({ fontSize: 10, color: '#334155' }),
+    headerDecoration: { color: '#1e3a8a' },
+    rowDecoration: { color: '#ffffff', border: { bottom: { color: '#e2e8f0', width: 0.6 } } },
+    headerAlignments: { 1: 'centerRight', 2: 'centerRight', 3: 'centerRight' },
+    cellAlignments: { 1: 'centerRight', 2: 'centerRight', 3: 'centerRight' }
+  });
+}
+
+/** Receives the model and returns a Uint8Array. No browser API is used here. */
+function buildDocument(model) {
+  const items = model.items.map(item => ({ ...item, total: item.qty * item.price }));
+  const total = items.reduce((sum, item) => sum + item.total, 0);
+  const issued = new Date().toLocaleDateString('en-US');
+
+  const document_ = new pw.Document({
+    title: model.title,
+    author: 'romulocrj/js_pdf',
+    subject: model.subtitle
+  });
+
+  document_.addPage(new pw.MultiPage({
+    pageFormat: pw.PageFormat.A4,
+    margin: 36,
+    gap: 12,
+
+    header: context => new pw.Row({
+      widths: [3, 1],
+      children: [
+        new pw.Text(model.title, { fontSize: 15, color: '#172554' }),
+        new pw.Text(`Page ${context.pageNumber}/${context.pagesCount}`, {
+          align: 'right', fontSize: 9, color: '#64748b'
+        })
+      ]
+    }),
+
+    footer: () => new pw.Text('Generated in the browser with romulocrj/js_pdf', {
+      fontSize: 8, color: '#94a3b8', align: 'center'
+    }),
+
+    build: context => [
+      new pw.Text(model.subtitle, { fontSize: 10, color: '#64748b' }),
+
+      new pw.Row({
+        gap: 8,
+        children: [
+          new pw.Expanded({ child: metricCard('Items', String(items.length)) }),
+          new pw.Expanded({ child: metricCard('Total', money(total)) }),
+          new pw.Expanded({ child: metricCard('Issued', issued) })
+        ]
+      }),
+
+      new pw.Inseparable({
+        child: new pw.Container({
+          padding: 12,
+          background: '#eff6ff',
+          borderColor: '#dbeafe',
+          child: new pw.Column({
+            gap: 8,
+            children: [
+              new pw.Text('Value per item', { fontSize: 12, color: '#1e3a8a' }),
+              barChart(items)
+            ]
+          })
+        })
+      }),
+
+      new pw.Text('Details', {
+        fontSize: 13, color: '#172554', margin: { top: 4, bottom: 2 }
+      }),
+
+      detailTable(context, items),
+
+      new pw.Container({
+        alignment: 'centerRight',
+        child: new pw.Text(`TOTAL: ${money(total)}`, { fontSize: 13, color: '#0f172a' })
+      })
+    ]
+  }));
+
+  return document_.save();
+}
+
+/* ------------------------------------------------------------------
+   3. Interface
+   ------------------------------------------------------------------ */
+
+const el = id => document.getElementById(id);
+const itemsBox = el('items');
+const frame = el('frame');
+const placeholder = el('placeholder');
+const readout = el('readout');
+
+let currentUrl = null;
+
+const seed = [
+  { name: 'Mechanical keyboard', qty: 3, price: 450 },
+  { name: '27-inch monitor', qty: 2, price: 1800 },
+  { name: 'Ergonomic chair', qty: 1, price: 2300 },
+  { name: 'Laptop', qty: 1, price: 6500 }
+];
+
+function addRow(item = { name: '', qty: 1, price: 0 }) {
+  const row = document.createElement('div');
+  row.className = 'item-row';
+  row.innerHTML = `
+    <input class="i-name" aria-label="Item name">
+    <input class="i-qty" type="number" min="1" step="1" aria-label="Quantity">
+    <input class="i-price" type="number" min="0" step="0.01" aria-label="Unit price">
+    <button class="remove" type="button" aria-label="Remove item">×</button>`;
+  row.querySelector('.i-name').value = item.name;
+  row.querySelector('.i-qty').value = item.qty;
+  row.querySelector('.i-price').value = item.price;
+  row.querySelector('.remove').addEventListener('click', () => {
+    if (itemsBox.children.length > 1) row.remove();
+  });
+  itemsBox.append(row);
+}
+
+function readModel() {
+  const items = [...itemsBox.querySelectorAll('.item-row')].map(row => ({
+    name: row.querySelector('.i-name').value.trim() || 'Unnamed item',
+    qty: Math.max(1, Number(row.querySelector('.i-qty').value) || 1),
+    price: Math.max(0, Number(row.querySelector('.i-price').value) || 0)
+  }));
+
+  return {
+    title: el('title').value.trim() || 'Report',
+    subtitle: el('subtitle').value.trim() || ' ',
+    items: items.length ? items : [{ name: 'Unnamed item', qty: 1, price: 0 }]
+  };
+}
+
+function showReadout(bytes, milliseconds) {
+  el('r-size').textContent = `${(bytes.length / 1024).toFixed(1)} kB`;
+  el('r-time').textContent = `${milliseconds.toFixed(1)} ms`;
+  el('r-magic').textContent = new TextDecoder().decode(bytes.slice(0, 8));
+  readout.classList.remove('fresh');
+  void readout.offsetWidth;
+  readout.classList.add('fresh');
+}
+
+function setState(state) {
+  el('viewer').className = `panel viewer is-${state}`;
+}
+
+function failWith(message, detail) {
+  placeholder.className = 'error';
+  placeholder.innerHTML = '';
+  placeholder.append(message);
+  if (detail) {
+    const code = document.createElement('code');
+    code.textContent = detail;
+    placeholder.append(code);
+  }
+  setState('error');
+  el('status').textContent = 'error';
+}
+
+function generate() {
+  const started = performance.now();
+  let bytes;
+
+  try {
+    bytes = buildDocument(readModel());
+  } catch (error) {
+    failWith('Failed to build the document.', String(error && error.stack || error));
+    return;
+  }
+
+  const elapsed = performance.now() - started;
+
+  if (currentUrl) URL.revokeObjectURL(currentUrl);
+  currentUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+
+  frame.src = currentUrl;
+  setState('ready');
+
+  el('download').disabled = false;
+  el('newtab').disabled = false;
+  el('status').textContent = 'ready';
+  showReadout(bytes, elapsed);
+}
+
+el('add').addEventListener('click', () => addRow());
+el('generate').addEventListener('click', generate);
+
+el('download').addEventListener('click', () => {
+  const anchor = document.createElement('a');
+  anchor.href = currentUrl;
+  anchor.download = `${readModel().title.replace(/[^\w\-]+/g, '-').toLowerCase()}.pdf`;
+  anchor.click();
+});
+
+el('newtab').addEventListener('click', () => window.open(currentUrl, '_blank'));
+
+seed.forEach(addRow);
+
+if (loadError) {
+  el('generate').disabled = true;
+  failWith(
+    'The romulocrj/js_pdf module could not be loaded.',
+    `${loadError}\n\nOpen the page over HTTP (for example, npx serve .) — module imports ` +
+    `do not work with file://. Without internet access, copy dist/js_pdf.mjs to ` +
+    `./vendor/ and update the import map URL at the top of the file.`
+  );
+} else {
+  generate();
+}
+</script>
+</body>
+</html>

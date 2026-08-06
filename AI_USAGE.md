@@ -97,6 +97,7 @@ isolate one feature family at a time.
 | [report.mjs](examples/report.mjs) | Upstream | Cartesian and pie charts, legends, tables and embedded fonts |
 | [resume.mjs](examples/resume.mjs) | Upstream | Images, icons, progress indicators, partitions, QR code and two-page layout |
 | [server.mjs](examples/server.mjs) | Upstream | Charts, SVG, feature cards, pricing table and external links |
+| [Browser.html](examples/Browser.html) | Project | Browser-only PDF generation, live preview, download and opening the result in iframe |
 | [create-sales-report.mjs](examples/create-sales-report.mjs) | Project | Small data-driven report using `Document`, `MultiPage`, cards, vector drawing and rows |
 | [svg-gradients-phase-2.8.mjs](examples/svg-gradients-phase-2.8.mjs) | Focused | Linear/radial SVG gradients and paint servers |
 | [table-phase-3.1.mjs](examples/table-phase-3.1.mjs) | Focused | Table tracks, borders, decoration and `TableHelper` |
