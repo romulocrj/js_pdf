@@ -48,6 +48,7 @@ end under Node.js and bare ClearScript V8.
 - [docs/PORTING-STATUS.md](docs/PORTING-STATUS.md) — what has been ported so far, file by file
 - [docs/ROADMAP.md](docs/ROADMAP.md) — the next steps, in order
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the port is organized and where it diverges from dart_pdf
+- [AI_USAGE.md](AI_USAGE.md) — instructions for LLMs generating js_pdf code from dart_pdf knowledge
 
 ## Install and build
 
@@ -74,14 +75,17 @@ Each JavaScript artifact carries the attribution banner and no other comment.
 Node, or any bundler:
 
 ```js
-import { createPdf, PdfType1Font } from 'js_pdf';
+import * as pw from 'js_pdf';
 
-const bytes = createPdf({
-  title: 'Report',
-  font: PdfType1Font.times()
-}, ({ Page, Text }) => [
-  new Page({ build: () => new Text('Hello js_pdf') })
-]);
+const document = new pw.Document({ title: 'Report' });
+
+document.addPage(new pw.Page({
+  build: () => new pw.Center({
+    child: new pw.Text('Hello js_pdf')
+  })
+}));
+
+const bytes = document.save();
 // bytes instanceof Uint8Array
 ```
 
@@ -92,7 +96,13 @@ Browser, via importmap — no build step on the consumer side:
   { "imports": { "js_pdf": "/vendor/js_pdf.mjs" } }
 </script>
 <script type="module">
-  import { createPdf } from 'js_pdf';
+  import * as pw from 'js_pdf';
+
+  const document = new pw.Document();
+  document.addPage(new pw.Page({
+    build: () => new pw.Text('Hello from the browser')
+  }));
+  const bytes = document.save();
 </script>
 ```
 
@@ -115,7 +125,7 @@ depends on your ClearScript version and host binding strategy.
 
 ## Public API
 
-Highlights include `createPdf`, `Document`, `Page`, `MultiPage`, `Text`,
+Highlights include `Document`, `Page`, `MultiPage`, `Text`,
 `Column`, `Row`, `Container`, `Table`, `Chart`, `SvgImage`, `Image`,
 `BarcodeWidget`, `TextField`, `ChoiceField`, `Checkbox`, `FlatButton`,
 `PageFormat`, `PdfType1Font`, `PdfTtfFont` and `Widget`.
@@ -127,7 +137,7 @@ surface and the remaining upstream gaps.
 
 [examples/create-sales-report.mjs](examples/create-sales-report.mjs) builds a
 paginated sales report with a header, footer, metric cards, a bar chart and a
-table. Run it with `npm run example`.
+table using the `Document`/`MultiPage` API. Run it with `npm run example`.
 
 ## Current limitations
 

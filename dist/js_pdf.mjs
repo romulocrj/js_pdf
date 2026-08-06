@@ -11470,7 +11470,7 @@ class PageTheme {
 }
 
 class MultiPage {
-  constructor({pageTheme = undefined, format = undefined, pageFormat = undefined, margin = undefined, orientation = undefined, gap = 0, theme = undefined, build, header = null, footer = null, background = null, maxPages = 20}) {
+  constructor({pageTheme = undefined, format = undefined, pageFormat = undefined, margin = undefined, orientation = undefined, gap = 0, theme = undefined, build, header = null, footer = null, background = null, maxPages = 50}) {
     this.renderedPages = [];
     if (typeof build !== "function") throw new TypeError("MultiPage.build must be a function");
     const base = pageTheme ?? new PageTheme({

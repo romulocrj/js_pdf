@@ -39,7 +39,8 @@
     "src",
     "LICENSE",
     "NOTICE",
-    "README.md"
+    "README.md",
+    "AI_USAGE.md"
   ],
   "sideEffects": false,
   "engines": {

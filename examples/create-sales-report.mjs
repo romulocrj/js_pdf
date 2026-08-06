@@ -8,86 +8,85 @@
  * ClearScript.
  */
 
-import { Column, Container, MultiPage, Row, Text, Vector, createPdf } from '../dist/js_pdf.mjs';
+import { Column, Container, Document, MultiPage, Row, Text, Vector } from '../dist/js_pdf.mjs';
 
 export function createSalesReport(model) {
+  const document = new Document({
+    title: 'Relatório de vendas',
+    author: model.author ?? 'Blunana',
+    subject: 'Dashboard executivo'
+  });
 
+  document.addPage(
+    new MultiPage({
+      margin: 32,
+      gap: 10,
 
+      header: context => new Row({
+        widths: [3, 1],
+        children: [
+          new Text('RELATÓRIO DE VENDAS', {
+            fontSize: 16,
+            color: '#172554'
+          }),
+          new Text(`Página ${context.pageNumber}`, {
+            align: 'right',
+            color: '#64748b'
+          })
+        ]
+      }),
 
-  return createPdf(
-    {
-      title: 'Relatório de vendas',
-      author: model.author ?? 'Blunana',
-      subject: 'Dashboard executivo'
-    },
-    () =>
-      new MultiPage({
-        margin: 32,
-        gap: 10,
+      footer: () => new Text('Gerado por js_pdf', {
+        fontSize: 9,
+        color: '#64748b',
+        align: 'center'
+      }),
 
-        header: context => new Row({
-          widths: [3, 1],
+      build: () => [
+        new Text(model.period, {
+          fontSize: 11,
+          color: '#64748b'
+        }),
+
+        new Row({
+          gap: 8,
           children: [
-            new Text('RELATÓRIO DE VENDAS', {
-              fontSize: 16,
-              color: '#172554'
-            }),
-            new Text(`Página ${context.pageNumber}`, {
-              align: 'right',
-              color: '#64748b'
-            })
+            metricCard('Faturamento', formatMoney(model.revenue)),
+            metricCard('Pedidos', String(model.orders)),
+            metricCard('Ticket médio', formatMoney(model.averageTicket))
           ]
         }),
 
-        footer: () => new Text('Gerado por js_pdf', {
-          fontSize: 9,
-          color: '#64748b',
-          align: 'center'
-        }),
-
-        build: () => [
-          new Text(model.period, {
-            fontSize: 11,
-            color: '#64748b'
-          }),
-
-          new Row({
+        new Container({
+          padding: 12,
+          borderColor: '#dbeafe',
+          background: '#eff6ff',
+          child: new Column({
             gap: 8,
             children: [
-              metricCard('Faturamento', formatMoney(model.revenue)),
-              metricCard('Pedidos', String(model.orders)),
-              metricCard('Ticket médio', formatMoney(model.averageTicket))
+              new Text('Faturamento por mês', {
+                fontSize: 14,
+                color: '#1e3a8a'
+              }),
+              createBarChart(model.months)
             ]
-          }),
+          })
+        }),
 
-          new Container({
-            padding: 12,
-            borderColor: '#dbeafe',
-            background: '#eff6ff',
-            child: new Column({
-              gap: 8,
-              children: [
-                new Text('Faturamento por mês', {
-                  fontSize: 14,
-                  color: '#1e3a8a'
-                }),
-                createBarChart(model.months)
-              ]
-            })
-          }),
+        new Text('Detalhamento', {
+          fontSize: 15,
+          color: '#172554',
+          margin: { top: 6, bottom: 2 }
+        }),
 
-          new Text('Detalhamento', {
-            fontSize: 15,
-            color: '#172554',
-            margin: { top: 6, bottom: 2 }
-          }),
+        createTableHeader(),
 
-          createTableHeader(),
-
-          ...model.sales.map((sale, index) => createTableRow(sale, index))
-        ]
-      })
+        ...model.sales.map((sale, index) => createTableRow(sale, index))
+      ]
+    })
   );
+
+  return document.save();
 }
 
 function metricCard(label, value) {

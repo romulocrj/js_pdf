@@ -21,7 +21,7 @@ clipping and PDF shading-pattern gradients, tables lay out fixed, intrinsic and
 flexible tracks across as many pages as their rows require, and raster images
 flow through the public `Image` widget/provider surface.
 
-**Phases 0, 1, 2, 3 and 4 are complete, and phases 5.1–5.5 have landed.** The
+**Phases 0 through 5.6 are complete.** The
 foundations, layout system, SVG/raster pipelines and every API required by the
 ported upstream examples are in place; all eight examples now generate.
 
@@ -95,7 +95,7 @@ missing-API total fell 37 → 33.
 **Phase 3.9 — placeholders — landed 2026-08-05.** `Placeholder`, `PdfLogo`,
 `FlutterLogo`, deterministic `LoremText` and the stable `Lorem` widget port the
 complete upstream file. Six tests and a retained V8 proof cover the phase;
-`certificate.pdf` now generates 126,786 bytes in both runtimes, the gate reaches
+`certificate.pdf` now generates 126,676 bytes in both runtimes, the gate reaches
 3/8 examples and the missing-API total falls 33 → 28.
 
 **Phase 3.10 — clipping widgets — landed 2026-08-05.** `ClipRect`,
@@ -107,8 +107,8 @@ loses `ClipOval`, the missing-API total falls 28 → 27, and phase 3 is complete
 `Image`, `ImageProvider`, `ImageProxy`, `MemoryImage` and `RawImage` now bridge
 the existing PNG/JPEG object layer to widgets, including BoxFit/alignment crop
 layout data and clipped painting. Six focused tests plus `examples/image-phase-4.3.mjs`
-cover the surface; the proof generates 3,677 bytes in both Node and bare V8,
-and resume loses `Image` + `MemoryImage` (27 → 25 missing APIs).
+cover the surface; the current proof generates 70,170 bytes in both Node and
+bare V8, and resume loses `Image` + `MemoryImage` (27 → 25 missing APIs).
 
 **Phase 5.2 — barcodes — landed 2026-08-06.** `Barcode`, `BarcodeWidget` and
 the Apache-licensed `barcode` generators are public, including PDF417 for the
@@ -292,8 +292,9 @@ npm run examples     # build, then try to generate all of them
 
 Successful runs write `examples/out/<name>.pdf`; failures land in
 `examples/generation-results.json` with the list of missing APIs, and one
-failure does not stop the rest. **Expect a non-zero exit until phase 5** — that
-is the gate working, not a broken build.
+failure does not stop the rest. During implementation, a non-zero exit was the
+expected capability signal. With phase 5.6 complete, the current run must exit
+zero with all eight examples generated.
 
 Every phase below carries an **Example gate** line naming the examples it
 advances, and the phases marked ⇒ are the ones where an example first generates
@@ -349,7 +350,8 @@ subsystems, not alongside them.
 **Example gate:** none — phase 0 unlocks no API requested by the upstream
 examples. `hello-world` kept generating throughout: its metrics-dependent
 positions changed in 0.1 to match the AFM tables, 0.2 left every byte alone, and
-0.3 renumbered its objects without changing its length (740 bytes).
+0.3 renumbered its objects without changing its length. The current artifact is
+743 bytes.
 
 ### 0.0 TypeScript migration ✅ *(landed 2026-08-05)*
 
@@ -401,7 +403,7 @@ Landed as a 13-module `format/` layer (`PdfDataType` and the value types, plus
 (`PdfObject`, `PdfObjectStream`, `PdfCatalog`, `PdfPageList`, `PdfPage`,
 `PdfInfo`). Verified byte-identical across 20 fixtures — the 14 standard fonts,
 both page formats, accented text, empty and full metadata, multi-page overflow
-and vector drawing — and `hello-world` still generates at 740 bytes.
+and vector drawing — and `hello-world` currently generates at 743 bytes.
 
 Divergences worth knowing, each noted in the file that makes it:
 
@@ -1015,8 +1017,9 @@ The phase also restores the upstream-compatible `new EdgeInsets({...})`
 constructor while keeping the existing static factories and plain structural
 return values. Ten tests cover offsets, clipping, run formation, continuation
 and uneven partitions. The example gate removes eight API occurrences,
-reducing the total 53 → 45; `calendar.pdf` generates 20,805 bytes under both
-Node and V8. `examples/layout-phase-3.6.mjs` is the retained visual/V8 proof.
+reducing the total 53 → 45; `calendar.pdf` currently generates 22,102 bytes
+under both Node and V8. `examples/layout-phase-3.6.mjs` is the retained
+visual/V8 proof.
 
 Four original defects corrected while porting are recorded with reproduction
 steps in [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md): stale `Positioned` dimensions,
@@ -1040,10 +1043,10 @@ it, including double rules. `RichTextState` is an immutable line cursor for
 Six focused tests cover the public API, style inheritance, safe justification,
 backgrounds/decorations, inline widgets and continuation. The four example
 gates remove eight API occurrences, reducing the total 45 → 37.
-`examples/rich-text-phase-3.7.mjs` generates a 4,088-byte proof under both Node
-and bare V8. Arabic shaping and full bidi reordering remain coupled to the
-separate upstream font helpers; explicit RTL direction already resolves run
-placement and start/end alignment.
+`examples/rich-text-phase-3.7.mjs` currently generates a 4,208-byte proof under
+both Node and bare V8. Arabic shaping and full bidi reordering remain coupled
+to the separate upstream font helpers; explicit RTL direction already resolves
+run placement and start/end alignment.
 
 The original single-run justification division-by-zero defect is recorded with
 its reproduction in [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md).
@@ -1069,7 +1072,7 @@ theme, marker size/margin, colour and circle/rectangle shape. Five tests cover
 the API surfaces, PDF navigation dictionaries, forward TOC collection,
 single-pass documents and visual operators. The document gate loses four API
 occurrences, reducing the global total 37 → 33.
-`examples/content-phase-3.8.mjs` generates a 5,652-byte two-page proof under
+`examples/content-phase-3.8.mjs` currently generates a 26,266-byte proof under
 Node and bare V8.
 
 The original destination collision for repeated/child-only headers is recorded
@@ -1091,8 +1094,8 @@ repeated layout and the table-of-content replay cannot mutate page geometry.
 Six tests cover API surfaces, exact word counts, access to the complete word
 dictionary, repeatable layout, logo operators and placeholder bounds. The four
 example gates lose five API occurrences, reducing the total 33 → 28.
-`certificate.pdf` generates 126,786 bytes in Node and bare V8;
-`examples/placeholders-phase-3.9.mjs` is the retained 9,206-byte proof.
+`certificate.pdf` currently generates 126,676 bytes in Node and bare V8;
+`examples/placeholders-phase-3.9.mjs` is the retained 9,252-byte proof.
 
 The original off-by-one word selection and overlong paragraph defects are
 recorded in [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md).
@@ -1139,17 +1142,17 @@ ports all eight upstream orientations.
 
 Seven focused tests cover the compression block types, filters, packed palettes,
 16-bit transparency, Adam7, corrupt input and final XObject dictionaries.
-`examples/png-phase-4.1.mjs` embeds a complete 12×12 PNG and generates a
-2,867-byte proof under both Node and bare V8. No upstream example advances until
-the public provider/widget arrives in 4.3.
+`examples/png-phase-4.1.mjs` embeds a complete 12×12 PNG and currently generates
+a 2,901-byte proof under both Node and bare V8. No upstream example advances
+until the public provider/widget arrives in 4.3.
 
 Phase 4.2 scans the JPEG marker stream through SOS, accepts 8-bit SOF0, derives
 gray/RGB/CMYK colour space, honours Adobe direct-CMYK versus YCCK inversion and
 embeds the original bytes unchanged behind `/DCTDecode`. Four tests exercise the
 real 200×200 profile, gray and CMYK marker variants, malformed/progressive input
 and byte-for-byte PDF pass-through. `examples/jpeg-phase-4.2.mjs` retains that
-real profile as host-free base64 data and generates a 37,957-byte proof under
-Node and bare V8.
+real profile as host-free base64 data and currently generates a 37,991-byte
+proof under Node and bare V8.
 
 Phase 4.3 ports the image widget/provider layer over that object model:
 `MemoryImage` detects PNG/JPEG bytes synchronously, `Image` performs BoxFit and
@@ -1165,7 +1168,7 @@ four-page host-free gallery of every `BoxFit`, every alignment, all providers,
 DPI and all eight orientations. Its 3:1 corpus is compared at three target
 sizes that exercise downscaling, cropping and upscaling, while every alignment
 has separate horizontal and vertical crop probes; the gallery generates
-70,176 bytes under Node and bare V8.
+70,170 bytes under Node and bare V8.
 
 The upstream early-SOF exit can miss a later legal APP14 marker and invert
 direct CMYK incorrectly; the correction and reproduction are recorded in
@@ -1175,7 +1178,8 @@ direct CMYK incorrectly; the correction and reproduction are recorded in
 
 ## Phase 5 — document features
 
-The last four examples all land here, one per sub-phase.
+The remaining five examples land across phases 5.1–5.5. Phase 5.3 unlocks both
+`document` and `server`, while phase 5.4 prepares `resume` for completion in 5.5.
 
 ### 5.1 Charts ⇒ `report` ✅
 
@@ -1236,7 +1240,7 @@ The last four examples all land here, one per sub-phase.
   black, fully opaque defaults; scoped themes and widget options override them.
 - Direction-matching icons mirror around their centre only in explicit RTL.
 - `examples/icons-phase-5.4.mjs` is the retained visual proof and generates
-  9,034 bytes under both the local bundle and bare V8.
+  9,169 bytes under both the local bundle and bare V8.
 - **Example gate:** advances `resume`; only `CircularProgressIndicator` remains.
 
 ### 5.5 Progress ✅ *(landed 2026-08-06)* ⇒ `resume`
@@ -1250,7 +1254,7 @@ The last four examples all land here, one per sub-phase.
   `pagesCount`; vertical flex, stateless content and containers carry immutable
   continuation state.
 - `examples/progress-phase-5.5.mjs` is the retained visual proof and generates
-  13,402 bytes under the local bundle.
+  13,624 bytes under the local bundle.
 - **Example gate:** ⇒ **`resume` generates end to end here — the whole example
   set now passes (74,273 bytes, 8/8 examples, zero missing APIs).**
 

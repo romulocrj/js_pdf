@@ -13,8 +13,9 @@ and [ROADMAP.md](ROADMAP.md) (what comes next).
 Everything under `src/` must run on a bare ECMAScript engine. Concretely, the
 only globals it may touch are:
 
-`Object` `Array` `String` `Number` `Math` `RegExp` `Map` `Set` `Uint8Array`
-`DataView` `ArrayBuffer` `Error` `TypeError` `RangeError` `JSON`
+`Object` `Array` `String` `Number` `Boolean` `BigInt` `Math` `RegExp` `Map`
+`Set` `Uint8Array` `DataView` `ArrayBuffer` `Error` `TypeError` `RangeError`
+`JSON` `parseInt` `parseFloat` `Infinity`
 
 Forbidden anywhere in `src/`, without exception:
 
@@ -171,8 +172,16 @@ licensed Dart `qr` implementation is neither ported nor distributed.
 - **`page.ts` / `page_theme.ts`** — one physical page, and everything about it
   but its body; overflow is an error.
 - **`multi_page.ts`** — pagination with per-page header and footer.
-- **`document.ts`** — `Document`, which renders sections and serializes. It also
-  owns the theme and the per-document `Font` → `PdfFont` cache.
+- **`image.ts` / `image_provider.ts`** — decoded and encoded raster providers,
+  fitting, alignment, DPI selection and clipped painting.
+- **`content.ts` / `annotations.ts` / `forms.ts`** — headings, table of content,
+  links, named destinations and interactive AcroForm controls.
+- **`chart/` / `barcode.ts`** — data visualizations and rendering-neutral
+  barcode operations carried through immutable layout data.
+- **`placeholders.ts` / `icon.ts` / `progress.ts`** — retained upstream utility
+  widgets used by the example suite.
+- **`document.ts`** — `Document`, which renders sections and serializes. It owns
+  the theme, metadata, page labels and the per-document `Font` → `PdfFont` cache.
 
 ## 3. The layout protocol
 
@@ -253,21 +262,20 @@ coordinates and converts internally (`bottom = pageHeight - top - height`).
 
 ## 5. Known divergences
 
-Beyond "not implemented yet", these are places where the port behaves
-*differently* from upstream and will keep doing so until the corresponding
-roadmap phase lands.
+Beyond features that are not implemented, these are current deliberate
+divergences or narrower compatibility gaps between the port and upstream.
 
 | Area | dart_pdf | js_pdf |
 |---|---|---|
 | Embedded TTF | Type0 for `0x00010000` fonts, WinAnsi `/TrueType` otherwise | Type0 only; a non-`0x00010000` or `CFF ` font is rejected at construction |
 | Inherited values | `InheritedWidget` plus `Context.dependsOn` | Fields on `RenderContext`, replaced for the subtree (§3) |
-| Text layout | Full breaker: rich text, bidi, justification, decorations | Single-style greedy wrap with `maxLines`; `justify` paints as `left` |
-| Page orientation | Content rotated through the CTM, paper size unchanged | Paper dimensions swapped; needs the `cm` operator (phase 2.1) |
+| Text layout | Full breaker with rich text, Unicode bidi, Arabic shaping, justification and decorations | Rich text, fallback fonts, justification, decorations and explicit RTL placement; no Unicode bidi reordering or Arabic shaping |
+| Page orientation | Content rotated through the CTM, paper size unchanged | Paper dimensions are swapped per section so `/MediaBox` reports the resolved physical orientation |
 | Object serialization | A value consults its owning object for compression, encryption and a verbose pretty-printer | `output(stream)` only, no `PdfSettings`; dictionaries and arrays keep the port's `<< /Type /Page >>` spacing |
 | Font naming | `/F$objser`, derived from the font object's serial | Page-local `/F1`, `/F2`, … allocated as the content stream is written |
 | Colors | `PdfColor` value type with CMYK and HSL variants | RGB triple, DeviceRGB only |
-| Pagination | `SpanningWidget` saves mutable widget context between pages | Direct spanning children return immutable continuation state; `Table` supports it, while other tall widgets still throw `RangeError` |
-| Decoration shadows | Temporary raster images produced by the raster subsystem | Concentric vector fills with scoped opacity until phase 4; other decoration features are direct ports |
+| Pagination | `SpanningWidget` saves mutable widget context between pages | Direct spanning children return immutable continuation state; indivisible widgets or rows taller than a full content area still throw `RangeError` |
+| Decoration shadows | Temporary raster images produced by the raster subsystem | Concentric vector fills with scoped opacity; other decoration features are direct ports |
 | Async | `save()` returns a `Future` | `save()` returns `Uint8Array` |
 
 Two rows left this table rather than moving: font metrics and text encoding.
@@ -337,6 +345,8 @@ produces byte-identical PDFs to `src/`. The tests import `src/index.ts` directly
    layout protocol (§3). Relative imports end in `.ts`.
 5. Add tests under `test/`. Assert on emitted PDF operators, not on rendering.
 6. Run `npm run verify`.
-7. **Update [PORTING-STATUS.md](PORTING-STATUS.md) and [ROADMAP.md](ROADMAP.md).**
+7. Run `npm run examples` and commit the refreshed
+   `examples/generation-results.json`.
+8. **Update [PORTING-STATUS.md](PORTING-STATUS.md) and [ROADMAP.md](ROADMAP.md).**
    This is not optional — those two files are how the next session knows where
    the work stands.

@@ -3,7 +3,7 @@
 Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-06
-**Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
+**Upstream reference:** `pdf/lib/` — 136 Dart files, ~31,800 lines
 **Ported:** 136 `.ts` files, ~30,500 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
@@ -142,13 +142,13 @@ on: an object registers itself with the document, hands out references through
 ## `src/svg/` — SVG subsystem
 
 The `d` grammar landed in phase 2.2. The corpus is the SVG already in
-`examples/assets/` — twelve files plus the inline markup in
-`server-assets.json`; every `d` attribute in it parses.
+`examples/assets/` — eleven `.svg` files plus the inline markup in
+`server-assets.json`, for twelve SVG documents; every `d` attribute in it parses.
 
 Upstream's own `svg/path.dart` holds only the *shapes* — a `<rect>` written out
 as a `d` string, and so on — and delegates the grammar to the `path_parsing`
 package. The port has no runtime dependencies, so `src/svg/path.ts` carries
-both, and will grow the shape factories in 2.5.
+both the grammar and the shape factories landed in phase 2.5.
 
 | Upstream | Lines | Port / status |
 |---|---:|---|
@@ -158,7 +158,7 @@ both, and will grow the shape factories in 2.5.
 | `svg/transform.dart` | 124 | `src/svg/transform.ts` — done: `matrix translate scale rotate skewX skewY`, composed left to right |
 | `svg/group.dart`, `use.dart`, `symbol.dart` | 287 | `src/svg/group.ts`, `use.ts`, `symbol.ts` — done: inherited groups and local or namespaced references |
 | `svg/brush.dart`, `color.dart`, `colors.dart` | 609 | `src/svg/brush.ts`, `color.ts`, `colors.ts` — partial: complete named table, functional/hex colours, `currentColor`, inherited solid and gradient paint, stroke state |
-| `svg/clip_path.dart`, `mask_path.dart` | 148 | `src/svg/clip_path.ts` — partial: `clipPath`, `clip-rule`, user-space/object-bounding-box units and nested scopes; soft masks wait for phase 4 form XObjects and `/SMask` |
+| `svg/clip_path.dart`, `mask_path.dart` | 148 | `src/svg/clip_path.ts` — partial: `clipPath`, `clip-rule`, user-space/object-bounding-box units and nested scopes; generic SVG soft masks remain unimplemented |
 | `svg/gradient.dart` | 436 | `src/svg/gradient.ts` — partial: linear/radial gradients, stops, transforms, units and inherited references; varying stop alpha and true repeat/reflect wait on soft masks/tiling patterns |
 | `svg/text.dart` | 221 | — |
 | `svg/image.dart` | 150 | — |
@@ -184,7 +184,7 @@ both, and will grow the shape factories in 2.5.
 | `widgets/border_radius.dart` | 466 | `src/widgets/border_radius.ts` | done — physical/directional circular or elliptical radii, with oversized radii scaled to a valid path |
 | `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | `src/widgets/stack.ts`, `wrap.ts`, `grid_view.ts`, `partitions.ts` | done — positioned overlays/clipping, multi-run wrap, fixed-track grid and parallel partitions; immutable continuation for wrap/grid/partitions |
 | `widgets/clip.dart` | 134 | `src/widgets/clip.ts` | done — rectangular, scaled rounded-rectangle and elliptical clip scopes over immutable child layout |
-| `widgets/chart/*.dart` | 1989 | `src/widgets/chart/*.ts` | done — `Chart`, `CartesianGrid`, `PieGrid`, `RadialGrid`, `FixedAxis`, `ChartLegend`, `PointDataSet`, `BarDataSet`, `LineDataSet`, `PieDataSet`; grids resolve a frame at layout and hand it to the data sets, in place of upstream's mutable boxes |
+| `widgets/chart/*.dart` | 1989 | `src/widgets/chart/*.ts` | partial — complete chart rendering through `Chart`, `CartesianGrid`, `PieGrid`, `RadialGrid`, `FixedAxis`, `ChartLegend`, `PointDataSet`, `BarDataSet`, `LineDataSet` and `PieDataSet`; the upstream `ChartValue` base and deprecated `LineChartValue` compatibility alias are omitted |
 | `widgets/annotations.dart`, `forms.dart` | 1244 | `src/widgets/annotations.ts`, `forms.ts` | partial — links plus `ChoiceField`, `Checkbox`, `FlatButton` and `TextField`; `Signature` is out of scope with digital signatures |
 | `widgets/barcode.dart` | 298 | `src/widgets/barcode.ts` | done — `Barcode`, `BarcodeWidget`; symbol operations are immutable layout data |
 | `widgets/content.dart` | 360 | `src/widgets/content.ts` | partial — `Header`, `Paragraph`, `Bullet`, clickable `TableOfContent`, named destinations and conditional two-pass TOC; no `Watermark` or `Footer` |
@@ -206,8 +206,8 @@ both, and will grow the shape factories in 2.5.
 | SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping and gradients done; SVG text and embedded raster content remain |
 | Widgets | ~14,000 | ~85 public widget/value constructors, plus tables, rich styles, content and themes |
 
-**Phases 0, 1 and 2 are complete.** The WinAnsi ceiling is gone: a TrueType font
-is parsed, subset to the glyphs a document used, embedded as a
+**Roadmap phases 0 through 5.6 are complete.** The WinAnsi ceiling is gone: a
+TrueType font is parsed, subset to the glyphs a document used, embedded as a
 Type0/CIDFontType2 composite with `/Identity-H`, and selected through `Font`,
 `TextStyle` and `ThemeData`. Text outside Latin-1 is no longer replaced with `?`
 — it is drawn from the embedded font and stays searchable through the
