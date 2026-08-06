@@ -13,23 +13,23 @@ import { createSalesReport } from './create-sales-report.mjs';
 
 const model = {
   author: 'Blunana',
-  period: 'Janeiro a julho de 2026',
+  period: 'January through July 2026',
   revenue: 185430.40,
   orders: 1248,
   averageTicket: 148.58,
   months: [
     { label: 'Jan', value: 21000 },
-    { label: 'Fev', value: 24000 },
+    { label: 'Feb', value: 24000 },
     { label: 'Mar', value: 23000 },
-    { label: 'Abr', value: 28000 },
-    { label: 'Mai', value: 27000 },
+    { label: 'Apr', value: 28000 },
+    { label: 'May', value: 27000 },
     { label: 'Jun', value: 31000 },
     { label: 'Jul', value: 31430 }
   ],
   sales: Array.from({ length: 35 }, (_, index) => ({
-    date: `${String((index % 28) + 1).padStart(2, '0')}/07/2026`,
-    customer: `Cliente ${index + 1}`,
-    status: index % 4 === 0 ? 'Pendente' : 'Pago',
+    date: `07/${String((index % 28) + 1).padStart(2, '0')}/2026`,
+    customer: `Customer ${index + 1}`,
+    status: index % 4 === 0 ? 'Pending' : 'Paid',
     value: 95.5 + index * 13.75
   }))
 };
