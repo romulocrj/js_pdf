@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-06T02:57:23.914Z",
+  "generatedAt": "2026-08-06T03:19:59.991Z",
   "results": [
     {
       "name": "hello-world",
@@ -34,7 +34,7 @@
     {
       "name": "resume",
       "status": "failed",
-      "error": "resume requires unported js_pdf APIs: CircularProgressIndicator, Icon, IconData"
+      "error": "resume requires unported js_pdf APIs: CircularProgressIndicator"
     },
     {
       "name": "server",

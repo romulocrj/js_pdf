@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { generateSvgGradientsPhase28 } from './svg-gradients-phase-2.8.mjs';
 import { generateTablePhase31 } from './table-phase-3.1.mjs';
 import { generateTableSpanningPhase32 } from './table-spanning-phase-3.2.mjs';
@@ -22,6 +22,11 @@ import { generateImagePhase43 } from './image-phase-4.3.mjs';
 import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
 import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
 import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
+import { generateIconsPhase54 } from './icons-phase-5.4.mjs';
+
+const materialIcons = new Uint8Array(
+  await readFile(new URL('./assets/MaterialIcons.ttf', import.meta.url))
+);
 
 const examples = [
   ['svg-gradients-phase-2.8', generateSvgGradientsPhase28],
@@ -40,7 +45,8 @@ const examples = [
   ['image-phase-4.3', generateImagePhase43],
   ['charts-phase-5.1', generateChartsPhase51],
   ['barcode-phase-5.2', generateBarcodePhase52],
-  ['annotations-phase-5.3', generateAnnotationsPhase53]
+  ['annotations-phase-5.3', generateAnnotationsPhase53],
+  ['icons-phase-5.4', () => generateIconsPhase54(materialIcons)]
 ];
 
 const outputDirectory = new URL('./out/', import.meta.url);

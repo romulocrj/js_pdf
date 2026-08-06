@@ -1,6 +1,7 @@
 import type { TextAlign, TextOverflow } from './text.ts';
 import { TextStyle } from './text_style.ts';
 import type { Font } from './font.ts';
+import { IconThemeData } from './icon.ts';
 import { Widget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
 export interface ThemeDataFields {
@@ -19,6 +20,7 @@ export interface ThemeDataFields {
     readonly overflow: TextOverflow;
     readonly textAlign: TextAlign | null;
     readonly maxLines: number | null;
+    readonly iconTheme: IconThemeData;
 }
 export interface ThemeDataOptions {
     readonly defaultTextStyle?: TextStyle;
@@ -36,13 +38,13 @@ export interface ThemeDataOptions {
     readonly overflow?: TextOverflow;
     readonly textAlign?: TextAlign | null;
     readonly maxLines?: number | null;
+    readonly iconTheme?: IconThemeData;
 }
 export interface ThemeWithFontOptions {
     readonly base?: Font | null;
     readonly bold?: Font | null;
     readonly italic?: Font | null;
     readonly boldItalic?: Font | null;
-    /** Accepted for API parity; consumed by `Icon` in roadmap phase 5.4. */
     readonly icons?: Font | null;
     readonly fontFallback?: readonly Font[] | null;
 }
@@ -62,6 +64,7 @@ export declare class ThemeData {
     readonly overflow: TextOverflow;
     readonly textAlign: TextAlign | null;
     readonly maxLines: number | null;
+    readonly iconTheme: IconThemeData;
     /**
      * Upstream's public constructor is a factory that merges onto
      * `ThemeData.base()`; a TypeScript constructor cannot return a different
@@ -70,7 +73,7 @@ export declare class ThemeData {
      */
     constructor(fields: ThemeDataFields);
     /** Every style derived from one set of faces — the usual entry point. */
-    static withFont({ base, bold, italic, boldItalic, fontFallback }?: ThemeWithFontOptions): ThemeData;
+    static withFont({ base, bold, italic, boldItalic, icons, fontFallback }?: ThemeWithFontOptions): ThemeData;
     /** The theme a document uses when it names none: Helvetica in four faces. */
     static base(): ThemeData;
     /** Upstream's `ThemeData({...})` factory: overrides merged onto the base. */

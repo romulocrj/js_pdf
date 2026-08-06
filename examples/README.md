@@ -39,6 +39,8 @@ Both runners place generated PDFs in `out/`.
 
 `annotations-phase-5.3.mjs` is the focused visual proof for whole-widget URL
 links, inline span annotations and internal named destinations.
+`icons-phase-5.4.mjs` proves themed glyph size, colour, opacity and RTL
+mirroring using the retained Material Icons font.
 
 **A non-zero exit is expected until phase 5 completes** — that is the gate
 working, not a broken build.

@@ -128,6 +128,14 @@ transforms, inline inheritance and internal navigation. `document.pdf` and
 `server.pdf` now generate in Node and bare V8, taking the gate to 7/8 examples
 and reducing the missing total 7 → 3.
 
+**Phase 5.4 — icons — landed 2026-08-06.** `Icon`, `IconData` and
+`IconThemeData` are public; `ThemeData.withFont({ icons })` supplies their
+caller-loaded font, and the existing TrueType subsetter embeds only the glyphs
+used. The widget inherits size, colour and opacity, accepts explicit overrides
+and mirrors directional glyphs in RTL. Six tests and
+`examples/icons-phase-5.4.mjs` cover the surface in Node and bare V8. Resume's
+missing total falls 3 → 1.
+
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
 option on `Page` and `MultiPage` as well as on `PageTheme`, and every physical
@@ -197,12 +205,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 5.4 — icons.** Port `Icon` and `IconData` over the existing embedded
-> TrueType font pipeline, using the retained Material Icons asset. This leaves
-> only progress indicators before `resume` and the full example set generate.
+> **Phase 5.5 — progress (`resume`).** Port `CircularProgressIndicator` and
+> `LinearProgressIndicator`. The circular widget is resume's final missing API,
+> so this phase makes the complete upstream example set generate end to end.
 
-Phase 5.3 is complete: document and server generate, and resume now waits only
-on icons and progress.
+Phase 5.4 is complete: icons render from the subsetted Material Icons font, and
+resume now waits only on progress.
 
 ---
 
@@ -452,7 +460,7 @@ Divergences, each noted in the file:
 are monotonic and in bounds; every glyph in `OpenSans-Regular` and
 `Roboto-Regular` reads without overrunning its `loca` entry and refers only to
 glyphs inside the font; `MaterialIcons` resolves Private Use Area codepoints,
-which is what phase 5.4 needs.
+which phase 5.4 uses.
 
 ### 1.2 TTF subsetting writer ✅ *(landed 2026-08-05)*
 
@@ -475,7 +483,7 @@ Divergences, each noted in the file:
   `/CIDToGIDMap /Identity`. Upstream breaks it twice: it drops a code point the
   font has no glyph for, and it substitutes an arbitrary glyph when two code
   points resolve to one. Either shifts every later CID onto the wrong glyph.
-  `MaterialIcons.ttf`, which phase 5.4 needs, has no space glyph and hits the
+  `MaterialIcons.ttf`, which phase 5.4 uses, has no space glyph and hits the
   first case. The port emits a blank placeholder instead.
 - Upstream's compound-glyph rewriter advances 6 or 8 bytes per component and
   never skips the optional scale or 2×2 transform, though its own reader does.
@@ -557,7 +565,8 @@ Other divergences worth knowing:
   same; `/MediaBox` reports the rotated size.
 - `fontFallback`, painted backgrounds/decorations and justification landed with
   the real line breaker in **3.7**.
-- No `iconTheme` on `ThemeData` — `IconThemeData` belongs with `Icon` in **5.4**.
+- `IconThemeData` landed with `Icon` in **5.4** and rides on the same scoped
+  `ThemeData` field as the text styles.
 - No `DefaultTextStyle.merge`, which upstream builds out of `Builder` — one of
   the widgets **3.3** left open.
 - `Font` is a pure declaration; the built `PdfFont` is cached on the `Document`
@@ -1177,12 +1186,17 @@ The last four examples all land here, one per sub-phase.
   generate end to end here.**
   Also advances `resume`.
 
-### 5.4 Icons
+### 5.4 Icons ✅ *(landed 2026-08-06)*
 
 - **Ports:** `widgets/icon.dart`
-- `Icon`, `IconData`, backed by the `MaterialIcons.ttf` already in
-  `examples/assets/`. Depends on phase 1.
-- **Example gate:** `resume`.
+- `Icon`, `IconData` and `IconThemeData`, backed by the `MaterialIcons.ttf`
+  already in `examples/assets/` and the phase-1 TrueType subsetter.
+- `ThemeData.withFont({ icons })` installs the font with upstream's 24-point,
+  black, fully opaque defaults; scoped themes and widget options override them.
+- Direction-matching icons mirror around their centre only in explicit RTL.
+- `examples/icons-phase-5.4.mjs` is the retained visual proof and generates
+  9,034 bytes under both the local bundle and bare V8.
+- **Example gate:** advances `resume`; only `CircularProgressIndicator` remains.
 
 ### 5.5 Progress ⇒ `resume`
 

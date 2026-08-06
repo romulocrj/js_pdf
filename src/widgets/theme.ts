@@ -24,14 +24,12 @@
  * paint their child with a context carrying a different `theme`, which is the
  * same scoping with none of the machinery. `Theme.of(context)` is therefore just
  * a field read.
- *
- * PORT GAP: no `iconTheme`. `IconThemeData` belongs with the `Icon` widget in
- * roadmap phase 5.4, and nothing can consume it before then.
  */
 
 import type { TextAlign, TextOverflow } from './text.ts';
 import { TextStyle } from './text_style.ts';
 import type { Font } from './font.ts';
+import { IconThemeData } from './icon.ts';
 import { Widget } from './widget.ts';
 import type {
   AnyLayoutBox,
@@ -58,6 +56,7 @@ export interface ThemeDataFields {
   readonly overflow: TextOverflow;
   readonly textAlign: TextAlign | null;
   readonly maxLines: number | null;
+  readonly iconTheme: IconThemeData;
 }
 
 export interface ThemeDataOptions {
@@ -76,6 +75,7 @@ export interface ThemeDataOptions {
   readonly overflow?: TextOverflow;
   readonly textAlign?: TextAlign | null;
   readonly maxLines?: number | null;
+  readonly iconTheme?: IconThemeData;
 }
 
 export interface ThemeWithFontOptions {
@@ -84,7 +84,6 @@ export interface ThemeWithFontOptions {
   readonly italic?: Font | null;
   readonly boldItalic?: Font | null;
 
-  /** Accepted for API parity; consumed by `Icon` in roadmap phase 5.4. */
   readonly icons?: Font | null;
   readonly fontFallback?: readonly Font[] | null;
 }
@@ -105,6 +104,7 @@ export class ThemeData {
   readonly overflow: TextOverflow;
   readonly textAlign: TextAlign | null;
   readonly maxLines: number | null;
+  readonly iconTheme: IconThemeData;
 
   /**
    * Upstream's public constructor is a factory that merges onto
@@ -128,6 +128,7 @@ export class ThemeData {
     this.overflow = fields.overflow;
     this.textAlign = fields.textAlign;
     this.maxLines = fields.maxLines;
+    this.iconTheme = fields.iconTheme;
   }
 
   /** Every style derived from one set of faces — the usual entry point. */
@@ -136,6 +137,7 @@ export class ThemeData {
     bold = null,
     italic = null,
     boldItalic = null,
+    icons = null,
     fontFallback = null
   }: ThemeWithFontOptions = {}): ThemeData {
     const defaultStyle = TextStyle.defaultStyle().copyWith({
@@ -163,7 +165,8 @@ export class ThemeData {
       softWrap: true,
       overflow: 'visible',
       textAlign: null,
-      maxLines: null
+      maxLines: null,
+      iconTheme: IconThemeData.fallback(icons)
     });
   }
 
@@ -193,7 +196,8 @@ export class ThemeData {
       softWrap: options.softWrap ?? this.softWrap,
       overflow: options.overflow ?? this.overflow,
       textAlign: options.textAlign ?? this.textAlign,
-      maxLines: options.maxLines ?? this.maxLines
+      maxLines: options.maxLines ?? this.maxLines,
+      iconTheme: options.iconTheme ?? this.iconTheme
     });
   }
 }

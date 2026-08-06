@@ -11174,6 +11174,106 @@ class Page {
   }
 }
 
+class IconData {
+  constructor(codePoint, {matchTextDirection = false} = {}) {
+    const value = Number(codePoint);
+    if (!Number.isInteger(value) || value < 0 || value > 1114111 || value >= 55296 && value <= 57343) {
+      throw new RangeError("IconData.codePoint must be a valid Unicode scalar value");
+    }
+    this.codePoint = value;
+    this.matchTextDirection = Boolean(matchTextDirection);
+  }
+}
+
+class IconThemeData {
+  constructor({color = null, opacity = null, size = null, font = null} = {}) {
+    this.color = color === null ? null : normalizeColor(color);
+    this.opacity = opacity === null ? null : assertFiniteNumber(Number(opacity), "icon opacity");
+    this.size = size === null ? null : assertFiniteNumber(Number(size), "icon size");
+    this.font = font;
+    if (this.opacity !== null && (this.opacity < 0 || this.opacity > 1)) {
+      throw new RangeError("icon opacity must be between 0 and 1");
+    }
+    if (this.size !== null && this.size < 0) {
+      throw new RangeError("icon size cannot be negative");
+    }
+  }
+  static fallback(font = null) {
+    return new IconThemeData({
+      color: "#000000",
+      opacity: 1,
+      size: 24,
+      font
+    });
+  }
+  copyWith(options = {}) {
+    return new IconThemeData({
+      color: options.color ?? this.color,
+      opacity: options.opacity ?? this.opacity,
+      size: options.size ?? this.size,
+      font: options.font ?? this.font
+    });
+  }
+}
+
+class Icon extends StatelessWidget {
+  constructor(icon, {size = null, color = null, textDirection = null, font = null} = {}) {
+    super();
+    if (!(icon instanceof IconData)) throw new TypeError("Icon expects an IconData value");
+    this.icon = icon;
+    this.size = size === null ? null : assertFiniteNumber(Number(size), "icon size");
+    this.color = color === null ? null : normalizeColor(color);
+    this.textDirection = textDirection;
+    this.font = font;
+    if (this.size !== null && this.size < 0) throw new RangeError("icon size cannot be negative");
+    if (textDirection !== null && textDirection !== "ltr" && textDirection !== "rtl") {
+      throw new TypeError(`Unknown text direction: ${String(textDirection)}`);
+    }
+  }
+  build(context) {
+    const theme = context.theme.iconTheme;
+    const size = this.size ?? theme.size ?? 24;
+    const color = this.color ?? theme.color ?? [ 0, 0, 0 ];
+    const opacity = theme.opacity ?? 1;
+    const font = this.font ?? theme.font;
+    if (font === null) {
+      throw new Error("Icon requires Icon.font or ThemeData.withFont({ icons })");
+    }
+    const direction = this.textDirection ?? "ltr";
+    let widget = new RichText({
+      textDirection: direction,
+      text: new TextSpan({
+        text: String.fromCodePoint(this.icon.codePoint),
+        style: new TextStyle({
+          inherit: false,
+          color,
+          fontNormal: font,
+          fontSize: size,
+          fontWeight: "normal",
+          fontStyle: "normal",
+          letterSpacing: 0,
+          wordSpacing: 0,
+          lineSpacing: 0,
+          height: 1,
+          decoration: "none"
+        })
+      })
+    });
+    if (this.icon.matchTextDirection && direction === "rtl") {
+      widget = new Transform({
+        transform: [ -1, 0, 0, 1, 0, 0 ],
+        alignment: "center",
+        child: widget
+      });
+    }
+    if (opacity < 1) widget = new Opacity({
+      opacity,
+      child: widget
+    });
+    return widget;
+  }
+}
+
 class ThemeData {
   constructor(fields) {
     this.defaultTextStyle = fields.defaultTextStyle;
@@ -11191,8 +11291,9 @@ class ThemeData {
     this.overflow = fields.overflow;
     this.textAlign = fields.textAlign;
     this.maxLines = fields.maxLines;
+    this.iconTheme = fields.iconTheme;
   }
-  static withFont({base = null, bold = null, italic = null, boldItalic = null, fontFallback = null} = {}) {
+  static withFont({base = null, bold = null, italic = null, boldItalic = null, icons = null, fontFallback = null} = {}) {
     const defaultStyle = TextStyle.defaultStyle().copyWith({
       font: base,
       fontNormal: base,
@@ -11238,7 +11339,8 @@ class ThemeData {
       softWrap: true,
       overflow: "visible",
       textAlign: null,
-      maxLines: null
+      maxLines: null,
+      iconTheme: IconThemeData.fallback(icons)
     });
   }
   static base() {
@@ -11263,7 +11365,8 @@ class ThemeData {
       softWrap: options.softWrap ?? this.softWrap,
       overflow: options.overflow ?? this.overflow,
       textAlign: options.textAlign ?? this.textAlign,
-      maxLines: options.maxLines ?? this.maxLines
+      maxLines: options.maxLines ?? this.maxLines,
+      iconTheme: options.iconTheme ?? this.iconTheme
     });
   }
 }
@@ -15236,6 +15339,9 @@ const publicApi = Object.freeze({
   BarcodeQRCorrectionLevel,
   Pdf417SecurityLevel,
   Document,
+  Icon,
+  IconData,
+  IconThemeData,
   Anchor,
   Annotation,
   AnnotationBuilder,
@@ -15374,4 +15480,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationLink, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridAxis, GridView, Header, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, Link, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationLink, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridAxis, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, Link, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

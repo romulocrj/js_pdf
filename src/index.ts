@@ -88,6 +88,7 @@ import type { Section } from './widgets/page.ts';
 import { PageTheme } from './widgets/page_theme.ts';
 import { Image } from './widgets/image.ts';
 import { ImageProvider, ImageProxy, MemoryImage, RawImage } from './widgets/image_provider.ts';
+import { Icon, IconData, IconThemeData } from './widgets/icon.ts';
 import { FlutterLogo, Lorem, LoremText, PdfLogo, Placeholder } from './widgets/placeholders.ts';
 import { Vector } from './widgets/shape.ts';
 import { Positioned, PositionedDirectional, Stack } from './widgets/stack.ts';
@@ -172,6 +173,9 @@ export {
   GridAxis,
   GridView,
   Header,
+  Icon,
+  IconData,
+  IconThemeData,
   Image,
   ImageProvider,
   ImageProxy,
@@ -535,6 +539,11 @@ export type {
   ImageOptions
 } from './widgets/image.ts';
 export type {
+  IconDataOptions,
+  IconOptions,
+  IconThemeDataOptions
+} from './widgets/icon.ts';
+export type {
   MemoryImageOptions,
   RawImageOptions
 } from './widgets/image_provider.ts';
@@ -573,6 +582,9 @@ export interface PublicApi {
   readonly BarcodeQRCorrectionLevel: typeof BarcodeQRCorrectionLevel;
   readonly Pdf417SecurityLevel: typeof Pdf417SecurityLevel;
   readonly Document: typeof Document;
+  readonly Icon: typeof Icon;
+  readonly IconData: typeof IconData;
+  readonly IconThemeData: typeof IconThemeData;
   readonly Anchor: typeof Anchor;
   readonly Annotation: typeof Annotation;
   readonly AnnotationBuilder: typeof AnnotationBuilder;
@@ -701,6 +713,9 @@ const publicApi: PublicApi = Object.freeze({
   BarcodeQRCorrectionLevel,
   Pdf417SecurityLevel,
   Document,
+  Icon,
+  IconData,
+  IconThemeData,
   Anchor,
   Annotation,
   AnnotationBuilder,

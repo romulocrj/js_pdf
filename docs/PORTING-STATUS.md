@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-06
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 131 `.ts` files, ~28,600 lines (TypeScript)
+**Ported:** 132 `.ts` files, ~28,800 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -29,9 +29,9 @@ table. Run `npm run examples`; current state, from
 | `invoice` | ✅ generated (70,824 bytes) | 0 | 5.2 |
 | `document` | ✅ generated (101,311 bytes) | 0 | 5.3 |
 | `server` | ✅ generated (81,692 bytes) | 0 | 5.3 |
-| `resume` | failed | 3 | 5.5 |
+| `resume` | failed | 1 | 5.5 |
 
-**7 of 8**, with the missing-API total down from 124 to 3 — phase 1.4 cleared
+**7 of 8**, with the missing-API total down from 124 to 1 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
 from every one of the seven, phase 2.7 cleared `SvgImage` from six, and phase
 3.1 cleared `TableHelper` from four. Phase 3.3 then cleared the composition
@@ -46,7 +46,8 @@ then removed `ClipOval` from resume; phase 4.3 then removed `Image` and
 `MemoryImage` from resume. Phase 5.2 supplied `Barcode` and `BarcodeWidget`,
 making invoice generate and advancing resume. Phase 5.3 supplied URL and named
 destination links, making document and server generate and leaving resume with
-only icons and progress. See
+only icons and progress. Phase 5.4 then supplied `Icon`, `IconData` and the
+inherited icon theme, leaving only progress. See
 [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which phase clears
 each one.
 
@@ -175,7 +176,7 @@ both, and will grow the shape factories in 2.5.
 | `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts`, `src/widgets/svg.ts` | partial — imperative `Vector`; public `SvgImage` with all `BoxFit` modes, alignment, clipping and colour filter; no SVG text or embedded raster content |
 | `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | done — all upstream public classes, including tight `SizedBox`, `ConstrainedBox`, minimum-preserving `LimitedBox` and aligned `OverflowBox`; dividers paint the equivalent rule directly |
 | `widgets/table.dart`, `table_helper.dart` | 834 | `src/widgets/table.ts`, `table_helper.ts` | partial — fixed/flex/intrinsic/fraction tracks, alignment, decorations, borders, `TableHelper`, page spanning and repeatable headers; no bidi direction |
-| `widgets/theme.dart`, `font.dart` | 461 | `src/widgets/theme.ts`, `src/widgets/font.ts` | partial — `Font`, `ThemeData`, `Theme`, `DefaultTextStyle`; no `iconTheme` (**5.4**) or `DefaultTextStyle.merge` |
+| `widgets/theme.dart`, `font.dart` | 461 | `src/widgets/theme.ts`, `src/widgets/font.ts` | partial — `Font`, `ThemeData`, `Theme`, `DefaultTextStyle` and `iconTheme`; no `DefaultTextStyle.merge` |
 | `widgets/image.dart`, `image_provider.dart` | 423 | `src/widgets/image.ts`, `src/widgets/image_provider.ts` | partial — `Image`, all seven `BoxFit` modes, alignment, DPI-aware decoded PNG/Raw resizing, `ImageProvider`, `ImageProxy`, `MemoryImage`, `RawImage`; bytes are caller-supplied and encoded JPEGs remain pass-through |
 | `widgets/border_radius.dart` | 466 | `src/widgets/border_radius.ts` | done — physical/directional circular or elliptical radii, with oversized radii scaled to a valid path |
 | `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | `src/widgets/stack.ts`, `wrap.ts`, `grid_view.ts`, `partitions.ts` | done — positioned overlays/clipping, multi-run wrap, fixed-track grid and parallel partitions; immutable continuation for wrap/grid/partitions |
@@ -185,7 +186,7 @@ both, and will grow the shape factories in 2.5.
 | `widgets/barcode.dart` | 298 | `src/widgets/barcode.ts` | done — `Barcode`, `BarcodeWidget`; symbol operations are immutable layout data |
 | `widgets/content.dart` | 360 | `src/widgets/content.ts` | partial — `Header`, `Paragraph`, `Bullet`, clickable `TableOfContent`, named destinations and conditional two-pass TOC; no `Watermark` or `Footer` |
 | `widgets/placeholders.dart` | 187 | `src/widgets/placeholders.ts` | done — `Placeholder`, vector `PdfLogo`, SVG `FlutterLogo`, deterministic `LoremText` and stable `Lorem` widget |
-| `widgets/icon.dart` | 146 | — | — `Icon`, `IconData` — **phase 5.4** |
+| `widgets/icon.dart` | 146 | `src/widgets/icon.ts` | done — `Icon`, `IconData`, `IconThemeData`, themed size/color/opacity and RTL mirroring over a caller-supplied font |
 | `widgets/progress.dart` | 202 | — | — `CircularProgressIndicator` — **phase 5.5** |
 | `widgets/grid_paper.dart` | 338 | — | — no example depends on it |
 
@@ -200,7 +201,7 @@ both, and will grow the shape factories in 2.5.
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
 | SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping and gradients done; SVG text and embedded raster content remain |
-| Widgets | ~14,000 | ~80 public widget/value constructors, plus tables, rich styles, content and themes |
+| Widgets | ~14,000 | ~83 public widget/value constructors, plus tables, rich styles, content and themes |
 
 **Phases 0, 1 and 2 are complete.** The WinAnsi ceiling is gone: a TrueType font
 is parsed, subset to the glyphs a document used, embedded as a
@@ -209,9 +210,8 @@ Type0/CIDFontType2 composite with `/Identity-H`, and selected through `Font`,
 — it is drawn from the embedded font and stays searchable through the
 `/ToUnicode` CMap. The public SVG pipeline now reaches PDF shading patterns.
 
-**Phase 5.3 is complete**, and `document` plus `server` generate. Page link
-annotations, external URLs, named destinations, anchors, inline span links and
-clickable table-of-content rows are now serialized end to end. Only `resume`
-remains, waiting on icons and progress.
+**Phase 5.4 is complete.** `Icon`, `IconData` and `IconThemeData` draw subsetted
+private-use glyphs through the existing embedded TrueType pipeline, including
+the Material Icons used by resume. Only `resume` remains, waiting on progress.
 See
 [ROADMAP.md](ROADMAP.md).
