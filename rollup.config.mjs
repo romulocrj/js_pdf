@@ -35,8 +35,10 @@ const { version } = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf8')
 );
 
-export const banner = `/*
- * romulocrj/js_pdf — JavaScript port of DavBfr/dart_pdf.
+export const banner = `/*!
+ * @license romulocrj/js_pdf v${version}
+ *
+ * An independent JavaScript port of DavBfr/dart_pdf.
  *
  * Original work: https://github.com/DavBfr/dart_pdf
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>

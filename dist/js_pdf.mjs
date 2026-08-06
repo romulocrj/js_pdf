@@ -1,5 +1,7 @@
-/*
- * romulocrj/js_pdf — JavaScript port of DavBfr/dart_pdf.
+/*!
+ * @license romulocrj/js_pdf v0.1.3
+ *
+ * An independent JavaScript port of DavBfr/dart_pdf.
  *
  * Original work: https://github.com/DavBfr/dart_pdf
  * Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>
