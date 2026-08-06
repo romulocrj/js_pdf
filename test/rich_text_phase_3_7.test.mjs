@@ -8,9 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Pdf from '../src/index.ts';
 
-function source(bytes) {
-  return String.fromCharCode(...bytes);
-}
+import { latin1 as source } from './support/pdf-text.mjs';
 
 function context(width = 220, height = 120) {
   const document = new Pdf.Document();

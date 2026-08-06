@@ -10,6 +10,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as Pdf from '../src/index.ts';
+import { latin1 } from './support/pdf-text.mjs';
 import { PdfCanvas } from '../src/pdf/graphics.ts';
 import { PageFormat } from '../src/pdf/page_format.ts';
 
@@ -125,8 +126,7 @@ test('SvgImage serializes real path operators into a PDF', () => {
   const bytes = Pdf.createPdf({}, api => new api.Page({
     build: () => new api.SvgImage({ svg, width: 100 })
   }));
-  let source = '';
-  for (const byte of bytes) source += String.fromCharCode(byte);
+  const source = latin1(bytes);
 
   assert.match(source, /1 0 0 rg/);
   assert.match(source, /W n/);

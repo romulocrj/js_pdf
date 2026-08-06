@@ -10,12 +10,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as Pdf from '../src/index.ts';
+import { latin1 } from "./support/pdf-text.mjs";
 
-const latin1 = bytes => {
-  let value = '';
-  for (const byte of bytes) value += String.fromCharCode(byte);
-  return value;
-};
 
 function layoutOnly(widget, constraints = { maxWidth: 200, maxHeight: 500 }) {
   const document = new Pdf.Document();

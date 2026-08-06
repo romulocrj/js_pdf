@@ -15,12 +15,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Pdf from '../src/index.ts';
+import { latin1 } from "./support/pdf-text.mjs";
 
-function latin1(bytes) {
-  let output = '';
-  for (const byte of bytes) output += String.fromCharCode(byte);
-  return output;
-}
 
 /** The `/MediaBox` of each page, in document order. */
 const mediaBoxes = bytes =>

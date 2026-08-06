@@ -1,5 +1,5 @@
 /*!
- * @license romulocrj/js_pdf v0.1.4
+ * @license romulocrj/js_pdf v0.1.5
  *
  * An independent JavaScript port of DavBfr/dart_pdf.
  *
@@ -60,27 +60,34 @@ const PageUnit = Object.freeze({
 });
 
 function codeUnits(text) {
-  const units = [];
-  for (let i = 0; i < text.length; i++) units.push(text.charCodeAt(i));
+  const units = new Uint16Array(text.length);
+  for (let i = 0; i < text.length; i++) units[i] = text.charCodeAt(i);
   return units;
 }
 
 function utf8Encode(text) {
-  const bytes = [];
+  const bytes = new Uint8Array(text.length * 3);
+  let length = 0;
   for (const character of text) {
     let point = character.codePointAt(0) ?? 65533;
     if (point >= 55296 && point <= 57343) point = 65533;
     if (point < 128) {
-      bytes.push(point);
+      bytes[length++] = point;
     } else if (point < 2048) {
-      bytes.push(192 | point >> 6, 128 | point & 63);
+      bytes[length++] = 192 | point >> 6;
+      bytes[length++] = 128 | point & 63;
     } else if (point < 65536) {
-      bytes.push(224 | point >> 12, 128 | point >> 6 & 63, 128 | point & 63);
+      bytes[length++] = 224 | point >> 12;
+      bytes[length++] = 128 | point >> 6 & 63;
+      bytes[length++] = 128 | point & 63;
     } else {
-      bytes.push(240 | point >> 18, 128 | point >> 12 & 63, 128 | point >> 6 & 63, 128 | point & 63);
+      bytes[length++] = 240 | point >> 18;
+      bytes[length++] = 128 | point >> 12 & 63;
+      bytes[length++] = 128 | point >> 6 & 63;
+      bytes[length++] = 128 | point & 63;
     }
   }
-  return Uint8Array.from(bytes);
+  return bytes.subarray(0, length).slice();
 }
 
 function utf8Decode(bytes) {
@@ -2130,7 +2137,7 @@ const ERROR_WORDS_PER_BLOCK = [ [ -1, 7, 10, 15, 20, 26, 18, 20, 24, 30, 18, 20,
 
 const BLOCK_COUNT = [ [ -1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4, 4, 4, 4, 4, 6, 6, 6, 6, 7, 8, 8, 9, 9, 10, 12, 12, 12, 13, 14, 15, 16, 17, 18, 19, 19, 20, 21, 22, 24, 25 ], [ -1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49 ], [ -1, 1, 1, 2, 2, 4, 4, 6, 6, 8, 8, 8, 10, 12, 16, 12, 17, 16, 18, 21, 20, 23, 23, 25, 27, 29, 34, 34, 35, 38, 40, 43, 45, 48, 51, 53, 56, 59, 62, 65, 68 ], [ -1, 1, 1, 2, 4, 4, 4, 5, 6, 8, 8, 11, 11, 16, 16, 18, 16, 19, 21, 25, 25, 25, 34, 30, 32, 35, 37, 40, 42, 45, 48, 51, 54, 57, 60, 63, 66, 70, 74, 77, 81 ] ];
 
-class BitWriter {
+let BitWriter$1 = class BitWriter {
   constructor() {
     this.bytes = [];
     this.length = 0;
@@ -2149,7 +2156,7 @@ class BitWriter {
     if (value) this.bytes[byteIndex] = this.bytes[byteIndex] | 128 >>> (this.length & 7);
     this.length++;
   }
-}
+};
 
 class BarcodeQR extends Barcode2D {
   constructor(typeNumber, errorCorrectLevel) {
@@ -2216,7 +2223,7 @@ function dataWordCount(version, correctionRow) {
 }
 
 function frameData(data, version, capacity) {
-  const bits = new BitWriter;
+  const bits = new BitWriter$1;
   bits.append(4, 4);
   bits.append(data.length, version < 10 ? 8 : 16);
   for (const byte of data) bits.append(byte, 8);
@@ -4213,6 +4220,10 @@ class PdfIndirect extends PdfDataType {
   }
 }
 
+const DEFAULT_PDF_SETTINGS = {
+  compress: true
+};
+
 class PdfObjectBase {
   constructor(objser, params, objgen = 0) {
     this.objser = objser;
@@ -4249,17 +4260,537 @@ class PdfFontDescriptor extends PdfObject {
   }
 }
 
+const MIN_MATCH = 3;
+
+const MAX_MATCH = 258;
+
+const WINDOW_SIZE = 32768;
+
+const WINDOW_MASK = WINDOW_SIZE - 1;
+
+const HASH_BITS = 15;
+
+const HASH_SIZE = 1 << HASH_BITS;
+
+const HASH_MASK = HASH_SIZE - 1;
+
+const MAX_CHAIN = 128;
+
+const BLOCK_TOKENS = 1 << 14;
+
+const MAX_STORED = 65535;
+
+const LENGTH_BASE$1 = [ 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258 ];
+
+const LENGTH_EXTRA$1 = [ 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0 ];
+
+const DISTANCE_BASE$1 = [ 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577 ];
+
+const DISTANCE_EXTRA$1 = [ 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 ];
+
+const CODE_LENGTH_ORDER = [ 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 ];
+
+const LITERAL_SYMBOLS = 286;
+
+const DISTANCE_SYMBOLS = 30;
+
+const CODE_LENGTH_SYMBOLS = 19;
+
+const END_OF_BLOCK = 256;
+
+const MAX_CODE_BITS = 15;
+
+const MAX_CODE_LENGTH_BITS = 7;
+
+const LENGTH_CODE = buildLengthCodes();
+
+const DISTANCE_CODE_LOW = new Uint8Array(256);
+
+const DISTANCE_CODE_HIGH = new Uint8Array(256);
+
+buildDistanceCodes();
+
+function buildLengthCodes() {
+  const table = new Uint8Array(MAX_MATCH + 1);
+  let code = 0;
+  for (let length = MIN_MATCH; length <= MAX_MATCH; length++) {
+    while (code < LENGTH_BASE$1.length - 1 && length >= LENGTH_BASE$1[code + 1]) {
+      code++;
+    }
+    table[length] = code;
+  }
+  return table;
+}
+
+function buildDistanceCodes() {
+  for (let distance = 1; distance <= 256; distance++) {
+    DISTANCE_CODE_LOW[distance - 1] = distanceCodeFor(distance);
+  }
+  for (let slot = 0; slot < 256; slot++) {
+    DISTANCE_CODE_HIGH[slot] = distanceCodeFor((slot << 7) + 1);
+  }
+}
+
+function distanceCodeFor(distance) {
+  let code = 0;
+  while (code < DISTANCE_BASE$1.length - 1 && distance >= DISTANCE_BASE$1[code + 1]) {
+    code++;
+  }
+  return code;
+}
+
+function distanceCode(distance) {
+  return distance <= 256 ? DISTANCE_CODE_LOW[distance - 1] : DISTANCE_CODE_HIGH[distance - 1 >>> 7];
+}
+
+class BitWriter {
+  constructor(capacity) {
+    this.length = 0;
+    this.bitBuffer = 0;
+    this.bitCount = 0;
+    this.bytes = new Uint8Array(Math.max(capacity, 64));
+  }
+  get byteLength() {
+    return this.length;
+  }
+  ensure(extra) {
+    if (this.length + extra <= this.bytes.length) return;
+    let size = this.bytes.length * 2;
+    while (size < this.length + extra) size *= 2;
+    const grown = new Uint8Array(size);
+    grown.set(this.bytes.subarray(0, this.length));
+    this.bytes = grown;
+  }
+  writeBits(value, count) {
+    if (count === 0) return;
+    this.bitBuffer |= value << this.bitCount;
+    this.bitCount += count;
+    this.ensure(4);
+    while (this.bitCount >= 8) {
+      this.bytes[this.length++] = this.bitBuffer & 255;
+      this.bitBuffer >>>= 8;
+      this.bitCount -= 8;
+    }
+  }
+  alignToByte() {
+    if (this.bitCount > 0) {
+      this.ensure(1);
+      this.bytes[this.length++] = this.bitBuffer & 255;
+      this.bitBuffer = 0;
+      this.bitCount = 0;
+    }
+  }
+  writeBytes(source, start, end) {
+    this.ensure(end - start);
+    this.bytes.set(source.subarray(start, end), this.length);
+    this.length += end - start;
+  }
+  finish() {
+    this.alignToByte();
+    return this.bytes.slice(0, this.length);
+  }
+}
+
+function huffmanLengths(frequencies, limit) {
+  const symbolCount = frequencies.length;
+  const lengths = new Uint8Array(symbolCount);
+  const used = [];
+  for (let symbol = 0; symbol < symbolCount; symbol++) {
+    if (frequencies[symbol] > 0) used.push(symbol);
+  }
+  if (used.length === 0) return lengths;
+  if (used.length === 1) {
+    lengths[used[0]] = 1;
+    return lengths;
+  }
+  const weights = new Float64Array(used.length);
+  for (let index = 0; index < used.length; index++) {
+    weights[index] = frequencies[used[index]];
+  }
+  const order = used.map((_, index) => index);
+  order.sort((a, b) => weights[a] - weights[b]);
+  const leafCount = used.length;
+  const nodeCount = 2 * leafCount - 1;
+  const nodeWeight = new Float64Array(nodeCount);
+  const leftChild = new Int32Array(nodeCount).fill(-1);
+  const rightChild = new Int32Array(nodeCount).fill(-1);
+  const depth = new Int32Array(nodeCount);
+  for (;;) {
+    for (let index = 0; index < leafCount; index++) {
+      nodeWeight[index] = weights[order[index]];
+    }
+    let leafHead = 0;
+    let internalHead = leafCount;
+    let internalTail = leafCount;
+    let next = leafCount;
+    const takeSmallest = () => {
+      if (leafHead < leafCount && (internalHead >= internalTail || nodeWeight[leafHead] <= nodeWeight[internalHead])) {
+        return leafHead++;
+      }
+      return internalHead++;
+    };
+    while (leafCount - leafHead + (internalTail - internalHead) > 1) {
+      const a = takeSmallest();
+      const b = takeSmallest();
+      nodeWeight[next] = nodeWeight[a] + nodeWeight[b];
+      leftChild[next] = a;
+      rightChild[next] = b;
+      internalTail = ++next;
+    }
+    const root = next - 1;
+    depth[root] = 0;
+    let deepest = 0;
+    for (let node = root; node >= leafCount; node--) {
+      const own = depth[node];
+      const left = leftChild[node];
+      const right = rightChild[node];
+      depth[left] = own + 1;
+      depth[right] = own + 1;
+      if (left < leafCount && own + 1 > deepest) deepest = own + 1;
+      if (right < leafCount && own + 1 > deepest) deepest = own + 1;
+    }
+    if (deepest <= limit) {
+      for (let index = 0; index < leafCount; index++) {
+        lengths[used[order[index]]] = depth[index];
+      }
+      return lengths;
+    }
+    for (let index = 0; index < leafCount; index++) {
+      weights[index] = Math.floor((weights[index] + 1) / 2);
+    }
+    order.sort((a, b) => weights[a] - weights[b]);
+  }
+}
+
+function reverseBits$1(value, count) {
+  let reversed = 0;
+  for (let bit = 0; bit < count; bit++) {
+    reversed = reversed << 1 | value >>> bit & 1;
+  }
+  return reversed;
+}
+
+function canonicalCodes(lengths, maxBits) {
+  const codes = new Uint16Array(lengths.length);
+  const blockCount = new Uint32Array(maxBits + 1);
+  for (const length of lengths) {
+    if (length > 0) blockCount[length]++;
+  }
+  const nextCode = new Uint32Array(maxBits + 2);
+  let code = 0;
+  for (let bits = 1; bits <= maxBits; bits++) {
+    code = code + blockCount[bits - 1] << 1;
+    nextCode[bits] = code;
+  }
+  for (let symbol = 0; symbol < lengths.length; symbol++) {
+    const length = lengths[symbol];
+    if (length > 0) {
+      codes[symbol] = reverseBits$1(nextCode[length]++, length);
+    }
+  }
+  return codes;
+}
+
+function encodeCodeLengths(lengths, count) {
+  const symbols = [];
+  const extras = [];
+  const extraBits = [];
+  const emit = (symbol, extra, bits) => {
+    symbols.push(symbol);
+    extras.push(extra);
+    extraBits.push(bits);
+  };
+  let index = 0;
+  while (index < count) {
+    const length = lengths[index];
+    let run = 1;
+    while (index + run < count && lengths[index + run] === length) run++;
+    index += run;
+    if (length === 0) {
+      while (run >= 11) {
+        const take = Math.min(run, 138);
+        emit(18, take - 11, 7);
+        run -= take;
+      }
+      while (run >= 3) {
+        const take = Math.min(run, 10);
+        emit(17, take - 3, 3);
+        run -= take;
+      }
+    } else {
+      emit(length, 0, 0);
+      run--;
+      while (run >= 3) {
+        const take = Math.min(run, 6);
+        emit(16, take - 3, 2);
+        run -= take;
+      }
+    }
+    while (run > 0) {
+      emit(length, 0, 0);
+      run--;
+    }
+  }
+  return {
+    symbols,
+    extras,
+    extraBits
+  };
+}
+
+class TokenBuffer {
+  constructor() {
+    this.values = new Uint16Array(BLOCK_TOKENS);
+    this.distances = new Uint16Array(BLOCK_TOKENS);
+    this.count = 0;
+    this.literalFrequencies = new Uint32Array(LITERAL_SYMBOLS);
+    this.distanceFrequencies = new Uint32Array(DISTANCE_SYMBOLS);
+  }
+  reset() {
+    this.count = 0;
+    this.literalFrequencies.fill(0);
+    this.distanceFrequencies.fill(0);
+    this.literalFrequencies[END_OF_BLOCK] = 1;
+  }
+  addLiteral(byte) {
+    this.values[this.count] = byte;
+    this.distances[this.count] = 0;
+    this.count++;
+    this.literalFrequencies[byte]++;
+  }
+  addMatch(length, distance) {
+    this.values[this.count] = length;
+    this.distances[this.count] = distance;
+    this.count++;
+    this.literalFrequencies[257 + LENGTH_CODE[length]]++;
+    this.distanceFrequencies[distanceCode(distance)]++;
+  }
+}
+
+function dynamicBlockCost(tokens, literalLengths, distanceLengths, runs, codeLengthLengths, headerCodeCount) {
+  let bits = 3 + 5 + 5 + 4 + headerCodeCount * 3;
+  for (let index = 0; index < runs.symbols.length; index++) {
+    bits += codeLengthLengths[runs.symbols[index]] + runs.extraBits[index];
+  }
+  for (let symbol = 0; symbol < LITERAL_SYMBOLS; symbol++) {
+    const frequency = tokens.literalFrequencies[symbol];
+    if (frequency === 0) continue;
+    bits += frequency * literalLengths[symbol];
+    if (symbol >= 257) bits += frequency * LENGTH_EXTRA$1[symbol - 257];
+  }
+  for (let symbol = 0; symbol < DISTANCE_SYMBOLS; symbol++) {
+    const frequency = tokens.distanceFrequencies[symbol];
+    if (frequency === 0) continue;
+    bits += frequency * (distanceLengths[symbol] + DISTANCE_EXTRA$1[symbol]);
+  }
+  return bits;
+}
+
+function writeStoredBlocks(writer, data, start, end, isFinal) {
+  let cursor = start;
+  do {
+    const chunkEnd = Math.min(cursor + MAX_STORED, end);
+    const last = isFinal && chunkEnd === end;
+    writer.writeBits(last ? 1 : 0, 1);
+    writer.writeBits(0, 2);
+    writer.alignToByte();
+    const length = chunkEnd - cursor;
+    writer.writeBits(length & 255, 8);
+    writer.writeBits(length >>> 8 & 255, 8);
+    writer.writeBits(~length & 255, 8);
+    writer.writeBits(~length >>> 8 & 255, 8);
+    writer.writeBytes(data, cursor, chunkEnd);
+    cursor = chunkEnd;
+  } while (cursor < end);
+}
+
+function writeBlock(writer, tokens, data, start, end, isFinal) {
+  if (tokens.distanceFrequencies.every(frequency => frequency === 0)) {
+    tokens.distanceFrequencies[0] = 1;
+  }
+  const literalLengths = huffmanLengths(tokens.literalFrequencies, MAX_CODE_BITS);
+  const distanceLengths = huffmanLengths(tokens.distanceFrequencies, MAX_CODE_BITS);
+  let literalCount = LITERAL_SYMBOLS;
+  while (literalCount > 257 && literalLengths[literalCount - 1] === 0) literalCount--;
+  let distanceCount = DISTANCE_SYMBOLS;
+  while (distanceCount > 1 && distanceLengths[distanceCount - 1] === 0) distanceCount--;
+  const combined = new Uint8Array(literalCount + distanceCount);
+  combined.set(literalLengths.subarray(0, literalCount), 0);
+  combined.set(distanceLengths.subarray(0, distanceCount), literalCount);
+  const runs = encodeCodeLengths(combined, combined.length);
+  const codeLengthFrequencies = new Uint32Array(CODE_LENGTH_SYMBOLS);
+  for (const symbol of runs.symbols) codeLengthFrequencies[symbol]++;
+  const codeLengthLengths = huffmanLengths(codeLengthFrequencies, MAX_CODE_LENGTH_BITS);
+  let headerCodeCount = CODE_LENGTH_SYMBOLS;
+  while (headerCodeCount > 4 && codeLengthLengths[CODE_LENGTH_ORDER[headerCodeCount - 1]] === 0) {
+    headerCodeCount--;
+  }
+  const dynamicBits = dynamicBlockCost(tokens, literalLengths, distanceLengths, runs, codeLengthLengths, headerCodeCount);
+  const storedBits = 8 * (end - start) + 40 + 7;
+  if (storedBits < dynamicBits) {
+    writeStoredBlocks(writer, data, start, end, isFinal);
+    return;
+  }
+  const literalCodes = canonicalCodes(literalLengths, MAX_CODE_BITS);
+  const distanceCodes = canonicalCodes(distanceLengths, MAX_CODE_BITS);
+  const codeLengthCodes = canonicalCodes(codeLengthLengths, MAX_CODE_LENGTH_BITS);
+  writer.writeBits(isFinal ? 1 : 0, 1);
+  writer.writeBits(2, 2);
+  writer.writeBits(literalCount - 257, 5);
+  writer.writeBits(distanceCount - 1, 5);
+  writer.writeBits(headerCodeCount - 4, 4);
+  for (let index = 0; index < headerCodeCount; index++) {
+    writer.writeBits(codeLengthLengths[CODE_LENGTH_ORDER[index]], 3);
+  }
+  for (let index = 0; index < runs.symbols.length; index++) {
+    const symbol = runs.symbols[index];
+    writer.writeBits(codeLengthCodes[symbol], codeLengthLengths[symbol]);
+    writer.writeBits(runs.extras[index], runs.extraBits[index]);
+  }
+  for (let index = 0; index < tokens.count; index++) {
+    const value = tokens.values[index];
+    const distance = tokens.distances[index];
+    if (distance === 0) {
+      writer.writeBits(literalCodes[value], literalLengths[value]);
+      continue;
+    }
+    const lengthIndex = LENGTH_CODE[value];
+    const lengthSymbol = 257 + lengthIndex;
+    writer.writeBits(literalCodes[lengthSymbol], literalLengths[lengthSymbol]);
+    writer.writeBits(value - LENGTH_BASE$1[lengthIndex], LENGTH_EXTRA$1[lengthIndex]);
+    const distanceIndex = distanceCode(distance);
+    writer.writeBits(distanceCodes[distanceIndex], distanceLengths[distanceIndex]);
+    writer.writeBits(distance - DISTANCE_BASE$1[distanceIndex], DISTANCE_EXTRA$1[distanceIndex]);
+  }
+  writer.writeBits(literalCodes[END_OF_BLOCK], literalLengths[END_OF_BLOCK]);
+}
+
+function adler32$1(bytes) {
+  let a = 1;
+  let b = 0;
+  let index = 0;
+  while (index < bytes.length) {
+    const end = Math.min(index + 5552, bytes.length);
+    while (index < end) {
+      a += bytes[index++];
+      b += a;
+    }
+    a %= 65521;
+    b %= 65521;
+  }
+  return (b << 16 | a) >>> 0;
+}
+
+function deflateRaw(data) {
+  const writer = new BitWriter(Math.max(64, data.length >>> 1));
+  if (data.length === 0) {
+    writeStoredBlocks(writer, data, 0, 0, true);
+    return writer.finish();
+  }
+  const head = new Int32Array(HASH_SIZE).fill(-1);
+  const previous = new Int32Array(WINDOW_SIZE).fill(-1);
+  const tokens = new TokenBuffer;
+  tokens.reset();
+  let blockStart = 0;
+  let position = 0;
+  let hash = 0;
+  const insert = at => {
+    const slot = hash;
+    previous[at & WINDOW_MASK] = head[slot];
+    head[slot] = at;
+    return slot;
+  };
+  const rollHash = at => {
+    hash = (hash << 5 ^ data[at]) & HASH_MASK;
+  };
+  if (data.length >= MIN_MATCH) {
+    rollHash(0);
+    rollHash(1);
+  }
+  while (position < data.length) {
+    let matchLength = 0;
+    let matchDistance = 0;
+    if (position + MIN_MATCH <= data.length) {
+      rollHash(position + MIN_MATCH - 1);
+      let candidate = head[hash];
+      let chain = MAX_CHAIN;
+      const limit = position - WINDOW_SIZE;
+      while (candidate > limit && candidate >= 0 && chain-- > 0) {
+        if (data[candidate + matchLength] === data[position + matchLength] && data[candidate] === data[position]) {
+          let length = 0;
+          const maximum = Math.min(MAX_MATCH, data.length - position);
+          while (length < maximum && data[candidate + length] === data[position + length]) {
+            length++;
+          }
+          if (length > matchLength) {
+            matchLength = length;
+            matchDistance = position - candidate;
+            if (length >= maximum) break;
+          }
+        }
+        candidate = previous[candidate & WINDOW_MASK];
+      }
+    }
+    if (matchLength >= MIN_MATCH) {
+      tokens.addMatch(matchLength, matchDistance);
+      const end = position + matchLength;
+      insert(position);
+      for (let at = position + 1; at < end; at++) {
+        if (at + MIN_MATCH <= data.length) {
+          rollHash(at + MIN_MATCH - 1);
+          insert(at);
+        }
+      }
+      position = end;
+    } else {
+      tokens.addLiteral(data[position]);
+      if (position + MIN_MATCH <= data.length) insert(position);
+      position++;
+    }
+    if (tokens.count >= BLOCK_TOKENS - 1) {
+      writeBlock(writer, tokens, data, blockStart, position, false);
+      tokens.reset();
+      blockStart = position;
+    }
+  }
+  writeBlock(writer, tokens, data, blockStart, position, true);
+  return writer.finish();
+}
+
+function deflateZlib(data) {
+  const body = deflateRaw(data);
+  const output = new Uint8Array(body.length + 6);
+  output[0] = 120;
+  output[1] = 156;
+  output.set(body, 2);
+  const checksum = adler32$1(data);
+  output[body.length + 2] = checksum >>> 24 & 255;
+  output[body.length + 3] = checksum >>> 16 & 255;
+  output[body.length + 4] = checksum >>> 8 & 255;
+  output[body.length + 5] = checksum & 255;
+  return output;
+}
+
 class PdfDictStream extends PdfDict {
-  constructor(data = new Uint8Array(0), values) {
+  constructor(data = new Uint8Array(0), values, compress = false) {
     super(values);
     this.data = data;
+    this.compress = compress;
   }
   output(s) {
-    this.set("/Length", new PdfNum(this.data.length));
+    let data = this.data;
+    if (this.compress && !this.has("/Filter")) {
+      const deflated = deflateZlib(data);
+      if (deflated.length < data.length) {
+        this.set("/Filter", new PdfName("/FlateDecode"));
+        data = deflated;
+      }
+    }
+    this.set("/Length", new PdfNum(data.length));
     super.output(s);
     s.putString("\nstream\n");
-    s.putBytes(this.data);
-    if (this.data.length === 0 || this.data[this.data.length - 1] !== 10) {
+    s.putBytes(data);
+    if (data.length === 0 || data[data.length - 1] !== 10) {
       s.putByte(10);
     }
     s.putString("endstream");
@@ -4267,8 +4798,8 @@ class PdfDictStream extends PdfDict {
 }
 
 class PdfObjectStream extends PdfObject {
-  constructor(document, data) {
-    super(document, new PdfDictStream(data));
+  constructor(document, data, compress) {
+    super(document, new PdfDictStream(data, undefined, compress ?? document.settings.compress));
   }
 }
 
@@ -4448,6 +4979,35 @@ const DISTANCE_BASE = Object.freeze([ 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 6
 
 const DISTANCE_EXTRA = Object.freeze([ 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 ]);
 
+class ByteBuffer {
+  constructor() {
+    this.bytes = new Uint8Array(1024);
+    this.length = 0;
+  }
+  ensure(extra) {
+    if (this.length + extra <= this.bytes.length) return;
+    let size = this.bytes.length * 2;
+    while (size < this.length + extra) size *= 2;
+    const grown = new Uint8Array(size);
+    grown.set(this.bytes.subarray(0, this.length));
+    this.bytes = grown;
+  }
+  push(byte) {
+    this.ensure(1);
+    this.bytes[this.length++] = byte;
+  }
+  repeat(distance, length) {
+    this.ensure(length);
+    let source = this.length - distance;
+    for (let index = 0; index < length; index++) {
+      this.bytes[this.length++] = this.bytes[source++];
+    }
+  }
+  view() {
+    return this.bytes.subarray(0, this.length);
+  }
+}
+
 function compressedBlock(reader, output, literals, distances) {
   for (;;) {
     const symbol = readSymbol(reader, literals);
@@ -4471,9 +5031,7 @@ function compressedBlock(reader, output, literals, distances) {
     }
     const distance = baseDistance + reader.read(distanceBits);
     if (distance > output.length) throw new RangeError("DEFLATE distance exceeds output");
-    for (let index = 0; index < length; index++) {
-      output.push(output[output.length - distance]);
-    }
+    output.repeat(distance, length);
   }
 }
 
@@ -4527,9 +5085,15 @@ function dynamicTables(reader) {
 function adler32(bytes) {
   let a = 1;
   let b = 0;
-  for (const byte of bytes) {
-    a = (a + byte) % 65521;
-    b = (b + a) % 65521;
+  let index = 0;
+  while (index < bytes.length) {
+    const end = Math.min(index + 5552, bytes.length);
+    while (index < end) {
+      a += bytes[index++];
+      b += a;
+    }
+    a %= 65521;
+    b %= 65521;
   }
   return (b << 16 | a) >>> 0;
 }
@@ -4542,7 +5106,7 @@ function inflateZlib(bytes) {
   if ((cmf << 8 | flags) % 31 !== 0) throw new RangeError("Invalid zlib header");
   if ((flags & 32) !== 0) throw new RangeError("Preset zlib dictionaries are unsupported");
   const reader = new BitReader(bytes.subarray(2, bytes.length - 4));
-  const output = [];
+  const output = new ByteBuffer;
   let final = false;
   while (!final) {
     final = reader.read(1) === 1;
@@ -4566,8 +5130,8 @@ function inflateZlib(bytes) {
     }
   }
   const expected = (bytes[bytes.length - 4] << 24 | bytes[bytes.length - 3] << 16 | bytes[bytes.length - 2] << 8 | bytes[bytes.length - 1]) >>> 0;
-  if (adler32(output) !== expected) throw new RangeError("Invalid zlib checksum");
-  return Uint8Array.from(output);
+  if (adler32(output.view()) !== expected) throw new RangeError("Invalid zlib checksum");
+  return output.view().slice();
 }
 
 function readU32(bytes, offset) {
@@ -4850,8 +5414,8 @@ function parseJpeg(bytes) {
 }
 
 class PdfXObject extends PdfObjectStream {
-  constructor(document, subtype, data = new Uint8Array(0)) {
-    super(document, data);
+  constructor(document, subtype, data = new Uint8Array(0), compress) {
+    super(document, data, compress);
     this.params.set("/Type", new PdfName("/XObject"));
     if (subtype !== null) this.params.set("/Subtype", new PdfName(subtype));
   }
@@ -11662,19 +12226,20 @@ class PdfAnnotation extends PdfObject {
 
 class PdfMetadata extends PdfObjectStream {
   constructor(document, metadata) {
-    super(document, utf8Encode(metadata));
+    super(document, utf8Encode(metadata), false);
     this.params.set("/Type", new PdfName("/Metadata"));
     this.params.set("/Subtype", new PdfName("/XML"));
   }
 }
 
 class PdfDocument {
-  constructor(metadata) {
+  constructor(metadata, settings = DEFAULT_PDF_SETTINGS) {
     this.serial = 0;
     this.xref = new PdfXrefTable;
     this.fontObjects = new Map;
     this.imageObjects = new Map;
     this.formFontNames = new Map;
+    this.settings = settings;
     const catalogSerial = this.genSerial();
     this.pageList = new PdfPageList(this);
     this.catalog = new PdfCatalog(this, this.pageList, catalogSerial);
@@ -11839,8 +12404,8 @@ class PdfDocument {
   }
 }
 
-function serializePdf(pages, metadata, outlines = [], pageMode = "none", destinations = [], pageLabels = []) {
-  const document = new PdfDocument(metadata);
+function serializePdf(pages, metadata, outlines = [], pageMode = "none", destinations = [], pageLabels = [], settings = DEFAULT_PDF_SETTINGS) {
+  const document = new PdfDocument(metadata, settings);
   for (const page of pages) {
     document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns, page.images, page.annotations);
   }
@@ -12960,7 +13525,7 @@ class DefaultTextStyle extends InheritedTheme {
 }
 
 class Document {
-  constructor({title = null, author = null, subject = null, creator = null, producer = null, keywords = null, xmpMetadata = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none"} = {}) {
+  constructor({title = null, author = null, subject = null, creator = null, producer = null, keywords = null, xmpMetadata = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none", compress = true} = {}) {
     this.sections = [];
     this.outlineEntries = [];
     this.destinationEntries = [];
@@ -12978,6 +13543,9 @@ class Document {
       producer,
       keywords,
       xmpMetadata
+    };
+    this.settings = {
+      compress
     };
     for (const {pageIndex, label} of pageLabels) this.setPageLabel(pageIndex, label);
     this.theme = theme ?? (font === undefined ? ThemeData.base() : ThemeData.withFont({
@@ -13122,7 +13690,7 @@ class Document {
       pageIndex,
       label
     }));
-    return serializePdf(pages, this.metadata, outlines, this.pageMode, destinations, pageLabels);
+    return serializePdf(pages, this.metadata, outlines, this.pageMode, destinations, pageLabels, this.settings);
   }
 }
 
@@ -15591,6 +16159,33 @@ class Shape extends Widget {
   }
 }
 
+let handler = null;
+
+function setPdfDiagnosticHandler(next) {
+  handler = next;
+}
+
+function pdfDiagnosticHandler() {
+  return handler;
+}
+
+function reportPdfDiagnostic(message) {
+  if (handler !== null) {
+    handler(message);
+    return;
+  }
+  const console = globalThis.console;
+  console?.warn?.(message);
+}
+
+const LARGE_IMAGE_PIXELS = 4e6;
+
+function reportIfOversized(image) {
+  const pixels = image.sourceWidth * image.sourceHeight;
+  if (pixels < LARGE_IMAGE_PIXELS) return;
+  reportPdfDiagnostic(`js_pdf: decoded a ${image.sourceWidth}x${image.sourceHeight} image ` + `(${Math.round(pixels / 1e6)} megapixels). Every source pixel is embedded ` + "at full resolution unless the provider is given a dpi, so pass " + "{ dpi: 150 } to resample it down to what the page actually draws.");
+}
+
 function validateDpi(dpi) {
   if (dpi !== null && (!Number.isFinite(dpi) || dpi <= 0)) {
     throw new RangeError("Image DPI must be positive");
@@ -15684,6 +16279,7 @@ class MemoryImage extends ImageProvider {
     super(image.sourceWidth, image.sourceHeight, orientation, dpi);
     this.bytes = bytes.slice();
     this.image = image;
+    if (dpi === null) reportIfOversized(image);
   }
   buildImage(width) {
     return width === undefined ? this.image : resizeDecodedImage(this.image, width);
@@ -17750,4 +18346,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };

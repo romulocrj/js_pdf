@@ -1,4 +1,5 @@
 import type { DocumentMetadata, PdfPageMode, SerializedPageLabel } from '../pdf/document.ts';
+import type { PdfSettings } from '../pdf/format/object_base.ts';
 import type { Rgb } from '../pdf/color.ts';
 import type { PdfOutlineStyle } from '../pdf/obj/outline.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
@@ -28,6 +29,12 @@ export interface DocumentOptions {
     readonly font?: PdfFont;
     /** Open the viewer's outline pane when the file is opened. */
     readonly pageMode?: PdfPageMode;
+    /**
+     * Deflate the document's streams. On by default, and worth leaving on: an
+     * embedded image is raw samples, so the saving is usually an order of
+     * magnitude. Turn it off to trade file size back for generation time.
+     */
+    readonly compress?: boolean;
 }
 export interface DocumentOutlineEntry {
     readonly title: string;
@@ -47,6 +54,7 @@ export interface DocumentDestinationEntry {
 }
 export declare class Document {
     readonly metadata: DocumentMetadata;
+    readonly settings: PdfSettings;
     readonly theme: ThemeData;
     readonly pageMode: PdfPageMode;
     readonly sections: Section[];
@@ -64,7 +72,7 @@ export declare class Document {
     private readonly fonts;
     /** Used only if the theme's default style somehow names no font at all. */
     private readonly fallbackFont;
-    constructor({ title, author, subject, creator, producer, keywords, xmpMetadata, pageLabels, theme, font, pageMode }?: DocumentOptions);
+    constructor({ title, author, subject, creator, producer, keywords, xmpMetadata, pageLabels, theme, font, pageMode, compress }?: DocumentOptions);
     /** The `PdfFont` `declaration` stands for here, built once. */
     resolveFont(declaration: Font): PdfFont;
     /**

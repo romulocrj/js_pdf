@@ -8,9 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Pdf from '../src/index.ts';
 
-function source(bytes) {
-  return String.fromCharCode(...bytes);
-}
+import { latin1 as source } from './support/pdf-text.mjs';
 
 test('phase 3.8 constructors are on named, namespace and callback APIs', () => {
   for (const name of ['Header', 'Paragraph', 'Bullet', 'TableOfContent']) {

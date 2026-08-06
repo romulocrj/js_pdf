@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Pdf from '../src/index.ts';
 
-const source = bytes => Buffer.from(bytes).toString('latin1');
+import { latin1 as source } from './support/pdf-text.mjs';
 
 test('document metadata attributes the producer without claiming a default creator', () => {
   const defaultDocument = new Pdf.Document();

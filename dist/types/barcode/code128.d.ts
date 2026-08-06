@@ -46,7 +46,7 @@ export declare class BarcodeCode128 extends Barcode1D {
      * The walk is backwards, because a switch to table C only pays for itself
      * once four digits are known to follow.
      */
-    shortestCode(data: readonly number[]): number[];
+    shortestCode(data: Uint16Array): number[];
     /** Rewrite the data, inserting FNC1 where GS1 parentheses or escapes ask. */
     adaptData(data: string, text?: boolean): string;
     convert(data: string): boolean[];

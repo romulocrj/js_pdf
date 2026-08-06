@@ -14,12 +14,8 @@ import * as Pdf from '../src/index.ts';
 import { PdfBaseFunction } from '../src/pdf/obj/function.ts';
 import { PdfShading } from '../src/pdf/obj/shading.ts';
 import { PdfShadingPattern } from '../src/pdf/obj/pattern.ts';
+import { latin1 } from "./support/pdf-text.mjs";
 
-const latin1 = bytes => {
-  let value = '';
-  for (const byte of bytes) value += String.fromCharCode(byte);
-  return value;
-};
 
 const pdfFor = svg => latin1(Pdf.createPdf({}, api => new api.Page({
   margin: 0,

@@ -1,6 +1,6 @@
 {
   "name": "@romulocrj/js_pdf",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "JavaScript port of DavBfr/dart_pdf. Dependency-free PDF composition for pure ECMAScript hosts (browser importmap, ClearScript, Node).",
   "type": "module",
   "license": "Apache-2.0",

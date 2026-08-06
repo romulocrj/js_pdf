@@ -25,7 +25,8 @@
  */
 
 import type { PdfDataType } from './format/base.ts';
-import type { PdfObjectBase } from './format/object_base.ts';
+import type { PdfObjectBase, PdfSettings } from './format/object_base.ts';
+import { DEFAULT_PDF_SETTINGS } from './format/object_base.ts';
 import { PdfDict } from './format/dict.ts';
 import { PdfArray } from './format/array.ts';
 import { PdfNum } from './format/num.ts';
@@ -141,7 +142,10 @@ export class PdfDocument {
   private readonly imageObjects = new Map<PdfImage, PdfImageObject>();
   private readonly formFontNames = new Map<PdfFont, string>();
 
-  constructor(metadata: DocumentMetadata) {
+  readonly settings: PdfSettings;
+
+  constructor(metadata: DocumentMetadata, settings: PdfSettings = DEFAULT_PDF_SETTINGS) {
+    this.settings = settings;
     const catalogSerial = this.genSerial();
     this.pageList = new PdfPageList(this);
     this.catalog = new PdfCatalog(this, this.pageList, catalogSerial);
@@ -378,9 +382,10 @@ export function serializePdf(
   outlines: readonly SerializedOutline[] = [],
   pageMode: PdfPageMode = 'none',
   destinations: readonly SerializedDestination[] = [],
-  pageLabels: readonly SerializedPageLabel[] = []
+  pageLabels: readonly SerializedPageLabel[] = [],
+  settings: PdfSettings = DEFAULT_PDF_SETTINGS
 ): Uint8Array {
-  const document = new PdfDocument(metadata);
+  const document = new PdfDocument(metadata, settings);
 
   for (const page of pages) {
     document.addPage(

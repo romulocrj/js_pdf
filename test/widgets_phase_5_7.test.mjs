@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Pdf from '../src/index.ts';
 
-const source = bytes => String.fromCharCode(...bytes);
+import { latin1 as source } from './support/pdf-text.mjs';
 
 test('phase 5.7 exports every newly retained widget except Signature', () => {
   for (const name of [

@@ -8,16 +8,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Pdf from '../src/index.ts';
+import { latin1 } from "./support/pdf-text.mjs";
 
 const MATERIAL_ICONS = new Uint8Array(
   readFileSync(new URL('../examples/assets/MaterialIcons.ttf', import.meta.url))
 );
 
-function latin1(bytes) {
-  let result = '';
-  for (const byte of bytes) result += String.fromCharCode(byte);
-  return result;
-}
 
 function iconTheme(options = {}) {
   return Pdf.ThemeData.withFont({ icons: Pdf.Font.ttf(MATERIAL_ICONS), ...options });

@@ -19,10 +19,40 @@
  * across documents without retaining a registry from a previous save.
  */
 
+import { reportPdfDiagnostic } from '../pdf/diagnostics.ts';
 import { PdfImage } from '../pdf/obj/image.ts';
 import type { PdfImageOrientation } from '../pdf/obj/image.ts';
 import { PageUnit } from '../pdf/page_format.ts';
 import type { PdfPoint } from '../pdf/rect.ts';
+
+/**
+ * Pixels above which decoding an image is worth warning about.
+ *
+ * Four megapixels is far more than any page can show: a full A4 bleed at 300
+ * dpi is about 8.7, and the images that trigger this in practice are logos a
+ * few points wide that happen to be stored at camera resolution. The cost is
+ * paid twice over — once decoding to RGBA, and again holding the samples until
+ * the document is written.
+ */
+const LARGE_IMAGE_PIXELS = 4000000;
+
+/**
+ * Warn that `image` is far larger than any page will draw.
+ *
+ * Silent unless the caller installed a handler; see `pdf/diagnostics.ts` for
+ * why the library cannot simply write this somewhere itself.
+ */
+function reportIfOversized(image: PdfImage): void {
+  const pixels = image.sourceWidth * image.sourceHeight;
+  if (pixels < LARGE_IMAGE_PIXELS) return;
+
+  reportPdfDiagnostic(
+    `js_pdf: decoded a ${image.sourceWidth}x${image.sourceHeight} image ` +
+    `(${Math.round(pixels / 1000000)} megapixels). Every source pixel is embedded ` +
+    'at full resolution unless the provider is given a dpi, so pass ' +
+    '{ dpi: 150 } to resample it down to what the page actually draws.'
+  );
+}
 
 function validateDpi(dpi: number | null): number | null {
   if (dpi !== null && (!Number.isFinite(dpi) || dpi <= 0)) {
@@ -159,6 +189,9 @@ export class MemoryImage extends ImageProvider {
     super(image.sourceWidth, image.sourceHeight, orientation, dpi);
     this.bytes = bytes.slice();
     this.image = image;
+    // Worth saying at construction rather than at save: this is where the
+    // caller still has the option of handing over a smaller source.
+    if (dpi === null) reportIfOversized(image);
   }
 
   protected override buildImage(width?: number): PdfImage {

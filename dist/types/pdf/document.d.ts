@@ -1,5 +1,5 @@
 import type { PdfDataType } from './format/base.ts';
-import type { PdfObjectBase } from './format/object_base.ts';
+import type { PdfObjectBase, PdfSettings } from './format/object_base.ts';
 import { PdfDict } from './format/dict.ts';
 import { PdfXrefTable } from './format/xref.ts';
 import type { PdfFont } from './font/font.ts';
@@ -85,7 +85,8 @@ export declare class PdfDocument {
     private readonly fontObjects;
     private readonly imageObjects;
     private readonly formFontNames;
-    constructor(metadata: DocumentMetadata);
+    readonly settings: PdfSettings;
+    constructor(metadata: DocumentMetadata, settings?: PdfSettings);
     get objects(): readonly PdfObjectBase<PdfDataType>[];
     genSerial(): number;
     register(object: PdfObjectBase<PdfDataType>): void;
@@ -115,4 +116,4 @@ export declare class PdfDocument {
     save(): Uint8Array;
 }
 /** Build a document from already-rendered pages and write it. */
-export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata, outlines?: readonly SerializedOutline[], pageMode?: PdfPageMode, destinations?: readonly SerializedDestination[], pageLabels?: readonly SerializedPageLabel[]): Uint8Array;
+export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata, outlines?: readonly SerializedOutline[], pageMode?: PdfPageMode, destinations?: readonly SerializedDestination[], pageLabels?: readonly SerializedPageLabel[], settings?: PdfSettings): Uint8Array;

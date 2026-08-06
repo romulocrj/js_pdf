@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-06
 **Upstream reference:** `pdf/lib/` — 136 Dart files, ~31,800 lines
-**Ported:** 138 `.ts` files, ~31,900 lines (TypeScript)
+**Ported:** 140 `.ts` files, ~32,600 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -22,14 +22,14 @@ table. Run `npm run examples`; current state, from
 
 | Example | Status | Missing APIs | Unlocks at |
 |---|---|---:|---|
-| `hello-world` | ✅ generated (743 bytes) | 0 | — |
-| `calendar` | ✅ generated (22,102 bytes) | 0 | 3.6 |
-| `certificate` | ✅ generated (126,676 bytes) | 0 | 3.9 |
-| `report` | ✅ generated (30,358 bytes) | 0 | 5.1 |
-| `invoice` | ✅ generated (102,664 bytes) | 0 | 5.2 |
-| `document` | ✅ generated (137,164 bytes) | 0 | 5.3 |
-| `server` | ✅ generated (82,684 bytes) | 0 | 5.3 |
-| `resume` | ✅ generated (74,273 bytes) | 0 | 5.5 |
+| `hello-world` | ✅ generated (788 bytes) | 0 | — |
+| `calendar` | ✅ generated (7,324 bytes) | 0 | 3.6 |
+| `certificate` | ✅ generated (38,332 bytes) | 0 | 3.9 |
+| `report` | ✅ generated (14,739 bytes) | 0 | 5.1 |
+| `invoice` | ✅ generated (38,464 bytes) | 0 | 5.2 |
+| `document` | ✅ generated (36,410 bytes) | 0 | 5.3 |
+| `server` | ✅ generated (34,387 bytes) | 0 | 5.3 |
+| `resume` | ✅ generated (55,056 bytes) | 0 | 5.5 |
 
 **8 of 8**, with the missing-API total down from 124 to 0 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
@@ -71,16 +71,17 @@ each one.
 | `format/string.dart` | 204 | `src/pdf/format/string.ts` | partial — `PdfString`, literal + WinAnsi, UTC PDF dates, hex strings for CIDs; no UTF-16BE |
 | `format/stream.dart` | 83 | `src/pdf/format/stream.ts` | done — growable `PdfStream` byte buffer |
 | `format/base.dart` | 50 | `src/pdf/format/base.ts` | done — `PdfDataType`; `output(stream)` only, no settings or indent |
-| `format/object_base.dart` | 118 | `src/pdf/format/object_base.ts` | partial — `PdfObjectBase`, `ref()`, `prepare()`; no `PdfSettings` |
+| `format/object_base.dart` | 118 | `src/pdf/format/object_base.ts` | partial — `PdfObjectBase`, `ref()`, `prepare()`, `PdfSettings.compress`; no encrypt callback, no version selector |
 | `format/dict.dart` | 135 | `src/pdf/format/dict.ts` | partial — `PdfDict`, insertion-ordered; no `merge`, no type parameter |
 | `format/array.dart` | 126 | `src/pdf/format/array.ts` | partial — `PdfArray`, `fromNum`, `fromObjects`; no `uniq`, no `fromColor` |
-| `format/dict_stream.dart` | 98 | `src/pdf/format/dict_stream.ts` | partial — `PdfDictStream`, derived `/Length`; no `/Filter`, no encryption |
+| `format/dict_stream.dart` | 98 | `src/pdf/format/dict_stream.ts` | partial — `PdfDictStream`, derived `/Length`, `/FlateDecode` kept only when smaller; no Ascii85, no encryption |
 | `format/name.dart` | 63 | `src/pdf/format/name.ts` | done — also escapes `)`, which upstream misses |
 | `format/indirect.dart` | 44 | `src/pdf/format/indirect.ts` | done — `PdfIndirect` |
 | `format/bool.dart`, `null_value.dart` | 78 | `src/pdf/format/bool.ts`, `null_value.ts` | done |
 | `format/xref.dart` | 406 | `src/pdf/format/xref.ts` | partial — classic xref table; no xref streams, no incremental update |
-| `format/ascii85.dart` | 91 | — | — needs `/Filter` support first |
-| `format/diagnostic.dart` | 66 | — | n/a — drives upstream's verbose mode, which the port does not reproduce |
+| `format/ascii85.dart` | 91 | — | — binary streams are written raw, which is legal and smaller |
+| `format/diagnostic.dart` | 66 | `src/pdf/diagnostics.ts` | partial — a caller-installed warning sink, falling back to an optional host console; upstream's verbose in-file comments are not reproduced |
+| *(no upstream file — upstream takes a `DeflateCallback`)* | — | `src/pdf/format/deflate.ts` | done — RFC 1951/1950 encoder: LZ77 over a 32 KiB window, dynamic Huffman, stored fallback |
 
 ## `src/pdf/` — document and graphics
 
@@ -92,7 +93,7 @@ each one.
 | `graphics.dart` | 1415 | `src/pdf/graphics.ts`, `src/svg/path.ts` | partial — full path API (`m`/`l`/`c`/`h`/`re`, ellipses, rounded rects, elliptical arcs), SVG path drawing, fill rules, clipping, CTM, cap/join/miter/dash, colors, `gs`, image XObjects and shading-pattern paint; no direct `sh` operator |
 | `graphic_state.dart` | 194 | `src/pdf/graphic_state.ts` | partial — `/ca`, `/CA`, `/BM`, deduplicated per page; no `PdfGraphicStates` document object, no `/SMask`, no `/TR` |
 | *(no upstream file — `vector_math`)* | — | `src/pdf/matrix.ts` | done — the 2×3 affine `cm` operand, composition, inversion and the y-down conjugation |
-| `document.dart` | 289 | `src/pdf/document.ts` | partial — `PdfDocument` object registry; one font/image object per distinct resource, created on first use |
+| `document.dart` | 289 | `src/pdf/document.ts` | partial — `PdfDocument` object registry carrying `PdfSettings`; one font/image object per distinct resource, created on first use |
 | `point.dart`, `rect.dart` | 159 | `src/pdf/rect.ts` | done — `PdfPoint`, `PdfRect` as interfaces plus factory objects |
 | `options.dart` | 8 | — | — |
 | `document_parser.dart` | 40 | — | — reading existing PDFs is out of scope |
@@ -110,7 +111,7 @@ on: an object registers itself with the document, hands out references through
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
 | `obj/object.dart`, `object_dict.dart` | 93 | `src/pdf/obj/object.ts` | done — `PdfObject`, `PdfObjectDict` |
-| `obj/object_stream.dart` | 51 | `src/pdf/obj/object_stream.ts` | partial — no Ascii85 flag, no deflate |
+| `obj/object_stream.dart` | 51 | `src/pdf/obj/object_stream.ts` | partial — per-stream `compress` flag honouring the document setting; no Ascii85 flag |
 | `obj/catalog.dart` | 178 | `src/pdf/obj/catalog.ts` | partial — pages, names, outlines, XML metadata, page labels and `/AcroForm`; no PDF/A output intents |
 | `obj/page_list.dart` | 46 | `src/pdf/obj/page_list.ts` | done — flat page tree |
 | `obj/page.dart` | 164 | `src/pdf/obj/page.ts` | partial — `/Resources` inherited from `PdfGraphicStream`, link, geometric and form `/Annots`; no `/Rotate` |
@@ -121,7 +122,7 @@ on: an object registers itself with the document, hands out references through
 | `obj/ttffont.dart`, `unicode_cmap.dart` | 278 | `src/pdf/obj/ttf_font.ts`, `src/pdf/obj/unicode_cmap.ts` | partial — Type0/CIDFontType2, `/Identity-H`, `/ToUnicode`; no simple `/TrueType` branch, no Arabic or bidi coupling |
 | `obj/graphic_stream.dart` | 156 | `src/pdf/obj/graphic_stream.ts` | partial — `/Font`, `/XObject`, `/ExtGState` and `/Pattern` (inline dictionaries, per page); base class rather than a mixin, no `/ProcSet` or standalone `/Shading` resources |
 | `obj/xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 206 | `src/pdf/obj/xobject.ts`, `src/pdf/document.ts` | partial — image and form XObjects with appearance resources; no generic transparency-group extensions |
-| `obj/image.dart`, `smask.dart` | 347 | `src/pdf/obj/image.ts`, `src/pdf/image/png.ts`, `src/pdf/image/jpeg.ts` | partial — **4.1–4.2 done:** PNG decode, baseline/extended/progressive JPEG pass-through, RGB/gray/CMYK colour spaces and image alpha `/SMask`; generic luminosity form masks remain |
+| `obj/image.dart`, `smask.dart` | 347 | `src/pdf/obj/image.ts`, `src/pdf/image/png.ts`, `src/pdf/image/jpeg.ts` | partial — **4.1–4.2 done:** PNG decode into byte buffers rather than number arrays, baseline/extended/progressive JPEG pass-through, RGB/gray/CMYK colour spaces and image alpha `/SMask`; generic luminosity form masks remain |
 | `obj/shading.dart`, `pattern.dart`, `function.dart` | 349 | `src/pdf/obj/shading.ts`, `pattern.ts`, `function.ts` | partial — axial/radial DeviceRGB shadings, type-2 interpolation and type-3 stitching, direct shading-pattern dictionaries; no sampled streams or tiling patterns |
 | `obj/names.dart`, `outline.dart` | 296 | `src/pdf/obj/names.ts`, `outline.ts` | done — sorted named destinations and hierarchical outline tree with title, style, colour, siblings and closed descendants |
 | `obj/annotation.dart`, `border.dart` | 1070 | `src/pdf/obj/annotation.ts` | partial — links, square/circle/polygon/polyline/ink annotations and text/choice/checkbox/push-button fields with `/AP`; text notes and the complete custom-border surface remain |

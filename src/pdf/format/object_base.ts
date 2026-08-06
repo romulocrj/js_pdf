@@ -15,15 +15,33 @@
  *   - pdf/lib/src/pdf/format/object_base.dart
  *
  * Upstream carries a `PdfSettings` on every object, holding the deflate and
- * encrypt callbacks, a verbose flag and the target PDF version. The port has
- * none of those knobs — no compressor, encryption out of scope, one output
- * version — so the settings object is omitted rather than kept empty. That is
- * why `PdfDataType.output` takes only a stream; see `format/base.ts`.
+ * encrypt callbacks, a verbose flag and the target PDF version. The port keeps
+ * only the knob it can act on — compression — because it ships its own
+ * compressor rather than taking a callback; see `format/deflate.ts`. Encryption
+ * is out of scope per docs/ROADMAP.md and there is one output version.
+ *
+ * The settings ride on the document rather than on every object, which is why
+ * `PdfDataType.output` still takes only a stream; see `format/base.ts`. A
+ * stream that needs them is handed them when it is constructed.
  */
 
 import type { PdfDataType } from './base.ts';
 import { PdfIndirect } from './indirect.ts';
 import type { PdfStream } from './stream.ts';
+
+/** Document-wide output options. */
+export interface PdfSettings {
+  /**
+   * Deflate stream data, keeping the result only when it is actually smaller.
+   *
+   * On by default. Turning it off trades file size for generation time: the
+   * compressor is written in JavaScript, so a document dominated by large
+   * images pays real milliseconds for a very large saving.
+   */
+  readonly compress: boolean;
+}
+
+export const DEFAULT_PDF_SETTINGS: PdfSettings = { compress: true };
 
 /**
  * An indirect object: a serial number plus the value it wraps.

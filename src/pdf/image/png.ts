@@ -125,9 +125,54 @@ const DISTANCE_EXTRA = Object.freeze([
   7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13
 ]);
 
+/**
+ * The inflate accumulator: a byte buffer that doubles as it fills.
+ *
+ * It has to be a `Uint8Array` and not an array of numbers. A decoded scanline
+ * buffer runs to the size of the image — a 4096x3515 RGBA source is 57.6 million
+ * bytes — and holding that many elements as an array costs eight bytes each
+ * before the growth copy doubles it again. That is half a gigabyte to decode one
+ * logo, which is enough to exhaust a constrained heap outright; as bytes, the
+ * same buffer is the 57.6 MB it actually is.
+ */
+class ByteBuffer {
+  private bytes = new Uint8Array(1024);
+  length = 0;
+
+  private ensure(extra: number): void {
+    if (this.length + extra <= this.bytes.length) return;
+    let size = this.bytes.length * 2;
+    while (size < this.length + extra) size *= 2;
+    const grown = new Uint8Array(size);
+    grown.set(this.bytes.subarray(0, this.length));
+    this.bytes = grown;
+  }
+
+  push(byte: number): void {
+    this.ensure(1);
+    this.bytes[this.length++] = byte;
+  }
+
+  /** Copy `length` bytes from `distance` back, one at a time. */
+  repeat(distance: number, length: number): void {
+    this.ensure(length);
+    let source = this.length - distance;
+    // Deliberately byte by byte: DEFLATE allows the run to overlap what it is
+    // still writing, which is how a repeating pattern is encoded.
+    for (let index = 0; index < length; index++) {
+      this.bytes[this.length++] = this.bytes[source++]!;
+    }
+  }
+
+  /** The filled prefix, without copying. Valid until the next write. */
+  view(): Uint8Array {
+    return this.bytes.subarray(0, this.length);
+  }
+}
+
 function compressedBlock(
   reader: BitReader,
-  output: number[],
+  output: ByteBuffer,
   literals: HuffmanTable,
   distances: HuffmanTable
 ): void {
@@ -153,9 +198,7 @@ function compressedBlock(
     }
     const distance = baseDistance + reader.read(distanceBits);
     if (distance > output.length) throw new RangeError('DEFLATE distance exceeds output');
-    for (let index = 0; index < length; index++) {
-      output.push(output[output.length - distance]!);
-    }
+    output.repeat(distance, length);
   }
 }
 
@@ -208,12 +251,20 @@ function dynamicTables(reader: BitReader): readonly [HuffmanTable, HuffmanTable]
   return [literals, huffman(distances)];
 }
 
-function adler32(bytes: readonly number[]): number {
+function adler32(bytes: Uint8Array): number {
   let a = 1;
   let b = 0;
-  for (const byte of bytes) {
-    a = (a + byte) % 65521;
-    b = (b + a) % 65521;
+  // 5552 is the most iterations that cannot overflow the accumulators, so the
+  // modulo runs once per span instead of once per byte.
+  let index = 0;
+  while (index < bytes.length) {
+    const end = Math.min(index + 5552, bytes.length);
+    while (index < end) {
+      a += bytes[index++]!;
+      b += a;
+    }
+    a %= 65521;
+    b %= 65521;
   }
   return ((b << 16) | a) >>> 0;
 }
@@ -228,7 +279,7 @@ export function inflateZlib(bytes: Uint8Array): Uint8Array {
   if ((flags & 32) !== 0) throw new RangeError('Preset zlib dictionaries are unsupported');
 
   const reader = new BitReader(bytes.subarray(2, bytes.length - 4));
-  const output: number[] = [];
+  const output = new ByteBuffer();
   let final = false;
   while (!final) {
     final = reader.read(1) === 1;
@@ -258,8 +309,8 @@ export function inflateZlib(bytes: Uint8Array): Uint8Array {
     (bytes[bytes.length - 2]! << 8) |
     bytes[bytes.length - 1]!
   ) >>> 0;
-  if (adler32(output) !== expected) throw new RangeError('Invalid zlib checksum');
-  return Uint8Array.from(output);
+  if (adler32(output.view()) !== expected) throw new RangeError('Invalid zlib checksum');
+  return output.view().slice();
 }
 
 function readU32(bytes: Uint8Array, offset: number): number {
