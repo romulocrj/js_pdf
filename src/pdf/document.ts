@@ -27,6 +27,8 @@
 import type { PdfDataType } from './format/base.ts';
 import type { PdfObjectBase } from './format/object_base.ts';
 import { PdfDict } from './format/dict.ts';
+import { PdfArray } from './format/array.ts';
+import { PdfNum } from './format/num.ts';
 import { PdfStream, encodeLatin1 } from './format/stream.ts';
 import { PdfXrefTable } from './format/xref.ts';
 import type { PdfFont } from './font/font.ts';
@@ -45,7 +47,16 @@ import type { Rgb } from './color.ts';
 import { PdfImageObject } from './obj/image.ts';
 import type { PdfImage } from './obj/image.ts';
 import { PdfAnnotation } from './obj/annotation.ts';
-import type { PdfLinkAnnotation } from './obj/annotation.ts';
+import type { PdfAnnotationSpec } from './obj/annotation.ts';
+import type {
+  PdfFormAppearance,
+  PdfFormAppearances,
+  PdfResolvedFormAppearances
+} from './obj/annotation.ts';
+import { PdfMetadata } from './obj/metadata.ts';
+import { PdfPageLabels } from './obj/page_label.ts';
+import type { PdfPageLabel } from './obj/page_label.ts';
+import { PdfXObject } from './obj/xobject.ts';
 
 export type { DocumentMetadata } from './obj/info.ts';
 
@@ -69,8 +80,8 @@ export interface SerializedPage {
   /** The image resources `content` selected, by their page-local names. */
   readonly images?: ReadonlyMap<PdfImage, string>;
 
-  /** Link annotations registered while the page was painted. */
-  readonly annotations?: readonly PdfLinkAnnotation[];
+  /** Link and form annotations registered while the page was painted. */
+  readonly annotations?: readonly PdfAnnotationSpec[];
 }
 
 export interface SerializedOutline {
@@ -95,6 +106,12 @@ export interface SerializedDestination {
 }
 
 export type PdfPageMode = 'none' | 'outlines';
+
+export interface SerializedPageLabel {
+  /** Zero-based physical page index where this numbering style begins. */
+  readonly pageIndex: number;
+  readonly label: PdfPageLabel;
+}
 
 /**
  * Owns the objects that make up a file, and writes them.
@@ -122,12 +139,16 @@ export class PdfDocument {
    */
   private readonly fontObjects = new Map<PdfFont, PdfObject<PdfDict>>();
   private readonly imageObjects = new Map<PdfImage, PdfImageObject>();
+  private readonly formFontNames = new Map<PdfFont, string>();
 
   constructor(metadata: DocumentMetadata) {
     const catalogSerial = this.genSerial();
     this.pageList = new PdfPageList(this);
     this.catalog = new PdfCatalog(this, this.pageList, catalogSerial);
     this.info = new PdfInfo(this, metadata);
+    if (metadata.xmpMetadata) {
+      this.catalog.metadata = new PdfMetadata(this, metadata.xmpMetadata);
+    }
   }
 
   get objects(): readonly PdfObjectBase<PdfDataType>[] {
@@ -170,6 +191,55 @@ export class PdfDocument {
     return object;
   }
 
+  private formAppearanceObject(appearance: PdfFormAppearance): PdfXObject {
+    const object = new PdfXObject(this, '/Form', encodeLatin1(appearance.content));
+    object.params.set('/FormType', new PdfNum(1));
+    object.params.set('/BBox', PdfArray.fromNum([0, 0, appearance.width, appearance.height]));
+    const resources = new PdfDict();
+    if (appearance.fonts.size > 0) {
+      const fonts = new Map<string, PdfObject<PdfDict>>();
+      for (const [font, name] of appearance.fonts) fonts.set(name, this.fontObject(font));
+      resources.set('/Font', PdfDict.fromObjectMap(fonts));
+    }
+    if (appearance.images.size > 0) {
+      const images = new Map<string, PdfImageObject>();
+      for (const [image, name] of appearance.images) images.set(name, this.imageObject(image));
+      resources.set('/XObject', PdfDict.fromObjectMap(images));
+    }
+    if (appearance.graphicStates.size > 0) {
+      resources.set('/ExtGState', new PdfDict(appearance.graphicStates));
+    }
+    if (appearance.patterns.size > 0) {
+      resources.set('/Pattern', new PdfDict(appearance.patterns));
+    }
+    if (!resources.isEmpty) object.params.set('/Resources', resources);
+    return object;
+  }
+
+  private resolveFormAppearances(
+    appearances: PdfFormAppearances | undefined
+  ): PdfResolvedFormAppearances | null {
+    if (appearances === undefined) return null;
+    const normalStates = appearances.normalStates === undefined
+      ? undefined
+      : new Map([...appearances.normalStates].map(([name, appearance]) => [
+        name,
+        this.formAppearanceObject(appearance)
+      ]));
+    return {
+      normal: appearances.normal === undefined
+        ? undefined
+        : this.formAppearanceObject(appearances.normal),
+      normalStates,
+      down: appearances.down === undefined
+        ? undefined
+        : this.formAppearanceObject(appearances.down),
+      rollover: appearances.rollover === undefined
+        ? undefined
+        : this.formAppearanceObject(appearances.rollover)
+    };
+  }
+
   /**
    * Append a page. Its fonts and content stream are created first so they are
    * numbered before the page that references them, keeping the file in
@@ -186,7 +256,7 @@ export class PdfDocument {
     graphicStates: ReadonlyMap<string, PdfDict> = new Map(),
     patterns: ReadonlyMap<string, PdfDict> = new Map(),
     images: ReadonlyMap<PdfImage, string> = new Map(),
-    annotations: readonly PdfLinkAnnotation[] = []
+    annotations: readonly PdfAnnotationSpec[] = []
   ): PdfPage {
     const resources: [string, PdfObject<PdfDict>][] = [];
     for (const [font, name] of fonts) {
@@ -213,7 +283,23 @@ export class PdfDocument {
     }
 
     for (const annotation of annotations) {
-      new PdfAnnotation(this, page, annotation);
+      let appearanceName: string | null = null;
+      if (annotation.kind === 'form') {
+        const font = annotation.font;
+        if (font !== undefined) {
+          appearanceName = this.formFontNames.get(font) ?? null;
+          if (appearanceName === null) {
+            appearanceName = `/FForm${this.formFontNames.size + 1}`;
+            this.formFontNames.set(font, appearanceName);
+            this.catalog.formFonts.set(appearanceName, this.fontObject(font));
+          }
+        }
+      }
+      const appearances = annotation.kind === 'form'
+        ? this.resolveFormAppearances(annotation.appearances)
+        : null;
+      const object = new PdfAnnotation(this, page, annotation, appearanceName, appearances);
+      if (annotation.kind === 'form') this.catalog.formFields.push(object);
     }
 
     page.contents.push(stream);
@@ -264,6 +350,13 @@ export class PdfDocument {
     this.catalog.showOutlines = pageMode === 'outlines';
   }
 
+  addPageLabels(labels: readonly SerializedPageLabel[]): void {
+    if (labels.length === 0) return;
+    const pageLabels = new PdfPageLabels(this);
+    for (const { pageIndex, label } of labels) pageLabels.labels.set(pageIndex, label);
+    this.catalog.pageLabels = pageLabels;
+  }
+
   save(): Uint8Array {
     for (const object of this.objects) {
       object.prepare();
@@ -284,7 +377,8 @@ export function serializePdf(
   metadata: DocumentMetadata,
   outlines: readonly SerializedOutline[] = [],
   pageMode: PdfPageMode = 'none',
-  destinations: readonly SerializedDestination[] = []
+  destinations: readonly SerializedDestination[] = [],
+  pageLabels: readonly SerializedPageLabel[] = []
 ): Uint8Array {
   const document = new PdfDocument(metadata);
 
@@ -301,6 +395,7 @@ export function serializePdf(
   }
 
   document.addNavigation(outlines, pageMode, destinations);
+  document.addPageLabels(pageLabels);
 
   return document.save();
 }

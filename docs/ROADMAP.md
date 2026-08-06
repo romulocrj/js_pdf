@@ -7,7 +7,7 @@ Ordered plan for the port dart_pdf-master folder. Current coverage is in
 **Last updated:** 2026-08-06
 
 
-**Important** if you find a bug in original code, correct it in the port and document it in [ORIGINAL-BUG.md](ORIGINAL-BUG.md) with a brief instruction on how to reproduce and correct it.
+**Important** if you find an issue in the original code, correct it in the port and document it in [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md) with brief instructions for reproducing and correcting it.
 
 ## Current position
 
@@ -227,12 +227,13 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 5.6 — remaining document features.** Port forms
-> (`widgets/forms.dart`), page labels, metadata and XMP. No retained example
-> depends on these, so add focused tests and a visual proof for the forms.
+> **The implementation roadmap is complete through phase 5.6.** Remaining
+> omissions are either explicitly out of scope or narrower gaps recorded in
+> [PORTING-STATUS.md](PORTING-STATUS.md); define a new phase before expanding
+> scope.
 
-Phase 5.5 is complete: both progress indicators render, `MultiPage.pageTheme`
-is honored, and the complete upstream example set generates end to end.
+Phase 5.6 is complete: interactive forms, page labels, keywords and XMP are in,
+and the complete upstream example set still generates end to end.
 
 ---
 
@@ -318,6 +319,25 @@ shipped bundle works under bare ClearScript V8.
 
 `resume` is deliberately last — it is the widest probe in the set, so it doubles
 as the acceptance test for the port as a whole.
+
+### Visual proof audit
+
+Every phase with an independent visual surface now has a retained generator.
+The earlier phases without a phase-named PDF were reviewed and deliberately do
+not need another gallery:
+
+- **0.0, 0.2 and 0.3** are type/object/resource plumbing; 0.2 was explicitly
+  required to change no observable output.
+- **0.1 and 1.1–1.4** feed text metrics, embedding and themes already visible in
+  every upstream document and in the later text/layout proofs.
+- **2.1–2.7** are the operators, parser and painter consumed together by
+  `svg-gradients-phase-2.8`; a separate PDF for each internal layer would repeat
+  the same rendered shapes.
+
+Phases 2.8, every 3.x and 4.x phase, and every 5.x phase now have a dedicated
+visual PDF. Metadata, XMP and viewer page labels from 5.6 are object-level
+features, so focused serialization tests cover them; only the form controls add
+a new visual proof.
 
 ---
 
@@ -999,7 +1019,7 @@ reducing the total 53 → 45; `calendar.pdf` generates 20,805 bytes under both
 Node and V8. `examples/layout-phase-3.6.mjs` is the retained visual/V8 proof.
 
 Four original defects corrected while porting are recorded with reproduction
-steps in [ORIGINAL-BUG.md](../ORIGINAL-BUG.md): stale `Positioned` dimensions,
+steps in [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md): stale `Positioned` dimensions,
 the grid's unconditional continuation and aspect-ratio compression, and early
 termination of uneven partitions.
 
@@ -1026,7 +1046,7 @@ separate upstream font helpers; explicit RTL direction already resolves run
 placement and start/end alignment.
 
 The original single-run justification division-by-zero defect is recorded with
-its reproduction in [ORIGINAL-BUG.md](../ORIGINAL-BUG.md).
+its reproduction in [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md).
 
 ### 3.8 Content widgets ✅ *(landed 2026-08-05)*
 
@@ -1053,7 +1073,7 @@ occurrences, reducing the global total 37 → 33.
 Node and bare V8.
 
 The original destination collision for repeated/child-only headers is recorded
-in [ORIGINAL-BUG.md](../ORIGINAL-BUG.md).
+in [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md).
 
 ### 3.9 Placeholders ⇒ `certificate` ✅ *(landed 2026-08-05)*
 
@@ -1075,7 +1095,7 @@ example gates lose five API occurrences, reducing the total 33 → 28.
 `examples/placeholders-phase-3.9.mjs` is the retained 9,206-byte proof.
 
 The original off-by-one word selection and overlong paragraph defects are
-recorded in [ORIGINAL-BUG.md](../ORIGINAL-BUG.md).
+recorded in [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md).
 
 ### 3.10 Clipping widgets ✅ *(landed 2026-08-05)*
 
@@ -1149,7 +1169,7 @@ has separate horizontal and vertical crop probes; the gallery generates
 
 The upstream early-SOF exit can miss a later legal APP14 marker and invert
 direct CMYK incorrectly; the correction and reproduction are recorded in
-[ORIGINAL-BUG.md](../ORIGINAL-BUG.md).
+[ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md).
 
 ---
 
@@ -1234,10 +1254,22 @@ The last four examples all land here, one per sub-phase.
 - **Example gate:** ⇒ **`resume` generates end to end here — the whole example
   set now passes (74,273 bytes, 8/8 examples, zero missing APIs).**
 
-### 5.6 Remaining
+### 5.6 Remaining document features ✅ *(landed 2026-08-06)*
 
-Forms (`widgets/forms.dart`), page labels, metadata and XMP. No example depends
-on these.
+- **Ports:** `widgets/forms.dart`, `obj/annotation.dart`, `obj/metadata.dart`,
+  `obj/page_label.dart` and the corresponding catalog integration.
+- `ChoiceField`, `Checkbox`, `FlatButton` and `TextField` register printable
+  `/Widget` annotations under `/AcroForm`. Explicit normal/down/rollover and
+  checkbox-state form XObjects keep values stable across readers.
+- `Document` accepts keywords and caller-supplied XMP, exposes zero-based page
+  label ranges through `PdfPageLabel`, and makes the current label available as
+  `RenderContext.pageLabel`.
+- `Signature` remains out of scope with encryption and digital signatures.
+- `examples/forms-phase-5.6.mjs` is the retained visual proof; metadata, XMP and
+  page labels have focused object-serialization tests because they do not alter
+  page drawing.
+- **Example gate:** none — all eight upstream examples already generated before
+  this phase.
 
 ---
 

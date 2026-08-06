@@ -1,6 +1,13 @@
 # js_pdf
 
-A JavaScript port of [dart_pdf](https://github.com/DavBfr/dart_pdf) by David PHAM-VAN.
+An independent JavaScript port of [dart_pdf](https://github.com/DavBfr/dart_pdf)
+by David PHAM-VAN.
+
+This port is based on **dart_pdf 3.13.0**, specifically upstream commit
+[`0833cd2fc8cf3e62b0228732e81402afca5cc542`](https://github.com/DavBfr/dart_pdf/commit/0833cd2fc8cf3e62b0228732e81402afca5cc542).
+
+js_pdf is an independent and unofficial JavaScript port of dart_pdf.
+It is not affiliated with or endorsed by the original project maintainers.
 
 `js_pdf` composes PDF documents from a widget tree using only standard ECMAScript.
 It has no runtime dependencies and touches no host API — no DOM, no Canvas, no
@@ -11,11 +18,32 @@ Written in TypeScript and shipped with type declarations; the compiler is
 configured against the ES2020 lib alone, so the host-free guarantee is enforced
 at build time rather than by convention.
 
+## Why this port exists
+
+I have used many PDF libraries across different languages and ecosystems,
+including iText, PDFKit, pdfmake, jsPDF and React-pdf. Of all of them, I have
+always considered dart_pdf the best library for generating PDFs because its
+declarative API makes documents remarkably simple to compose. I have used it
+successfully in mobile applications, on servers, in desktop applications and
+on the web.
+
+What I still wanted was a 100% JavaScript declarative PDF library. React-pdf is
+the closest alternative, but it depends on React. I wanted a framework-free
+library that could run in a browser with plain JavaScript, in Node.js, or
+directly in a bare V8 host.
+
+That is why I decided to port dart_pdf. This port was only possible because of
+the great and beautiful work David PHAM-VAN put into the original project, and
+because of the advances in LLM agents that made translating and validating a
+project of this scale feasible.
+
 ## Status
 
-Early. The low-level PDF writer, the layout protocol and a small widget set are
-in place; all 14 built-in Type1 fonts are available with real AFM metrics and
-WinAnsi text, while SVG, image and table subsystems are not implemented yet.
+The implementation roadmap is complete through phase 5.6. The port includes
+the PDF object model, Type1 and embedded TrueType fonts, declarative layout and
+pagination, SVG, raster images, tables, charts, barcodes, links, forms, page
+labels and metadata/XMP. All eight retained upstream examples generate end to
+end under Node.js and bare ClearScript V8.
 
 - [docs/PORTING-STATUS.md](docs/PORTING-STATUS.md) — what has been ported so far, file by file
 - [docs/ROADMAP.md](docs/ROADMAP.md) — the next steps, in order
@@ -87,9 +115,13 @@ depends on your ClearScript version and host binding strategy.
 
 ## Public API
 
-`createPdf`, `Document`, `Page`, `MultiPage`, `Text`, `Column`, `Row`,
-`Container`, `Spacer`, `Vector`, `PageFormat`, `PdfType1Font`,
-`PdfFontMetrics`, `Widget`.
+Highlights include `createPdf`, `Document`, `Page`, `MultiPage`, `Text`,
+`Column`, `Row`, `Container`, `Table`, `Chart`, `SvgImage`, `Image`,
+`BarcodeWidget`, `TextField`, `ChoiceField`, `Checkbox`, `FlatButton`,
+`PageFormat`, `PdfType1Font`, `PdfTtfFont` and `Widget`.
+
+See [docs/PORTING-STATUS.md](docs/PORTING-STATUS.md) for the complete implemented
+surface and the remaining upstream gaps.
 
 ## Example
 
@@ -99,13 +131,17 @@ table. Run it with `npm run example`.
 
 ## Current limitations
 
-- One built-in Type1 font per document with WinAnsi text; no embedded TTF, so
-  no CJK and no arbitrary Unicode.
-- `Vector` emits PDF vector operators directly; there is no SVG parser yet.
-- No image, table, spanning widget, RTL shaping, encryption, signature or PDF/A support.
-- A `MultiPage` child taller than one content area is rejected rather than split.
+- Reading existing PDFs, rasterizing PDFs, encryption and digital signatures
+  are out of scope.
+- PDF/A output intents, full Unicode bidi/Arabic shaping, SVG text and embedded
+  SVG raster content are not implemented.
+- Library code performs no host I/O. Fonts, images and other external assets
+  must be supplied by the caller as bytes or text.
+- An indivisible `MultiPage` child taller than one content area is rejected;
+  spanning widgets such as text, columns and tables paginate normally.
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the order in which these are being addressed.
+See [docs/PORTING-STATUS.md](docs/PORTING-STATUS.md) for details about each
+remaining gap.
 
 ## License
 

@@ -44,7 +44,11 @@ import { formatNumber } from './format/num.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
 import type { PdfImage } from './obj/image.ts';
-import type { PdfLinkAnnotation } from './obj/annotation.ts';
+import type {
+  PdfAnnotationSpec,
+  PdfFormFieldAnnotation,
+  PdfLinkAnnotation
+} from './obj/annotation.ts';
 import { identityMatrix, multiplyMatrix, transformPoint } from './matrix.ts';
 import type { PdfMatrix } from './matrix.ts';
 import type { PdfRect } from './rect.ts';
@@ -151,7 +155,7 @@ export class PdfCanvas {
   private readonly patternNames = new Map<string, string>();
   private readonly patternDicts = new Map<string, PdfDict>();
   private readonly imageNames = new Map<PdfImage, string>();
-  private readonly linkAnnotations: PdfLinkAnnotation[] = [];
+  private readonly pageAnnotations: PdfAnnotationSpec[] = [];
 
   /**
    * The current transformation matrix, tracked so a widget can ask what space
@@ -226,8 +230,8 @@ export class PdfCanvas {
   }
 
   /** Clickable rectangles registered while this page was painted. */
-  get annotations(): readonly PdfLinkAnnotation[] {
-    return this.linkAnnotations;
+  get annotations(): readonly PdfAnnotationSpec[] {
+    return this.pageAnnotations;
   }
 
   addUrlLink(destination: string, x: number, top: number, width: number, height: number): void {
@@ -259,9 +263,29 @@ export class PdfCanvas {
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
-    this.linkAnnotations.push({
+    this.pageAnnotations.push({
       kind,
       destination,
+      rect: { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+    });
+  }
+
+  addFormField(field: Omit<PdfFormFieldAnnotation, 'rect'>, x: number, top: number, width: number, height: number): void {
+    if (width <= 0 || height <= 0) return;
+    const points = [
+      this.transformWidgetPoint(x, top),
+      this.transformWidgetPoint(x + width, top),
+      this.transformWidgetPoint(x, top + height),
+      this.transformWidgetPoint(x + width, top + height)
+    ];
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    this.pageAnnotations.push({
+      ...field,
       rect: { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
     });
   }

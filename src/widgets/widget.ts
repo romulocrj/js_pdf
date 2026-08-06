@@ -43,6 +43,8 @@ export interface RenderContext extends DocumentContext {
   readonly canvas: PdfCanvas;
   readonly pageFormat: PageSize;
   readonly pageNumber: number;
+  /** Viewer page label for this physical page. */
+  readonly pageLabel: string;
   readonly pagesCount: number;
   readonly theme: ThemeData;
 }

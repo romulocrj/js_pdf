@@ -30,6 +30,7 @@ import { BarcodeQRCorrectionLevel } from './barcode/qrcode.ts';
 import { PdfType1Font } from './pdf/font/type1_fonts.ts';
 import { PdfTtfFont } from './pdf/obj/ttf_font.ts';
 import { PdfImage } from './pdf/obj/image.ts';
+import { PdfPageLabel } from './pdf/obj/page_label.ts';
 import { decodePng, inflateZlib } from './pdf/image/png.ts';
 import { parseJpeg } from './pdf/image/jpeg.ts';
 import {
@@ -90,6 +91,7 @@ import { Image } from './widgets/image.ts';
 import { ImageProvider, ImageProxy, MemoryImage, RawImage } from './widgets/image_provider.ts';
 import { Icon, IconData, IconThemeData } from './widgets/icon.ts';
 import { CircularProgressIndicator, LinearProgressIndicator } from './widgets/progress.ts';
+import { Checkbox, ChoiceField, FlatButton, TextField } from './widgets/forms.ts';
 import { FlutterLogo, Lorem, LoremText, PdfLogo, Placeholder } from './widgets/placeholders.ts';
 import { Vector } from './widgets/shape.ts';
 import { Positioned, PositionedDirectional, Stack } from './widgets/stack.ts';
@@ -147,6 +149,8 @@ export {
   ChartFrame,
   ChartGrid,
   ChartLegend,
+  Checkbox,
+  ChoiceField,
   ClipOval,
   ClipRect,
   ClipRRect,
@@ -166,6 +170,7 @@ export {
   FittedBox,
   Flex,
   Flexible,
+  FlatButton,
   Font,
   FlutterLogo,
   FixedAxis,
@@ -202,6 +207,7 @@ export {
   Partition,
   Partitions,
   PdfLogo,
+  PdfPageLabel,
   Pdf417SecurityLevel,
   PdfImage,
   PdfTtfFont,
@@ -234,6 +240,7 @@ export {
   InlineSpan,
   RichText,
   Text,
+  TextField,
   TextSpan,
   TextStyle,
   Theme,
@@ -252,6 +259,7 @@ export { decodePng, inflateZlib, parseJpeg };
 export type { DecodedPng } from './pdf/image/png.ts';
 export type { JpegColorSpace, JpegInfo } from './pdf/image/jpeg.ts';
 export type { PdfImageOptions, PdfImageOrientation } from './pdf/obj/image.ts';
+export type { PdfPageLabelOptions, PdfPageLabelStyle } from './pdf/obj/page_label.ts';
 export type { Barcode as BarcodeGenerator, BarcodeType } from './barcode/barcode.ts';
 export type {
   CodabarFactoryOptions,
@@ -261,6 +269,13 @@ export type {
   ItfFixedFactoryOptions
 } from './barcode/barcode_factory.ts';
 export type { BarcodeWidgetOptions } from './widgets/barcode.ts';
+export type {
+  CheckboxOptions,
+  ChoiceFieldOptions,
+  FlatButtonOptions,
+  PdfFieldFlag,
+  TextFieldOptions
+} from './widgets/forms.ts';
 export type {
   AnchorOptions,
   AnnotationLayoutData,
@@ -577,7 +592,13 @@ export type {
   DocumentOptions,
   DocumentOutlineEntry
 } from './widgets/document.ts';
-export type { PdfPageMode, SerializedDestination, SerializedOutline } from './pdf/document.ts';
+export type {
+  PdfPageMode,
+  SerializedDestination,
+  SerializedOutline,
+  SerializedPageLabel
+} from './pdf/document.ts';
+export type { PdfFormHighlighting, PdfTextFieldAlign } from './pdf/obj/annotation.ts';
 export type { PdfOutlineStyle } from './pdf/obj/outline.ts';
 
 /** The widget constructors handed to a `createPdf` build callback. */
@@ -594,6 +615,10 @@ export interface PublicApi {
   readonly IconThemeData: typeof IconThemeData;
   readonly CircularProgressIndicator: typeof CircularProgressIndicator;
   readonly LinearProgressIndicator: typeof LinearProgressIndicator;
+  readonly Checkbox: typeof Checkbox;
+  readonly ChoiceField: typeof ChoiceField;
+  readonly FlatButton: typeof FlatButton;
+  readonly TextField: typeof TextField;
   readonly Anchor: typeof Anchor;
   readonly Annotation: typeof Annotation;
   readonly AnnotationBuilder: typeof AnnotationBuilder;
@@ -706,6 +731,7 @@ export interface PublicApi {
   readonly PageFormat: typeof PageFormat;
   readonly PdfType1Font: typeof PdfType1Font;
   readonly PdfTtfFont: typeof PdfTtfFont;
+  readonly PdfPageLabel: typeof PdfPageLabel;
   readonly Font: typeof Font;
   readonly TextStyle: typeof TextStyle;
   readonly Theme: typeof Theme;
@@ -727,6 +753,10 @@ const publicApi: PublicApi = Object.freeze({
   IconThemeData,
   CircularProgressIndicator,
   LinearProgressIndicator,
+  Checkbox,
+  ChoiceField,
+  FlatButton,
+  TextField,
   Anchor,
   Annotation,
   AnnotationBuilder,
@@ -839,6 +869,7 @@ const publicApi: PublicApi = Object.freeze({
   PageFormat,
   PdfType1Font,
   PdfTtfFont,
+  PdfPageLabel,
   Font,
   TextStyle,
   Theme,

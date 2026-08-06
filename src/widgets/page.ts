@@ -118,6 +118,7 @@ export class Page implements Section {
       canvas,
       pageFormat: format,
       pageNumber: documentContext.pageOffset + 1,
+      pageLabel: documentContext.document.pageLabel(documentContext.pageOffset),
       pagesCount: documentContext.pagesCount || documentContext.pageOffset + 1,
       theme: this.pageTheme.theme ?? documentContext.document.theme
     };

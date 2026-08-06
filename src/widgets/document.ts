@@ -26,11 +26,13 @@ import type {
   PdfPageMode,
   SerializedDestination,
   SerializedOutline,
-  SerializedPage
+  SerializedPage,
+  SerializedPageLabel
 } from '../pdf/document.ts';
 import type { Rgb } from '../pdf/color.ts';
 import type { PdfOutlineStyle } from '../pdf/obj/outline.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
+import { PdfPageLabel } from '../pdf/obj/page_label.ts';
 import { Font } from './font.ts';
 import { MultiPage } from './multi_page.ts';
 import { Page } from './page.ts';
@@ -43,6 +45,10 @@ export interface DocumentOptions {
   readonly subject?: string | null;
   readonly creator?: string | null;
   readonly producer?: string | null;
+  readonly keywords?: string | null;
+  /** Caller-supplied XMP packet, serialized as UTF-8 XML metadata. */
+  readonly xmpMetadata?: string | null;
+  readonly pageLabels?: readonly SerializedPageLabel[];
 
   /** The styles pages inherit unless their own `PageTheme` names another. */
   readonly theme?: ThemeData;
@@ -84,6 +90,7 @@ export class Document {
   readonly sections: Section[] = [];
   private readonly outlineEntries: DocumentOutlineEntry[] = [];
   private readonly destinationEntries: DocumentDestinationEntry[] = [];
+  private readonly pageLabelEntries = new Map<number, PdfPageLabel>();
   private outlineReplay = false;
   private outlineCursor = 0;
   private outlineRerenderRequested = false;
@@ -104,11 +111,15 @@ export class Document {
     subject = null,
     creator = 'js_pdf',
     producer = 'js_pdf',
+    keywords = null,
+    xmpMetadata = null,
+    pageLabels = [],
     theme = undefined,
     font = undefined,
     pageMode = 'none'
   }: DocumentOptions = {}) {
-    this.metadata = { title, author, subject, creator, producer };
+    this.metadata = { title, author, subject, creator, producer, keywords, xmpMetadata };
+    for (const { pageIndex, label } of pageLabels) this.setPageLabel(pageIndex, label);
     this.theme = theme
       ?? (font === undefined
         ? ThemeData.base()
@@ -143,6 +154,30 @@ export class Document {
     }
     this.sections.push(page);
     return this;
+  }
+
+  /** Begin a page-label numbering range at a zero-based physical page index. */
+  setPageLabel(pageIndex: number, label: PdfPageLabel): this {
+    if (!Number.isInteger(pageIndex) || pageIndex < 0) {
+      throw new RangeError('Page label index must be a non-negative integer');
+    }
+    if (!(label instanceof PdfPageLabel)) {
+      throw new TypeError('Document.setPageLabel expects a PdfPageLabel');
+    }
+    this.pageLabelEntries.set(pageIndex, label);
+    return this;
+  }
+
+  pageLabel(pageIndex: number): string {
+    const keys = [...this.pageLabelEntries.keys()].sort((a, b) => a - b);
+    let current = PdfPageLabel.arabic();
+    let start = 0;
+    for (const key of keys) {
+      if (pageIndex < key) break;
+      current = this.pageLabelEntries.get(key) ?? current;
+      start = key;
+    }
+    return current.asString(pageIndex - start);
   }
 
   /** Current first-pass outline data, consumed by `TableOfContent`. */
@@ -271,6 +306,9 @@ export class Document {
 
     const outlines: SerializedOutline[] = this.outlineEntries.map(entry => ({ ...entry }));
     const destinations: SerializedDestination[] = this.destinationEntries.map(entry => ({ ...entry }));
-    return serializePdf(pages, this.metadata, outlines, this.pageMode, destinations);
+    const pageLabels: SerializedPageLabel[] = [...this.pageLabelEntries]
+      .sort(([a], [b]) => a - b)
+      .map(([pageIndex, label]) => ({ pageIndex, label }));
+    return serializePdf(pages, this.metadata, outlines, this.pageMode, destinations, pageLabels);
   }
 }

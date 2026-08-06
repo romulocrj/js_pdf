@@ -24,6 +24,7 @@ import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
 import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
 import { generateIconsPhase54 } from './icons-phase-5.4.mjs';
 import { generateProgressPhase55 } from './progress-phase-5.5.mjs';
+import { generateFormsPhase56 } from './forms-phase-5.6.mjs';
 
 const materialIcons = new Uint8Array(
   await readFile(new URL('./assets/MaterialIcons.ttf', import.meta.url))
@@ -48,7 +49,8 @@ const examples = [
   ['barcode-phase-5.2', generateBarcodePhase52],
   ['annotations-phase-5.3', generateAnnotationsPhase53],
   ['icons-phase-5.4', () => generateIconsPhase54(materialIcons)],
-  ['progress-phase-5.5', generateProgressPhase55]
+  ['progress-phase-5.5', generateProgressPhase55],
+  ['forms-phase-5.6', generateFormsPhase56]
 ];
 
 const outputDirectory = new URL('./out/', import.meta.url);

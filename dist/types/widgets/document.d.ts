@@ -1,7 +1,8 @@
-import type { DocumentMetadata, PdfPageMode } from '../pdf/document.ts';
+import type { DocumentMetadata, PdfPageMode, SerializedPageLabel } from '../pdf/document.ts';
 import type { Rgb } from '../pdf/color.ts';
 import type { PdfOutlineStyle } from '../pdf/obj/outline.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
+import { PdfPageLabel } from '../pdf/obj/page_label.ts';
 import { Font } from './font.ts';
 import type { Section } from './page.ts';
 import { ThemeData } from './theme.ts';
@@ -11,6 +12,10 @@ export interface DocumentOptions {
     readonly subject?: string | null;
     readonly creator?: string | null;
     readonly producer?: string | null;
+    readonly keywords?: string | null;
+    /** Caller-supplied XMP packet, serialized as UTF-8 XML metadata. */
+    readonly xmpMetadata?: string | null;
+    readonly pageLabels?: readonly SerializedPageLabel[];
     /** The styles pages inherit unless their own `PageTheme` names another. */
     readonly theme?: ThemeData;
     /**
@@ -46,6 +51,7 @@ export declare class Document {
     readonly sections: Section[];
     private readonly outlineEntries;
     private readonly destinationEntries;
+    private readonly pageLabelEntries;
     private outlineReplay;
     private outlineCursor;
     private outlineRerenderRequested;
@@ -57,7 +63,7 @@ export declare class Document {
     private readonly fonts;
     /** Used only if the theme's default style somehow names no font at all. */
     private readonly fallbackFont;
-    constructor({ title, author, subject, creator, producer, theme, font, pageMode }?: DocumentOptions);
+    constructor({ title, author, subject, creator, producer, keywords, xmpMetadata, pageLabels, theme, font, pageMode }?: DocumentOptions);
     /** The `PdfFont` `declaration` stands for here, built once. */
     resolveFont(declaration: Font): PdfFont;
     /**
@@ -67,6 +73,9 @@ export declare class Document {
      */
     get font(): PdfFont;
     addPage(page: Section): this;
+    /** Begin a page-label numbering range at a zero-based physical page index. */
+    setPageLabel(pageIndex: number, label: PdfPageLabel): this;
+    pageLabel(pageIndex: number): string;
     /** Current first-pass outline data, consumed by `TableOfContent`. */
     get outlines(): readonly DocumentOutlineEntry[];
     requestOutlineRerender(): void;

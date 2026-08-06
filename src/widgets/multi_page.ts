@@ -100,7 +100,7 @@ export class MultiPage implements Section {
     header = null,
     footer = null,
     background = null,
-    maxPages = 20
+    maxPages = 50
   }: MultiPageOptions) {
     if (typeof build !== 'function') throw new TypeError('MultiPage.build must be a function');
     const base = pageTheme ?? new PageTheme({ pageFormat: PageFormat.A4 });
@@ -148,6 +148,7 @@ export class MultiPage implements Section {
         canvas,
         pageFormat: this.format,
         pageNumber,
+        pageLabel: documentContext.document.pageLabel(pageNumber - 1),
         pagesCount: documentContext.pagesCount || pageNumber,
         theme: this.theme ?? documentContext.document.theme
       };

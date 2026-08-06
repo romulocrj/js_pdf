@@ -14,7 +14,7 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/obj/info.dart
  *
- * PORT GAP: no `/CreationDate` and no `/Keywords`. Upstream stamps the current
+ * PORT GAP: no `/CreationDate`. Upstream stamps the current
  * time, which the port cannot do — reading a clock is a host capability the
  * library does not have, and a document that varies run to run cannot be
  * asserted byte for byte. A caller that wants a creation date can pass it once
@@ -35,6 +35,8 @@ export interface DocumentMetadata {
   readonly subject?: string | null;
   readonly creator?: string | null;
   readonly producer?: string | null;
+  readonly keywords?: string | null;
+  readonly xmpMetadata?: string | null;
 }
 
 /** The `/Info` dictionary the trailer points at. */
@@ -48,6 +50,7 @@ export class PdfInfo extends PdfObject<PdfDict> {
       ['/Title', metadata.title],
       ['/Author', metadata.author],
       ['/Subject', metadata.subject],
+      ['/Keywords', metadata.keywords],
       ['/Creator', metadata.creator],
       ['/Producer', metadata.producer]
     ];

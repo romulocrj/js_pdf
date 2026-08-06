@@ -4923,6 +4923,138 @@ class PdfImageObject extends PdfXObject {
   }
 }
 
+class PdfPageLabel {
+  constructor({prefix = null, style = null, subsequent = null} = {}) {
+    const styles = [ "arabic", "romanUpper", "romanLower", "lettersUpper", "lettersLower" ];
+    if (style !== null && !styles.includes(style)) {
+      throw new TypeError(`Unknown page label style: ${String(style)}`);
+    }
+    this.prefix = prefix === null ? null : String(prefix);
+    this.style = style;
+    this.subsequent = subsequent === null ? null : Number(subsequent);
+    if (this.subsequent !== null && (!Number.isInteger(this.subsequent) || this.subsequent < 1)) {
+      throw new RangeError("Page label subsequent must be a positive integer");
+    }
+  }
+  static arabic(options = {}) {
+    return new PdfPageLabel({
+      ...options,
+      style: "arabic"
+    });
+  }
+  static romanUpper(options = {}) {
+    return new PdfPageLabel({
+      ...options,
+      style: "romanUpper"
+    });
+  }
+  static romanLower(options = {}) {
+    return new PdfPageLabel({
+      ...options,
+      style: "romanLower"
+    });
+  }
+  static lettersUpper(options = {}) {
+    return new PdfPageLabel({
+      ...options,
+      style: "lettersUpper"
+    });
+  }
+  static lettersLower(options = {}) {
+    return new PdfPageLabel({
+      ...options,
+      style: "lettersLower"
+    });
+  }
+  toDict() {
+    const result = new PdfDict;
+    const styleNames = {
+      arabic: "/D",
+      romanUpper: "/R",
+      romanLower: "/r",
+      lettersUpper: "/A",
+      lettersLower: "/a"
+    };
+    if (this.style !== null) result.set("/S", new PdfName(styleNames[this.style]));
+    if (this.prefix !== null && this.prefix.length > 0) result.set("/P", new PdfString(this.prefix));
+    if (this.subsequent !== null) result.set("/St", new PdfNum(this.subsequent));
+    return result;
+  }
+  toRoman(decimal) {
+    if (decimal < 1 || decimal > 3999) {
+      throw new RangeError("Roman page labels are limited to 1 through 3999");
+    }
+    const dictionary = [ [ 1e3, "M" ], [ 900, "CM" ], [ 500, "D" ], [ 400, "CD" ], [ 100, "C" ], [ 90, "XC" ], [ 50, "L" ], [ 40, "XL" ], [ 10, "X" ], [ 9, "IX" ], [ 5, "V" ], [ 4, "IV" ], [ 1, "I" ] ];
+    let value = decimal;
+    let result = "";
+    for (const [number, numeral] of dictionary) {
+      while (value >= number) {
+        value -= number;
+        result += numeral;
+      }
+    }
+    return result;
+  }
+  toLetters(decimal) {
+    const letter = String.fromCharCode(65 + decimal % 26);
+    return letter.repeat(Math.floor(decimal / 26) + 1);
+  }
+  asString(index = 0) {
+    const number = index + (this.subsequent === null ? 0 : this.subsequent - 1);
+    let suffix = "";
+    switch (this.style) {
+     case "arabic":
+      suffix = String(number + 1);
+      break;
+
+     case "romanUpper":
+      suffix = this.toRoman(number + 1);
+      break;
+
+     case "romanLower":
+      suffix = this.toRoman(number + 1).toLowerCase();
+      break;
+
+     case "lettersUpper":
+      suffix = this.toLetters(number);
+      break;
+
+     case "lettersLower":
+      suffix = this.toLetters(number).toLowerCase();
+      break;
+    }
+    return `${this.prefix ?? ""}${suffix}`;
+  }
+}
+
+class PdfPageLabels extends PdfObject {
+  constructor(document) {
+    super(document, new PdfDict);
+    this.labels = new Map;
+  }
+  pageLabel(index) {
+    const keys = [ ...this.labels.keys() ].sort((a, b) => a - b);
+    let current = PdfPageLabel.arabic();
+    let start = 0;
+    for (const key of keys) {
+      if (index < key) break;
+      current = this.labels.get(key) ?? current;
+      start = key;
+    }
+    return current.asString(index - start);
+  }
+  prepare() {
+    const nums = new PdfArray;
+    for (const key of [ ...this.labels.keys() ].sort((a, b) => a - b)) {
+      const label = this.labels.get(key);
+      if (label === undefined) continue;
+      nums.add(new PdfNum(key));
+      nums.add(label.toDict());
+    }
+    this.params.set("/Nums", nums);
+  }
+}
+
 function assertFiniteNumber(value, name) {
   if (!Number.isFinite(value)) {
     throw new TypeError(`${name} must be a finite number`);
@@ -10320,6 +10452,10 @@ class PdfCatalog extends PdfObject {
     super(document, new PdfDict([ [ "/Type", new PdfName("/Catalog") ] ]), objser);
     this.names = null;
     this.outline = null;
+    this.metadata = null;
+    this.pageLabels = null;
+    this.formFields = [];
+    this.formFonts = new Map;
     this.showOutlines = false;
     this.pageList = pageList;
   }
@@ -10327,6 +10463,17 @@ class PdfCatalog extends PdfObject {
     this.params.set("/Pages", this.pageList.ref());
     if (this.names !== null) this.params.set("/Names", this.names.ref());
     if (this.outline !== null) this.params.set("/Outlines", this.outline.ref());
+    if (this.metadata !== null) this.params.set("/Metadata", this.metadata.ref());
+    if (this.pageLabels !== null && this.pageLabels.labels.size > 0) {
+      this.params.set("/PageLabels", this.pageLabels.ref());
+    }
+    if (this.formFields.length > 0) {
+      const form = new PdfDict([ [ "/Fields", PdfArray.fromObjects(this.formFields) ], [ "/NeedAppearances", new PdfBool(false) ] ]);
+      if (this.formFonts.size > 0) {
+        form.set("/DR", new PdfDict([ [ "/Font", PdfDict.fromObjectMap(this.formFonts) ] ]));
+      }
+      this.params.set("/AcroForm", form);
+    }
     if (this.showOutlines) this.params.set("/PageMode", new PdfName("/UseOutlines"));
   }
 }
@@ -10334,7 +10481,7 @@ class PdfCatalog extends PdfObject {
 class PdfInfo extends PdfObject {
   constructor(document, metadata) {
     super(document, new PdfDict);
-    const entries = [ [ "/Title", metadata.title ], [ "/Author", metadata.author ], [ "/Subject", metadata.subject ], [ "/Creator", metadata.creator ], [ "/Producer", metadata.producer ] ];
+    const entries = [ [ "/Title", metadata.title ], [ "/Author", metadata.author ], [ "/Subject", metadata.subject ], [ "/Keywords", metadata.keywords ], [ "/Creator", metadata.creator ], [ "/Producer", metadata.producer ] ];
     for (const [key, value] of entries) {
       if (value) {
         this.params.set(key, new PdfString(value));
@@ -10515,13 +10662,19 @@ class PdfOutline extends PdfObject {
 }
 
 class PdfAnnotation extends PdfObject {
-  constructor(document, page, annotation) {
+  constructor(document, page, annotation, defaultAppearanceName = null, appearances = null) {
     super(document, new PdfDict([ [ "/Type", new PdfName("/Annot") ] ]));
     this.page = page;
     this.annotation = annotation;
+    this.defaultAppearanceName = defaultAppearanceName;
+    this.appearances = appearances;
     page.annotations.push(this);
   }
   prepare() {
+    if (this.annotation.kind === "form") {
+      this.prepareForm(this.annotation);
+      return;
+    }
     const {rect, destination, kind} = this.annotation;
     this.params.set("/Subtype", new PdfName("/Link"));
     this.params.set("/Rect", PdfArray.fromNum([ rect.x, rect.y, rect.x + rect.width, rect.y + rect.height ]));
@@ -10529,6 +10682,89 @@ class PdfAnnotation extends PdfObject {
     this.params.set("/Border", PdfArray.fromNum([ 0, 0, 0 ]));
     this.params.set("/F", new PdfNum(4));
     this.params.set("/A", new PdfDict([ [ "/S", new PdfName(kind === "url" ? "/URI" : "/GoTo") ], [ kind === "url" ? "/URI" : "/D", new PdfString(destination) ] ]));
+  }
+  prepareForm(field) {
+    const fieldNames = {
+      text: "/Tx",
+      choice: "/Ch",
+      checkbox: "/Btn",
+      button: "/Btn"
+    };
+    this.params.set("/Subtype", new PdfName("/Widget"));
+    this.params.set("/Rect", PdfArray.fromNum([ field.rect.x, field.rect.y, field.rect.x + field.rect.width, field.rect.y + field.rect.height ]));
+    this.params.set("/P", this.page.ref());
+    this.params.set("/F", new PdfNum(4));
+    this.params.set("/FT", new PdfName(fieldNames[field.fieldType]));
+    this.params.set("/T", new PdfString(field.name));
+    this.params.set("/Ff", new PdfNum(field.fieldFlags ?? 0));
+    if (field.alternateName) this.params.set("/TU", new PdfString(field.alternateName));
+    if (field.mappingName) this.params.set("/TM", new PdfString(field.mappingName));
+    if (field.maxLength !== null && field.maxLength !== undefined) {
+      this.params.set("/MaxLen", new PdfNum(field.maxLength));
+    }
+    if (field.textAlign !== null && field.textAlign !== undefined) {
+      this.params.set("/Q", new PdfNum([ "left", "center", "right" ].indexOf(field.textAlign)));
+    }
+    if (field.items !== undefined) {
+      this.params.set("/Opt", new PdfArray(field.items.map(item => new PdfString(item))));
+    }
+    const isButton = field.fieldType === "checkbox" || field.fieldType === "button";
+    if (field.value) {
+      this.params.set("/V", isButton ? new PdfName(field.value) : new PdfString(field.value));
+    }
+    if (field.defaultValue) {
+      this.params.set("/DV", isButton ? new PdfName(field.defaultValue) : new PdfString(field.defaultValue));
+    }
+    if (field.fieldType === "checkbox") {
+      this.params.set("/AS", new PdfName(field.value ?? "/Off"));
+    }
+    if (this.defaultAppearanceName !== null) {
+      const [r, g, b] = field.textColor ?? [ 0, 0, 0 ];
+      this.params.set("/DA", new PdfString(`${this.defaultAppearanceName} ${field.fontSize ?? 12} Tf ${r} ${g} ${b} rg`));
+    }
+    const appearance = new PdfDict;
+    if (field.borderColor !== null && field.borderColor !== undefined) {
+      appearance.set("/BC", PdfArray.fromNum(field.borderColor));
+    }
+    if (field.backgroundColor !== null && field.backgroundColor !== undefined) {
+      appearance.set("/BG", PdfArray.fromNum(field.backgroundColor));
+    }
+    if (!appearance.isEmpty) this.params.set("/MK", appearance);
+    const highlights = {
+      none: "/N",
+      invert: "/I",
+      outline: "/O",
+      push: "/P",
+      toggle: "/T"
+    };
+    if (field.highlighting !== null && field.highlighting !== undefined) {
+      this.params.set("/H", new PdfName(highlights[field.highlighting]));
+    }
+    if (this.appearances !== null) {
+      const appearances = new PdfDict;
+      if (this.appearances.normal !== undefined) {
+        appearances.set("/N", this.appearances.normal.ref());
+      } else if (this.appearances.normalStates !== undefined) {
+        const states = new PdfDict;
+        for (const [name, appearance] of this.appearances.normalStates) {
+          states.set(name, appearance.ref());
+        }
+        appearances.set("/N", states);
+      }
+      if (this.appearances.down !== undefined) appearances.set("/D", this.appearances.down.ref());
+      if (this.appearances.rollover !== undefined) {
+        appearances.set("/R", this.appearances.rollover.ref());
+      }
+      if (!appearances.isEmpty) this.params.set("/AP", appearances);
+    }
+  }
+}
+
+class PdfMetadata extends PdfObjectStream {
+  constructor(document, metadata) {
+    super(document, utf8Encode(metadata));
+    this.params.set("/Type", new PdfName("/Metadata"));
+    this.params.set("/Subtype", new PdfName("/XML"));
   }
 }
 
@@ -10538,10 +10774,14 @@ class PdfDocument {
     this.xref = new PdfXrefTable;
     this.fontObjects = new Map;
     this.imageObjects = new Map;
+    this.formFontNames = new Map;
     const catalogSerial = this.genSerial();
     this.pageList = new PdfPageList(this);
     this.catalog = new PdfCatalog(this, this.pageList, catalogSerial);
     this.info = new PdfInfo(this, metadata);
+    if (metadata.xmpMetadata) {
+      this.catalog.metadata = new PdfMetadata(this, metadata.xmpMetadata);
+    }
   }
   get objects() {
     return this.xref.objects;
@@ -10570,6 +10810,40 @@ class PdfDocument {
     this.imageObjects.set(image, object);
     return object;
   }
+  formAppearanceObject(appearance) {
+    const object = new PdfXObject(this, "/Form", encodeLatin1(appearance.content));
+    object.params.set("/FormType", new PdfNum(1));
+    object.params.set("/BBox", PdfArray.fromNum([ 0, 0, appearance.width, appearance.height ]));
+    const resources = new PdfDict;
+    if (appearance.fonts.size > 0) {
+      const fonts = new Map;
+      for (const [font, name] of appearance.fonts) fonts.set(name, this.fontObject(font));
+      resources.set("/Font", PdfDict.fromObjectMap(fonts));
+    }
+    if (appearance.images.size > 0) {
+      const images = new Map;
+      for (const [image, name] of appearance.images) images.set(name, this.imageObject(image));
+      resources.set("/XObject", PdfDict.fromObjectMap(images));
+    }
+    if (appearance.graphicStates.size > 0) {
+      resources.set("/ExtGState", new PdfDict(appearance.graphicStates));
+    }
+    if (appearance.patterns.size > 0) {
+      resources.set("/Pattern", new PdfDict(appearance.patterns));
+    }
+    if (!resources.isEmpty) object.params.set("/Resources", resources);
+    return object;
+  }
+  resolveFormAppearances(appearances) {
+    if (appearances === undefined) return null;
+    const normalStates = appearances.normalStates === undefined ? undefined : new Map([ ...appearances.normalStates ].map(([name, appearance]) => [ name, this.formAppearanceObject(appearance) ]));
+    return {
+      normal: appearances.normal === undefined ? undefined : this.formAppearanceObject(appearances.normal),
+      normalStates,
+      down: appearances.down === undefined ? undefined : this.formAppearanceObject(appearances.down),
+      rollover: appearances.rollover === undefined ? undefined : this.formAppearanceObject(appearances.rollover)
+    };
+  }
   addPage(format, content, fonts = new Map, graphicStates = new Map, patterns = new Map, images = new Map, annotations = []) {
     const resources = [];
     for (const [font, name] of fonts) {
@@ -10590,7 +10864,21 @@ class PdfDocument {
       page.addXObject(name, this.imageObject(image));
     }
     for (const annotation of annotations) {
-      new PdfAnnotation(this, page, annotation);
+      let appearanceName = null;
+      if (annotation.kind === "form") {
+        const font = annotation.font;
+        if (font !== undefined) {
+          appearanceName = this.formFontNames.get(font) ?? null;
+          if (appearanceName === null) {
+            appearanceName = `/FForm${this.formFontNames.size + 1}`;
+            this.formFontNames.set(font, appearanceName);
+            this.catalog.formFonts.set(appearanceName, this.fontObject(font));
+          }
+        }
+      }
+      const appearances = annotation.kind === "form" ? this.resolveFormAppearances(annotation.appearances) : null;
+      const object = new PdfAnnotation(this, page, annotation, appearanceName, appearances);
+      if (annotation.kind === "form") this.catalog.formFields.push(object);
     }
     page.contents.push(stream);
     return page;
@@ -10633,6 +10921,12 @@ class PdfDocument {
     if (names !== null) this.catalog.names = names;
     this.catalog.showOutlines = pageMode === "outlines";
   }
+  addPageLabels(labels) {
+    if (labels.length === 0) return;
+    const pageLabels = new PdfPageLabels(this);
+    for (const {pageIndex, label} of labels) pageLabels.labels.set(pageIndex, label);
+    this.catalog.pageLabels = pageLabels;
+  }
   save() {
     for (const object of this.objects) {
       object.prepare();
@@ -10645,12 +10939,13 @@ class PdfDocument {
   }
 }
 
-function serializePdf(pages, metadata, outlines = [], pageMode = "none", destinations = []) {
+function serializePdf(pages, metadata, outlines = [], pageMode = "none", destinations = [], pageLabels = []) {
   const document = new PdfDocument(metadata);
   for (const page of pages) {
     document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns, page.images, page.annotations);
   }
   document.addNavigation(outlines, pageMode, destinations);
+  document.addPageLabels(pageLabels);
   return document.save();
 }
 
@@ -10681,7 +10976,7 @@ class PdfCanvas {
     this.patternNames = new Map;
     this.patternDicts = new Map;
     this.imageNames = new Map;
-    this.linkAnnotations = [];
+    this.pageAnnotations = [];
     this.currentTransform = identityMatrix;
     this.transformStack = [];
     this.currentLetterSpacing = 0;
@@ -10721,7 +11016,7 @@ class PdfCanvas {
     return this.imageNames;
   }
   get annotations() {
-    return this.linkAnnotations;
+    return this.pageAnnotations;
   }
   addUrlLink(destination, x, top, width, height) {
     this.addLink("url", destination, x, top, width, height);
@@ -10738,9 +11033,28 @@ class PdfCanvas {
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
-    this.linkAnnotations.push({
+    this.pageAnnotations.push({
       kind,
       destination,
+      rect: {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
+      }
+    });
+  }
+  addFormField(field, x, top, width, height) {
+    if (width <= 0 || height <= 0) return;
+    const points = [ this.transformWidgetPoint(x, top), this.transformWidgetPoint(x + width, top), this.transformWidgetPoint(x, top + height), this.transformWidgetPoint(x + width, top + height) ];
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    this.pageAnnotations.push({
+      ...field,
       rect: {
         x: minX,
         y: minY,
@@ -11199,6 +11513,7 @@ class MultiPage {
         canvas,
         pageFormat: this.format,
         pageNumber,
+        pageLabel: documentContext.document.pageLabel(pageNumber - 1),
         pagesCount: documentContext.pagesCount || pageNumber,
         theme: this.theme ?? documentContext.document.theme
       };
@@ -11408,6 +11723,7 @@ class Page {
       canvas,
       pageFormat: format,
       pageNumber: documentContext.pageOffset + 1,
+      pageLabel: documentContext.document.pageLabel(documentContext.pageOffset),
       pagesCount: documentContext.pagesCount || documentContext.pageOffset + 1,
       theme: this.pageTheme.theme ?? documentContext.document.theme
     };
@@ -11718,10 +12034,11 @@ class DefaultTextStyle extends InheritedTheme {
 }
 
 class Document {
-  constructor({title = null, author = null, subject = null, creator = "js_pdf", producer = "js_pdf", theme = undefined, font = undefined, pageMode = "none"} = {}) {
+  constructor({title = null, author = null, subject = null, creator = "js_pdf", producer = "js_pdf", keywords = null, xmpMetadata = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none"} = {}) {
     this.sections = [];
     this.outlineEntries = [];
     this.destinationEntries = [];
+    this.pageLabelEntries = new Map;
     this.outlineReplay = false;
     this.outlineCursor = 0;
     this.outlineRerenderRequested = false;
@@ -11732,8 +12049,11 @@ class Document {
       author,
       subject,
       creator,
-      producer
+      producer,
+      keywords,
+      xmpMetadata
     };
+    for (const {pageIndex, label} of pageLabels) this.setPageLabel(pageIndex, label);
     this.theme = theme ?? (font === undefined ? ThemeData.base() : ThemeData.withFont({
       base: Font.fromPdfFont(font)
     }));
@@ -11757,6 +12077,27 @@ class Document {
     }
     this.sections.push(page);
     return this;
+  }
+  setPageLabel(pageIndex, label) {
+    if (!Number.isInteger(pageIndex) || pageIndex < 0) {
+      throw new RangeError("Page label index must be a non-negative integer");
+    }
+    if (!(label instanceof PdfPageLabel)) {
+      throw new TypeError("Document.setPageLabel expects a PdfPageLabel");
+    }
+    this.pageLabelEntries.set(pageIndex, label);
+    return this;
+  }
+  pageLabel(pageIndex) {
+    const keys = [ ...this.pageLabelEntries.keys() ].sort((a, b) => a - b);
+    let current = PdfPageLabel.arabic();
+    let start = 0;
+    for (const key of keys) {
+      if (pageIndex < key) break;
+      current = this.pageLabelEntries.get(key) ?? current;
+      start = key;
+    }
+    return current.asString(pageIndex - start);
   }
   get outlines() {
     return this.outlineEntries;
@@ -11851,7 +12192,11 @@ class Document {
     const destinations = this.destinationEntries.map(entry => ({
       ...entry
     }));
-    return serializePdf(pages, this.metadata, outlines, this.pageMode, destinations);
+    const pageLabels = [ ...this.pageLabelEntries ].sort(([a], [b]) => a - b).map(([pageIndex, label]) => ({
+      pageIndex,
+      label
+    }));
+    return serializePdf(pages, this.metadata, outlines, this.pageMode, destinations, pageLabels);
   }
 }
 
@@ -12531,6 +12876,363 @@ class LinearProgressIndicator extends Widget {
       context.canvas.setFillColor(valueColor);
       context.canvas.fillPath();
     }
+  }
+}
+
+const fieldFlagBits = {
+  readOnly: 0,
+  mandatory: 1,
+  noExport: 2,
+  multiline: 12,
+  password: 13,
+  noToggleToOff: 14,
+  radio: 15,
+  pushButton: 16,
+  combo: 17,
+  edit: 18,
+  sort: 19,
+  fileSelect: 20,
+  multiSelect: 21,
+  doNotSpellCheck: 22,
+  doNotScroll: 23,
+  comb: 24,
+  radiosInUnison: 25,
+  commitOnSelChange: 26
+};
+
+function fieldFlagsValue(flags) {
+  let value = 0;
+  for (const flag of flags) {
+    const bit = fieldFlagBits[flag];
+    if (bit === undefined) throw new TypeError(`Unknown form field flag: ${String(flag)}`);
+    value |= 1 << bit;
+  }
+  return value;
+}
+
+function requireName(name) {
+  const result = String(name);
+  if (result.length === 0) throw new RangeError("Form field name cannot be empty");
+  return result;
+}
+
+function resolvedStyle(context, style) {
+  return context.theme.defaultTextStyle.merge(style);
+}
+
+function appearanceFor(context, width, height, child) {
+  const canvas = new PdfCanvas(height);
+  const scoped = {
+    ...context,
+    canvas,
+    pageFormat: {
+      width,
+      height
+    }
+  };
+  const childBox = child.layout(scoped, BoxConstraints.tight({
+    width,
+    height
+  }));
+  childBox.widget.paint(scoped, {
+    ...childBox,
+    x: 0,
+    y: 0
+  });
+  return {
+    width,
+    height,
+    content: canvas.output(),
+    fonts: canvas.fonts,
+    graphicStates: canvas.graphicStates,
+    patterns: canvas.patterns,
+    images: canvas.images
+  };
+}
+
+class ChoiceField extends Widget {
+  constructor({name, items, value = null, width = 120, height = 13, textStyle = null}) {
+    super();
+    this.name = requireName(name);
+    this.items = items.map(String);
+    this.value = value;
+    this.width = Number(width);
+    this.height = Number(height);
+    this.textStyle = textStyle;
+    if (value !== null && !this.items.includes(value)) {
+      throw new RangeError("ChoiceField value must be one of its items");
+    }
+  }
+  child() {
+    return new Container({
+      width: this.width,
+      height: this.height,
+      padding: {
+        left: 4,
+        right: 16,
+        top: 2,
+        bottom: 2
+      },
+      borderColor: "#777777",
+      background: "#ffffff",
+      child: null
+    });
+  }
+  layout(context, constraints) {
+    const childBox = this.child().layout(context, BoxConstraints.from(constraints));
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    box.data.childBox.widget.paint(context, {
+      ...box.data.childBox,
+      x: box.x,
+      y: box.y
+    });
+    const style = resolvedStyle(context, this.textStyle);
+    context.canvas.addFormField({
+      kind: "form",
+      fieldType: "choice",
+      name: this.name,
+      items: this.items,
+      value: this.value,
+      fieldFlags: fieldFlagsValue([ "combo" ]),
+      font: style.font === null ? context.document.font : context.document.resolveFont(style.font),
+      fontSize: style.fontSize ?? 12,
+      textColor: style.color ?? [ 0, 0, 0 ],
+      appearances: this.value === null ? undefined : {
+        normal: appearanceFor(context, box.width, box.height, new Container({
+          padding: {
+            left: 4,
+            right: 16,
+            top: 2,
+            bottom: 2
+          },
+          child: new Text(this.value, {
+            style: this.textStyle ?? undefined
+          })
+        }))
+      }
+    }, box.x, box.y, box.width, box.height);
+  }
+}
+
+class Checkbox extends Widget {
+  constructor({name, value, tristate = false, width = 13, height = 13, activeColor = "#2196f3", checkColor = "#ffffff", borderColor = "#757575"}) {
+    super();
+    this.name = requireName(name);
+    this.value = Boolean(value);
+    this.tristate = Boolean(tristate);
+    this.width = Number(width);
+    this.height = Number(height);
+    this.activeColor = normalizeColor(activeColor);
+    this.checkColor = normalizeColor(checkColor);
+    this.borderColor = normalizeColor(borderColor);
+  }
+  layout(_context, constraints) {
+    const size = BoxConstraints.from(constraints).constrain({
+      width: this.width,
+      height: this.height
+    });
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: null
+    };
+  }
+  paint(context, box) {
+    this.paintState(context, box, this.value);
+    const on = new CheckboxAppearance(this.activeColor, this.checkColor, this.borderColor, true);
+    const off = new CheckboxAppearance(this.activeColor, this.checkColor, this.borderColor, false);
+    context.canvas.addFormField({
+      kind: "form",
+      fieldType: "checkbox",
+      name: this.name,
+      value: this.value ? "/Yes" : null,
+      defaultValue: this.value ? "/Yes" : null,
+      appearances: {
+        normalStates: new Map([ [ "/Yes", appearanceFor(context, box.width, box.height, on) ], [ "/Off", appearanceFor(context, box.width, box.height, off) ] ])
+      }
+    }, box.x, box.y, box.width, box.height);
+  }
+  paintState(context, box, selected) {
+    paintCheckbox(context, box.x, box.y, box.width, box.height, selected, this.activeColor, this.checkColor, this.borderColor);
+  }
+}
+
+function paintCheckbox(context, x, y, width, height, selected, activeColor, checkColor, borderColor) {
+  context.canvas.fillRect(x, y, width, height, selected ? activeColor : "#ffffff");
+  if (selected) {
+    context.canvas.line(x + 2, y + height * .55, x + width * .42, y + height - 3, checkColor, 2);
+    context.canvas.line(x + width * .42, y + height - 3, x + width - 2, y + 3, checkColor, 2);
+  }
+  context.canvas.strokeRect(x, y, width, height, borderColor, 1);
+}
+
+class CheckboxAppearance extends Widget {
+  constructor(activeColor, checkColor, borderColor, selected) {
+    super();
+    this.activeColor = activeColor;
+    this.checkColor = checkColor;
+    this.borderColor = borderColor;
+    this.selected = selected;
+  }
+  layout(_context, constraints) {
+    const size = BoxConstraints.from(constraints).biggest;
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: null
+    };
+  }
+  paint(context, box) {
+    paintCheckbox(context, box.x, box.y, box.width, box.height, this.selected, this.activeColor, this.checkColor, this.borderColor);
+  }
+}
+
+class FlatButton extends Widget {
+  constructor({name, child, textColor = "#ffffff", color = "#2196f3", colorDown = "#f44336", colorRollover = "#448aff", padding = {
+    left: 20,
+    right: 20,
+    top: 5,
+    bottom: 5
+  }, fieldFlags = [ "pushButton" ]}) {
+    super();
+    this.name = requireName(name);
+    this.childWidget = child;
+    this.textColor = normalizeColor(textColor);
+    this.color = normalizeColor(color);
+    this.colorDown = normalizeColor(colorDown);
+    this.colorRollover = normalizeColor(colorRollover);
+    this.padding = padding;
+    this.fieldFlags = fieldFlags;
+  }
+  child(color = this.color) {
+    return new Container({
+      background: color,
+      padding: this.padding,
+      child: new DefaultTextStyle({
+        style: new TextStyle({
+          color: this.textColor
+        }),
+        child: this.childWidget
+      })
+    });
+  }
+  layout(context, constraints) {
+    const childBox = this.child().layout(context, constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    box.data.childBox.widget.paint(context, {
+      ...box.data.childBox,
+      x: box.x,
+      y: box.y
+    });
+    context.canvas.addFormField({
+      kind: "form",
+      fieldType: "button",
+      name: this.name,
+      fieldFlags: fieldFlagsValue(this.fieldFlags),
+      highlighting: "push",
+      appearances: {
+        normal: appearanceFor(context, box.width, box.height, this.child()),
+        down: appearanceFor(context, box.width, box.height, this.child(this.colorDown)),
+        rollover: appearanceFor(context, box.width, box.height, this.child(this.colorRollover))
+      }
+    }, box.x, box.y, box.width, box.height);
+  }
+}
+
+class TextField extends Widget {
+  constructor(options) {
+    super();
+    this.options = options;
+    this.name = requireName(options.name);
+    if (options.maxLength !== null && options.maxLength !== undefined && (!Number.isInteger(options.maxLength) || options.maxLength < 0)) {
+      throw new RangeError("TextField maxLength must be a non-negative integer");
+    }
+  }
+  child() {
+    if (this.options.child !== null && this.options.child !== undefined) return this.options.child;
+    return new Container({
+      width: this.options.width ?? 120,
+      height: this.options.height ?? 13,
+      padding: {
+        left: 4,
+        right: 4,
+        top: 2,
+        bottom: 2
+      },
+      borderColor: this.options.color ?? "#777777",
+      background: this.options.backgroundColor ?? "#ffffff",
+      child: null
+    });
+  }
+  layout(context, constraints) {
+    const childBox = this.child().layout(context, constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    box.data.childBox.widget.paint(context, {
+      ...box.data.childBox,
+      x: box.x,
+      y: box.y
+    });
+    const style = resolvedStyle(context, this.options.textStyle ?? null);
+    context.canvas.addFormField({
+      kind: "form",
+      fieldType: "text",
+      name: this.name,
+      value: this.options.value ?? null,
+      defaultValue: this.options.defaultValue ?? null,
+      maxLength: this.options.maxLength ?? null,
+      alternateName: this.options.alternateName ?? null,
+      mappingName: this.options.mappingName ?? null,
+      fieldFlags: fieldFlagsValue(this.options.fieldFlags ?? []),
+      textAlign: this.options.textAlign ?? null,
+      borderColor: this.options.color == null ? null : normalizeColor(this.options.color),
+      backgroundColor: this.options.backgroundColor == null ? null : normalizeColor(this.options.backgroundColor),
+      highlighting: this.options.highlighting ?? null,
+      font: style.font === null ? context.document.font : context.document.resolveFont(style.font),
+      fontSize: style.fontSize ?? 12,
+      textColor: style.color ?? [ 0, 0, 0 ],
+      appearances: this.options.value === null || this.options.value === undefined ? undefined : {
+        normal: appearanceFor(context, box.width, box.height, new Container({
+          padding: {
+            left: 4,
+            right: 4,
+            top: 2,
+            bottom: 2
+          },
+          child: new Text(this.options.value, {
+            style: this.options.textStyle ?? undefined
+          })
+        }))
+      }
+    }, box.x, box.y, box.width, box.height);
   }
 }
 
@@ -15801,6 +16503,10 @@ const publicApi = Object.freeze({
   IconThemeData,
   CircularProgressIndicator,
   LinearProgressIndicator,
+  Checkbox,
+  ChoiceField,
+  FlatButton,
+  TextField,
   Anchor,
   Annotation,
   AnnotationBuilder,
@@ -15913,6 +16619,7 @@ const publicApi = Object.freeze({
   PageFormat,
   PdfType1Font,
   PdfTtfFont,
+  PdfPageLabel,
   Font,
   TextStyle,
   Theme,
@@ -15939,4 +16646,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationLink, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridAxis, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationLink, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridAxis, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

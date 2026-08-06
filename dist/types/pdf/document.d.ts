@@ -14,7 +14,8 @@ import type { PageSize } from './page_format.ts';
 import type { Rgb } from './color.ts';
 import { PdfImageObject } from './obj/image.ts';
 import type { PdfImage } from './obj/image.ts';
-import type { PdfLinkAnnotation } from './obj/annotation.ts';
+import type { PdfAnnotationSpec } from './obj/annotation.ts';
+import type { PdfPageLabel } from './obj/page_label.ts';
 export type { DocumentMetadata } from './obj/info.ts';
 /** One physical page, with its content stream already rendered to operators. */
 export interface SerializedPage {
@@ -31,8 +32,8 @@ export interface SerializedPage {
     readonly patterns?: ReadonlyMap<string, PdfDict>;
     /** The image resources `content` selected, by their page-local names. */
     readonly images?: ReadonlyMap<PdfImage, string>;
-    /** Link annotations registered while the page was painted. */
-    readonly annotations?: readonly PdfLinkAnnotation[];
+    /** Link and form annotations registered while the page was painted. */
+    readonly annotations?: readonly PdfAnnotationSpec[];
 }
 export interface SerializedOutline {
     readonly title: string;
@@ -54,6 +55,11 @@ export interface SerializedDestination {
     readonly zoom?: number | null;
 }
 export type PdfPageMode = 'none' | 'outlines';
+export interface SerializedPageLabel {
+    /** Zero-based physical page index where this numbering style begins. */
+    readonly pageIndex: number;
+    readonly label: PdfPageLabel;
+}
 /**
  * Owns the objects that make up a file, and writes them.
  *
@@ -78,6 +84,7 @@ export declare class PdfDocument {
      */
     private readonly fontObjects;
     private readonly imageObjects;
+    private readonly formFontNames;
     constructor(metadata: DocumentMetadata);
     get objects(): readonly PdfObjectBase<PdfDataType>[];
     genSerial(): number;
@@ -91,6 +98,8 @@ export declare class PdfDocument {
      */
     fontObject(font: PdfFont): PdfObject<PdfDict>;
     imageObject(image: PdfImage): PdfImageObject;
+    private formAppearanceObject;
+    private resolveFormAppearances;
     /**
      * Append a page. Its fonts and content stream are created first so they are
      * numbered before the page that references them, keeping the file in
@@ -100,9 +109,10 @@ export declare class PdfDocument {
      * wrote for that font — see `PdfCanvas.addFont`. A page that drew no text
      * passes nothing and gets no `/Resources` at all, as upstream does.
      */
-    addPage(format: PageSize, content: string, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>, images?: ReadonlyMap<PdfImage, string>, annotations?: readonly PdfLinkAnnotation[]): PdfPage;
+    addPage(format: PageSize, content: string, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>, images?: ReadonlyMap<PdfImage, string>, annotations?: readonly PdfAnnotationSpec[]): PdfPage;
     addNavigation(outlines: readonly SerializedOutline[], pageMode: PdfPageMode, destinations?: readonly SerializedDestination[]): void;
+    addPageLabels(labels: readonly SerializedPageLabel[]): void;
     save(): Uint8Array;
 }
 /** Build a document from already-rendered pages and write it. */
-export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata, outlines?: readonly SerializedOutline[], pageMode?: PdfPageMode, destinations?: readonly SerializedDestination[]): Uint8Array;
+export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata, outlines?: readonly SerializedOutline[], pageMode?: PdfPageMode, destinations?: readonly SerializedDestination[], pageLabels?: readonly SerializedPageLabel[]): Uint8Array;
