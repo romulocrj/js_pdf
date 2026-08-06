@@ -57,6 +57,2949 @@ const PageUnit = Object.freeze({
   pica: 12
 });
 
+function codeUnits(text) {
+  const units = [];
+  for (let i = 0; i < text.length; i++) units.push(text.charCodeAt(i));
+  return units;
+}
+
+function utf8Encode(text) {
+  const bytes = [];
+  for (const character of text) {
+    let point = character.codePointAt(0) ?? 65533;
+    if (point >= 55296 && point <= 57343) point = 65533;
+    if (point < 128) {
+      bytes.push(point);
+    } else if (point < 2048) {
+      bytes.push(192 | point >> 6, 128 | point & 63);
+    } else if (point < 65536) {
+      bytes.push(224 | point >> 12, 128 | point >> 6 & 63, 128 | point & 63);
+    } else {
+      bytes.push(240 | point >> 18, 128 | point >> 12 & 63, 128 | point >> 6 & 63, 128 | point & 63);
+    }
+  }
+  return Uint8Array.from(bytes);
+}
+
+function utf8Decode(bytes) {
+  let text = "";
+  for (let i = 0; i < bytes.length; ) {
+    const first = bytes[i];
+    let point;
+    let length;
+    if (first < 128) {
+      point = first;
+      length = 1;
+    } else if ((first & 224) === 192) {
+      point = first & 31;
+      length = 2;
+    } else if ((first & 240) === 224) {
+      point = first & 15;
+      length = 3;
+    } else if ((first & 248) === 240) {
+      point = first & 7;
+      length = 4;
+    } else {
+      text += "�";
+      i++;
+      continue;
+    }
+    if (i + length > bytes.length) {
+      text += "�";
+      break;
+    }
+    let valid = true;
+    for (let n = 1; n < length; n++) {
+      const byte = bytes[i + n];
+      if ((byte & 192) !== 128) {
+        valid = false;
+        break;
+      }
+      point = point << 6 | byte & 63;
+    }
+    if (!valid || point > 1114111) {
+      text += "�";
+      i++;
+      continue;
+    }
+    text += String.fromCodePoint(point);
+    i += length;
+  }
+  return text;
+}
+
+class BarcodeException extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "BarcodeException";
+  }
+}
+
+class BarcodeElement {
+  constructor(left, top, width, height) {
+    this.left = left;
+    this.top = top;
+    this.width = width;
+    this.height = height;
+  }
+  get right() {
+    return this.left + this.width;
+  }
+  get bottom() {
+    return this.top + this.height;
+  }
+}
+
+class BarcodeBar extends BarcodeElement {
+  constructor(left, top, width, height, black) {
+    super(left, top, width, height);
+    this.black = black;
+  }
+}
+
+class BarcodeText extends BarcodeElement {
+  constructor(left, top, width, height, text, align) {
+    super(left, top, width, height);
+    this.text = text;
+    this.align = align;
+  }
+}
+
+const INFINITE_MAX_LENGTH = 1e3;
+
+const SVG_NAMESPACE = `http:${String.fromCharCode(47, 47)}www.w3.org/2000/svg`;
+
+class Barcode {
+  make(data, options) {
+    return this.makeBytes(utf8Encode(data), options);
+  }
+  isValid(data) {
+    try {
+      this.verify(data);
+    } catch {
+      return false;
+    }
+    return true;
+  }
+  isValidBytes(data) {
+    try {
+      this.verifyBytes(data);
+    } catch {
+      return false;
+    }
+    return true;
+  }
+  verify(data) {
+    this.verifyBytes(utf8Encode(data));
+  }
+  verifyBytes(data) {
+    if (data.length > this.maxLength) {
+      throw new BarcodeException(`Unable to encode "${data}", maximum length is ${this.maxLength} for ${this.name} Barcode`);
+    }
+    if (data.length < this.minLength) {
+      throw new BarcodeException(`Unable to encode "${data}", minimum length is ${this.minLength} for ${this.name} Barcode`);
+    }
+    const chr = new Set(this.charSet);
+    for (const code of data) {
+      if (!chr.has(code)) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+    }
+  }
+  toSvg(data, options = {}) {
+    return this.toSvgBytes(utf8Encode(data), options);
+  }
+  toSvgBytes(data, options = {}) {
+    const {x = 0, y = 0, width = 200, height = 80, drawText = true, fontFamily = "monospace", color = 0, fullSvg = true, baseline = .75} = options;
+    const fontHeight = options.fontHeight ?? height * .2;
+    const textPadding = options.textPadding ?? height * .05;
+    const recipe = this.makeBytes(data, {
+      width,
+      height,
+      drawText,
+      fontHeight,
+      textPadding
+    });
+    let path = "";
+    let tSpan = "";
+    for (const element of recipe) {
+      if (element instanceof BarcodeBar) {
+        if (element.black) {
+          path += `M ${d(x + element.left)} ${d(y + element.top)} `;
+          path += `h ${d(element.width)} `;
+          path += `v ${d(element.height)} `;
+          path += `h ${d(-element.width)} `;
+          path += "z ";
+        }
+      } else if (element instanceof BarcodeText) {
+        const lY = y + element.top + element.height * baseline;
+        let lX;
+        let anchor;
+        switch (element.align) {
+         case "left":
+          lX = x + element.left;
+          anchor = "start";
+          break;
+
+         case "center":
+          lX = x + element.left + element.width / 2;
+          anchor = "middle";
+          break;
+
+         case "right":
+          lX = x + element.left + element.width;
+          anchor = "end";
+          break;
+        }
+        tSpan += `<tspan style="text-anchor: ${anchor}" x="${d(lX)}" y="${d(lY)}">${escape(element.text)}</tspan>`;
+      }
+    }
+    let output = "";
+    if (fullSvg) {
+      output += `<svg viewBox="${d(x)} ${d(y)} ${d(width)} ${d(height)}" xmlns="${SVG_NAMESPACE}">`;
+    }
+    output += `<path d="${path}" style="fill: ${hex(color)}"/>`;
+    output += `<text style="fill: ${hex(color)}; font-family: &quot;${escape(fontFamily)}&quot;; ` + `font-size: ${d(fontHeight)}px" x="${d(x)}" y="${d(y)}">${tSpan}</text>`;
+    if (fullSvg) {
+      output += "</svg>";
+    }
+    return output;
+  }
+  get maxLength() {
+    return INFINITE_MAX_LENGTH;
+  }
+  get minLength() {
+    return 1;
+  }
+  toString() {
+    return `Barcode ${this.name}`;
+  }
+}
+
+function d(value) {
+  return value.toFixed(5);
+}
+
+function escape(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function hex(color) {
+  return `#${(color & 16777215).toString(16).padStart(6, "0")}`;
+}
+
+const DEFAULT_TEXT_PADDING = 0;
+
+class Barcode1D extends Barcode {
+  makeBytes(data, options) {
+    const params = drawParams(options);
+    const result = [];
+    const text = utf8Decode(data);
+    const bits = this.convert(text);
+    if (bits.length === 0) {
+      return result;
+    }
+    const top = this.marginTop(params);
+    const left = this.marginLeft(params);
+    const right = this.marginRight(params);
+    const lineWidth = (params.width - left - right) / bits.length;
+    const inner = {
+      ...params,
+      height: params.height - top
+    };
+    let color = bits[0];
+    let count = 1;
+    for (let i = 1; i < bits.length; i++) {
+      if (color === bits[i]) {
+        count++;
+        continue;
+      }
+      result.push(new BarcodeBar(left + (i - count) * lineWidth, top, count * lineWidth, this.getHeight(i - count, count, inner), color));
+      color = bits[i];
+      count = 1;
+    }
+    const l = bits.length;
+    result.push(new BarcodeBar(left + (l - count) * lineWidth, top, count * lineWidth, this.getHeight(l - count, count, inner), color));
+    if (params.drawText) {
+      result.push(...this.makeText(text, params, lineWidth));
+    }
+    return result;
+  }
+  getHeight(_index, _count, params) {
+    return params.height - (params.drawText ? params.fontHeight + params.textPadding : 0);
+  }
+  marginTop(_params) {
+    return 0;
+  }
+  marginLeft(_params) {
+    return 0;
+  }
+  marginRight(_params) {
+    return 0;
+  }
+  makeText(data, params, _lineWidth) {
+    return [ new BarcodeText(0, params.height - params.fontHeight, params.width, params.fontHeight, data, "center") ];
+  }
+  add(data, count) {
+    const bits = [];
+    for (let i = 0; i < count; i++) {
+      bits.push((1 & data >> i) === 1);
+    }
+    return bits;
+  }
+  toHex(data) {
+    let intermediate = "";
+    for (const bit of this.convert(data)) {
+      intermediate += bit ? "1" : "0";
+    }
+    let result = "";
+    while (intermediate.length > 8) {
+      const sub = intermediate.substring(intermediate.length - 8);
+      result += parseInt(sub, 2).toString(16);
+      intermediate = intermediate.substring(0, intermediate.length - 8);
+    }
+    result += parseInt(intermediate, 2).toString(16);
+    return result;
+  }
+  getText(data) {
+    let result = "";
+    const params = {
+      drawText: true,
+      width: 200,
+      height: 200,
+      fontHeight: 10,
+      textPadding: 5
+    };
+    for (const element of this.makeText(data, params, 10)) {
+      if (element instanceof BarcodeText) {
+        result += element.text;
+      }
+    }
+    return result;
+  }
+}
+
+function drawParams(options) {
+  if (!(options.width > 0) || !(options.height > 0)) {
+    throw new RangeError("A barcode needs a positive width and height");
+  }
+  return {
+    drawText: options.drawText ?? false,
+    width: options.width,
+    height: options.height,
+    fontHeight: options.fontHeight ?? 0,
+    textPadding: options.textPadding ?? DEFAULT_TEXT_PADDING
+  };
+}
+
+const code93Dollar = 201;
+
+const code93Percent = 183;
+
+const code93Slash = 215;
+
+const code93Plus = 153;
+
+const code93StartStop = 245;
+
+const code93ReverseStop = 189;
+
+const code128StartCodeA = 103;
+
+const code128StartCodeB = 104;
+
+const code128StartCodeC = 105;
+
+const code128Stop = 106;
+
+const code128ReverseStop = 107;
+
+const code128StopPattern = 108;
+
+const code128FNC1 = 250;
+
+const code128FNC2 = 251;
+
+const code128FNC3 = 252;
+
+const code128FNC4 = 253;
+
+const code128ShiftA = -5;
+
+const code128ShiftB = -6;
+
+const code128CodeA = -7;
+
+const code128CodeB = -8;
+
+const code128CodeC = -9;
+
+const BarcodeMaps = {
+  code39: new Map([ [ 48, 2917 ], [ 49, 3403 ], [ 50, 3405 ], [ 51, 2715 ], [ 52, 3429 ], [ 53, 2763 ], [ 54, 2765 ], [ 55, 3493 ], [ 56, 2891 ], [ 57, 2893 ], [ 65, 3371 ], [ 66, 3373 ], [ 67, 2651 ], [ 68, 3381 ], [ 69, 2667 ], [ 70, 2669 ], [ 71, 3477 ], [ 72, 2859 ], [ 73, 2861 ], [ 74, 2869 ], [ 75, 3243 ], [ 76, 3245 ], [ 77, 2395 ], [ 78, 3253 ], [ 79, 2411 ], [ 80, 2413 ], [ 81, 3285 ], [ 82, 2475 ], [ 83, 2477 ], [ 84, 2485 ], [ 85, 3411 ], [ 86, 3417 ], [ 87, 2739 ], [ 88, 3433 ], [ 89, 2771 ], [ 90, 2777 ], [ 45, 3497 ], [ 46, 2899 ], [ 32, 2905 ], [ 36, 2633 ], [ 47, 2377 ], [ 43, 2345 ], [ 37, 2341 ] ]),
+  code39StartStop: 2921,
+  code39Len: 13,
+  code93: new Map([ [ 48, 81 ], [ 49, 37 ], [ 50, 69 ], [ 51, 133 ], [ 52, 41 ], [ 53, 73 ], [ 54, 137 ], [ 55, 21 ], [ 56, 145 ], [ 57, 161 ], [ 65, 43 ], [ 66, 75 ], [ 67, 139 ], [ 68, 83 ], [ 69, 147 ], [ 70, 163 ], [ 71, 45 ], [ 72, 77 ], [ 73, 141 ], [ 74, 89 ], [ 75, 177 ], [ 76, 53 ], [ 77, 101 ], [ 78, 197 ], [ 79, 105 ], [ 80, 209 ], [ 81, 91 ], [ 82, 155 ], [ 83, 107 ], [ 84, 203 ], [ 85, 211 ], [ 86, 179 ], [ 87, 109 ], [ 88, 205 ], [ 89, 217 ], [ 90, 185 ], [ 45, 233 ], [ 46, 87 ], [ 32, 151 ], [ 36, 167 ], [ 47, 237 ], [ 43, 221 ], [ 37, 235 ], [ -1, code93Dollar ], [ -2, code93Percent ], [ -3, code93Slash ], [ -4, code93Plus ], [ -5, code93StartStop ], [ -6, code93ReverseStop ] ]),
+  code93StartStop: 245,
+  code93Len: 9,
+  code128A: new Map([ [ 32, 0 ], [ 33, 1 ], [ 34, 2 ], [ 35, 3 ], [ 36, 4 ], [ 37, 5 ], [ 38, 6 ], [ 39, 7 ], [ 40, 8 ], [ 41, 9 ], [ 42, 10 ], [ 43, 11 ], [ 44, 12 ], [ 45, 13 ], [ 46, 14 ], [ 47, 15 ], [ 48, 16 ], [ 49, 17 ], [ 50, 18 ], [ 51, 19 ], [ 52, 20 ], [ 53, 21 ], [ 54, 22 ], [ 55, 23 ], [ 56, 24 ], [ 57, 25 ], [ 58, 26 ], [ 59, 27 ], [ 60, 28 ], [ 61, 29 ], [ 62, 30 ], [ 63, 31 ], [ 64, 32 ], [ 65, 33 ], [ 66, 34 ], [ 67, 35 ], [ 68, 36 ], [ 69, 37 ], [ 70, 38 ], [ 71, 39 ], [ 72, 40 ], [ 73, 41 ], [ 74, 42 ], [ 75, 43 ], [ 76, 44 ], [ 77, 45 ], [ 78, 46 ], [ 79, 47 ], [ 80, 48 ], [ 81, 49 ], [ 82, 50 ], [ 83, 51 ], [ 84, 52 ], [ 85, 53 ], [ 86, 54 ], [ 87, 55 ], [ 88, 56 ], [ 89, 57 ], [ 90, 58 ], [ 91, 59 ], [ 92, 60 ], [ 93, 61 ], [ 94, 62 ], [ 95, 63 ], [ 0, 64 ], [ 1, 65 ], [ 2, 66 ], [ 3, 67 ], [ 4, 68 ], [ 5, 69 ], [ 6, 70 ], [ 7, 71 ], [ 8, 72 ], [ 9, 73 ], [ 10, 74 ], [ 11, 75 ], [ 12, 76 ], [ 13, 77 ], [ 14, 78 ], [ 15, 79 ], [ 16, 80 ], [ 17, 81 ], [ 18, 82 ], [ 19, 83 ], [ 20, 84 ], [ 21, 85 ], [ 22, 86 ], [ 23, 87 ], [ 24, 88 ], [ 25, 89 ], [ 26, 90 ], [ 27, 91 ], [ 28, 92 ], [ 29, 93 ], [ 30, 94 ], [ 31, 95 ], [ code128FNC3, 96 ], [ code128FNC2, 97 ], [ code128ShiftB, 98 ], [ code128CodeC, 99 ], [ code128CodeB, 100 ], [ code128FNC4, 101 ], [ code128FNC1, 102 ] ]),
+  code128B: new Map([ [ 32, 0 ], [ 33, 1 ], [ 34, 2 ], [ 35, 3 ], [ 36, 4 ], [ 37, 5 ], [ 38, 6 ], [ 39, 7 ], [ 40, 8 ], [ 41, 9 ], [ 42, 10 ], [ 43, 11 ], [ 44, 12 ], [ 45, 13 ], [ 46, 14 ], [ 47, 15 ], [ 48, 16 ], [ 49, 17 ], [ 50, 18 ], [ 51, 19 ], [ 52, 20 ], [ 53, 21 ], [ 54, 22 ], [ 55, 23 ], [ 56, 24 ], [ 57, 25 ], [ 58, 26 ], [ 59, 27 ], [ 60, 28 ], [ 61, 29 ], [ 62, 30 ], [ 63, 31 ], [ 64, 32 ], [ 65, 33 ], [ 66, 34 ], [ 67, 35 ], [ 68, 36 ], [ 69, 37 ], [ 70, 38 ], [ 71, 39 ], [ 72, 40 ], [ 73, 41 ], [ 74, 42 ], [ 75, 43 ], [ 76, 44 ], [ 77, 45 ], [ 78, 46 ], [ 79, 47 ], [ 80, 48 ], [ 81, 49 ], [ 82, 50 ], [ 83, 51 ], [ 84, 52 ], [ 85, 53 ], [ 86, 54 ], [ 87, 55 ], [ 88, 56 ], [ 89, 57 ], [ 90, 58 ], [ 91, 59 ], [ 92, 60 ], [ 93, 61 ], [ 94, 62 ], [ 95, 63 ], [ 96, 64 ], [ 97, 65 ], [ 98, 66 ], [ 99, 67 ], [ 100, 68 ], [ 101, 69 ], [ 102, 70 ], [ 103, 71 ], [ 104, 72 ], [ 105, 73 ], [ 106, 74 ], [ 107, 75 ], [ 108, 76 ], [ 109, 77 ], [ 110, 78 ], [ 111, 79 ], [ 112, 80 ], [ 113, 81 ], [ 114, 82 ], [ 115, 83 ], [ 116, 84 ], [ 117, 85 ], [ 118, 86 ], [ 119, 87 ], [ 120, 88 ], [ 121, 89 ], [ 122, 90 ], [ 123, 91 ], [ 124, 92 ], [ 125, 93 ], [ 126, 94 ], [ 127, 95 ], [ code128FNC3, 96 ], [ code128FNC2, 97 ], [ code128ShiftA, 98 ], [ code128CodeC, 99 ], [ code128FNC4, 100 ], [ code128CodeA, 101 ], [ code128FNC1, 102 ] ]),
+  code128C: new Map([ [ 0, 0 ], [ 1, 1 ], [ 2, 2 ], [ 3, 3 ], [ 4, 4 ], [ 5, 5 ], [ 6, 6 ], [ 7, 7 ], [ 8, 8 ], [ 9, 9 ], [ 10, 10 ], [ 11, 11 ], [ 12, 12 ], [ 13, 13 ], [ 14, 14 ], [ 15, 15 ], [ 16, 16 ], [ 17, 17 ], [ 18, 18 ], [ 19, 19 ], [ 20, 20 ], [ 21, 21 ], [ 22, 22 ], [ 23, 23 ], [ 24, 24 ], [ 25, 25 ], [ 26, 26 ], [ 27, 27 ], [ 28, 28 ], [ 29, 29 ], [ 30, 30 ], [ 31, 31 ], [ 32, 32 ], [ 33, 33 ], [ 34, 34 ], [ 35, 35 ], [ 36, 36 ], [ 37, 37 ], [ 38, 38 ], [ 39, 39 ], [ 40, 40 ], [ 41, 41 ], [ 42, 42 ], [ 43, 43 ], [ 44, 44 ], [ 45, 45 ], [ 46, 46 ], [ 47, 47 ], [ 48, 48 ], [ 49, 49 ], [ 50, 50 ], [ 51, 51 ], [ 52, 52 ], [ 53, 53 ], [ 54, 54 ], [ 55, 55 ], [ 56, 56 ], [ 57, 57 ], [ 58, 58 ], [ 59, 59 ], [ 60, 60 ], [ 61, 61 ], [ 62, 62 ], [ 63, 63 ], [ 64, 64 ], [ 65, 65 ], [ 66, 66 ], [ 67, 67 ], [ 68, 68 ], [ 69, 69 ], [ 70, 70 ], [ 71, 71 ], [ 72, 72 ], [ 73, 73 ], [ 74, 74 ], [ 75, 75 ], [ 76, 76 ], [ 77, 77 ], [ 78, 78 ], [ 79, 79 ], [ 80, 80 ], [ 81, 81 ], [ 82, 82 ], [ 83, 83 ], [ 84, 84 ], [ 85, 85 ], [ 86, 86 ], [ 87, 87 ], [ 88, 88 ], [ 89, 89 ], [ 90, 90 ], [ 91, 91 ], [ 92, 92 ], [ 93, 93 ], [ 94, 94 ], [ 95, 95 ], [ 96, 96 ], [ 97, 97 ], [ 98, 98 ], [ 99, 99 ], [ code128CodeB, 100 ], [ code128CodeA, 101 ], [ code128FNC1, 102 ] ]),
+  code128: new Map([ [ 0, 411 ], [ 1, 435 ], [ 2, 819 ], [ 3, 201 ], [ 4, 393 ], [ 5, 401 ], [ 6, 153 ], [ 7, 281 ], [ 8, 305 ], [ 9, 147 ], [ 10, 275 ], [ 11, 291 ], [ 12, 461 ], [ 13, 473 ], [ 14, 921 ], [ 15, 413 ], [ 16, 441 ], [ 17, 825 ], [ 18, 627 ], [ 19, 467 ], [ 20, 915 ], [ 21, 315 ], [ 22, 371 ], [ 23, 951 ], [ 24, 407 ], [ 25, 423 ], [ 26, 807 ], [ 27, 311 ], [ 28, 359 ], [ 29, 615 ], [ 30, 219 ], [ 31, 795 ], [ 32, 867 ], [ 33, 197 ], [ 34, 209 ], [ 35, 785 ], [ 36, 141 ], [ 37, 177 ], [ 38, 561 ], [ 39, 139 ], [ 40, 163 ], [ 41, 547 ], [ 42, 237 ], [ 43, 909 ], [ 44, 945 ], [ 45, 221 ], [ 46, 797 ], [ 47, 881 ], [ 48, 887 ], [ 49, 907 ], [ 50, 931 ], [ 51, 187 ], [ 52, 571 ], [ 53, 955 ], [ 54, 215 ], [ 55, 791 ], [ 56, 839 ], [ 57, 183 ], [ 58, 567 ], [ 59, 711 ], [ 60, 759 ], [ 61, 531 ], [ 62, 655 ], [ 63, 101 ], [ 64, 389 ], [ 65, 105 ], [ 66, 777 ], [ 67, 417 ], [ 68, 801 ], [ 69, 77 ], [ 70, 269 ], [ 71, 89 ], [ 72, 537 ], [ 73, 353 ], [ 74, 609 ], [ 75, 579 ], [ 76, 83 ], [ 77, 751 ], [ 78, 323 ], [ 79, 753 ], [ 80, 485 ], [ 81, 489 ], [ 82, 969 ], [ 83, 317 ], [ 84, 377 ], [ 85, 633 ], [ 86, 303 ], [ 87, 335 ], [ 88, 591 ], [ 89, 987 ], [ 90, 891 ], [ 91, 879 ], [ 92, 245 ], [ 93, 965 ], [ 94, 977 ], [ 95, 189 ], [ 96, 573 ], [ 97, 175 ], [ 98, 559 ], [ 99, 989 ], [ 100, 957 ], [ 101, 983 ], [ 102, 943 ], [ code128StartCodeA, 267 ], [ code128StartCodeB, 75 ], [ code128StartCodeC, 459 ], [ code128Stop, 739 ], [ code128ReverseStop, 235 ], [ code128StopPattern, 6883 ] ]),
+  code128StartCodeA: 103,
+  code128StartCodeB: 104,
+  code128StartCodeC: 105,
+  code128Stop: 106,
+  code128FNC1: 250,
+  code128FNC1String: "ú",
+  code128FNC2: 251,
+  code128FNC2String: "û",
+  code128FNC3: 252,
+  code128FNC3String: "ü",
+  code128FNC4: 253,
+  code128FNC4String: "ý",
+  code128CodeA: -7,
+  code128CodeB: -8,
+  code128CodeC: -9,
+  code128Len: 11,
+  ean: new Map([ [ 48, [ 88, 114, 39 ] ], [ 49, [ 76, 102, 51 ] ], [ 50, [ 100, 108, 27 ] ], [ 51, [ 94, 66, 33 ] ], [ 52, [ 98, 92, 29 ] ], [ 53, [ 70, 78, 57 ] ], [ 54, [ 122, 80, 5 ] ], [ 55, [ 110, 68, 17 ] ], [ 56, [ 118, 72, 9 ] ], [ 57, [ 104, 116, 23 ] ] ]),
+  eanFirst: new Map([ [ 48, 0 ], [ 49, 52 ], [ 50, 44 ], [ 51, 28 ], [ 52, 50 ], [ 53, 38 ], [ 54, 14 ], [ 55, 42 ], [ 56, 26 ], [ 57, 22 ] ]),
+  ean5Checksum: new Map([ [ 48, 3 ], [ 49, 5 ], [ 50, 9 ], [ 51, 17 ], [ 52, 6 ], [ 53, 12 ], [ 54, 24 ], [ 55, 10 ], [ 56, 18 ], [ 57, 20 ] ]),
+  upce: new Map([ [ 48, 56 ], [ 49, 52 ], [ 50, 44 ], [ 51, 28 ], [ 52, 50 ], [ 53, 38 ], [ 54, 14 ], [ 55, 42 ], [ 56, 26 ], [ 57, 22 ] ]),
+  eanStartEnd: 5,
+  eanCenter: 10,
+  eanEndUpcE: 42,
+  eanStartEan2: 26,
+  eanCenterEan2: 2,
+  itf: new Map([ [ 48, 12 ], [ 49, 17 ], [ 50, 18 ], [ 51, 3 ], [ 52, 20 ], [ 53, 5 ], [ 54, 6 ], [ 55, 24 ], [ 56, 9 ], [ 57, 10 ] ]),
+  itfStart: 5,
+  itfEnd: 23,
+  telepen: [ 30583, 24029, 24007, 30581, 24023, 30493, 30481, 24021, 23671, 30557, 30535, 23669, 30551, 23621, 23633, 30549, 23927, 29149, 29127, 23925, 29143, 23837, 23825, 29141, 28951, 23901, 23879, 28949, 23895, 28997, 29009, 23893, 18295, 30173, 30151, 18293, 30167, 18205, 18193, 30165, 29815, 18269, 18247, 29813, 18263, 29765, 29777, 18261, 30071, 17501, 17479, 30069, 17495, 29981, 29969, 17493, 17687, 30045, 30023, 17685, 30039, 17733, 17745, 30037, 22391, 7645, 7623, 22389, 7639, 22301, 22289, 7637, 7287, 22365, 22343, 7285, 22359, 7237, 7249, 22357, 7543, 20957, 20935, 7541, 20951, 7453, 7441, 20949, 20759, 7517, 7495, 20757, 7511, 20805, 20817, 7509, 4471, 21981, 21959, 4469, 21975, 4381, 4369, 21973, 21623, 4445, 4423, 21621, 4439, 21573, 21585, 4437, 21879, 5213, 5191, 21877, 5207, 21789, 21777, 5205, 5399, 21853, 21831, 5397, 21847, 5445, 5457, 21845 ],
+  telepenStart: 7509,
+  telepenEnd: 21831,
+  telepenLen: 16,
+  codabar: new Map([ [ 48, 405 ], [ 49, 309 ], [ 52, 301 ], [ 53, 299 ], [ 50, 421 ], [ 45, 357 ], [ 36, 333 ], [ 57, 331 ], [ 54, 425 ], [ 55, 361 ], [ 56, 345 ], [ 51, 339 ], [ 46, 731 ], [ 47, 859 ], [ 58, 875 ], [ 43, 877 ], [ 67, 805 ], [ 68, 613 ], [ 65, 589 ], [ 66, 841 ] ]),
+  codabarLen: new Map([ [ 48, 9 ], [ 49, 9 ], [ 52, 9 ], [ 53, 9 ], [ 50, 9 ], [ 45, 9 ], [ 36, 9 ], [ 57, 9 ], [ 54, 9 ], [ 55, 9 ], [ 56, 9 ], [ 51, 9 ], [ 46, 10 ], [ 47, 10 ], [ 58, 10 ], [ 43, 10 ], [ 67, 10 ], [ 68, 10 ], [ 65, 10 ], [ 66, 10 ] ]),
+  rm4scc: new Map([ [ 48, 240 ], [ 49, 216 ], [ 50, 120 ], [ 51, 210 ], [ 52, 114 ], [ 53, 90 ], [ 54, 228 ], [ 55, 204 ], [ 56, 108 ], [ 57, 198 ], [ 65, 102 ], [ 66, 78 ], [ 67, 180 ], [ 68, 156 ], [ 69, 60 ], [ 70, 150 ], [ 71, 54 ], [ 72, 30 ], [ 73, 225 ], [ 74, 201 ], [ 75, 105 ], [ 76, 195 ], [ 77, 99 ], [ 78, 75 ], [ 79, 177 ], [ 80, 153 ], [ 81, 57 ], [ 82, 147 ], [ 83, 51 ], [ 84, 27 ], [ 85, 165 ], [ 86, 141 ], [ 87, 45 ], [ 88, 135 ], [ 89, 39 ], [ 90, 15 ] ]),
+  rm4sccLen: 4,
+  rm4sccStart: 1,
+  rm4sccStop: 3,
+  postnet: new Map([ [ 48, 687 ], [ 49, 1002 ], [ 50, 954 ], [ 51, 762 ], [ 52, 942 ], [ 53, 750 ], [ 54, 702 ], [ 55, 939 ], [ 56, 747 ], [ 57, 187 ] ]),
+  postnetLen: 5,
+  postnetStartStop: 3
+};
+
+const BarcodeCodabarStartStop = {
+  A: 0,
+  B: 1,
+  C: 2,
+  D: 3
+};
+
+class BarcodeCodabar extends Barcode1D {
+  constructor(start, stop, printStartStop, explicitStartStop) {
+    super();
+    this.start = start;
+    this.stop = stop;
+    this.printStartStop = printStartStop;
+    this.explicitStartStop = explicitStartStop;
+  }
+  get charSet() {
+    return [ ...BarcodeMaps.codabar.keys() ].filter(x => x < 64);
+  }
+  get name() {
+    return "CODABAR";
+  }
+  convert(data) {
+    const startStop = [ 65, 66, 67, 68 ];
+    let lStart = startStop[this.start];
+    let lStop = startStop[this.stop];
+    if (this.explicitStartStop) {
+      lStart = startStopByte(data.charCodeAt(0));
+      lStop = startStopByte(data.charCodeAt(data.length - 1));
+      data = data.substring(1, data.length - 1);
+    }
+    const bits = [];
+    bits.push(...this.add(BarcodeMaps.codabar.get(lStart), BarcodeMaps.codabarLen.get(lStart)));
+    bits.push(false);
+    for (const code of codeUnits(data)) {
+      if (code > 64 || code === 42) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+      const codeValue = BarcodeMaps.codabar.get(code);
+      if (codeValue === undefined) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+      bits.push(...this.add(codeValue, BarcodeMaps.codabarLen.get(code)));
+      bits.push(false);
+    }
+    bits.push(...this.add(BarcodeMaps.codabar.get(lStop), BarcodeMaps.codabarLen.get(lStop)));
+    return bits;
+  }
+  verifyBytes(data) {
+    if (this.explicitStartStop) {
+      const validStartStop = [ 65, 66, 67, 68, 78, 84, 42, 69 ];
+      if (data.length < 3) {
+        throw new BarcodeException(`Unable to encode ${this.name} Barcode: missing start and/or stop chars`);
+      }
+      if (!validStartStop.includes(data[0])) {
+        throw new BarcodeException(`Unable to encode ${this.name} Barcode: "${String.fromCharCode(data[0])}" is an invalid start char`);
+      }
+      const lastByte = data[data.length - 1];
+      if (!validStartStop.includes(lastByte)) {
+        throw new BarcodeException(`Unable to encode ${this.name} Barcode: "${String.fromCharCode(lastByte)}" is an invalid start char`);
+      }
+      data = data.subarray(1, data.length - 1);
+    }
+    super.verifyBytes(data);
+  }
+  makeText(data, params, lineWidth) {
+    if (this.printStartStop && !this.explicitStartStop) {
+      data = String.fromCharCode(this.start + 65) + data + String.fromCharCode(this.stop + 65);
+    } else if (!this.printStartStop && this.explicitStartStop) {
+      data = data.substring(1, data.length - 1);
+    }
+    return super.makeText(data, params, lineWidth);
+  }
+}
+
+function startStopByte(value) {
+  switch (value) {
+   case 84:
+    return 65;
+
+   case 78:
+    return 66;
+
+   case 42:
+    return 67;
+
+   case 69:
+    return 68;
+
+   default:
+    return value;
+  }
+}
+
+const BarcodeCode128Fnc = {
+  fnc1: BarcodeMaps.code128FNC1String,
+  fnc2: BarcodeMaps.code128FNC2String,
+  fnc3: BarcodeMaps.code128FNC3String,
+  fnc4: BarcodeMaps.code128FNC4String
+};
+
+class BarcodeCode128 extends Barcode1D {
+  constructor(options) {
+    super();
+    if (!options.useCode128A && !options.useCode128B && !options.useCode128C) {
+      throw new BarcodeException("Enable at least one of the CODE 128 tables");
+    }
+    this.useCode128A = options.useCode128A;
+    this.useCode128B = options.useCode128B;
+    this.useCode128C = options.useCode128C;
+    this.isGS1 = options.isGS1;
+    this.escapes = options.escapes;
+    this.keepParenthesis = options.keepParenthesis;
+    this.addSpaceAfterParenthesis = options.addSpaceAfterParenthesis;
+  }
+  get charSet() {
+    const set = new Set;
+    if (this.useCode128B) {
+      for (const key of BarcodeMaps.code128B.keys()) if (key >= 0) set.add(key);
+    }
+    if (this.useCode128A) {
+      for (const key of BarcodeMaps.code128A.keys()) if (key >= 0) set.add(key);
+    }
+    if (this.useCode128C) {
+      for (let index = 0; index < 10; index++) set.add(index + 48);
+    }
+    set.add(BarcodeMaps.code128FNC1);
+    if (this.useCode128A || this.useCode128B) {
+      set.add(BarcodeMaps.code128FNC2);
+      set.add(BarcodeMaps.code128FNC3);
+      set.add(BarcodeMaps.code128FNC4);
+    }
+    if (this.isGS1) {
+      set.add(40);
+      set.add(41);
+    }
+    return set;
+  }
+  get name() {
+    return this.isGS1 ? "GS1 128" : "CODE 128";
+  }
+  shortestCode(data) {
+    let table = 0;
+    let lastTable = 0;
+    let length = 0;
+    let digitCount = 0;
+    const result = [];
+    const addFrom = start => {
+      let t = null;
+      if ((table & 4) !== 0 && (digitCount & 1) === 0) {
+        t = BarcodeMaps.code128C;
+        if (lastTable === 1) {
+          result.push(t.get(BarcodeMaps.code128CodeA));
+        } else if (lastTable === 2) {
+          result.push(t.get(BarcodeMaps.code128CodeB));
+        }
+        lastTable = 3;
+      } else if ((table & 1) !== 0) {
+        t = BarcodeMaps.code128A;
+        if (lastTable === 2) {
+          result.push(t.get(BarcodeMaps.code128CodeB));
+        } else if (lastTable === 3) {
+          result.push(t.get(BarcodeMaps.code128CodeC));
+        }
+        lastTable = 1;
+      } else if ((table & 2) !== 0) {
+        t = BarcodeMaps.code128B;
+        if (lastTable === 1) {
+          result.push(t.get(BarcodeMaps.code128CodeA));
+        } else if (lastTable === 3) {
+          result.push(t.get(BarcodeMaps.code128CodeC));
+        }
+        lastTable = 2;
+      }
+      if (t === null) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(...data)}" to ${this.name} Barcode`);
+      }
+      if (lastTable === 3) {
+        for (let i = start + length - 1; i >= start; i--) {
+          if (data[i] === BarcodeMaps.code128FNC1) {
+            result.push(t.get(BarcodeMaps.code128FNC1));
+          } else {
+            const digit = data[i] - 48 + (data[i - 1] - 48) * 10;
+            result.push(t.get(digit));
+            i--;
+          }
+        }
+      } else {
+        for (const c of data.slice(start, start + length).reverse()) {
+          result.push(t.get(c));
+        }
+      }
+    };
+    for (let index = data.length - 1; index >= 0; index--) {
+      const code = data[index];
+      const codeA = this.useCode128A && BarcodeMaps.code128A.has(code);
+      const codeB = this.useCode128B && BarcodeMaps.code128B.has(code);
+      const isFnc1 = code === BarcodeMaps.code128FNC1;
+      const codeC = this.useCode128C && code >= 48 && code <= 57;
+      let available = 0;
+      if (codeA) available = 1;
+      if (codeB) available |= 2;
+      if (codeC || isFnc1) available |= 4;
+      if (available === 0) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+      if (codeC) {
+        digitCount++;
+      } else if (isFnc1) {
+        length++;
+        addFrom(index);
+        length = 0;
+        digitCount = 0;
+        continue;
+      } else {
+        if (digitCount >= 4) {
+          if ((digitCount & 1) !== 0) {
+            digitCount--;
+          }
+          if (length > digitCount) {
+            length -= digitCount;
+            table &= 3;
+            if (table === 0) {
+              throw new BarcodeException(`Unable to encode "${String.fromCharCode(...data)}" to ${this.name} Barcode`);
+            }
+            addFrom(index + digitCount + 1);
+            length = digitCount;
+          }
+          table = 4;
+          addFrom(index + 1);
+          table = 0;
+          length = 0;
+        }
+        digitCount = 0;
+      }
+      if (table === 0) {
+        table = available;
+        length++;
+      } else {
+        const newTable = table & available;
+        if (newTable === 0) {
+          addFrom(index + 1);
+          length = 0;
+          table = available;
+        } else {
+          table = newTable;
+        }
+        length++;
+      }
+    }
+    if (digitCount >= 2) {
+      if ((digitCount & 1) !== 0) {
+        length -= digitCount - 1;
+        addFrom(digitCount - 1);
+        digitCount--;
+      } else if (length > digitCount) {
+        length -= digitCount;
+        addFrom(digitCount);
+      }
+      table = 4;
+      length = digitCount;
+    }
+    if (length > 0) {
+      addFrom(0);
+    }
+    if (lastTable === 1) {
+      result.push(BarcodeMaps.code128StartCodeA);
+    } else if (lastTable === 2) {
+      result.push(BarcodeMaps.code128StartCodeB);
+    } else if (lastTable === 3) {
+      result.push(BarcodeMaps.code128StartCodeC);
+    }
+    return result.reverse();
+  }
+  adaptData(data, text = false) {
+    if (this.isGS1) {
+      let result = "";
+      let start = 0;
+      for (const match of data.matchAll(/\(.+?\)/g)) {
+        const from = match.index;
+        const to = from + match[0].length;
+        result += data.substring(start, from);
+        result += BarcodeMaps.code128FNC1String;
+        if (text && this.keepParenthesis) result += "(";
+        result += data.substring(from + 1, to - 1);
+        if (text && this.keepParenthesis) result += ")";
+        if (text && this.addSpaceAfterParenthesis) result += " ";
+        start = to;
+      }
+      result += data.substring(start);
+      data = result;
+    }
+    if (this.escapes) {
+      let result = "";
+      let start = 0;
+      for (const match of data.matchAll(/\{\d\}/g)) {
+        const from = match.index;
+        const to = from + match[0].length;
+        result += data.substring(start, from);
+        switch (match[0]) {
+         case "{1}":
+          result += BarcodeMaps.code128FNC1String;
+          break;
+
+         case "{2}":
+          result += BarcodeMaps.code128FNC2String;
+          break;
+
+         case "{3}":
+          result += BarcodeMaps.code128FNC3String;
+          break;
+
+         case "{4}":
+          result += BarcodeMaps.code128FNC4String;
+          break;
+
+         default:
+          result += match[0];
+        }
+        start = to;
+      }
+      result += data.substring(start);
+      data = result;
+    }
+    return data;
+  }
+  convert(data) {
+    const bits = [];
+    const adapted = this.adaptData(data);
+    const checksum = [];
+    for (const codeIndex of this.shortestCode(codeUnits(adapted))) {
+      const codeValue = BarcodeMaps.code128.get(codeIndex);
+      bits.push(...this.add(codeValue, BarcodeMaps.code128Len));
+      checksum.push(codeIndex);
+    }
+    let sum = 0;
+    for (let index = 0; index < checksum.length; index++) {
+      const code = checksum[index];
+      const mul = index === 0 ? 1 : index;
+      sum += code * mul;
+    }
+    sum = sum % 103;
+    bits.push(...this.add(BarcodeMaps.code128.get(sum), BarcodeMaps.code128Len));
+    bits.push(...this.add(BarcodeMaps.code128.get(BarcodeMaps.code128Stop), BarcodeMaps.code128Len));
+    bits.push(true, true);
+    return bits;
+  }
+  makeText(data, params, lineWidth) {
+    const text = this.adaptData(data, true).replace(/[^ -\u007f]/g, " ").trim();
+    return super.makeText(text, params, lineWidth);
+  }
+  verifyBytes(data) {
+    const adapted = this.adaptData(utf8Decode(data));
+    const units = codeUnits(adapted);
+    this.shortestCode(units);
+    super.verifyBytes(Uint8Array.from(units.map(unit => unit & 255)));
+  }
+}
+
+class BarcodeCode39 extends Barcode1D {
+  constructor(drawSpacers) {
+    super();
+    this.drawSpacers = drawSpacers;
+  }
+  get charSet() {
+    return BarcodeMaps.code39.keys();
+  }
+  get name() {
+    return "CODE 39";
+  }
+  convert(data) {
+    const bits = [];
+    bits.push(...this.add(BarcodeMaps.code39StartStop, BarcodeMaps.code39Len));
+    for (const code of codeUnits(data)) {
+      const codeValue = BarcodeMaps.code39.get(code);
+      if (codeValue === undefined) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+      bits.push(...this.add(codeValue, BarcodeMaps.code39Len));
+    }
+    bits.push(...this.add(BarcodeMaps.code39StartStop, BarcodeMaps.code39Len));
+    return bits;
+  }
+  makeText(data, params, lineWidth) {
+    const text = this.drawSpacers ? `*${data}*` : data;
+    const additionalOffset = this.drawSpacers ? 0 : 1;
+    const result = [];
+    for (let i = 0; i < text.length; i++) {
+      result.push(new BarcodeText(lineWidth * BarcodeMaps.code39Len * (i + additionalOffset), params.height - params.fontHeight, lineWidth * BarcodeMaps.code39Len, params.fontHeight, text[i], "center"));
+    }
+    return result;
+  }
+}
+
+class BarcodeCode93 extends Barcode1D {
+  get charSet() {
+    return [ ...BarcodeMaps.code93.keys() ].filter(x => x > 0);
+  }
+  get name() {
+    return "CODE 93";
+  }
+  convert(data) {
+    const bits = [];
+    bits.push(...this.add(BarcodeMaps.code93StartStop, BarcodeMaps.code93Len));
+    const keys = [ ...BarcodeMaps.code93.keys() ];
+    const units = codeUnits(data);
+    for (const code of units) {
+      const codeValue = BarcodeMaps.code93.get(code);
+      if (codeValue === undefined) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+      bits.push(...this.add(codeValue, BarcodeMaps.code93Len));
+    }
+    let sumC = 0;
+    let sumK = 0;
+    let indexC = 1;
+    let indexK = 2;
+    for (let index = units.length - 1; index >= 0; index--) {
+      const code = units[index];
+      sumC += keys.indexOf(code) * indexC;
+      sumK += keys.indexOf(code) * indexK;
+      indexC++;
+      if (indexC > 20) indexC = 1;
+      indexK++;
+      if (indexK > 15) indexK = 1;
+    }
+    sumC = sumC % 47;
+    bits.push(...this.add(BarcodeMaps.code93.get(keys[sumC]), BarcodeMaps.code93Len));
+    sumK = (sumK + sumC) % 47;
+    bits.push(...this.add(BarcodeMaps.code93.get(keys[sumK]), BarcodeMaps.code93Len));
+    bits.push(...this.add(BarcodeMaps.code93StartStop, BarcodeMaps.code93Len));
+    bits.push(true);
+    return bits;
+  }
+}
+
+class BarcodeEan extends Barcode1D {
+  get charSet() {
+    return Array.from({
+      length: 10
+    }, (_unused, index) => index + 48);
+  }
+  checkLength(data, length) {
+    if (data.length === length - 1) {
+      data += this.checkSumModulo10(data);
+    } else {
+      if (data.length !== length) {
+        throw new BarcodeException(`Unable to encode "${data}" to ${this.name} Barcode, it is not ${length} digits`);
+      }
+      const last = data.substring(length - 1);
+      const checksum = this.checkSumModulo10(data.substring(0, length - 1));
+      if (last !== checksum) {
+        throw new BarcodeException(`Unable to encode "${data}" to ${this.name} Barcode, checksum "${last}" should be "${checksum}"`);
+      }
+    }
+    return data;
+  }
+  checkSumModulo10(data) {
+    let sum = 0;
+    let fak = data.length;
+    for (const c of codeUnits(data)) {
+      if (fak % 2 === 0) {
+        sum += c - 48;
+      } else {
+        sum += (c - 48) * 3;
+      }
+      fak--;
+    }
+    if (sum % 10 === 0) {
+      return "0";
+    }
+    return String.fromCharCode(10 - sum % 10 + 48);
+  }
+  checkSumModulo11(data) {
+    let sum = 0;
+    let pos = 10;
+    for (const c of codeUnits(data)) {
+      sum += (c - 48) * pos;
+      pos--;
+    }
+    return String.fromCharCode(11 - sum % 11 + 48);
+  }
+  normalize(data) {
+    return this.checkLength(data.padEnd(this.minLength, "0").substring(0, this.minLength), this.maxLength);
+  }
+}
+
+const FINAL_SPACER$1 = ">";
+
+class BarcodeEan13 extends BarcodeEan {
+  constructor(drawEndChar) {
+    super();
+    this.drawEndChar = drawEndChar;
+  }
+  get name() {
+    return "EAN 13";
+  }
+  get minLength() {
+    return 12;
+  }
+  get maxLength() {
+    return 13;
+  }
+  verifyBytes(data) {
+    this.checkLength(utf8Decode(data), this.maxLength);
+    super.verifyBytes(data);
+  }
+  convert(data) {
+    const bits = [];
+    const text = this.checkLength(data, this.maxLength);
+    const units = codeUnits(text);
+    bits.push(...this.add(BarcodeMaps.eanStartEnd, 3));
+    let index = 0;
+    const first = BarcodeMaps.eanFirst.get(units[0]);
+    if (first === undefined) {
+      throw new BarcodeException(`Unable to encode "${String.fromCharCode(units[0])}" to ${this.name} Barcode`);
+    }
+    for (const code of units.slice(1)) {
+      const codes = BarcodeMaps.ean.get(code);
+      if (codes === undefined) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+      if (index === 6) {
+        bits.push(...this.add(BarcodeMaps.eanCenter, 5));
+      }
+      if (index < 6) {
+        bits.push(...this.add(codes[first >> index & 1], 7));
+      } else {
+        bits.push(...this.add(codes[2], 7));
+      }
+      index++;
+    }
+    bits.push(...this.add(BarcodeMaps.eanStartEnd, 3));
+    return bits;
+  }
+  marginLeft(params) {
+    return params.drawText ? params.fontHeight : 0;
+  }
+  marginRight(params) {
+    return params.drawText && this.drawEndChar ? params.fontHeight : 0;
+  }
+  getHeight(index, count, params) {
+    if (!params.drawText) {
+      return super.getHeight(index, count, params);
+    }
+    const h = params.height - params.fontHeight - params.textPadding;
+    if (index < 3 || index > 45 && index < 49 || index > 91) {
+      return h + params.fontHeight / 2 + params.textPadding;
+    }
+    return h;
+  }
+  makeText(data, params, lineWidth) {
+    const result = [];
+    const text = this.checkLength(data, this.maxLength);
+    const w = lineWidth * 7;
+    const left = this.marginLeft(params);
+    const right = this.marginRight(params);
+    result.push(new BarcodeText(0, params.height - params.fontHeight, left - lineWidth, params.fontHeight, text[0], "right"));
+    let offset = left + lineWidth * 3;
+    for (let i = 1; i < text.length; i++) {
+      result.push(new BarcodeText(offset, params.height - params.fontHeight, w, params.fontHeight, text[i], "center"));
+      offset += w;
+      if (i === 6) {
+        offset += lineWidth * 5;
+      }
+    }
+    if (this.drawEndChar) {
+      result.push(new BarcodeText(params.width - right + lineWidth, params.height - params.fontHeight, right - lineWidth, params.fontHeight, FINAL_SPACER$1, "left"));
+    }
+    return result;
+  }
+}
+
+class BarcodeEan2 extends BarcodeEan {
+  get name() {
+    return "EAN 2";
+  }
+  get minLength() {
+    return 2;
+  }
+  get maxLength() {
+    return 2;
+  }
+  convert(data) {
+    this.verify(data);
+    const idata = Number(data);
+    if (!Number.isInteger(idata)) {
+      throw new BarcodeException(`Unable to encode "${data}" to ${this.name} Barcode`);
+    }
+    const pattern = idata % 4;
+    const bits = [];
+    bits.push(...this.add(BarcodeMaps.eanStartEan2, 5));
+    let index = 0;
+    for (const code of codeUnits(data)) {
+      const codes = BarcodeMaps.ean.get(code);
+      if (codes === undefined) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+      if (index === 1) {
+        bits.push(...this.add(BarcodeMaps.eanCenterEan2, 2));
+      }
+      if (index === 0) {
+        bits.push(...this.add(codes[pattern < 2 ? 0 : 1], 7));
+      } else {
+        bits.push(...this.add(codes[pattern % 2 === 0 ? 0 : 1], 7));
+      }
+      index++;
+    }
+    return bits;
+  }
+  marginTop(params) {
+    return params.drawText ? params.fontHeight + params.textPadding : 0;
+  }
+  getHeight(_index, _count, params) {
+    return params.height;
+  }
+  makeText(data, params, _lineWidth) {
+    return [ new BarcodeText(0, 0, params.width, params.fontHeight, data, "center") ];
+  }
+  normalize(data) {
+    return data.padEnd(this.minLength, "0").substring(0, this.minLength);
+  }
+}
+
+class BarcodeEan5 extends BarcodeEan2 {
+  get name() {
+    return "EAN 5";
+  }
+  get minLength() {
+    return 5;
+  }
+  get maxLength() {
+    return 5;
+  }
+  checkSumModulo10(data) {
+    let sum = 0;
+    let fak = data.length;
+    for (const c of codeUnits(data)) {
+      if (fak % 2 === 0) {
+        sum += (c - 48) * 9;
+      } else {
+        sum += (c - 48) * 3;
+      }
+      fak--;
+    }
+    return String.fromCharCode(sum % 10 + 48);
+  }
+  convert(data) {
+    this.verify(data);
+    const checksum = this.checkSumModulo10(data);
+    const pattern = BarcodeMaps.ean5Checksum.get(checksum.charCodeAt(0));
+    const bits = [];
+    bits.push(...this.add(BarcodeMaps.eanStartEan2, 5));
+    let index = 0;
+    for (const code of codeUnits(data)) {
+      const codes = BarcodeMaps.ean.get(code);
+      if (codes === undefined) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+      if (index >= 1) {
+        bits.push(...this.add(BarcodeMaps.eanCenterEan2, 2));
+      }
+      bits.push(...this.add(codes[pattern >> index & 1], 7));
+      index++;
+    }
+    return bits;
+  }
+}
+
+const START_SPACER = "<";
+
+const FINAL_SPACER = ">";
+
+class BarcodeEan8 extends BarcodeEan {
+  constructor(drawSpacers) {
+    super();
+    this.drawSpacers = drawSpacers;
+  }
+  get name() {
+    return "EAN 8";
+  }
+  get minLength() {
+    return 7;
+  }
+  get maxLength() {
+    return 8;
+  }
+  verifyBytes(data) {
+    this.checkLength(utf8Decode(data), this.maxLength);
+    super.verifyBytes(data);
+  }
+  convert(data) {
+    const bits = [];
+    const text = this.checkLength(data, this.maxLength);
+    bits.push(...this.add(BarcodeMaps.eanStartEnd, 3));
+    let index = 0;
+    for (const code of codeUnits(text)) {
+      const codes = BarcodeMaps.ean.get(code);
+      if (codes === undefined) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+      if (index === 4) {
+        bits.push(...this.add(BarcodeMaps.eanCenter, 5));
+      }
+      bits.push(...this.add(codes[index < 4 ? 0 : 2], 7));
+      index++;
+    }
+    bits.push(...this.add(BarcodeMaps.eanStartEnd, 3));
+    return bits;
+  }
+  marginLeft(params) {
+    return params.drawText && this.drawSpacers ? params.fontHeight : 0;
+  }
+  marginRight(params) {
+    return params.drawText && this.drawSpacers ? params.fontHeight : 0;
+  }
+  getHeight(index, count, params) {
+    if (!params.drawText) {
+      return super.getHeight(index, count, params);
+    }
+    const h = params.height - params.fontHeight - params.textPadding;
+    if (index + count < 4 || index > 31 && index + count < 36 || index > 63) {
+      return h + params.fontHeight / 2 + params.textPadding;
+    }
+    return h;
+  }
+  makeText(data, params, lineWidth) {
+    const result = [];
+    const text = this.checkLength(data, this.maxLength);
+    const w = lineWidth * 7;
+    const left = this.marginLeft(params);
+    const right = this.marginRight(params);
+    let offset = left + lineWidth * 3;
+    for (let i = 0; i < text.length; i++) {
+      result.push(new BarcodeText(offset, params.height - params.fontHeight, w, params.fontHeight, text[i], "center"));
+      offset += w;
+      if (i === 3) {
+        offset += lineWidth * 5;
+      }
+    }
+    if (this.drawSpacers) {
+      result.push(new BarcodeText(0, params.height - params.fontHeight, left - lineWidth, params.fontHeight, START_SPACER, "right"));
+      result.push(new BarcodeText(params.width - right + lineWidth, params.height - params.fontHeight, right - lineWidth, params.fontHeight, FINAL_SPACER, "left"));
+    }
+    return result;
+  }
+}
+
+class BarcodeIsbn extends BarcodeEan13 {
+  constructor(drawEndChar, drawIsbn) {
+    super(drawEndChar);
+    this.drawIsbn = drawIsbn;
+  }
+  get name() {
+    return "ISBN";
+  }
+  marginTop(params) {
+    if (!params.drawText || !this.drawIsbn) {
+      return super.marginTop(params);
+    }
+    return params.fontHeight + params.textPadding;
+  }
+  makeText(data, params, lineWidth) {
+    const text = this.checkLength(data, this.maxLength);
+    const result = [ ...super.makeText(text, params, lineWidth) ];
+    if (this.drawIsbn) {
+      const isbn = `${text.substring(0, 3)}-${text.substring(3, 12)}-${text.substring(12, 13)}`;
+      result.push(new BarcodeText(0, 0, params.width, params.fontHeight, `ISBN ${isbn}`, "center"));
+    }
+    return result;
+  }
+}
+
+class BarcodeItf extends BarcodeEan {
+  constructor(addChecksum, zeroPrepend, drawBorder, borderWidth, quietWidth, fixedLength) {
+    super();
+    if (fixedLength !== null && fixedLength % 2 !== 0) {
+      throw new BarcodeException("An ITF barcode of fixed length needs an even one");
+    }
+    this.addChecksum = addChecksum;
+    this.zeroPrepend = zeroPrepend;
+    this.drawBorder = drawBorder;
+    this.borderWidth = borderWidth;
+    this.quietWidth = quietWidth;
+    this.fixedLength = fixedLength;
+  }
+  get name() {
+    return "ITF";
+  }
+  get minLength() {
+    return this.fixedLength !== null ? this.fixedLength - 1 : super.minLength;
+  }
+  get maxLength() {
+    return this.fixedLength !== null ? this.fixedLength : super.maxLength;
+  }
+  getBorderWidth(width) {
+    return this.borderWidth ?? width * .015;
+  }
+  getQuietWidth(width) {
+    return this.quietWidth ?? width * .07;
+  }
+  marginTop(params) {
+    return this.drawBorder ? this.getBorderWidth(params.width) : 0;
+  }
+  marginLeft(params) {
+    return this.drawBorder ? this.getBorderWidth(params.width) + this.getQuietWidth(params.width) : 0;
+  }
+  marginRight(params) {
+    return this.drawBorder ? this.getBorderWidth(params.width) + this.getQuietWidth(params.width) : 0;
+  }
+  getHeight(index, count, params) {
+    return super.getHeight(index, count, params) - (this.drawBorder ? this.getBorderWidth(params.width) : 0);
+  }
+  padded(data) {
+    if (this.zeroPrepend && data.length % 2 !== 0 !== this.addChecksum) {
+      data = `0${data}`;
+    }
+    if (this.addChecksum) {
+      data += this.checkSumModulo10(data);
+    }
+    return data;
+  }
+  convert(data) {
+    if (this.fixedLength !== null) {
+      data = this.checkLength(data, this.fixedLength);
+    } else {
+      data = this.padded(data);
+      if (data.length % 2 !== 0) {
+        throw new BarcodeException(`${this.name} barcode can only encode an even number of digits.`);
+      }
+    }
+    const bits = [];
+    bits.push(...this.add(BarcodeMaps.itfStart, 4));
+    const cu = codeUnits(data);
+    for (let i = 0; i < cu.length / 2; i++) {
+      const tuple = [ BarcodeMaps.itf.get(cu[i * 2]), BarcodeMaps.itf.get(cu[i * 2 + 1]) ];
+      if (tuple[0] === undefined || tuple[1] === undefined) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(cu[i * 2])}` + `${String.fromCharCode(cu[i * 2 + 1])}" to ${this.name} Barcode`);
+      }
+      for (let n = 0; n < 10; n++) {
+        const v = tuple[n % 2] >> Math.floor(n / 2) & 1;
+        const c = n % 2 === 0;
+        bits.push(c);
+        if (v !== 0) {
+          bits.push(c, c);
+        }
+      }
+    }
+    bits.push(...this.add(BarcodeMaps.itfEnd, 5));
+    return bits;
+  }
+  makeBytes(data, options) {
+    const params = drawParams(options);
+    const result = [ ...super.makeBytes(data, options) ];
+    if (this.drawBorder) {
+      const bw = this.getBorderWidth(params.width);
+      const hp = params.drawText ? params.fontHeight + params.textPadding : 0;
+      result.push(new BarcodeBar(0, 0, params.width, bw, true));
+      result.push(new BarcodeBar(0, params.height - hp - bw, params.width, bw, true));
+      result.push(new BarcodeBar(0, bw, bw, params.height - hp - bw * 2, true));
+      result.push(new BarcodeBar(params.width - bw, bw, bw, params.height - hp - bw * 2, true));
+    }
+    return result;
+  }
+  makeText(data, params, lineWidth) {
+    const text = this.fixedLength !== null ? data : this.padded(data);
+    return super.makeText(text, params, lineWidth);
+  }
+  verifyBytes(data) {
+    let text = utf8Decode(data);
+    if (this.fixedLength !== null) {
+      text = this.checkLength(text, this.maxLength);
+    } else {
+      text = this.padded(text);
+    }
+    if (text.length % 2 !== 0) {
+      throw new BarcodeException(`${this.name} barcode can only encode an even number of digits.`);
+    }
+    super.verifyBytes(utf8Encode(text));
+  }
+  normalize(data) {
+    if (this.fixedLength !== null) {
+      return this.checkLength(this.zeroPrepend ? data.padEnd(this.minLength, "0").substring(0, this.minLength) : data, this.maxLength);
+    }
+    return this.padded(data);
+  }
+}
+
+class BarcodeItf14 extends BarcodeItf {
+  constructor(drawBorder, borderWidth, quietWidth) {
+    super(true, true, drawBorder, borderWidth, quietWidth, 14);
+  }
+  get name() {
+    return "ITF 14";
+  }
+  makeText(data, params, lineWidth) {
+    const text = this.checkLength(data, this.maxLength);
+    const grouped = `${text.substring(0, 1)} ${text.substring(1, 3)} ` + `${text.substring(3, 8)} ${text.substring(8, 13)} ${text.substring(13, 14)}`;
+    return super.makeText(grouped, params, lineWidth);
+  }
+}
+
+class BarcodeItf16 extends BarcodeItf {
+  constructor(drawBorder, borderWidth, quietWidth) {
+    super(true, true, drawBorder, borderWidth, quietWidth, 16);
+  }
+  get name() {
+    return "ITF 16";
+  }
+  makeText(data, params, lineWidth) {
+    const text = this.checkLength(data, this.maxLength);
+    const grouped = `${text.substring(0, 1)} ${text.substring(1, 3)} ` + `${text.substring(3, 5)} ${text.substring(5, 10)} ` + `${text.substring(10, 15)} ${text.substring(15, 16)}`;
+    return super.makeText(grouped, params, lineWidth);
+  }
+}
+
+class Barcode2DMatrix {
+  constructor(width, height, ratio, pixels) {
+    this.width = width;
+    this.height = height;
+    this.ratio = ratio;
+    this.pixels = pixels;
+  }
+  static fromXY(width, height, ratio, isDark) {
+    const pixels = [];
+    for (let p = 0; p < width * height; p++) {
+      const x = p % width;
+      const y = Math.floor(p / width);
+      pixels.push(isDark(x, y));
+    }
+    return new Barcode2DMatrix(width, height, ratio, pixels);
+  }
+}
+
+class Barcode2D extends Barcode {
+  makeBytes(data, options) {
+    const {width, height} = options;
+    if (!(width > 0) || !(height > 0)) {
+      throw new RangeError("A barcode needs a positive width and height");
+    }
+    const matrix = this.convert(data);
+    const result = [];
+    const mh = matrix.height * matrix.ratio;
+    let w;
+    let h;
+    if (width / height > matrix.width / mh) {
+      w = matrix.width * height / mh;
+      h = height;
+    } else {
+      w = width;
+      h = mh * width / matrix.width;
+    }
+    const pixelW = w / matrix.width;
+    const pixelH = h / matrix.height;
+    const offsetX = (width - w) / 2;
+    const offsetY = (height - h) / 2;
+    let start = 0;
+    let color = null;
+    let x = 0;
+    let y = 0;
+    for (const pixel of matrix.pixels) {
+      if (color === null) color = pixel;
+      if (pixel !== color) {
+        result.push(new BarcodeBar(offsetX + start * pixelW, offsetY + y * pixelH, (x - start) * pixelW, pixelH, color));
+        color = pixel;
+        start = x;
+      }
+      x++;
+      if (x >= matrix.width) {
+        result.push(new BarcodeBar(offsetX + start * pixelW, offsetY + y * pixelH, (matrix.width - start) * pixelW, pixelH, color));
+        color = null;
+        start = 0;
+        x = 0;
+        y++;
+      }
+    }
+    return result;
+  }
+  verifyBytes(data) {
+    super.verifyBytes(data);
+    try {
+      this.convert(data);
+    } catch (error) {
+      throw new BarcodeException(String(error));
+    }
+  }
+  toHex(data) {
+    let intermediate = "";
+    const codeUnits = new Uint8Array(data.length);
+    for (let i = 0; i < data.length; i++) codeUnits[i] = data.charCodeAt(i) & 255;
+    for (const bit of this.convert(codeUnits).pixels) {
+      intermediate += bit ? "1" : "0";
+    }
+    let result = "";
+    while (intermediate.length > 8) {
+      const sub = intermediate.substring(intermediate.length - 8);
+      result += parseInt(sub, 2).toString(16);
+      intermediate = intermediate.substring(0, intermediate.length - 8);
+    }
+    result += parseInt(intermediate, 2).toString(16);
+    return result;
+  }
+}
+
+const startWord = 130728;
+
+const stopWord = 260649;
+
+const paddingCodeword = 900;
+
+const codewords = [ [ 120256, 125680, 128380, 120032, 125560, 128318, 108736, 119920, 108640, 86080, 108592, 86048, 110016, 120560, 125820, 109792, 120440, 125758, 88256, 109680, 88160, 89536, 110320, 120700, 89312, 110200, 120638, 89200, 110140, 89840, 110460, 89720, 110398, 89980, 128506, 119520, 125304, 128190, 107712, 119408, 125244, 107616, 119352, 84032, 107568, 119324, 84e3, 107544, 83984, 108256, 119672, 125374, 85184, 108144, 119612, 85088, 108088, 119582, 85040, 108060, 85728, 108408, 119742, 85616, 108348, 85560, 108318, 85880, 108478, 85820, 85790, 107200, 119152, 125116, 107104, 119096, 125086, 83008, 107056, 119068, 82976, 107032, 82960, 82952, 83648, 107376, 119228, 83552, 107320, 119198, 83504, 107292, 83480, 83468, 83824, 107452, 83768, 107422, 83740, 83900, 106848, 118968, 125022, 82496, 106800, 118940, 82464, 106776, 118926, 82448, 106764, 82440, 106758, 82784, 106936, 119006, 82736, 106908, 82712, 106894, 82700, 82694, 106974, 82830, 82240, 106672, 118876, 82208, 106648, 118862, 82192, 106636, 82184, 106630, 82180, 82352, 82328, 82316, 82080, 118830, 106572, 106566, 82050, 117472, 124280, 127678, 103616, 117360, 124220, 103520, 117304, 124190, 75840, 103472, 75808, 104160, 117624, 124350, 76992, 104048, 117564, 76896, 103992, 76848, 76824, 77536, 104312, 117694, 77424, 104252, 77368, 77340, 77688, 104382, 77628, 77758, 121536, 126320, 128700, 121440, 126264, 128670, 111680, 121392, 126236, 111648, 121368, 126222, 111632, 121356, 103104, 117104, 124092, 112320, 103008, 117048, 124062, 112224, 121656, 126366, 93248, 74784, 102936, 117006, 93216, 112152, 93200, 75456, 103280, 117180, 93888, 75360, 103224, 117150, 93792, 112440, 121758, 93744, 75288, 93720, 75632, 103356, 94064, 75576, 103326, 94008, 112542, 93980, 75708, 94140, 75678, 94110, 121184, 126136, 128606, 111168, 121136, 126108, 111136, 121112, 126094, 111120, 121100, 111112, 111108, 102752, 116920, 123998, 111456, 102704, 116892, 91712, 74272, 121244, 116878, 91680, 74256, 102668, 91664, 111372, 102662, 74244, 74592, 102840, 116958, 92e3, 74544, 102812, 91952, 111516, 102798, 91928, 74508, 74502, 74680, 102878, 92088, 74652, 92060, 74638, 92046, 92126, 110912, 121008, 126044, 110880, 120984, 126030, 110864, 120972, 110856, 120966, 110852, 110850, 74048, 102576, 116828, 90944, 74016, 102552, 116814, 90912, 111e3, 121038, 90896, 73992, 102534, 90888, 110982, 90884, 74160, 102620, 91056, 74136, 102606, 91032, 111054, 91020, 74118, 91014, 91100, 91086, 110752, 120920, 125998, 110736, 120908, 110728, 120902, 110724, 110722, 73888, 102488, 116782, 90528, 73872, 102476, 90512, 110796, 102470, 90504, 73860, 90500, 73858, 73944, 90584, 90572, 90566, 120876, 120870, 110658, 102444, 73800, 90312, 90308, 90306, 101056, 116080, 123580, 100960, 116024, 70720, 100912, 115996, 70688, 100888, 70672, 70664, 71360, 101232, 116156, 71264, 101176, 116126, 71216, 101148, 71192, 71180, 71536, 101308, 71480, 101278, 71452, 71612, 71582, 118112, 124600, 127838, 105024, 118064, 124572, 104992, 118040, 124558, 104976, 118028, 104968, 118022, 100704, 115896, 123486, 105312, 100656, 115868, 79424, 70176, 118172, 115854, 79392, 105240, 100620, 79376, 70152, 79368, 70496, 100792, 115934, 79712, 70448, 118238, 79664, 105372, 100750, 79640, 70412, 79628, 70584, 100830, 79800, 70556, 79772, 70542, 70622, 79838, 122176, 126640, 128860, 122144, 126616, 128846, 122128, 126604, 122120, 126598, 122116, 104768, 117936, 124508, 113472, 104736, 126684, 124494, 113440, 122264, 126670, 113424, 104712, 117894, 113416, 122246, 104706, 69952, 100528, 115804, 78656, 69920, 100504, 115790, 96064, 78624, 104856, 117966, 96032, 113560, 122318, 100486, 96016, 78600, 104838, 96008, 69890, 70064, 100572, 78768, 70040, 100558, 96176, 78744, 104910, 96152, 113614, 70022, 78726, 70108, 78812, 70094, 96220, 78798, 122016, 126552, 128814, 122e3, 126540, 121992, 126534, 121988, 121986, 104608, 117848, 124462, 113056, 104592, 126574, 113040, 122060, 117830, 113032, 104580, 113028, 104578, 113026, 69792, 100440, 115758, 78240, 69776, 100428, 95136, 78224, 104652, 100422, 95120, 113100, 69764, 95112, 78212, 69762, 78210, 69848, 100462, 78296, 69836, 95192, 78284, 69830, 95180, 78278, 69870, 95214, 121936, 126508, 121928, 126502, 121924, 121922, 104528, 117804, 112848, 104520, 117798, 112840, 121958, 112836, 104514, 112834, 69712, 100396, 78032, 69704, 100390, 94672, 78024, 104550, 94664, 112870, 69698, 94660, 78018, 94658, 78060, 94700, 94694, 126486, 121890, 117782, 104484, 104482, 69672, 77928, 94440, 69666, 77922, 99680, 68160, 99632, 68128, 99608, 115342, 68112, 99596, 68104, 99590, 68448, 99768, 115422, 68400, 99740, 68376, 99726, 68364, 68358, 68536, 99806, 68508, 68494, 68574, 101696, 116400, 123740, 101664, 116376, 101648, 116364, 101640, 116358, 101636, 67904, 99504, 115292, 72512, 67872, 116444, 115278, 72480, 101784, 116430, 72464, 67848, 99462, 72456, 101766, 67842, 68016, 99548, 72624, 67992, 99534, 72600, 101838, 72588, 67974, 68060, 72668, 68046, 72654, 118432, 124760, 127918, 118416, 124748, 118408, 124742, 118404, 118402, 101536, 116312, 105888, 101520, 116300, 105872, 118476, 116294, 105864, 101508, 105860, 101506, 105858, 67744, 99416, 72096, 67728, 116334, 80800, 72080, 101580, 99398, 80784, 105932, 67716, 80776, 72068, 67714, 72066, 67800, 99438, 72152, 67788, 80856, 72140, 67782, 80844, 72134, 67822, 72174, 80878, 126800, 128940, 126792, 128934, 126788, 126786, 118352, 124716, 122576, 126828, 124710, 122568, 126822, 122564, 118338, 122562, 101456, 116268, 105680, 101448, 116262, 114128, 105672, 118374, 114120, 122598, 101442, 114116, 105666, 114114, 67664, 99372, 71888, 67656, 99366, 80336, 71880, 101478, 97232, 80328, 105702, 67650, 97224, 114150, 71874, 97220, 67692, 71916, 67686, 80364, 71910, 97260, 80358, 97254, 126760, 128918, 126756, 126754, 118312, 124694, 122472, 126774, 122468, 118306, 122466, 101416, 116246, 105576, 101412, 113896, 105572, 101410, 113892, 105570, 113890, 67624, 99350, 71784, 101430, 80104, 71780, 67618, 96744, 80100, 71778, 96740, 80098, 96738, 71798, 96758, 126738, 122420, 122418, 105524, 113780, 113778, 71732, 79988, 96500, 96498, 66880, 66848, 98968, 66832, 66824, 66820, 66992, 66968, 66956, 66950, 67036, 67022, 1e5, 99984, 115532, 99976, 115526, 99972, 99970, 66720, 98904, 69024, 100056, 98892, 69008, 100044, 69e3, 100038, 68996, 66690, 68994, 66776, 98926, 69080, 100078, 69068, 66758, 69062, 66798, 69102, 116560, 116552, 116548, 116546, 99920, 102096, 116588, 115494, 102088, 116582, 102084, 99906, 102082, 66640, 68816, 66632, 98854, 73168, 68808, 66628, 73160, 68804, 66626, 73156, 68802, 66668, 68844, 66662, 73196, 68838, 73190, 124840, 124836, 124834, 116520, 118632, 124854, 118628, 116514, 118626, 99880, 115478, 101992, 116534, 106216, 101988, 99874, 106212, 101986, 106210, 66600, 98838, 68712, 99894, 72936, 68708, 66594, 81384, 72932, 68706, 81380, 72930, 66614, 68726, 72950, 81398, 128980, 128978, 124820, 126900, 124818, 126898, 116500, 118580, 116498, 122740, 118578, 122738, 99860, 101940, 99858, 106100, 101938, 114420 ], [ 128352, 129720, 125504, 128304, 129692, 125472, 128280, 129678, 125456, 128268, 125448, 128262, 125444, 125792, 128440, 129758, 120384, 125744, 128412, 120352, 125720, 128398, 120336, 125708, 120328, 125702, 120324, 120672, 125880, 128478, 110144, 120624, 125852, 110112, 120600, 125838, 110096, 120588, 110088, 120582, 110084, 110432, 120760, 125918, 89664, 110384, 120732, 89632, 110360, 120718, 89616, 110348, 89608, 110342, 89952, 110520, 120798, 89904, 110492, 89880, 110478, 89868, 90040, 110558, 90012, 89998, 125248, 128176, 129628, 125216, 128152, 129614, 125200, 128140, 125192, 128134, 125188, 125186, 119616, 125360, 128220, 119584, 125336, 128206, 119568, 125324, 119560, 125318, 119556, 119554, 108352, 119728, 125404, 108320, 119704, 125390, 108304, 119692, 108296, 119686, 108292, 108290, 85824, 108464, 119772, 85792, 108440, 119758, 85776, 108428, 85768, 108422, 85764, 85936, 108508, 85912, 108494, 85900, 85894, 85980, 85966, 125088, 128088, 129582, 125072, 128076, 125064, 128070, 125060, 125058, 119200, 125144, 128110, 119184, 125132, 119176, 125126, 119172, 119170, 107424, 119256, 125166, 107408, 119244, 107400, 119238, 107396, 107394, 83872, 107480, 119278, 83856, 107468, 83848, 107462, 83844, 83842, 83928, 107502, 83916, 83910, 83950, 125008, 128044, 125e3, 128038, 124996, 124994, 118992, 125036, 118984, 125030, 118980, 118978, 106960, 119020, 106952, 119014, 106948, 106946, 82896, 106988, 82888, 106982, 82884, 82882, 82924, 82918, 124968, 128022, 124964, 124962, 118888, 124982, 118884, 118882, 106728, 118902, 106724, 106722, 82408, 106742, 82404, 82402, 124948, 124946, 118836, 118834, 106612, 106610, 124224, 127664, 129372, 124192, 127640, 129358, 124176, 127628, 124168, 127622, 124164, 124162, 117568, 124336, 127708, 117536, 124312, 127694, 117520, 124300, 117512, 124294, 117508, 117506, 104256, 117680, 124380, 104224, 117656, 124366, 104208, 117644, 104200, 117638, 104196, 104194, 77632, 104368, 117724, 77600, 104344, 117710, 77584, 104332, 77576, 104326, 77572, 77744, 104412, 77720, 104398, 77708, 77702, 77788, 77774, 128672, 129880, 93168, 128656, 129868, 92664, 128648, 129862, 92412, 128644, 128642, 124064, 127576, 129326, 126368, 124048, 129902, 126352, 128716, 127558, 126344, 124036, 126340, 124034, 126338, 117152, 124120, 127598, 121760, 117136, 124108, 121744, 126412, 124102, 121736, 117124, 121732, 117122, 121730, 103328, 117208, 124142, 112544, 103312, 117196, 112528, 121804, 117190, 112520, 103300, 112516, 103298, 112514, 75680, 103384, 117230, 94112, 75664, 103372, 94096, 112588, 103366, 94088, 75652, 94084, 75650, 75736, 103406, 94168, 75724, 94156, 75718, 94150, 75758, 128592, 129836, 91640, 128584, 129830, 91388, 128580, 91262, 128578, 123984, 127532, 126160, 123976, 127526, 126152, 128614, 126148, 123970, 126146, 116944, 124012, 121296, 116936, 124006, 121288, 126182, 121284, 116930, 121282, 102864, 116972, 111568, 102856, 116966, 111560, 121318, 111556, 102850, 111554, 74704, 102892, 92112, 74696, 102886, 92104, 111590, 92100, 74690, 92098, 74732, 92140, 74726, 92134, 128552, 129814, 90876, 128548, 90750, 128546, 123944, 127510, 126056, 128566, 126052, 123938, 126050, 116840, 123958, 121064, 116836, 121060, 116834, 121058, 102632, 116854, 111080, 121078, 111076, 102626, 111074, 74216, 102646, 91112, 74212, 91108, 74210, 91106, 74230, 91126, 128532, 90494, 128530, 123924, 126004, 123922, 126002, 116788, 120948, 116786, 120946, 102516, 110836, 102514, 110834, 73972, 90612, 73970, 90610, 128522, 123914, 125978, 116762, 120890, 102458, 110714, 123552, 127320, 129198, 123536, 127308, 123528, 127302, 123524, 123522, 116128, 123608, 127342, 116112, 123596, 116104, 123590, 116100, 116098, 101280, 116184, 123630, 101264, 116172, 101256, 116166, 101252, 101250, 71584, 101336, 116206, 71568, 101324, 71560, 101318, 71556, 71554, 71640, 101358, 71628, 71622, 71662, 127824, 129452, 79352, 127816, 129446, 79100, 127812, 78974, 127810, 123472, 127276, 124624, 123464, 127270, 124616, 127846, 124612, 123458, 124610, 115920, 123500, 118224, 115912, 123494, 118216, 124646, 118212, 115906, 118210, 100816, 115948, 105424, 100808, 115942, 105416, 118246, 105412, 100802, 105410, 70608, 100844, 79824, 70600, 100838, 79816, 105446, 79812, 70594, 79810, 70636, 79852, 70630, 79846, 129960, 95728, 113404, 129956, 95480, 113278, 129954, 95356, 95294, 127784, 129430, 78588, 128872, 129974, 95996, 78462, 128868, 127778, 95870, 128866, 123432, 127254, 124520, 123428, 126696, 128886, 123426, 126692, 124514, 126690, 115816, 123446, 117992, 115812, 122344, 117988, 115810, 122340, 117986, 122338, 100584, 115830, 104936, 100580, 113640, 104932, 100578, 113636, 104930, 113634, 70120, 100598, 78824, 70116, 96232, 78820, 70114, 96228, 78818, 96226, 70134, 78838, 129940, 94968, 113022, 129938, 94844, 94782, 127764, 78206, 128820, 127762, 95102, 128818, 123412, 124468, 123410, 126580, 124466, 126578, 115764, 117876, 115762, 122100, 117874, 122098, 100468, 104692, 100466, 113140, 104690, 113138, 69876, 78324, 69874, 95220, 78322, 95218, 129930, 94588, 94526, 127754, 128794, 123402, 124442, 126522, 115738, 117818, 121978, 100410, 104570, 112890, 69754, 78074, 94714, 94398, 123216, 127148, 123208, 127142, 123204, 123202, 115408, 123244, 115400, 123238, 115396, 115394, 99792, 115436, 99784, 115430, 99780, 99778, 68560, 99820, 68552, 99814, 68548, 68546, 68588, 68582, 127400, 129238, 72444, 127396, 72318, 127394, 123176, 127126, 123752, 123172, 123748, 123170, 123746, 115304, 123190, 116456, 115300, 116452, 115298, 116450, 99560, 115318, 101864, 99556, 101860, 99554, 101858, 68072, 99574, 72680, 68068, 72676, 68066, 72674, 68086, 72694, 129492, 80632, 105854, 129490, 80508, 80446, 127380, 72062, 127924, 127378, 80766, 127922, 123156, 123700, 123154, 124788, 123698, 124786, 115252, 116340, 115250, 118516, 116338, 118514, 99444, 101620, 99442, 105972, 101618, 105970, 67828, 72180, 67826, 80884, 72178, 80882, 97008, 114044, 96888, 113982, 96828, 96798, 129482, 80252, 130010, 97148, 80190, 97086, 127370, 127898, 128954, 123146, 123674, 124730, 126842, 115226, 116282, 118394, 122618, 99386, 101498, 105722, 114170, 67706, 71930, 80378, 96632, 113854, 96572, 96542, 80062, 96702, 96444, 96414, 96350, 123048, 123044, 123042, 115048, 123062, 115044, 115042, 99048, 115062, 99044, 99042, 67048, 99062, 67044, 67042, 67062, 127188, 68990, 127186, 123028, 123316, 123026, 123314, 114996, 115572, 114994, 115570, 98932, 100084, 98930, 100082, 66804, 69108, 66802, 69106, 129258, 73084, 73022, 127178, 127450, 123018, 123290, 123834, 114970, 115514, 116602, 98874, 99962, 102138, 66682, 68858, 73210, 81272, 106174, 81212, 81182, 72894, 81342, 97648, 114364, 97592, 114334, 97564, 97550, 81084, 97724, 81054, 97694, 97464, 114270, 97436, 97422, 80990, 97502, 97372, 97358, 97326, 114868, 114866, 98676, 98674, 66292, 66290, 123098, 114842, 115130, 98618, 99194, 66170, 67322, 69310, 73404, 73374, 81592, 106334, 81564, 81550, 73310, 81630, 97968, 114524, 97944, 114510, 97932, 97926, 81500, 98012, 81486, 97998, 97880, 114478, 97868, 97862, 81454, 97902, 97836, 97830, 69470, 73564, 73550, 81752, 106414, 81740, 81734, 73518, 81774, 81708, 81702 ], [ 109536, 120312, 86976, 109040, 120060, 86496, 108792, 119934, 86256, 108668, 86136, 129744, 89056, 110072, 129736, 88560, 109820, 129732, 88312, 109694, 129730, 88188, 128464, 129772, 89592, 128456, 129766, 89340, 128452, 89214, 128450, 125904, 128492, 125896, 128486, 125892, 125890, 120784, 125932, 120776, 125926, 120772, 120770, 110544, 120812, 110536, 120806, 110532, 84928, 108016, 119548, 84448, 107768, 119422, 84208, 107644, 84088, 107582, 84028, 129640, 85488, 108284, 129636, 85240, 108158, 129634, 85116, 85054, 128232, 129654, 85756, 128228, 85630, 128226, 125416, 128246, 125412, 125410, 119784, 125430, 119780, 119778, 108520, 119798, 108516, 108514, 83424, 107256, 119166, 83184, 107132, 83064, 107070, 83004, 82974, 129588, 83704, 107390, 129586, 83580, 83518, 128116, 83838, 128114, 125172, 125170, 119284, 119282, 107508, 107506, 82672, 106876, 82552, 106814, 82492, 82462, 129562, 82812, 82750, 128058, 125050, 119034, 82296, 106686, 82236, 82206, 82366, 82108, 82078, 76736, 103920, 117500, 76256, 103672, 117374, 76016, 103548, 75896, 103486, 75836, 129384, 77296, 104188, 129380, 77048, 104062, 129378, 76924, 76862, 127720, 129398, 77564, 127716, 77438, 127714, 124392, 127734, 124388, 124386, 117736, 124406, 117732, 117730, 104424, 117750, 104420, 104418, 112096, 121592, 126334, 92608, 111856, 121468, 92384, 111736, 121406, 92272, 111676, 92216, 111646, 92188, 75232, 103160, 117118, 93664, 74992, 103036, 93424, 112252, 102974, 93304, 74812, 93244, 74782, 93214, 129332, 75512, 103294, 129908, 129330, 93944, 75388, 129906, 93820, 75326, 93758, 127604, 75646, 128756, 127602, 94078, 128754, 124148, 126452, 124146, 126450, 117236, 121844, 117234, 121842, 103412, 103410, 91584, 111344, 121212, 91360, 111224, 121150, 91248, 111164, 91192, 111134, 91164, 91150, 74480, 102780, 91888, 74360, 102718, 91768, 111422, 91708, 74270, 91678, 129306, 74620, 129850, 92028, 74558, 91966, 127546, 128634, 124026, 126202, 116986, 121338, 102906, 90848, 110968, 121022, 90736, 110908, 90680, 110878, 90652, 90638, 74104, 102590, 91e3, 74044, 90940, 74014, 90910, 74174, 91070, 90480, 110780, 90424, 110750, 90396, 90382, 73916, 90556, 73886, 90526, 90296, 110686, 90268, 90254, 73822, 90334, 90204, 90190, 71136, 101112, 116094, 70896, 100988, 70776, 100926, 70716, 70686, 129204, 71416, 101246, 129202, 71292, 71230, 127348, 71550, 127346, 123636, 123634, 116212, 116210, 101364, 101362, 79296, 105200, 118140, 79072, 105080, 118078, 78960, 105020, 78904, 104990, 78876, 78862, 70384, 100732, 79600, 70264, 100670, 79480, 105278, 79420, 70174, 79390, 129178, 70524, 129466, 79740, 70462, 79678, 127290, 127866, 123514, 124666, 115962, 118266, 100858, 113376, 122232, 126654, 95424, 113264, 122172, 95328, 113208, 122142, 95280, 113180, 95256, 113166, 95244, 78560, 104824, 117950, 95968, 78448, 104764, 95856, 113468, 104734, 95800, 78364, 95772, 78350, 95758, 70008, 100542, 78712, 69948, 96120, 78652, 69918, 96060, 78622, 96030, 70078, 78782, 96190, 94912, 113008, 122044, 94816, 112952, 122014, 94768, 112924, 94744, 112910, 94732, 94726, 78192, 104636, 95088, 78136, 104606, 95032, 113054, 95004, 78094, 94990, 69820, 78268, 69790, 95164, 78238, 95134, 94560, 112824, 121950, 94512, 112796, 94488, 112782, 94476, 94470, 78008, 104542, 94648, 77980, 94620, 77966, 94606, 69726, 78046, 94686, 94384, 112732, 94360, 112718, 94348, 94342, 77916, 94428, 77902, 94414, 94296, 112686, 94284, 94278, 77870, 94318, 94252, 94246, 68336, 99708, 68216, 99646, 68156, 68126, 68476, 68414, 127162, 123258, 115450, 99834, 72416, 101752, 116414, 72304, 101692, 72248, 101662, 72220, 72206, 67960, 99518, 72568, 67900, 72508, 67870, 72478, 68030, 72638, 80576, 105840, 118460, 80480, 105784, 118430, 80432, 105756, 80408, 105742, 80396, 80390, 72048, 101564, 80752, 71992, 101534, 80696, 71964, 80668, 71950, 80654, 67772, 72124, 67742, 80828, 72094, 80798, 114016, 122552, 126814, 96832, 113968, 122524, 96800, 113944, 122510, 96784, 113932, 96776, 113926, 96772, 80224, 105656, 118366, 97120, 80176, 105628, 97072, 114076, 105614, 97048, 80140, 97036, 80134, 97030, 71864, 101470, 80312, 71836, 97208, 80284, 71822, 97180, 80270, 97166, 67678, 71902, 80350, 97246, 96576, 113840, 122460, 96544, 113816, 122446, 96528, 113804, 96520, 113798, 96516, 96514, 80048, 105564, 96688, 80024, 105550, 96664, 113870, 96652, 80006, 96646, 71772, 80092, 71758, 96732, 80078, 96718, 96416, 113752, 122414, 96400, 113740, 96392, 113734, 96388, 96386, 79960, 105518, 96472, 79948, 96460, 79942, 96454, 71726, 79982, 96494, 96336, 113708, 96328, 113702, 96324, 96322, 79916, 96364, 79910, 96358, 96296, 113686, 96292, 96290, 79894, 96310, 66936, 99006, 66876, 66846, 67006, 68976, 100028, 68920, 99998, 68892, 68878, 66748, 69052, 66718, 69022, 73056, 102072, 116574, 73008, 102044, 72984, 102030, 72972, 72966, 68792, 99934, 73144, 68764, 73116, 68750, 73102, 66654, 68830, 73182, 81216, 106160, 118620, 81184, 106136, 118606, 81168, 106124, 81160, 106118, 81156, 81154, 72880, 101980, 81328, 72856, 101966, 81304, 106190, 81292, 72838, 81286, 68700, 72924, 68686, 81372, 72910, 81358, 114336, 122712, 126894, 114320, 122700, 114312, 122694, 114308, 114306, 81056, 106072, 118574, 97696, 81040, 106060, 97680, 114380, 106054, 97672, 81028, 97668, 81026, 97666, 72792, 101934, 81112, 72780, 97752, 81100, 72774, 97740, 81094, 97734, 68654, 72814, 81134, 97774, 114256, 122668, 114248, 122662, 114244, 114242, 80976, 106028, 97488, 80968, 106022, 97480, 114278, 97476, 80962, 97474, 72748, 81004, 72742, 97516, 80998, 97510, 114216, 122646, 114212, 114210, 80936, 106006, 97384, 80932, 97380, 80930, 97378, 72726, 80950, 97398, 114196, 114194, 80916, 97332, 80914, 97330, 66236, 66206, 67256, 99166, 67228, 67214, 66142, 67294, 69296, 100188, 69272, 100174, 69260, 69254, 67164, 69340, 67150, 69326, 73376, 102232, 116654, 73360, 102220, 73352, 102214, 73348, 73346, 69208, 100142, 73432, 102254, 73420, 69190, 73414, 67118, 69230, 73454, 106320, 118700, 106312, 118694, 106308, 106306, 73296, 102188, 81616, 106348, 102182, 81608, 73284, 81604, 73282, 81602, 69164, 73324, 69158, 81644, 73318, 81638, 122792, 126934, 122788, 122786, 106280, 118678, 114536, 106276, 114532, 106274, 114530, 73256, 102166, 81512, 73252, 98024, 81508, 73250, 98020, 81506, 98018, 69142, 73270, 81526, 98038, 122772, 122770, 106260, 114484, 106258, 114482, 73236, 81460, 73234, 97908, 81458, 97906, 122762, 106250, 114458, 73226, 81434, 97850, 66396, 66382, 67416, 99246, 67404, 67398, 66350, 67438, 69456, 100268, 69448, 100262, 69444, 69442, 67372, 69484, 67366, 69478, 102312, 116694, 102308, 102306, 69416, 100246, 73576, 102326, 73572, 69410, 73570, 67350, 69430, 73590, 118740, 118738, 102292, 106420, 102290, 106418, 69396, 73524, 69394, 81780, 73522, 81778, 118730, 102282, 106394, 69386, 73498, 81722, 66476, 66470, 67496, 99286, 67492, 67490, 66454, 67510, 100308, 100306, 67476, 69556, 67474, 69554, 116714 ] ];
+
+const correctionFactors = [ [ 27, 917 ], [ 522, 568, 723, 809 ], [ 237, 308, 436, 284, 646, 653, 428, 379 ], [ 274, 562, 232, 755, 599, 524, 801, 132, 295, 116, 442, 428, 295, 42, 176, 65 ], [ 361, 575, 922, 525, 176, 586, 640, 321, 536, 742, 677, 742, 687, 284, 193, 517, 273, 494, 263, 147, 593, 800, 571, 320, 803, 133, 231, 390, 685, 330, 63, 410 ], [ 539, 422, 6, 93, 862, 771, 453, 106, 610, 287, 107, 505, 733, 877, 381, 612, 723, 476, 462, 172, 430, 609, 858, 822, 543, 376, 511, 400, 672, 762, 283, 184, 440, 35, 519, 31, 460, 594, 225, 535, 517, 352, 605, 158, 651, 201, 488, 502, 648, 733, 717, 83, 404, 97, 280, 771, 840, 629, 4, 381, 843, 623, 264, 543 ], [ 521, 310, 864, 547, 858, 580, 296, 379, 53, 779, 897, 444, 400, 925, 749, 415, 822, 93, 217, 208, 928, 244, 583, 620, 246, 148, 447, 631, 292, 908, 490, 704, 516, 258, 457, 907, 594, 723, 674, 292, 272, 96, 684, 432, 686, 606, 860, 569, 193, 219, 129, 186, 236, 287, 192, 775, 278, 173, 40, 379, 712, 463, 646, 776, 171, 491, 297, 763, 156, 732, 95, 270, 447, 90, 507, 48, 228, 821, 808, 898, 784, 663, 627, 378, 382, 262, 380, 602, 754, 336, 89, 614, 87, 432, 670, 616, 157, 374, 242, 726, 600, 269, 375, 898, 845, 454, 354, 130, 814, 587, 804, 34, 211, 330, 539, 297, 827, 865, 37, 517, 834, 315, 550, 86, 801, 4, 108, 539 ], [ 524, 894, 75, 766, 882, 857, 74, 204, 82, 586, 708, 250, 905, 786, 138, 720, 858, 194, 311, 913, 275, 190, 375, 850, 438, 733, 194, 280, 201, 280, 828, 757, 710, 814, 919, 89, 68, 569, 11, 204, 796, 605, 540, 913, 801, 700, 799, 137, 439, 418, 592, 668, 353, 859, 370, 694, 325, 240, 216, 257, 284, 549, 209, 884, 315, 70, 329, 793, 490, 274, 877, 162, 749, 812, 684, 461, 334, 376, 849, 521, 307, 291, 803, 712, 19, 358, 399, 908, 103, 511, 51, 8, 517, 225, 289, 470, 637, 731, 66, 255, 917, 269, 463, 830, 730, 433, 848, 585, 136, 538, 906, 90, 2, 290, 743, 199, 655, 903, 329, 49, 802, 580, 355, 588, 188, 462, 10, 134, 628, 320, 479, 130, 739, 71, 263, 318, 374, 601, 192, 605, 142, 673, 687, 234, 722, 384, 177, 752, 607, 640, 455, 193, 689, 707, 805, 641, 48, 60, 732, 621, 895, 544, 261, 852, 655, 309, 697, 755, 756, 60, 231, 773, 434, 421, 726, 528, 503, 118, 49, 795, 32, 144, 500, 238, 836, 394, 280, 566, 319, 9, 647, 550, 73, 914, 342, 126, 32, 681, 331, 792, 620, 60, 609, 441, 180, 791, 893, 754, 605, 383, 228, 749, 760, 213, 54, 297, 134, 54, 834, 299, 922, 191, 910, 532, 609, 829, 189, 20, 167, 29, 872, 449, 83, 402, 41, 656, 505, 579, 481, 173, 404, 251, 688, 95, 497, 555, 642, 543, 307, 159, 924, 558, 648, 55, 497, 10 ], [ 352, 77, 373, 504, 35, 599, 428, 207, 409, 574, 118, 498, 285, 380, 350, 492, 197, 265, 920, 155, 914, 299, 229, 643, 294, 871, 306, 88, 87, 193, 352, 781, 846, 75, 327, 520, 435, 543, 203, 666, 249, 346, 781, 621, 640, 268, 794, 534, 539, 781, 408, 390, 644, 102, 476, 499, 290, 632, 545, 37, 858, 916, 552, 41, 542, 289, 122, 272, 383, 800, 485, 98, 752, 472, 761, 107, 784, 860, 658, 741, 290, 204, 681, 407, 855, 85, 99, 62, 482, 180, 20, 297, 451, 593, 913, 142, 808, 684, 287, 536, 561, 76, 653, 899, 729, 567, 744, 390, 513, 192, 516, 258, 240, 518, 794, 395, 768, 848, 51, 610, 384, 168, 190, 826, 328, 596, 786, 303, 570, 381, 415, 641, 156, 237, 151, 429, 531, 207, 676, 710, 89, 168, 304, 402, 40, 708, 575, 162, 864, 229, 65, 861, 841, 512, 164, 477, 221, 92, 358, 785, 288, 357, 850, 836, 827, 736, 707, 94, 8, 494, 114, 521, 2, 499, 851, 543, 152, 729, 771, 95, 248, 361, 578, 323, 856, 797, 289, 51, 684, 466, 533, 820, 669, 45, 902, 452, 167, 342, 244, 173, 35, 463, 651, 51, 699, 591, 452, 578, 37, 124, 298, 332, 552, 43, 427, 119, 662, 777, 475, 850, 764, 364, 578, 911, 283, 711, 472, 420, 245, 288, 594, 394, 511, 327, 589, 777, 699, 688, 43, 408, 842, 383, 721, 521, 560, 644, 714, 559, 62, 145, 873, 663, 713, 159, 672, 729, 624, 59, 193, 417, 158, 209, 563, 564, 343, 693, 109, 608, 563, 365, 181, 772, 677, 310, 248, 353, 708, 410, 579, 870, 617, 841, 632, 860, 289, 536, 35, 777, 618, 586, 424, 833, 77, 597, 346, 269, 757, 632, 695, 751, 331, 247, 184, 45, 787, 680, 18, 66, 407, 369, 54, 492, 228, 613, 830, 922, 437, 519, 644, 905, 789, 420, 305, 441, 207, 300, 892, 827, 141, 537, 381, 662, 513, 56, 252, 341, 242, 797, 838, 837, 720, 224, 307, 631, 61, 87, 560, 310, 756, 665, 397, 808, 851, 309, 473, 795, 378, 31, 647, 915, 459, 806, 590, 731, 425, 216, 548, 249, 321, 881, 699, 535, 673, 782, 210, 815, 905, 303, 843, 922, 281, 73, 469, 791, 660, 162, 498, 308, 155, 422, 907, 817, 187, 62, 16, 425, 535, 336, 286, 437, 375, 273, 610, 296, 183, 923, 116, 667, 751, 353, 62, 366, 691, 379, 687, 842, 37, 357, 720, 742, 330, 5, 39, 923, 311, 424, 242, 749, 321, 54, 669, 316, 342, 299, 534, 105, 667, 488, 640, 672, 576, 540, 316, 486, 721, 610, 46, 656, 447, 171, 616, 464, 190, 531, 297, 321, 762, 752, 533, 175, 134, 14, 381, 433, 717, 45, 111, 20, 596, 284, 736, 138, 646, 411, 877, 669, 141, 919, 45, 780, 407, 164, 332, 899, 165, 726, 600, 325, 498, 655, 357, 752, 768, 223, 849, 647, 63, 310, 863, 251, 366, 304, 282, 738, 675, 410, 389, 244, 31, 121, 303, 263 ] ];
+
+const latchToText = 900;
+
+const latchToBytePadded = 901;
+
+const latchToNumeric = 902;
+
+const latchToByte = 924;
+
+const shiftToByte = 913;
+
+const minNumericCount = 13;
+
+const mixedMap = new Map([ [ 48, 0 ], [ 49, 1 ], [ 50, 2 ], [ 51, 3 ], [ 52, 4 ], [ 53, 5 ], [ 54, 6 ], [ 55, 7 ], [ 56, 8 ], [ 57, 9 ], [ 38, 10 ], [ 13, 11 ], [ 9, 12 ], [ 44, 13 ], [ 58, 14 ], [ 35, 15 ], [ 45, 16 ], [ 46, 17 ], [ 36, 18 ], [ 47, 19 ], [ 43, 20 ], [ 37, 21 ], [ 42, 22 ], [ 61, 23 ], [ 94, 24 ], [ 32, 26 ] ]);
+
+const punctMap = new Map([ [ 59, 0 ], [ 60, 1 ], [ 62, 2 ], [ 64, 3 ], [ 91, 4 ], [ 92, 5 ], [ 93, 6 ], [ 95, 7 ], [ 96, 8 ], [ 126, 9 ], [ 33, 10 ], [ 13, 11 ], [ 9, 12 ], [ 44, 13 ], [ 58, 14 ], [ 10, 15 ], [ 45, 16 ], [ 46, 17 ], [ 36, 18 ], [ 47, 19 ], [ 34, 20 ], [ 124, 21 ], [ 42, 22 ], [ 40, 23 ], [ 41, 24 ], [ 63, 25 ], [ 123, 26 ], [ 125, 27 ], [ 39, 28 ] ]);
+
+const Pdf417SecurityLevel = {
+  level0: 0,
+  level1: 1,
+  level2: 2,
+  level3: 3,
+  level4: 4,
+  level5: 5,
+  level6: 6,
+  level7: 7,
+  level8: 8
+};
+
+const MIN_COLS = 2;
+
+const MAX_COLS = 60;
+
+const MAX_ROWS = 60;
+
+const MIN_ROWS = 2;
+
+const ENC_TEXT = 0;
+
+const ENC_NUMERIC = 1;
+
+const ENC_BINARY = 2;
+
+const SUB_UPPER = 0;
+
+const SUB_LOWER = 1;
+
+const SUB_MIXED = 2;
+
+const SUB_PUNCT = 3;
+
+class BarcodePDF417 extends Barcode2D {
+  constructor(securityLevel, moduleHeight, preferredRatio) {
+    super();
+    this.securityLevel = securityLevel;
+    this.moduleHeight = moduleHeight;
+    this.preferredRatio = preferredRatio;
+  }
+  get charSet() {
+    return Array.from({
+      length: 256
+    }, (_unused, index) => index);
+  }
+  get name() {
+    return "PDF417";
+  }
+  get maxLength() {
+    return 990;
+  }
+  convert(data) {
+    const dataWords = this.highlevelEncode([ ...data ]);
+    const dim = this.calcDimensions(dataWords.length, errorCorrectionWordCount(this.securityLevel));
+    if (dim.columns < MIN_COLS || dim.columns > MAX_COLS || dim.rows < MIN_ROWS || dim.rows > MAX_ROWS) {
+      throw new BarcodeException("Unable to fit data in barcode");
+    }
+    const codeWords = this.encodeData(dataWords, dim.columns, this.securityLevel);
+    const grid = [];
+    for (let i = 0; i < codeWords.length; i += dim.columns) {
+      grid.push(codeWords.slice(i, Math.min(i + dim.columns, codeWords.length)));
+    }
+    const codes = [];
+    let rowNum = 0;
+    for (const row of grid) {
+      const table = rowNum % 3;
+      const rowCodes = [];
+      rowCodes.push(startWord);
+      rowCodes.push(getCodeword(table, leftCodeWord(rowNum, dim.rows, dim.columns, this.securityLevel)));
+      for (const word of row) {
+        rowCodes.push(getCodeword(table, word));
+      }
+      rowCodes.push(getCodeword(table, rightCodeWord(rowNum, dim.rows, dim.columns, this.securityLevel)));
+      rowCodes.push(stopWord);
+      codes.push(rowCodes);
+      rowNum++;
+    }
+    const width = (dim.columns + 4) * 17 + 1;
+    return new Barcode2DMatrix(width, dim.rows, this.moduleHeight, renderBarcode(codes));
+  }
+  encodeData(dataWords, columns, securityLevel) {
+    const dataCount = dataWords.length;
+    const ecCount = errorCorrectionWordCount(securityLevel);
+    const words = [ ...dataWords, ...padding(dataCount, ecCount, columns) ];
+    words.unshift(words.length + 1);
+    return [ ...words, ...computeErrorCorrection(securityLevel, words) ];
+  }
+  calcDimensions(dataWords, eccWords) {
+    let ratio = 0;
+    let cols = 0;
+    let rows = 0;
+    for (let c = MIN_COLS; c <= MAX_COLS; c++) {
+      const r = numberOfRows(dataWords, eccWords, c);
+      if (r < MIN_ROWS) {
+        break;
+      }
+      if (r > MAX_ROWS) {
+        continue;
+      }
+      if (r !== 0) {
+        const newRatio = (17 * c + 69) / (r * this.moduleHeight);
+        if (Math.abs(newRatio - this.preferredRatio) < Math.abs(ratio - this.preferredRatio)) {
+          ratio = newRatio;
+          cols = c;
+          rows = r;
+          continue;
+        }
+        break;
+      }
+    }
+    if (rows === 0) {
+      cols = MIN_COLS;
+      rows = numberOfRows(dataWords, eccWords, cols);
+      if (rows < MIN_ROWS) {
+        rows = MIN_ROWS;
+      }
+    }
+    return {
+      columns: cols,
+      rows
+    };
+  }
+  encodeText(text, submode, result) {
+    let idx = 0;
+    const tmp = [];
+    while (idx < text.length) {
+      const ch = text[idx];
+      switch (submode) {
+       case SUB_UPPER:
+        if (isAlphaUpper(ch)) {
+          tmp.push(ch === 32 ? 26 : ch - 65);
+        } else if (isAlphaLower(ch)) {
+          submode = SUB_LOWER;
+          tmp.push(27);
+          continue;
+        } else if (mixedMap.has(ch)) {
+          submode = SUB_MIXED;
+          tmp.push(28);
+          continue;
+        } else {
+          tmp.push(29);
+          tmp.push(punctMap.get(ch));
+        }
+        break;
+
+       case SUB_LOWER:
+        if (isAlphaLower(ch)) {
+          tmp.push(ch === 32 ? 26 : ch - 97);
+        } else if (isAlphaUpper(ch)) {
+          tmp.push(27);
+          tmp.push(ch - 65);
+        } else if (mixedMap.has(ch)) {
+          submode = SUB_MIXED;
+          tmp.push(28);
+          continue;
+        } else {
+          tmp.push(29);
+          tmp.push(punctMap.get(ch));
+        }
+        break;
+
+       case SUB_MIXED:
+        if (mixedMap.has(ch)) {
+          tmp.push(mixedMap.get(ch));
+        } else if (isAlphaUpper(ch)) {
+          submode = SUB_UPPER;
+          tmp.push(28);
+          continue;
+        } else if (isAlphaLower(ch)) {
+          submode = SUB_LOWER;
+          tmp.push(27);
+          continue;
+        } else {
+          if (idx + 1 < text.length && punctMap.has(text[idx + 1])) {
+            submode = SUB_PUNCT;
+            tmp.push(25);
+            continue;
+          }
+          tmp.push(29);
+          tmp.push(punctMap.get(ch));
+        }
+        break;
+
+       default:
+        if (punctMap.has(ch)) {
+          tmp.push(punctMap.get(ch));
+        } else {
+          submode = SUB_UPPER;
+          tmp.push(29);
+          continue;
+        }
+      }
+      idx++;
+    }
+    let h = 0;
+    let i = 0;
+    for (const val of tmp) {
+      if (i % 2 !== 0) {
+        h = h * 30 + val;
+        result.push(h);
+      } else {
+        h = val;
+      }
+      i++;
+    }
+    if (tmp.length % 2 !== 0) {
+      result.push(h * 30 + 29);
+    }
+    return submode;
+  }
+  consecutiveTextCount(msg) {
+    let result = 0;
+    let i = 0;
+    for (const ch of msg) {
+      const numericCount = consecutiveDigitCount(msg.slice(i));
+      if (numericCount >= minNumericCount || numericCount === 0 && !isText(ch)) {
+        break;
+      }
+      result++;
+      i++;
+    }
+    return result;
+  }
+  consecutiveBinaryCount(msg) {
+    let result = 0;
+    for (let i = 0; i < msg.length; i++) {
+      if (consecutiveDigitCount(msg.slice(i)) >= minNumericCount) {
+        break;
+      }
+      if (this.consecutiveTextCount(msg.slice(i)) > 5) {
+        break;
+      }
+      result++;
+    }
+    return result;
+  }
+  highlevelEncode(data) {
+    const words = [];
+    let encodingMode = ENC_TEXT;
+    let textSubMode = SUB_UPPER;
+    while (data.length > 0) {
+      const numericCount = consecutiveDigitCount(data);
+      if (numericCount >= minNumericCount || numericCount === data.length) {
+        words.push(latchToNumeric);
+        encodingMode = ENC_NUMERIC;
+        textSubMode = SUB_UPPER;
+        words.push(...encodeNumeric(data.slice(0, numericCount)));
+        data = data.slice(numericCount);
+      } else {
+        const textCount = this.consecutiveTextCount(data);
+        if (textCount >= 5 || textCount === data.length) {
+          if (encodingMode !== ENC_TEXT) {
+            words.push(latchToText);
+            encodingMode = ENC_TEXT;
+            textSubMode = SUB_UPPER;
+          }
+          const txtData = [];
+          textSubMode = this.encodeText(data.slice(0, textCount), textSubMode, txtData);
+          words.push(...txtData);
+          data = data.slice(textCount);
+        } else {
+          let binaryCount = this.consecutiveBinaryCount(data);
+          if (binaryCount === 0) {
+            binaryCount = 1;
+          }
+          const bytes = data.slice(0, binaryCount);
+          if (bytes.length !== 1 || encodingMode !== ENC_TEXT) {
+            encodingMode = ENC_BINARY;
+            textSubMode = SUB_UPPER;
+          }
+          words.push(...encodeBinary(bytes, encodingMode));
+          data = data.slice(binaryCount);
+        }
+      }
+    }
+    return words;
+  }
+}
+
+function errorCorrectionWordCount(level) {
+  return 1 << level + 1;
+}
+
+function numberOfRows(m, k, c) {
+  let r = Math.floor((m + 1 + k) / c) + 1;
+  if (c * r >= m + 1 + k + c) {
+    r--;
+  }
+  return r;
+}
+
+function leftCodeWord(rowNum, rows, columns, securityLevel) {
+  const tableId = rowNum % 3;
+  let x = 0;
+  switch (tableId) {
+   case 0:
+    x = Math.floor((rows - 3) / 3);
+    break;
+
+   case 1:
+    x = securityLevel * 3;
+    x += (rows - 1) % 3;
+    break;
+
+   case 2:
+    x = columns - 1;
+    break;
+  }
+  return 30 * Math.floor(rowNum / 3) + x;
+}
+
+function rightCodeWord(rowNum, rows, columns, securityLevel) {
+  const tableId = rowNum % 3;
+  let x = 0;
+  switch (tableId) {
+   case 0:
+    x = columns - 1;
+    break;
+
+   case 1:
+    x = Math.floor((rows - 1) / 3);
+    break;
+
+   case 2:
+    x = securityLevel * 3;
+    x += (rows - 1) % 3;
+    break;
+  }
+  return 30 * Math.floor(rowNum / 3) + x;
+}
+
+function padding(dataCount, ecCount, columns) {
+  const totalCount = dataCount + ecCount + 1;
+  const mod = totalCount % columns;
+  if (mod > 0) {
+    return new Array(columns - mod).fill(paddingCodeword);
+  }
+  return [];
+}
+
+function addBits(b, count) {
+  const bits = [];
+  for (let i = count - 1; i >= 0; i--) {
+    bits.push((b >> i & 1) === 1);
+  }
+  return bits;
+}
+
+function renderBarcode(codes) {
+  const pixels = [];
+  for (const row of codes) {
+    const lastIdx = row.length - 1;
+    let i = 0;
+    for (const col of row) {
+      pixels.push(...addBits(col, i === lastIdx ? 18 : 17));
+      i++;
+    }
+  }
+  return pixels;
+}
+
+function computeErrorCorrection(level, data) {
+  const factors = correctionFactors[level];
+  const count = errorCorrectionWordCount(level);
+  const ecWords = new Array(count).fill(0);
+  for (const value of data) {
+    const temp = (value + ecWords[0]) % 929;
+    for (let i = count - 1; i >= 0; i--) {
+      let add = 0;
+      if (i > 0) {
+        add = ecWords[count - i];
+      }
+      ecWords[count - 1 - i] = (add + 929 - temp * factors[i] % 929) % 929;
+    }
+  }
+  for (let key = 0; key < ecWords.length; key++) {
+    const word = ecWords[key];
+    if (word > 0) {
+      ecWords[key] = 929 - word;
+    }
+  }
+  return ecWords;
+}
+
+function getCodeword(tableId, word) {
+  return codewords[tableId][word];
+}
+
+function consecutiveDigitCount(data) {
+  let cnt = 0;
+  for (const r of data) {
+    if (r < 48 || r > 57) {
+      break;
+    }
+    cnt++;
+  }
+  return cnt;
+}
+
+function encodeNumeric(digits) {
+  const result = [];
+  const digitCount = digits.length;
+  let chunkCount = Math.floor(digitCount / 44);
+  if (digitCount % 44 !== 0) {
+    chunkCount++;
+  }
+  for (let i = 0; i < chunkCount; i++) {
+    const start = i * 44;
+    const end = Math.min(start + 44, digitCount);
+    const chunk = digits.slice(start, end);
+    let chunkNum = BigInt(`1${String.fromCharCode(...chunk)}`);
+    const cws = [];
+    while (chunkNum > 0n) {
+      const cw = chunkNum % 900n;
+      chunkNum = chunkNum / 900n;
+      cws.unshift(Number(cw));
+    }
+    result.push(...cws);
+  }
+  return result;
+}
+
+function isText(ch) {
+  return ch === 9 || ch === 10 || ch === 13 || ch >= 32 && ch <= 126;
+}
+
+function isAlphaUpper(ch) {
+  return ch === 32 || ch >= 65 && ch <= 90;
+}
+
+function isAlphaLower(ch) {
+  return ch === 32 || ch >= 97 && ch <= 122;
+}
+
+function encodeBinary(data, startmode) {
+  const result = [];
+  const count = data.length;
+  if (count === 1 && startmode === ENC_TEXT) {
+    result.push(shiftToByte);
+  } else if (count % 6 === 0) {
+    result.push(latchToByte);
+  } else {
+    result.push(latchToBytePadded);
+  }
+  let idx = 0;
+  if (count >= 6) {
+    const words = new Array(5).fill(0);
+    while (count - idx >= 6) {
+      let t = 0;
+      for (let i = 0; i < 6; i++) {
+        t = t * 256;
+        t += data[idx + i];
+      }
+      for (let i = 0; i < 5; i++) {
+        words[4 - i] = t % 900;
+        t = Math.floor(t / 900);
+      }
+      result.push(...words);
+      idx += 6;
+    }
+  }
+  for (let i = idx; i < count; i++) {
+    result.push(data[i] & 255);
+  }
+  return result;
+}
+
+const BarcodeHMBar = {
+  tracker: 0,
+  ascender: 1,
+  descender: 2,
+  full: 3
+};
+
+class BarcodeHM extends Barcode1D {
+  constructor(tracker = .3) {
+    super();
+    this.trackerRatio = tracker;
+  }
+  makeBytes(data, options) {
+    const params = drawParams(options);
+    const result = [];
+    const text = utf8Decode(data);
+    const bars = this.convertHM(text);
+    if (bars.length === 0) {
+      return result;
+    }
+    const top = this.marginTop(params);
+    const left = this.marginLeft(params);
+    const right = this.marginRight(params);
+    const lineWidth = (params.width - left - right) / (bars.length * 2 - 1);
+    const barHeight = params.height - (params.drawText ? params.fontHeight + params.textPadding : 0) - top;
+    const tracker = barHeight * this.trackerRatio;
+    let index = 0;
+    for (const bar of bars) {
+      switch (bar) {
+       case BarcodeHMBar.tracker:
+        result.push(new BarcodeBar(left + index * 2 * lineWidth, top + barHeight / 2 - tracker / 2, lineWidth, tracker, true));
+        break;
+
+       case BarcodeHMBar.ascender:
+        result.push(new BarcodeBar(left + index * 2 * lineWidth, top, lineWidth, barHeight / 2 + tracker / 2, true));
+        break;
+
+       case BarcodeHMBar.descender:
+        result.push(new BarcodeBar(left + index * 2 * lineWidth, top + barHeight / 2 - tracker / 2, lineWidth, barHeight / 2 + tracker / 2, true));
+        break;
+
+       case BarcodeHMBar.full:
+        result.push(new BarcodeBar(left + index * 2 * lineWidth, top, lineWidth, barHeight, true));
+        break;
+      }
+      index++;
+    }
+    if (params.drawText) {
+      result.push(...this.makeText(text, params, lineWidth));
+    }
+    return result;
+  }
+  toHex(data) {
+    let result = "";
+    let b = 0;
+    let n = false;
+    for (const bit of this.convertHM(data)) {
+      b = (b << 2) + bit;
+      if (n) {
+        result += b.toString(16);
+        b = 0;
+      }
+      n = !n;
+    }
+    return result;
+  }
+  fromBits(bits) {
+    return bits & 3;
+  }
+  addHW(code, len) {
+    const bars = [];
+    for (let index = 0; index < len; index++) {
+      bars.push(this.fromBits(code >> index * 2 & 3));
+    }
+    return bars;
+  }
+  convert(_data) {
+    throw new Error("A height-modulated barcode has no two-state bars");
+  }
+}
+
+class BarcodePostnet extends BarcodeHM {
+  constructor() {
+    super(0);
+  }
+  get charSet() {
+    return [ 45, ...BarcodeMaps.postnet.keys() ];
+  }
+  get name() {
+    return "POSTNET";
+  }
+  convertHM(data) {
+    const bars = [];
+    bars.push(this.fromBits(BarcodeMaps.postnetStartStop));
+    let sum = 0;
+    for (const codeUnit of codeUnits(data)) {
+      if (codeUnit === 45) {
+        continue;
+      }
+      const code = BarcodeMaps.postnet.get(codeUnit);
+      if (code === undefined) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(codeUnit)}" to ${this.name}`);
+      }
+      bars.push(...this.addHW(code, BarcodeMaps.postnetLen));
+      sum += codeUnit - 48;
+    }
+    const crc = (10 - sum % 10) % 10;
+    bars.push(...this.addHW(BarcodeMaps.postnet.get(crc + 48), BarcodeMaps.postnetLen));
+    bars.push(this.fromBits(BarcodeMaps.postnetStartStop));
+    return bars;
+  }
+}
+
+const BarcodeQRCorrectionLevel = {
+  low: "low",
+  medium: "medium",
+  quartile: "quartile",
+  high: "high"
+};
+
+const CORRECTION = {
+  low: {
+    formatBits: 1,
+    row: 0
+  },
+  medium: {
+    formatBits: 0,
+    row: 1
+  },
+  quartile: {
+    formatBits: 3,
+    row: 2
+  },
+  high: {
+    formatBits: 2,
+    row: 3
+  }
+};
+
+const ERROR_WORDS_PER_BLOCK = [ [ -1, 7, 10, 15, 20, 26, 18, 20, 24, 30, 18, 20, 24, 26, 30, 22, 24, 28, 30, 28, 28, 28, 28, 30, 30, 26, 28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30 ], [ -1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28 ], [ -1, 13, 22, 18, 26, 18, 24, 18, 22, 20, 24, 28, 26, 24, 20, 30, 24, 28, 28, 26, 30, 28, 30, 30, 30, 30, 28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30 ], [ -1, 17, 28, 22, 16, 22, 28, 26, 26, 24, 28, 24, 28, 22, 24, 24, 30, 28, 28, 26, 28, 30, 24, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30 ] ];
+
+const BLOCK_COUNT = [ [ -1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4, 4, 4, 4, 4, 6, 6, 6, 6, 7, 8, 8, 9, 9, 10, 12, 12, 12, 13, 14, 15, 16, 17, 18, 19, 19, 20, 21, 22, 24, 25 ], [ -1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49 ], [ -1, 1, 1, 2, 2, 4, 4, 6, 6, 8, 8, 8, 10, 12, 16, 12, 17, 16, 18, 21, 20, 23, 23, 25, 27, 29, 34, 34, 35, 38, 40, 43, 45, 48, 51, 53, 56, 59, 62, 65, 68 ], [ -1, 1, 1, 2, 4, 4, 4, 5, 6, 8, 8, 11, 11, 16, 16, 18, 16, 19, 21, 25, 25, 25, 34, 30, 32, 35, 37, 40, 42, 45, 48, 51, 54, 57, 60, 63, 66, 70, 74, 77, 81 ] ];
+
+class BitWriter {
+  constructor() {
+    this.bytes = [];
+    this.length = 0;
+  }
+  append(value, count) {
+    if (count < 0 || count > 31 || value >>> count !== 0) {
+      throw new RangeError("Invalid QR bit field");
+    }
+    for (let shift = count - 1; shift >= 0; shift--) {
+      this.appendBit((value >>> shift & 1) !== 0);
+    }
+  }
+  appendBit(value) {
+    const byteIndex = this.length >>> 3;
+    if (byteIndex === this.bytes.length) this.bytes.push(0);
+    if (value) this.bytes[byteIndex] = this.bytes[byteIndex] | 128 >>> (this.length & 7);
+    this.length++;
+  }
+}
+
+class BarcodeQR extends Barcode2D {
+  constructor(typeNumber, errorCorrectLevel) {
+    super();
+    if (typeNumber !== null && (!Number.isInteger(typeNumber) || typeNumber < 1 || typeNumber > 40)) {
+      throw new RangeError("QR version must be an integer from 1 to 40");
+    }
+    if (CORRECTION[errorCorrectLevel] === undefined) {
+      throw new RangeError(`Unknown QR correction level: ${errorCorrectLevel}`);
+    }
+    this.typeNumber = typeNumber;
+    this.errorCorrectLevel = errorCorrectLevel;
+  }
+  get charSet() {
+    return Array.from({
+      length: 256
+    }, (_unused, index) => index);
+  }
+  get name() {
+    return "QR-Code";
+  }
+  get maxLength() {
+    return 2953;
+  }
+  convert(data) {
+    const parameters = CORRECTION[this.errorCorrectLevel];
+    const version = this.typeNumber ?? smallestVersion(data.length, parameters.row);
+    const capacity = dataWordCount(version, parameters.row);
+    const countBits = version < 10 ? 8 : 16;
+    if (data.length >= 1 << countBits || 4 + countBits + data.length * 8 > capacity * 8) {
+      throw new BarcodeException(`Unable to fit ${data.length} bytes in QR version ${version} at ${this.errorCorrectLevel} correction`);
+    }
+    const dataWords = frameData(data, version, capacity);
+    const allWords = addErrorCorrection(dataWords, version, parameters.row);
+    const matrix = new QrMatrix(version, parameters.formatBits, allWords);
+    return new Barcode2DMatrix(matrix.size, matrix.size, 1, matrix.pixels());
+  }
+}
+
+function smallestVersion(byteLength, correctionRow) {
+  for (let version = 1; version <= 40; version++) {
+    const countBits = version < 10 ? 8 : 16;
+    if (byteLength < 1 << countBits && 4 + countBits + byteLength * 8 <= dataWordCount(version, correctionRow) * 8) {
+      return version;
+    }
+  }
+  throw new BarcodeException("Data is too long for a QR symbol");
+}
+
+function rawWordCount(version) {
+  let modules = (16 * version + 128) * version + 64;
+  if (version >= 2) {
+    const align = Math.floor(version / 7) + 2;
+    modules -= (25 * align - 10) * align - 55;
+    if (version >= 7) modules -= 36;
+  }
+  return Math.floor(modules / 8);
+}
+
+function dataWordCount(version, correctionRow) {
+  const errorWords = ERROR_WORDS_PER_BLOCK[correctionRow][version];
+  const blocks = BLOCK_COUNT[correctionRow][version];
+  return rawWordCount(version) - errorWords * blocks;
+}
+
+function frameData(data, version, capacity) {
+  const bits = new BitWriter;
+  bits.append(4, 4);
+  bits.append(data.length, version < 10 ? 8 : 16);
+  for (const byte of data) bits.append(byte, 8);
+  const capacityBits = capacity * 8;
+  for (let count = Math.min(4, capacityBits - bits.length); count > 0; count--) {
+    bits.appendBit(false);
+  }
+  while ((bits.length & 7) !== 0) bits.appendBit(false);
+  let toggle = false;
+  while (bits.bytes.length < capacity) {
+    bits.bytes.push(toggle ? 17 : 236);
+    toggle = !toggle;
+  }
+  return Uint8Array.from(bits.bytes);
+}
+
+function addErrorCorrection(data, version, correctionRow) {
+  const blocks = BLOCK_COUNT[correctionRow][version];
+  const errorLength = ERROR_WORDS_PER_BLOCK[correctionRow][version];
+  const rawLength = rawWordCount(version);
+  const shortBlockLength = Math.floor(rawLength / blocks);
+  const shortBlockCount = blocks - rawLength % blocks;
+  const divisor = reedSolomonDivisor(errorLength);
+  const dataBlocks = [];
+  const errorBlocks = [];
+  let offset = 0;
+  for (let block = 0; block < blocks; block++) {
+    const dataLength = shortBlockLength - errorLength + (block < shortBlockCount ? 0 : 1);
+    const part = data.slice(offset, offset + dataLength);
+    offset += dataLength;
+    dataBlocks.push(part);
+    errorBlocks.push(reedSolomonRemainder(part, divisor));
+  }
+  const result = [];
+  const longestData = shortBlockLength - errorLength + 1;
+  for (let index = 0; index < longestData; index++) {
+    for (const block of dataBlocks) {
+      if (index < block.length) result.push(block[index]);
+    }
+  }
+  for (let index = 0; index < errorLength; index++) {
+    for (const block of errorBlocks) result.push(block[index]);
+  }
+  if (result.length !== rawLength || offset !== data.length) {
+    throw new Error("Internal QR block length mismatch");
+  }
+  return Uint8Array.from(result);
+}
+
+function reedSolomonDivisor(degree) {
+  const result = new Uint8Array(degree);
+  result[degree - 1] = 1;
+  let root = 1;
+  for (let i = 0; i < degree; i++) {
+    for (let j = 0; j < degree; j++) {
+      result[j] = gfMultiply(result[j], root) ^ (j + 1 < degree ? result[j + 1] : 0);
+    }
+    root = gfMultiply(root, 2);
+  }
+  return result;
+}
+
+function reedSolomonRemainder(data, divisor) {
+  const result = new Uint8Array(divisor.length);
+  for (const byte of data) {
+    const factor = byte ^ result[0];
+    result.copyWithin(0, 1);
+    result[result.length - 1] = 0;
+    for (let index = 0; index < result.length; index++) {
+      result[index] = result[index] ^ gfMultiply(divisor[index], factor);
+    }
+  }
+  return result;
+}
+
+function gfMultiply(left, right) {
+  let x = left;
+  let y = right;
+  let result = 0;
+  for (let bit = 0; bit < 8; bit++) {
+    if ((y & 1) !== 0) result ^= x;
+    const carry = (x & 128) !== 0;
+    x = x << 1 & 255;
+    if (carry) x ^= 29;
+    y >>>= 1;
+  }
+  return result;
+}
+
+class QrMatrix {
+  constructor(version, correctionFormatBits, words) {
+    this.size = version * 4 + 17;
+    this.correctionFormatBits = correctionFormatBits;
+    this.modules = square(this.size, false);
+    this.functionModules = square(this.size, false);
+    this.drawFunctions(version);
+    this.drawWords(words);
+    let bestMask = 0;
+    let bestPenalty = Infinity;
+    for (let mask = 0; mask < 8; mask++) {
+      this.applyMask(mask);
+      this.drawFormat(mask);
+      const penalty = this.penalty();
+      if (penalty < bestPenalty) {
+        bestPenalty = penalty;
+        bestMask = mask;
+      }
+      this.applyMask(mask);
+    }
+    this.applyMask(bestMask);
+    this.drawFormat(bestMask);
+  }
+  pixels() {
+    const result = [];
+    for (const row of this.modules) result.push(...row);
+    return result;
+  }
+  drawFunctions(version) {
+    for (let index = 0; index < this.size; index++) {
+      this.setFunction(6, index, index % 2 === 0);
+      this.setFunction(index, 6, index % 2 === 0);
+    }
+    this.drawFinder(3, 3);
+    this.drawFinder(this.size - 4, 3);
+    this.drawFinder(3, this.size - 4);
+    const positions = alignmentPositions(version, this.size);
+    const last = positions.length - 1;
+    for (let y = 0; y < positions.length; y++) {
+      for (let x = 0; x < positions.length; x++) {
+        if (x === 0 && y === 0 || x === 0 && y === last || x === last && y === 0) {
+          continue;
+        }
+        this.drawAlignment(positions[x], positions[y]);
+      }
+    }
+    this.drawFormat(0);
+    if (version >= 7) this.drawVersion(version);
+  }
+  drawFinder(centerX, centerY) {
+    for (let dy = -4; dy <= 4; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const x = centerX + dx;
+        const y = centerY + dy;
+        if (x < 0 || x >= this.size || y < 0 || y >= this.size) continue;
+        const distance = Math.max(Math.abs(dx), Math.abs(dy));
+        this.setFunction(x, y, distance !== 2 && distance !== 4);
+      }
+    }
+  }
+  drawAlignment(centerX, centerY) {
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        this.setFunction(centerX + dx, centerY + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+      }
+    }
+  }
+  drawFormat(mask) {
+    const value = this.correctionFormatBits << 3 | mask;
+    let remainder = value;
+    for (let bit = 0; bit < 10; bit++) {
+      remainder = remainder << 1 ^ (remainder >>> 9) * 1335;
+    }
+    const bits = (value << 10 | remainder) ^ 21522;
+    const at = index => (bits >>> index & 1) !== 0;
+    for (let index = 0; index <= 5; index++) this.setFunction(8, index, at(index));
+    this.setFunction(8, 7, at(6));
+    this.setFunction(8, 8, at(7));
+    this.setFunction(7, 8, at(8));
+    for (let index = 9; index < 15; index++) this.setFunction(14 - index, 8, at(index));
+    for (let index = 0; index < 8; index++) this.setFunction(this.size - 1 - index, 8, at(index));
+    for (let index = 8; index < 15; index++) this.setFunction(8, this.size - 15 + index, at(index));
+    this.setFunction(8, this.size - 8, true);
+  }
+  drawVersion(version) {
+    let remainder = version;
+    for (let bit = 0; bit < 12; bit++) {
+      remainder = remainder << 1 ^ (remainder >>> 11) * 7973;
+    }
+    const bits = version << 12 | remainder;
+    for (let index = 0; index < 18; index++) {
+      const value = (bits >>> index & 1) !== 0;
+      const a = this.size - 11 + index % 3;
+      const b = Math.floor(index / 3);
+      this.setFunction(a, b, value);
+      this.setFunction(b, a, value);
+    }
+  }
+  drawWords(words) {
+    let bitIndex = 0;
+    for (let right = this.size - 1; right >= 1; right -= 2) {
+      if (right === 6) right--;
+      for (let vertical = 0; vertical < this.size; vertical++) {
+        const upward = (right + 1 & 2) === 0;
+        const y = upward ? this.size - 1 - vertical : vertical;
+        for (let offset = 0; offset < 2; offset++) {
+          const x = right - offset;
+          if (this.functionModules[y][x]) continue;
+          const dark = bitIndex < words.length * 8 && (words[bitIndex >>> 3] >>> 7 - (bitIndex & 7) & 1) !== 0;
+          this.modules[y][x] = dark;
+          bitIndex++;
+        }
+      }
+    }
+    if (bitIndex < words.length * 8) throw new Error("QR matrix did not consume every data bit");
+  }
+  applyMask(mask) {
+    for (let y = 0; y < this.size; y++) {
+      for (let x = 0; x < this.size; x++) {
+        if (!this.functionModules[y][x] && maskBit(mask, x, y)) {
+          this.modules[y][x] = !this.modules[y][x];
+        }
+      }
+    }
+  }
+  penalty() {
+    let result = 0;
+    for (let y = 0; y < this.size; y++) result += runPenalty(this.modules[y]);
+    for (let x = 0; x < this.size; x++) {
+      const column = [];
+      for (let y = 0; y < this.size; y++) column.push(this.modules[y][x]);
+      result += runPenalty(column);
+    }
+    for (let y = 0; y < this.size - 1; y++) {
+      for (let x = 0; x < this.size - 1; x++) {
+        const value = this.modules[y][x];
+        if (this.modules[y][x + 1] === value && this.modules[y + 1][x] === value && this.modules[y + 1][x + 1] === value) result += 3;
+      }
+    }
+    let dark = 0;
+    for (const row of this.modules) for (const value of row) if (value) dark++;
+    const total = this.size * this.size;
+    result += Math.floor(Math.abs(dark * 20 - total * 10) / total) * 10;
+    return result;
+  }
+  setFunction(x, y, value) {
+    this.modules[y][x] = value;
+    this.functionModules[y][x] = true;
+  }
+}
+
+function square(size, value) {
+  return Array.from({
+    length: size
+  }, () => new Array(size).fill(value));
+}
+
+function alignmentPositions(version, size) {
+  if (version === 1) return [];
+  const count = Math.floor(version / 7) + 2;
+  const step = version === 32 ? 26 : Math.ceil((version * 4 + count * 2 + 1) / (count * 2 - 2)) * 2;
+  const result = [ 6 ];
+  for (let position = size - 7; result.length < count; position -= step) {
+    result.splice(1, 0, position);
+  }
+  return result;
+}
+
+function maskBit(mask, x, y) {
+  switch (mask) {
+   case 0:
+    return (x + y) % 2 === 0;
+
+   case 1:
+    return y % 2 === 0;
+
+   case 2:
+    return x % 3 === 0;
+
+   case 3:
+    return (x + y) % 3 === 0;
+
+   case 4:
+    return (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0;
+
+   case 5:
+    return x * y % 2 + x * y % 3 === 0;
+
+   case 6:
+    return (x * y % 2 + x * y % 3) % 2 === 0;
+
+   case 7:
+    return ((x + y) % 2 + x * y % 3) % 2 === 0;
+
+   default:
+    throw new RangeError(`Unknown QR mask: ${mask}`);
+  }
+}
+
+function runPenalty(line) {
+  let result = 0;
+  let runLength = 1;
+  for (let index = 1; index <= line.length; index++) {
+    if (index < line.length && line[index] === line[index - 1]) {
+      runLength++;
+    } else {
+      if (runLength >= 5) result += 3 + runLength - 5;
+      runLength = 1;
+    }
+  }
+  for (let index = 0; index + 10 < line.length; index++) {
+    let bits = 0;
+    for (let offset = 0; offset < 11; offset++) {
+      bits = bits << 1 | (line[index + offset] ? 1 : 0);
+    }
+    if (bits === 93 || bits === 1488) result += 40;
+  }
+  return result;
+}
+
+class BarcodeRm4scc extends BarcodeHM {
+  get charSet() {
+    return BarcodeMaps.rm4scc.keys();
+  }
+  get name() {
+    return "RM4SCC";
+  }
+  convertHM(data) {
+    const bars = [];
+    bars.push(this.fromBits(BarcodeMaps.rm4sccStart));
+    let sumTop = 0;
+    let sumBottom = 0;
+    const keys = [ ...BarcodeMaps.rm4scc.keys() ];
+    for (const codeUnit of codeUnits(data)) {
+      const code = BarcodeMaps.rm4scc.get(codeUnit);
+      if (code === undefined) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(codeUnit)}" to ${this.name}`);
+      }
+      bars.push(...this.addHW(code, BarcodeMaps.rm4sccLen));
+      const index = keys.indexOf(codeUnit);
+      sumTop += (Math.floor(index / 6) + 1) % 6;
+      sumBottom += (index + 1) % 6;
+    }
+    const crc = modulo(sumTop - 1, 6) * 6 + modulo(sumBottom - 1, 6);
+    bars.push(...this.addHW(BarcodeMaps.rm4scc.get(keys[crc]), BarcodeMaps.rm4sccLen));
+    bars.push(this.fromBits(BarcodeMaps.rm4sccStop));
+    return bars;
+  }
+}
+
+function modulo(value, divisor) {
+  return (value % divisor + divisor) % divisor;
+}
+
+class BarcodeTelepen extends Barcode1D {
+  get charSet() {
+    return Array.from({
+      length: 128
+    }, (_unused, index) => index);
+  }
+  get name() {
+    return "Telepen";
+  }
+  convert(data) {
+    const bits = [];
+    bits.push(...this.add(BarcodeMaps.telepenStart, BarcodeMaps.telepenLen));
+    let checksum = 0;
+    for (const code of codeUnits(data)) {
+      if (code >= BarcodeMaps.telepen.length) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+      bits.push(...this.add(BarcodeMaps.telepen[code], BarcodeMaps.telepenLen));
+      checksum += code;
+    }
+    checksum = 127 - checksum % 127;
+    if (checksum === 127) {
+      checksum = 0;
+    }
+    bits.push(...this.add(BarcodeMaps.telepen[checksum], BarcodeMaps.telepenLen));
+    bits.push(...this.add(BarcodeMaps.telepenEnd, BarcodeMaps.telepenLen));
+    return bits;
+  }
+}
+
+class BarcodeUpcA extends BarcodeEan {
+  get name() {
+    return "UPC A";
+  }
+  get minLength() {
+    return 11;
+  }
+  get maxLength() {
+    return 12;
+  }
+  verifyBytes(data) {
+    this.checkLength(utf8Decode(data), this.maxLength);
+    super.verifyBytes(data);
+  }
+  convert(data) {
+    const bits = [];
+    const text = this.checkLength(data, this.maxLength);
+    bits.push(...this.add(BarcodeMaps.eanStartEnd, 3));
+    let index = 0;
+    for (const code of codeUnits(text)) {
+      const codes = BarcodeMaps.ean.get(code);
+      if (codes === undefined) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+      if (index === 6) {
+        bits.push(...this.add(BarcodeMaps.eanCenter, 5));
+      }
+      bits.push(...this.add(codes[index < 6 ? 0 : 2], 7));
+      index++;
+    }
+    bits.push(...this.add(BarcodeMaps.eanStartEnd, 3));
+    return bits;
+  }
+  marginLeft(params) {
+    return params.drawText ? params.fontHeight : 0;
+  }
+  marginRight(params) {
+    return params.drawText ? params.fontHeight : 0;
+  }
+  getHeight(index, count, params) {
+    if (!params.drawText) {
+      return super.getHeight(index, count, params);
+    }
+    const h = params.height - params.fontHeight - params.textPadding;
+    if (index + count < 11 || index > 45 && index < 49 || index > 82) {
+      return h + params.fontHeight / 2 + params.textPadding;
+    }
+    return h;
+  }
+  makeText(data, params, lineWidth) {
+    const result = [];
+    const text = this.checkLength(data, this.maxLength);
+    const w = lineWidth * 7;
+    const left = this.marginLeft(params);
+    const right = this.marginRight(params);
+    result.push(new BarcodeText(0, params.height - params.fontHeight, left - lineWidth, params.fontHeight, text[0], "right"));
+    let offset = left + lineWidth * 10;
+    for (let i = 1; i < text.length - 1; i++) {
+      result.push(new BarcodeText(offset, params.height - params.fontHeight, w, params.fontHeight, text[i], "center"));
+      offset += w;
+      if (i === 5) {
+        offset += lineWidth * 5;
+      }
+    }
+    result.push(new BarcodeText(params.width - right + lineWidth, params.height - params.fontHeight, right - lineWidth, params.fontHeight, text[text.length - 1], "left"));
+    return result;
+  }
+}
+
+class BarcodeUpcE extends BarcodeEan {
+  constructor(fallback) {
+    super();
+    this.fallback = fallback;
+  }
+  get name() {
+    return "UPC E";
+  }
+  get minLength() {
+    return 6;
+  }
+  get maxLength() {
+    return 12;
+  }
+  verifyBytes(data) {
+    let text = utf8Decode(data);
+    if (text.length <= 8) {
+      text = this.upceToUpca(text);
+    }
+    if (text.length < 11) {
+      throw new BarcodeException(`Unable to encode "${text}", minimum length is 11 for ${this.name} Barcode`);
+    }
+    const upca = this.checkLength(text, this.maxLength);
+    if (!this.fallback) {
+      this.upcaToUpce(upca);
+    }
+    super.verifyBytes(Uint8Array.from(codeUnits(text)));
+  }
+  upcaToUpce(data) {
+    if (!/^[01]\d{11}$/.test(data)) {
+      throw new BarcodeException(`Unable to convert "${data}" to ${this.name} Barcode`);
+    }
+    const mc = data.substring(1, 6);
+    const pc = data.substring(6, 11);
+    if ([ "000", "100", "200" ].includes(mc.substring(mc.length - 3)) && Number(pc) <= 999) {
+      return `${mc.substring(0, 2)}${pc.substring(pc.length - 3)}${mc[2]}`;
+    } else if (mc.substring(mc.length - 2) === "00" && Number(pc) <= 99) {
+      return `${mc.substring(0, 3)}${pc.substring(pc.length - 2)}3`;
+    } else if (mc.substring(mc.length - 1) === "0" && Number(pc) <= 9) {
+      return `${mc.substring(0, 4)}${pc.substring(pc.length - 1)}4`;
+    } else if (mc.substring(mc.length - 1) !== "0" && [ 5, 6, 7, 8, 9 ].includes(Number(pc))) {
+      return mc + pc.substring(pc.length - 1);
+    }
+    throw new BarcodeException(`Unable to convert "${data}" to ${this.name} Barcode`);
+  }
+  upceToUpca(data) {
+    if (!/^\d{6,8}$/.test(data)) {
+      throw new BarcodeException(`Unable to convert "${data}" to UPC A Barcode`);
+    }
+    let first = "0";
+    let checksum = null;
+    switch (data.length) {
+     case 8:
+      checksum = data[7];
+      first = data[0];
+      data = data.substring(1, 7);
+      break;
+
+     case 7:
+      first = data[0];
+      data = data.substring(1, 7);
+      break;
+    }
+    if (first !== "0" && first !== "1") {
+      throw new BarcodeException(`Unable to convert "${data}" to UPC A Barcode`);
+    }
+    const d1 = data[0];
+    const d2 = data[1];
+    const d3 = data[2];
+    const d4 = data[3];
+    const d5 = data[4];
+    const d6 = data[5];
+    let manufacturer;
+    let product;
+    switch (d6) {
+     case "0":
+     case "1":
+     case "2":
+      manufacturer = `${d1}${d2}${d6}00`;
+      product = `00${d3}${d4}${d5}`;
+      break;
+
+     case "3":
+      manufacturer = `${d1}${d2}${d3}00`;
+      product = `000${d4}${d5}`;
+      break;
+
+     case "4":
+      manufacturer = `${d1}${d2}${d3}${d4}0`;
+      product = `0000${d5}`;
+      break;
+
+     default:
+      manufacturer = `${d1}${d2}${d3}${d4}${d5}`;
+      product = `0000${d6}`;
+      break;
+    }
+    data = first + manufacturer + product;
+    return data + (checksum ?? this.checkSumModulo10(data));
+  }
+  convert(data) {
+    if (data.length <= 8) {
+      data = this.upceToUpca(data);
+    }
+    data = this.checkLength(data, this.maxLength);
+    const first = data.charCodeAt(0);
+    const last = data.charCodeAt(11);
+    let short;
+    try {
+      short = this.upcaToUpce(data);
+    } catch (error) {
+      if (this.fallback && error instanceof BarcodeException) {
+        return (new BarcodeUpcA).convert(data);
+      }
+      throw error;
+    }
+    const bits = [];
+    bits.push(...this.add(BarcodeMaps.eanStartEnd, 3));
+    const parityRow = BarcodeMaps.upce.get(last);
+    const parity = first === 48 ? parityRow : parityRow ^ 63;
+    let index = 0;
+    for (const code of codeUnits(short)) {
+      const codes = BarcodeMaps.ean.get(code);
+      if (codes === undefined) {
+        throw new BarcodeException(`Unable to encode "${String.fromCharCode(code)}" to ${this.name} Barcode`);
+      }
+      bits.push(...this.add(codes[(parity >> index & 1) === 0 ? 1 : 0], 7));
+      index++;
+    }
+    bits.push(...this.add(BarcodeMaps.eanEndUpcE, 6));
+    return bits;
+  }
+  marginLeft(params) {
+    return params.drawText ? params.fontHeight : 0;
+  }
+  marginRight(params) {
+    return params.drawText ? params.fontHeight : 0;
+  }
+  getHeight(index, count, params) {
+    if (!params.drawText) {
+      return super.getHeight(index, count, params);
+    }
+    const h = params.height - params.fontHeight - params.textPadding;
+    if (index + count < 4 || index > 44) {
+      return h + params.fontHeight / 2 + params.textPadding;
+    }
+    return h;
+  }
+  makeText(data, params, lineWidth) {
+    if (data.length <= 8) {
+      data = this.upceToUpca(data);
+    }
+    data = this.checkLength(data, this.maxLength);
+    const first = data.substring(0, 1);
+    const last = data.substring(11, 12);
+    let short;
+    try {
+      short = this.upcaToUpce(data);
+    } catch (error) {
+      if (this.fallback && error instanceof BarcodeException) {
+        return (new BarcodeUpcA).makeText(data, params, lineWidth);
+      }
+      throw error;
+    }
+    const result = [];
+    const w = lineWidth * 7;
+    const left = this.marginLeft(params);
+    const right = this.marginRight(params);
+    result.push(new BarcodeText(0, params.height - params.fontHeight, left - lineWidth, params.fontHeight, first, "right"));
+    let offset = left + lineWidth * 3;
+    for (let i = 0; i < short.length; i++) {
+      result.push(new BarcodeText(offset, params.height - params.fontHeight, w, params.fontHeight, short[i], "center"));
+      offset += w;
+    }
+    result.push(new BarcodeText(params.width - right + lineWidth, params.height - params.fontHeight, right - lineWidth, params.fontHeight, last, "left"));
+    return result;
+  }
+  normalize(data) {
+    if (data.length <= 8) {
+      data = this.upceToUpca(data.padEnd(6, "0"));
+    }
+    data = this.checkLength(data, this.maxLength);
+    const first = data.substring(0, 1);
+    const last = data.substring(11, 12);
+    let short;
+    try {
+      short = this.upcaToUpce(data);
+    } catch (error) {
+      if (this.fallback && error instanceof BarcodeException) {
+        return data;
+      }
+      throw error;
+    }
+    return `${first}${short}${last}`;
+  }
+}
+
+class BarcodeFactory {
+  constructor() {}
+  static fromType(type) {
+    switch (type) {
+     case "Code39":
+      return this.code39();
+
+     case "Code93":
+      return this.code93();
+
+     case "Code128":
+      return this.code128();
+
+     case "GS128":
+      return this.gs128();
+
+     case "Itf":
+      return this.itf();
+
+     case "CodeITF14":
+      return this.itf14();
+
+     case "CodeITF16":
+      return this.itf16();
+
+     case "CodeEAN13":
+      return this.ean13();
+
+     case "CodeEAN8":
+      return this.ean8();
+
+     case "CodeEAN5":
+      return this.ean5();
+
+     case "CodeEAN2":
+      return this.ean2();
+
+     case "CodeISBN":
+      return this.isbn();
+
+     case "CodeUPCA":
+      return this.upcA();
+
+     case "CodeUPCE":
+      return this.upcE();
+
+     case "Telepen":
+      return this.telepen();
+
+     case "Codabar":
+      return this.codabar();
+
+     case "Rm4scc":
+      return this.rm4scc();
+
+     case "Postnet":
+      return this.postnet();
+
+     case "QrCode":
+      return this.qrCode();
+
+     case "PDF417":
+      return this.pdf417();
+
+     default:
+      throw new RangeError(`Barcode ${type} is not supported`);
+    }
+  }
+  static code39({drawSpacers = true} = {}) {
+    return new BarcodeCode39(drawSpacers);
+  }
+  static code93() {
+    return new BarcodeCode93;
+  }
+  static code128({useCode128A = true, useCode128B = true, useCode128C = true, escapes = false} = {}) {
+    return new BarcodeCode128({
+      useCode128A,
+      useCode128B,
+      useCode128C,
+      escapes,
+      isGS1: false,
+      addSpaceAfterParenthesis: false,
+      keepParenthesis: false
+    });
+  }
+  static gs128({useCode128A = true, useCode128B = true, useCode128C = true, escapes = false, addSpaceAfterParenthesis = true, keepParenthesis = false} = {}) {
+    return new BarcodeCode128({
+      useCode128A,
+      useCode128B,
+      useCode128C,
+      escapes,
+      isGS1: true,
+      addSpaceAfterParenthesis,
+      keepParenthesis
+    });
+  }
+  static itf({addChecksum = false, zeroPrepend = false, drawBorder = false, borderWidth = null, quietWidth = null, fixedLength = null} = {}) {
+    return new BarcodeItf(addChecksum, zeroPrepend, drawBorder, borderWidth, quietWidth, fixedLength);
+  }
+  static itf14({drawBorder = true, borderWidth = null, quietWidth = null} = {}) {
+    return new BarcodeItf14(drawBorder, borderWidth, quietWidth);
+  }
+  static itf16({drawBorder = true, borderWidth = null, quietWidth = null} = {}) {
+    return new BarcodeItf16(drawBorder, borderWidth, quietWidth);
+  }
+  static ean13({drawEndChar = false} = {}) {
+    return new BarcodeEan13(drawEndChar);
+  }
+  static ean8({drawSpacers = false} = {}) {
+    return new BarcodeEan8(drawSpacers);
+  }
+  static ean5() {
+    return new BarcodeEan5;
+  }
+  static ean2() {
+    return new BarcodeEan2;
+  }
+  static isbn({drawEndChar = false, drawIsbn = true} = {}) {
+    return new BarcodeIsbn(drawEndChar, drawIsbn);
+  }
+  static upcA() {
+    return new BarcodeUpcA;
+  }
+  static upcE({fallback = false} = {}) {
+    return new BarcodeUpcE(fallback);
+  }
+  static telepen() {
+    return new BarcodeTelepen;
+  }
+  static qrCode({typeNumber = null, errorCorrectLevel = BarcodeQRCorrectionLevel.low} = {}) {
+    return new BarcodeQR(typeNumber, errorCorrectLevel);
+  }
+  static pdf417({securityLevel = Pdf417SecurityLevel.level2, moduleHeight = 2, preferredRatio = 3} = {}) {
+    return new BarcodePDF417(securityLevel, moduleHeight, preferredRatio);
+  }
+  static codabar({start = BarcodeCodabarStartStop.A, stop = BarcodeCodabarStartStop.B, printStartStop = false, explicitStartStop = false} = {}) {
+    return new BarcodeCodabar(start, stop, printStartStop, explicitStartStop);
+  }
+  static rm4scc() {
+    return new BarcodeRm4scc;
+  }
+  static postnet() {
+    return new BarcodePostnet;
+  }
+}
+
 class PdfFontMetrics {
   constructor({left, top, right, bottom, ascent = bottom, descent = top, advanceWidth = right - left, leftBearing = left}) {
     this.left = left;
@@ -4010,6 +6953,341 @@ class Container extends Widget {
   }
 }
 
+const TYPE1_FACES = Object.freeze({
+  courier: PdfType1Font.courier,
+  courierBold: PdfType1Font.courierBold,
+  courierBoldOblique: PdfType1Font.courierBoldOblique,
+  courierOblique: PdfType1Font.courierOblique,
+  helvetica: PdfType1Font.helvetica,
+  helveticaBold: PdfType1Font.helveticaBold,
+  helveticaBoldOblique: PdfType1Font.helveticaBoldOblique,
+  helveticaOblique: PdfType1Font.helveticaOblique,
+  times: PdfType1Font.times,
+  timesBold: PdfType1Font.timesBold,
+  timesBoldItalic: PdfType1Font.timesBoldItalic,
+  timesItalic: PdfType1Font.timesItalic,
+  symbol: PdfType1Font.symbol,
+  zapfDingbats: PdfType1Font.zapfDingbats
+});
+
+class Font {
+  constructor(create) {
+    this.create = create;
+  }
+  static type1(face) {
+    const factory = TYPE1_FACES[face];
+    if (factory === undefined) {
+      throw new TypeError(`\`${face}\` is not one of the 14 standard Type1 fonts`);
+    }
+    return new Font(factory);
+  }
+  static courier() {
+    return Font.type1("courier");
+  }
+  static courierBold() {
+    return Font.type1("courierBold");
+  }
+  static courierBoldOblique() {
+    return Font.type1("courierBoldOblique");
+  }
+  static courierOblique() {
+    return Font.type1("courierOblique");
+  }
+  static helvetica() {
+    return Font.type1("helvetica");
+  }
+  static helveticaBold() {
+    return Font.type1("helveticaBold");
+  }
+  static helveticaBoldOblique() {
+    return Font.type1("helveticaBoldOblique");
+  }
+  static helveticaOblique() {
+    return Font.type1("helveticaOblique");
+  }
+  static times() {
+    return Font.type1("times");
+  }
+  static timesBold() {
+    return Font.type1("timesBold");
+  }
+  static timesBoldItalic() {
+    return Font.type1("timesBoldItalic");
+  }
+  static timesItalic() {
+    return Font.type1("timesItalic");
+  }
+  static symbol() {
+    return Font.type1("symbol");
+  }
+  static zapfDingbats() {
+    return Font.type1("zapfDingbats");
+  }
+  static ttf(data, options) {
+    if (!(data instanceof Uint8Array)) {
+      throw new TypeError("Font.ttf expects the font file as a Uint8Array");
+    }
+    return new Font(() => new PdfTtfFont(data, options));
+  }
+  static fromPdfFont(font) {
+    return new Font(() => font);
+  }
+  build() {
+    return this.create();
+  }
+  getFont(context) {
+    return context.document.resolveFont(this);
+  }
+}
+
+const DEFAULT_FONT_SIZE = 12;
+
+const DEFAULT_LINE_HEIGHT = 1.2;
+
+class TextStyle {
+  constructor({inherit = true, color = null, font = null, fontNormal = null, fontBold = null, fontItalic = null, fontBoldItalic = null, fontFallback = null, fontSize = null, fontWeight = null, fontStyle = null, letterSpacing = null, wordSpacing = null, lineSpacing = null, height = null, background = null, decoration = null, decorationColor = null, decorationStyle = null, decorationThickness = null} = {}) {
+    const isItalic = fontStyle === "italic";
+    const isBold = fontWeight === "bold";
+    this.inherit = inherit;
+    this.color = color == null ? null : normalizeColor(color);
+    this.fontNormal = fontNormal ?? (!isItalic && !isBold ? font : null);
+    this.fontBold = fontBold ?? (!isItalic && isBold ? font : null);
+    this.fontItalic = fontItalic ?? (isItalic && !isBold ? font : null);
+    this.fontBoldItalic = fontBoldItalic ?? (isItalic && isBold ? font : null);
+    this.fontFallback = fontFallback ?? [];
+    this.fontSize = fontSize;
+    this.fontWeight = fontWeight;
+    this.fontStyle = fontStyle;
+    this.letterSpacing = letterSpacing;
+    this.wordSpacing = wordSpacing;
+    this.lineSpacing = lineSpacing;
+    this.height = height;
+    this.background = normalizeBoxDecoration(background);
+    this.decoration = decoration;
+    this.decorationColor = decorationColor == null ? null : normalizeColor(decorationColor);
+    this.decorationStyle = decorationStyle;
+    this.decorationThickness = decorationThickness;
+  }
+  static defaultStyle() {
+    return new TextStyle({
+      inherit: false,
+      color: "#000000",
+      fontNormal: Font.helvetica(),
+      fontBold: Font.helveticaBold(),
+      fontItalic: Font.helveticaOblique(),
+      fontBoldItalic: Font.helveticaBoldOblique(),
+      fontSize: DEFAULT_FONT_SIZE,
+      fontWeight: "normal",
+      fontStyle: "normal",
+      letterSpacing: 0,
+      wordSpacing: 0,
+      lineSpacing: 0,
+      height: DEFAULT_LINE_HEIGHT,
+      decoration: "none",
+      decorationStyle: "solid",
+      decorationThickness: 1
+    });
+  }
+  get font() {
+    if (this.fontWeight !== "bold") {
+      if (this.fontStyle !== "italic") {
+        return this.fontNormal ?? this.fontBold ?? this.fontItalic ?? this.fontBoldItalic;
+      }
+      return this.fontItalic ?? this.fontNormal ?? this.fontBold ?? this.fontBoldItalic;
+    }
+    if (this.fontStyle !== "italic") {
+      return this.fontBold ?? this.fontNormal ?? this.fontItalic ?? this.fontBoldItalic;
+    }
+    return this.fontBoldItalic ?? this.fontBold ?? this.fontItalic ?? this.fontNormal;
+  }
+  copyWith(options = {}) {
+    return new TextStyle({
+      inherit: this.inherit,
+      color: options.color ?? this.color,
+      font: options.font ?? this.font,
+      fontNormal: options.fontNormal ?? this.fontNormal,
+      fontBold: options.fontBold ?? this.fontBold,
+      fontItalic: options.fontItalic ?? this.fontItalic,
+      fontBoldItalic: options.fontBoldItalic ?? this.fontBoldItalic,
+      fontFallback: options.fontFallback ?? this.fontFallback,
+      fontSize: options.fontSize ?? this.fontSize,
+      fontWeight: options.fontWeight ?? this.fontWeight,
+      fontStyle: options.fontStyle ?? this.fontStyle,
+      letterSpacing: options.letterSpacing ?? this.letterSpacing,
+      wordSpacing: options.wordSpacing ?? this.wordSpacing,
+      lineSpacing: options.lineSpacing ?? this.lineSpacing,
+      height: options.height ?? this.height,
+      background: options.background ?? this.background,
+      decoration: options.decoration ?? this.decoration,
+      decorationColor: options.decorationColor ?? this.decorationColor,
+      decorationStyle: options.decorationStyle ?? this.decorationStyle,
+      decorationThickness: options.decorationThickness ?? this.decorationThickness
+    });
+  }
+  merge(other) {
+    if (other == null) {
+      return this;
+    }
+    if (!other.inherit) {
+      return other;
+    }
+    return this.copyWith({
+      color: other.color,
+      font: other.font,
+      fontNormal: other.fontNormal,
+      fontBold: other.fontBold,
+      fontItalic: other.fontItalic,
+      fontBoldItalic: other.fontBoldItalic,
+      fontFallback: [ ...other.fontFallback, ...this.fontFallback ],
+      fontSize: other.fontSize,
+      fontWeight: other.fontWeight,
+      fontStyle: other.fontStyle,
+      letterSpacing: other.letterSpacing,
+      wordSpacing: other.wordSpacing,
+      lineSpacing: other.lineSpacing,
+      height: other.height,
+      background: other.background,
+      decoration: other.decoration,
+      decorationColor: other.decorationColor,
+      decorationStyle: other.decorationStyle,
+      decorationThickness: other.decorationThickness
+    });
+  }
+}
+
+class BarcodePainter extends Widget {
+  constructor(data, barcode, color, drawText, textStyle, textPadding) {
+    super();
+    this.data = data;
+    this.barcode = barcode;
+    this.color = normalizeColor(color);
+    this.drawText = drawText;
+    this.textStyle = textStyle;
+    this.textPadding = textPadding;
+  }
+  layout(context, constraints) {
+    const size = BoxConstraints.from(constraints).biggest;
+    if (!Number.isFinite(size.width) || !Number.isFinite(size.height)) {
+      throw new Error("BarcodeWidget needs bounded width and height");
+    }
+    const fontSize = this.textStyle.fontSize ?? 12;
+    const options = {
+      width: size.width,
+      height: size.height,
+      drawText: this.drawText,
+      fontHeight: fontSize,
+      textPadding: this.textPadding
+    };
+    const elements = this.data instanceof Uint8Array ? this.barcode.makeBytes(this.data, options) : this.barcode.make(this.data, options);
+    const font = this.drawText ? this.textStyle.font?.getFont(context) ?? null : null;
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        elements,
+        font
+      }
+    };
+  }
+  paint(context, box) {
+    for (const element of box.data.elements) {
+      if (element instanceof BarcodeBar && element.black) {
+        context.canvas.fillRect(box.x + element.left, box.y + element.top, element.width, element.height, this.color);
+      }
+    }
+    if (!this.drawText || box.data.font === null) return;
+    const fontSize = this.textStyle.fontSize ?? 12;
+    const textColor = this.textStyle.color ?? this.color;
+    for (const element of box.data.elements) {
+      if (!(element instanceof BarcodeText)) continue;
+      const metrics = box.data.font.stringMetrics(element.text, fontSize);
+      let x = box.x + element.left;
+      if (element.align === "center") x += (element.width - metrics.advanceWidth) / 2;
+      if (element.align === "right") x += element.width - metrics.advanceWidth;
+      const baseline = box.y + element.top + element.height + metrics.descent;
+      context.canvas.text(element.text, x, baseline, {
+        font: box.data.font,
+        fontSize,
+        color: textColor
+      });
+    }
+  }
+}
+
+class BarcodeWidget extends StatelessWidget {
+  constructor({data, barcode, color = "#000000", backgroundColor = null, decoration = null, margin = null, padding = null, width = null, height = null, drawText = true, textStyle = null, textPadding = 0}) {
+    super();
+    if (width !== null && (!Number.isFinite(width) || width < 0)) {
+      throw new RangeError("BarcodeWidget width must be non-negative");
+    }
+    if (height !== null && (!Number.isFinite(height) || height < 0)) {
+      throw new RangeError("BarcodeWidget height must be non-negative");
+    }
+    if (!Number.isFinite(textPadding) || textPadding < 0) {
+      throw new RangeError("BarcodeWidget textPadding must be non-negative");
+    }
+    this.dataString = typeof data === "string" ? data : null;
+    this.dataBytes = data instanceof Uint8Array ? data : null;
+    this.barcode = barcode;
+    this.color = color;
+    this.backgroundColor = backgroundColor;
+    this.decoration = decoration;
+    this.margin = margin;
+    this.padding = padding;
+    this.width = width;
+    this.height = height;
+    this.drawText = drawText;
+    this.textStyle = textStyle;
+    this.textPadding = textPadding;
+  }
+  get data() {
+    return this.dataBytes ?? utf8Encode(this.dataString ?? "");
+  }
+  build(context) {
+    const defaultStyle = context.theme.defaultTextStyle.copyWith({
+      font: Font.courier(),
+      fontNormal: Font.courier(),
+      fontBold: Font.courierBold(),
+      fontItalic: Font.courierOblique(),
+      fontBoldItalic: Font.courierBoldOblique(),
+      lineSpacing: 1,
+      fontSize: this.height === null ? null : this.height * .2
+    });
+    const style = defaultStyle.merge(this.textStyle);
+    let child = new BarcodePainter(this.dataBytes ?? this.dataString ?? "", this.barcode, this.color, this.drawText, style, this.textPadding);
+    if (this.padding !== null) child = new Padding({
+      padding: this.padding,
+      child
+    });
+    if (this.decoration !== null) {
+      child = new DecoratedBox({
+        decoration: this.decoration,
+        child
+      });
+    } else if (this.backgroundColor !== null) {
+      child = new DecoratedBox({
+        decoration: {
+          color: this.backgroundColor
+        },
+        child
+      });
+    }
+    if (this.width !== null || this.height !== null) {
+      child = new SizedBox({
+        width: this.width,
+        height: this.height,
+        child
+      });
+    }
+    if (this.margin !== null) child = new Padding({
+      padding: this.margin,
+      child
+    });
+    return child;
+  }
+}
+
 class ClipWidget extends Widget {
   constructor({child = null} = {}) {
     super();
@@ -4350,208 +7628,6 @@ class Column extends Flex {
     super({
       ...options,
       direction: "vertical"
-    });
-  }
-}
-
-const TYPE1_FACES = Object.freeze({
-  courier: PdfType1Font.courier,
-  courierBold: PdfType1Font.courierBold,
-  courierBoldOblique: PdfType1Font.courierBoldOblique,
-  courierOblique: PdfType1Font.courierOblique,
-  helvetica: PdfType1Font.helvetica,
-  helveticaBold: PdfType1Font.helveticaBold,
-  helveticaBoldOblique: PdfType1Font.helveticaBoldOblique,
-  helveticaOblique: PdfType1Font.helveticaOblique,
-  times: PdfType1Font.times,
-  timesBold: PdfType1Font.timesBold,
-  timesBoldItalic: PdfType1Font.timesBoldItalic,
-  timesItalic: PdfType1Font.timesItalic,
-  symbol: PdfType1Font.symbol,
-  zapfDingbats: PdfType1Font.zapfDingbats
-});
-
-class Font {
-  constructor(create) {
-    this.create = create;
-  }
-  static type1(face) {
-    const factory = TYPE1_FACES[face];
-    if (factory === undefined) {
-      throw new TypeError(`\`${face}\` is not one of the 14 standard Type1 fonts`);
-    }
-    return new Font(factory);
-  }
-  static courier() {
-    return Font.type1("courier");
-  }
-  static courierBold() {
-    return Font.type1("courierBold");
-  }
-  static courierBoldOblique() {
-    return Font.type1("courierBoldOblique");
-  }
-  static courierOblique() {
-    return Font.type1("courierOblique");
-  }
-  static helvetica() {
-    return Font.type1("helvetica");
-  }
-  static helveticaBold() {
-    return Font.type1("helveticaBold");
-  }
-  static helveticaBoldOblique() {
-    return Font.type1("helveticaBoldOblique");
-  }
-  static helveticaOblique() {
-    return Font.type1("helveticaOblique");
-  }
-  static times() {
-    return Font.type1("times");
-  }
-  static timesBold() {
-    return Font.type1("timesBold");
-  }
-  static timesBoldItalic() {
-    return Font.type1("timesBoldItalic");
-  }
-  static timesItalic() {
-    return Font.type1("timesItalic");
-  }
-  static symbol() {
-    return Font.type1("symbol");
-  }
-  static zapfDingbats() {
-    return Font.type1("zapfDingbats");
-  }
-  static ttf(data, options) {
-    if (!(data instanceof Uint8Array)) {
-      throw new TypeError("Font.ttf expects the font file as a Uint8Array");
-    }
-    return new Font(() => new PdfTtfFont(data, options));
-  }
-  static fromPdfFont(font) {
-    return new Font(() => font);
-  }
-  build() {
-    return this.create();
-  }
-  getFont(context) {
-    return context.document.resolveFont(this);
-  }
-}
-
-const DEFAULT_FONT_SIZE = 12;
-
-const DEFAULT_LINE_HEIGHT = 1.2;
-
-class TextStyle {
-  constructor({inherit = true, color = null, font = null, fontNormal = null, fontBold = null, fontItalic = null, fontBoldItalic = null, fontFallback = null, fontSize = null, fontWeight = null, fontStyle = null, letterSpacing = null, wordSpacing = null, lineSpacing = null, height = null, background = null, decoration = null, decorationColor = null, decorationStyle = null, decorationThickness = null} = {}) {
-    const isItalic = fontStyle === "italic";
-    const isBold = fontWeight === "bold";
-    this.inherit = inherit;
-    this.color = color == null ? null : normalizeColor(color);
-    this.fontNormal = fontNormal ?? (!isItalic && !isBold ? font : null);
-    this.fontBold = fontBold ?? (!isItalic && isBold ? font : null);
-    this.fontItalic = fontItalic ?? (isItalic && !isBold ? font : null);
-    this.fontBoldItalic = fontBoldItalic ?? (isItalic && isBold ? font : null);
-    this.fontFallback = fontFallback ?? [];
-    this.fontSize = fontSize;
-    this.fontWeight = fontWeight;
-    this.fontStyle = fontStyle;
-    this.letterSpacing = letterSpacing;
-    this.wordSpacing = wordSpacing;
-    this.lineSpacing = lineSpacing;
-    this.height = height;
-    this.background = normalizeBoxDecoration(background);
-    this.decoration = decoration;
-    this.decorationColor = decorationColor == null ? null : normalizeColor(decorationColor);
-    this.decorationStyle = decorationStyle;
-    this.decorationThickness = decorationThickness;
-  }
-  static defaultStyle() {
-    return new TextStyle({
-      inherit: false,
-      color: "#000000",
-      fontNormal: Font.helvetica(),
-      fontBold: Font.helveticaBold(),
-      fontItalic: Font.helveticaOblique(),
-      fontBoldItalic: Font.helveticaBoldOblique(),
-      fontSize: DEFAULT_FONT_SIZE,
-      fontWeight: "normal",
-      fontStyle: "normal",
-      letterSpacing: 0,
-      wordSpacing: 0,
-      lineSpacing: 0,
-      height: DEFAULT_LINE_HEIGHT,
-      decoration: "none",
-      decorationStyle: "solid",
-      decorationThickness: 1
-    });
-  }
-  get font() {
-    if (this.fontWeight !== "bold") {
-      if (this.fontStyle !== "italic") {
-        return this.fontNormal ?? this.fontBold ?? this.fontItalic ?? this.fontBoldItalic;
-      }
-      return this.fontItalic ?? this.fontNormal ?? this.fontBold ?? this.fontBoldItalic;
-    }
-    if (this.fontStyle !== "italic") {
-      return this.fontBold ?? this.fontNormal ?? this.fontItalic ?? this.fontBoldItalic;
-    }
-    return this.fontBoldItalic ?? this.fontBold ?? this.fontItalic ?? this.fontNormal;
-  }
-  copyWith(options = {}) {
-    return new TextStyle({
-      inherit: this.inherit,
-      color: options.color ?? this.color,
-      font: options.font ?? this.font,
-      fontNormal: options.fontNormal ?? this.fontNormal,
-      fontBold: options.fontBold ?? this.fontBold,
-      fontItalic: options.fontItalic ?? this.fontItalic,
-      fontBoldItalic: options.fontBoldItalic ?? this.fontBoldItalic,
-      fontFallback: options.fontFallback ?? this.fontFallback,
-      fontSize: options.fontSize ?? this.fontSize,
-      fontWeight: options.fontWeight ?? this.fontWeight,
-      fontStyle: options.fontStyle ?? this.fontStyle,
-      letterSpacing: options.letterSpacing ?? this.letterSpacing,
-      wordSpacing: options.wordSpacing ?? this.wordSpacing,
-      lineSpacing: options.lineSpacing ?? this.lineSpacing,
-      height: options.height ?? this.height,
-      background: options.background ?? this.background,
-      decoration: options.decoration ?? this.decoration,
-      decorationColor: options.decorationColor ?? this.decorationColor,
-      decorationStyle: options.decorationStyle ?? this.decorationStyle,
-      decorationThickness: options.decorationThickness ?? this.decorationThickness
-    });
-  }
-  merge(other) {
-    if (other == null) {
-      return this;
-    }
-    if (!other.inherit) {
-      return other;
-    }
-    return this.copyWith({
-      color: other.color,
-      font: other.font,
-      fontNormal: other.fontNormal,
-      fontBold: other.fontBold,
-      fontItalic: other.fontItalic,
-      fontBoldItalic: other.fontBoldItalic,
-      fontFallback: [ ...other.fontFallback, ...this.fontFallback ],
-      fontSize: other.fontSize,
-      fontWeight: other.fontWeight,
-      fontStyle: other.fontStyle,
-      letterSpacing: other.letterSpacing,
-      wordSpacing: other.wordSpacing,
-      lineSpacing: other.lineSpacing,
-      height: other.height,
-      background: other.background,
-      decoration: other.decoration,
-      decorationColor: other.decorationColor,
-      decorationStyle: other.decorationStyle,
-      decorationThickness: other.decorationThickness
     });
   }
 }
@@ -7723,8 +10799,7 @@ class MultiPage {
       if (this.header) {
         const headerWidget = this.header(context);
         const headerBox = headerWidget.layout(context, new BoxConstraints({
-          maxWidth,
-          maxHeight: bottom - top
+          maxWidth
         }));
         headerWidget.paint(context, {
           ...headerBox,
@@ -7736,8 +10811,7 @@ class MultiPage {
       if (this.footer) {
         const footerWidget = this.footer(context);
         const footerBox = footerWidget.layout(context, new BoxConstraints({
-          maxWidth,
-          maxHeight: bottom - top
+          maxWidth
         }));
         bottom -= footerBox.height + this.gap;
         footerWidget.paint(context, {
@@ -11879,6 +14953,12 @@ class TableHelper {
 }
 
 const publicApi = Object.freeze({
+  Barcode: BarcodeFactory,
+  BarcodeWidget,
+  BarcodeCodabarStartStop,
+  BarcodeCode128Fnc,
+  BarcodeQRCorrectionLevel,
+  Pdf417SecurityLevel,
   Document,
   Page,
   MultiPage,
@@ -12011,4 +15091,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AspectRatio, BarDataSet, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridAxis, GridView, Header, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridAxis, GridView, Header, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

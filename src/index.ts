@@ -22,6 +22,11 @@
  */
 
 import { PageFormat } from './pdf/page_format.ts';
+import { BarcodeFactory } from './barcode/barcode_factory.ts';
+import { BarcodeCodabarStartStop } from './barcode/codabar.ts';
+import { BarcodeCode128Fnc } from './barcode/code128.ts';
+import { Pdf417SecurityLevel } from './barcode/pdf417.ts';
+import { BarcodeQRCorrectionLevel } from './barcode/qrcode.ts';
 import { PdfType1Font } from './pdf/font/type1_fonts.ts';
 import { PdfTtfFont } from './pdf/obj/ttf_font.ts';
 import { PdfImage } from './pdf/obj/image.ts';
@@ -48,6 +53,7 @@ import {
 } from './widgets/basic.ts';
 import { BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, Radius } from './widgets/border_radius.ts';
 import { Border, BorderSide, BorderStyle, BoxBorder } from './widgets/box_border.ts';
+import { BarcodeWidget } from './widgets/barcode.ts';
 import { Container, DecoratedBox } from './widgets/container.ts';
 import { ClipOval, ClipRect, ClipRRect } from './widgets/clip.ts';
 import { Bullet, Header, Paragraph, TableOfContent } from './widgets/content.ts';
@@ -99,6 +105,11 @@ export {
   Align,
   Alignment,
   AspectRatio,
+  BarcodeFactory as Barcode,
+  BarcodeCodabarStartStop,
+  BarcodeCode128Fnc,
+  BarcodeQRCorrectionLevel,
+  BarcodeWidget,
   Border,
   BorderRadius,
   BorderRadiusDirectional,
@@ -169,6 +180,7 @@ export {
   Partition,
   Partitions,
   PdfLogo,
+  Pdf417SecurityLevel,
   PdfImage,
   PdfTtfFont,
   PdfType1Font,
@@ -217,6 +229,15 @@ export { decodePng, inflateZlib, parseJpeg };
 export type { DecodedPng } from './pdf/image/png.ts';
 export type { JpegColorSpace, JpegInfo } from './pdf/image/jpeg.ts';
 export type { PdfImageOptions, PdfImageOrientation } from './pdf/obj/image.ts';
+export type { Barcode as BarcodeGenerator, BarcodeType } from './barcode/barcode.ts';
+export type {
+  CodabarFactoryOptions,
+  Code128FactoryOptions,
+  Gs128FactoryOptions,
+  ItfFactoryOptions,
+  ItfFixedFactoryOptions
+} from './barcode/barcode_factory.ts';
+export type { BarcodeWidgetOptions } from './widgets/barcode.ts';
 
 export type { ColorInput, Rgb } from './pdf/color.ts';
 export { PdfGraphicState } from './pdf/graphic_state.ts';
@@ -519,6 +540,12 @@ export type { PdfOutlineStyle } from './pdf/obj/outline.ts';
 
 /** The widget constructors handed to a `createPdf` build callback. */
 export interface PublicApi {
+  readonly Barcode: typeof BarcodeFactory;
+  readonly BarcodeWidget: typeof BarcodeWidget;
+  readonly BarcodeCodabarStartStop: typeof BarcodeCodabarStartStop;
+  readonly BarcodeCode128Fnc: typeof BarcodeCode128Fnc;
+  readonly BarcodeQRCorrectionLevel: typeof BarcodeQRCorrectionLevel;
+  readonly Pdf417SecurityLevel: typeof Pdf417SecurityLevel;
   readonly Document: typeof Document;
   readonly Page: typeof Page;
   readonly MultiPage: typeof MultiPage;
@@ -634,6 +661,12 @@ export interface PublicApi {
 }
 
 const publicApi: PublicApi = Object.freeze({
+  Barcode: BarcodeFactory,
+  BarcodeWidget,
+  BarcodeCodabarStartStop,
+  BarcodeCode128Fnc,
+  BarcodeQRCorrectionLevel,
+  Pdf417SecurityLevel,
   Document,
   Page,
   MultiPage,

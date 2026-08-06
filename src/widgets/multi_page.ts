@@ -153,8 +153,7 @@ export class MultiPage implements Section {
       if (this.header) {
         const headerWidget = this.header(context);
         const headerBox = headerWidget.layout(context, new BoxConstraints({
-          maxWidth,
-          maxHeight: bottom - top
+          maxWidth
         }));
         headerWidget.paint(context, { ...headerBox, x: this.margin.left, y: top });
         top += headerBox.height + this.gap;
@@ -163,8 +162,7 @@ export class MultiPage implements Section {
       if (this.footer) {
         const footerWidget = this.footer(context);
         const footerBox = footerWidget.layout(context, new BoxConstraints({
-          maxWidth,
-          maxHeight: bottom - top
+          maxWidth
         }));
         bottom -= footerBox.height + this.gap;
         footerWidget.paint(context, { ...footerBox, x: this.margin.left, y: bottom + this.gap });

@@ -87,7 +87,7 @@ for (const path of files) {
     }
   }
 
-  if (!/- pdf\/lib\/[^\s]+\.dart/.test(header)) {
+  if (!/- (?:pdf|barcode)\/lib\/[^\s]+\.dart/.test(header)) {
     problems.push(`${name}: header lists no upstream Dart source path`);
   }
 

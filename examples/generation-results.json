@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-06T01:23:12.306Z",
+  "generatedAt": "2026-08-06T02:12:44.711Z",
   "results": [
     {
       "name": "hello-world",
@@ -23,8 +23,8 @@
     },
     {
       "name": "invoice",
-      "status": "failed",
-      "error": "invoice requires unported js_pdf APIs: Barcode, BarcodeWidget"
+      "status": "generated",
+      "bytes": 70824
     },
     {
       "name": "report",
@@ -34,7 +34,7 @@
     {
       "name": "resume",
       "status": "failed",
-      "error": "resume requires unported js_pdf APIs: Barcode, BarcodeWidget, CircularProgressIndicator, Icon, IconData, UrlLink"
+      "error": "resume requires unported js_pdf APIs: CircularProgressIndicator, Icon, IconData, UrlLink"
     },
     {
       "name": "server",

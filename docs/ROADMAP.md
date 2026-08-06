@@ -110,6 +110,14 @@ layout data and clipped painting. Six focused tests plus `examples/image-phase-4
 cover the surface; the proof generates 3,677 bytes in both Node and bare V8,
 and resume loses `Image` + `MemoryImage` (27 → 25 missing APIs).
 
+**Phase 5.2 — barcodes — landed 2026-08-06.** `Barcode`, `BarcodeWidget` and
+the Apache-licensed `barcode` generators are public, including PDF417 for the
+invoice. QR preserves the adapter API but is an independent js_pdf encoder;
+no code from the separately licensed Dart `qr` library is ported. Seven focused
+tests cover the public surface, a reference QR matrix, capacity, PDF417,
+row-major matrices and pure widget layout. `invoice.pdf` now generates 70,824
+bytes, the gate reaches 5/8 examples and the missing total falls 25 → 7.
+
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
 option on `Page` and `MultiPage` as well as on `PageTheme`, and every physical
@@ -179,13 +187,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 5.2 — barcodes (`invoice`).** Port `widgets/barcode.dart` and enough
-> of upstream's `barcode` package for `Barcode` and `BarcodeWidget` to unlock
-> the invoice example and advance resume.
+> **Phase 5.3 — annotations and links (`document`, `server`).** Port URL and
+> internal-destination annotations plus `UrlLink` and `AnnotationUrl` to unlock
+> both examples and advance resume.
 
-Phase 5.1 is complete: `widgets/chart/*.dart` is ported file for file into
-`src/widgets/chart/`, and `report` generates end to end. The gate now waits on
-barcodes, links, icons and progress.
+Phase 5.2 is complete: PDF417 unlocks invoice, and the QR implementation used by
+resume is ready. The gate now waits on links, icons and progress.
 
 ---
 
@@ -1121,14 +1128,18 @@ The last four examples all land here, one per sub-phase.
 - **Example gate:** ⇒ **`report` generates end to end here** (nine APIs, its
   last dependency). Also advances `server`.
 
-### 5.2 Barcodes ⇒ `invoice`
+### 5.2 Barcodes ⇒ `invoice` ✅ *(landed 2026-08-06)*
 
 - **Ports:** `widgets/barcode.dart`
-- `Barcode`, `BarcodeWidget`. Upstream delegates to the separate `barcode`
-  Dart package; that generator has to be ported too, or narrowed to the symbol
-  types the examples use.
-- **Example gate:** ⇒ **`invoice` generates end to end here.** Also advances
-  `resume`.
+- `Barcode`, `BarcodeWidget`, the Apache-licensed generators exposed by the
+  upstream adapter, and PDF417 for the invoice. QR is implemented independently
+  inside js_pdf rather than ported from the separate Dart `qr` library.
+- Pure layout carries the generated drawing operations to paint; barcode
+  widgets do not cache a measured symbol. Header/footer measurement was aligned
+  with upstream's width-only `MultiPage` constraints when invoice exposed the
+  earlier bounded-height divergence.
+- **Example gate:** ⇒ **`invoice` generates end to end here** (70,824 bytes).
+  Also advances `resume`.
 
 ### 5.3 Annotations and links ⇒ `document`, `server`
 

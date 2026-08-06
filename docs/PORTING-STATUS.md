@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-06
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 98 `.ts` files, ~21,500 lines (TypeScript)
+**Ported:** 129 `.ts` files, ~28,100 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -26,12 +26,12 @@ table. Run `npm run examples`; current state, from
 | `calendar` | ✅ generated (22,027 bytes) | 0 | 3.6 |
 | `certificate` | ✅ generated (126,677 bytes) | 0 | 3.9 |
 | `report` | ✅ generated (30,332 bytes) | 0 | 5.1 |
-| `invoice` | failed | 2 | 5.2 |
+| `invoice` | ✅ generated (70,824 bytes) | 0 | 5.2 |
 | `document` | failed | 1 | 5.3 |
-| `server` | failed | 7 | 5.3 |
-| `resume` | failed | 6 | 5.5 |
+| `server` | failed | 2 | 5.3 |
+| `resume` | failed | 4 | 5.5 |
 
-**4 of 8**, with the missing-API total down from 124 to 25 — phase 1.4 cleared
+**5 of 8**, with the missing-API total down from 124 to 7 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
 from every one of the seven, phase 2.7 cleared `SvgImage` from six, and phase
 3.1 cleared `TableHelper` from four. Phase 3.3 then cleared the composition
@@ -43,7 +43,8 @@ the calendar generate, phase 3.7 cleared rich text from four, and phase 3.8
 cleared all four content widgets from document. Phase 3.9 then supplied the
 placeholders used by four examples and made certificate generate; phase 3.10
 then removed `ClipOval` from resume; phase 4.3 then removed `Image` and
-`MemoryImage` from resume. See
+`MemoryImage` from resume. Phase 5.2 supplied `Barcode` and `BarcodeWidget`,
+making invoice generate and advancing resume. See
 [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which phase clears
 each one.
 
@@ -179,7 +180,7 @@ both, and will grow the shape factories in 2.5.
 | `widgets/clip.dart` | 134 | `src/widgets/clip.ts` | done — rectangular, scaled rounded-rectangle and elliptical clip scopes over immutable child layout |
 | `widgets/chart/*.dart` | 1989 | `src/widgets/chart/*.ts` | done — `Chart`, `CartesianGrid`, `PieGrid`, `RadialGrid`, `FixedAxis`, `ChartLegend`, `PointDataSet`, `BarDataSet`, `LineDataSet`, `PieDataSet`; grids resolve a frame at layout and hand it to the data sets, in place of upstream's mutable boxes |
 | `widgets/annotations.dart`, `forms.dart` | 1244 | — | — `UrlLink`, `AnnotationUrl` — **phase 5.3**; forms 5.6 |
-| `widgets/barcode.dart` | 298 | — | — `Barcode`, `BarcodeWidget` — **phase 5.2** |
+| `widgets/barcode.dart` | 298 | `src/widgets/barcode.ts` | done — `Barcode`, `BarcodeWidget`; symbol operations are immutable layout data |
 | `widgets/content.dart` | 360 | `src/widgets/content.ts` | partial — `Header`, `Paragraph`, `Bullet`, `TableOfContent`, named destinations and conditional two-pass TOC; no `Watermark` or `Footer` |
 | `widgets/placeholders.dart` | 187 | `src/widgets/placeholders.ts` | done — `Placeholder`, vector `PdfLogo`, SVG `FlutterLogo`, deterministic `LoremText` and stable `Lorem` widget |
 | `widgets/icon.dart` | 146 | — | — `Icon`, `IconData` — **phase 5.4** |
@@ -206,9 +207,10 @@ Type0/CIDFontType2 composite with `/Identity-H`, and selected through `Font`,
 — it is drawn from the embedded font and stays searchable through the
 `/ToUnicode` CMap. The public SVG pipeline now reaches PDF shading patterns.
 
-**Phase 5.1 is complete**, and `report` generates: the chart widgets are a
-file-per-upstream-file port under `src/widgets/chart/`. What now limits the four
-remaining examples is the rest of phase 5 (barcodes, links, icons and
-progress).
+**Phase 5.2 is complete**, and `invoice` generates. The Apache-licensed
+`barcode` generators live under `src/barcode/`; QR keeps the upstream adapter
+surface but uses an independent js_pdf byte-mode encoder rather than porting
+the separately licensed Dart `qr` library. What now limits the three remaining
+examples is links, icons and progress.
 See
 [ROADMAP.md](ROADMAP.md).

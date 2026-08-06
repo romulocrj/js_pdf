@@ -35,3 +35,16 @@ Portions of this software are derived from dart_pdf:
 Every file under src/ that derives from dart_pdf carries a header naming the
 upstream Dart source files it was ported from. Those files have been
 substantially modified from the original Dart source.
+
+--------------------------------------------------------------------------
+
+Portions of the barcode subsystem are derived from dart_barcode:
+
+    Copyright (C) 2020, David PHAM-VAN <dev.nfet.net@gmail.com>
+
+    https://github.com/DavBfr/dart_barcode
+
+    Licensed under the Apache License, Version 2.0.
+
+The QR encoder is an independent js_pdf implementation. It does not contain
+source code from dart_barcode's separately licensed qr dependency.

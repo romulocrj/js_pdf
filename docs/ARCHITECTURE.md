@@ -67,8 +67,8 @@ forces you to re-derive from the Dart on every read.
 
 ## 2. Layer map
 
-Three layers, bottom to top. A layer may only import from itself and the layers
-below it.
+The main PDF stack has three layers, bottom to top. Barcode generation is a
+side subsystem consumed by widgets; it depends only on `base/`.
 
 ```
   ┌────────────────────────────────────────────────────────────┐
@@ -79,6 +79,9 @@ below it.
   │    flex · stack · wrap · grid · container · decoration     │
   │    page · page_theme · multi_page · document               │
   ├────────────────────────────────────────────────────────────┤
+  │  src/barcode/           host-free symbol generators        │
+  │    1D · PDF417 · independent QR encoder                    │
+  ├────────────────────────────────────────────────────────────┤
   │  src/pdf/                PDF model: operators and objects  │
   │    graphics · document · color · page_format               │
   │    format/… · font/… · obj/…                               │
@@ -87,8 +90,10 @@ below it.
   └────────────────────────────────────────────────────────────┘
 ```
 
-The directory names mirror `dart_pdf`'s own `pdf/lib/src/` tree so an upstream
-path maps to a port path by inspection. Every file header names the Dart sources
+Except for `src/barcode/`, directory names mirror `dart_pdf`'s own
+`pdf/lib/src/` tree so an upstream path maps to a port path by inspection.
+`src/barcode/` mirrors the Apache-licensed `dart_barcode` package that
+`widgets/barcode.dart` delegates to. Every file header names the Dart sources
 it derives from; when one `.ts` merges several `.dart` files, all of them are
 listed.
 
@@ -96,6 +101,14 @@ listed.
 
 Runtime guards that Dart expresses in its type system (`assert`, sound null
 safety) and that JavaScript has to check by hand.
+
+### `src/barcode/` — symbol generation
+
+The one- and two-dimensional generators produce rendering-neutral rectangles
+and text zones. `BarcodeWidget` measures those operations once and carries them
+to paint in immutable layout data. The QR adapter matches `dart_barcode`, but
+its byte-mode versions 1–40 encoder is original js_pdf code; the separately
+licensed Dart `qr` implementation is neither ported nor distributed.
 
 ### `src/pdf/` — the PDF model
 

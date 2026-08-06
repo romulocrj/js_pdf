@@ -1,0 +1,13 @@
+export declare const startWord = 130728;
+export declare const stopWord = 260649;
+export declare const paddingCodeword = 900;
+export declare const codewords: readonly (readonly number[])[];
+export declare const correctionFactors: readonly (readonly number[])[];
+export declare const latchToText = 900;
+export declare const latchToBytePadded = 901;
+export declare const latchToNumeric = 902;
+export declare const latchToByte = 924;
+export declare const shiftToByte = 913;
+export declare const minNumericCount = 13;
+export declare const mixedMap: Map<number, number>;
+export declare const punctMap: Map<number, number>;
