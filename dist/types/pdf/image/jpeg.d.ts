@@ -7,5 +7,5 @@ export interface JpegInfo {
     readonly colorSpace: JpegColorSpace;
     readonly inverted: boolean;
 }
-/** Read baseline JPEG dimensions and colour metadata without decoding pixels. */
+/** Read JPEG dimensions and colour metadata without decoding pixels. */
 export declare function parseJpeg(bytes: Uint8Array): JpegInfo;

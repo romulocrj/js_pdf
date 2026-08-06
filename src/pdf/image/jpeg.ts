@@ -14,8 +14,8 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/exif.dart
  *
- * Only metadata needed to embed a baseline JPEG is parsed. The compressed
- * image payload is never decoded or rewritten.
+ * Only metadata needed to embed a JPEG is parsed. The compressed image
+ * payload is never decoded or rewritten.
  */
 
 export type JpegColorSpace = 'gray' | 'rgb' | 'cmyk';
@@ -34,6 +34,8 @@ const SOF_MARKERS = Object.freeze([
   0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf
 ]);
 
+const DCT_SOF_MARKERS = Object.freeze([0xc0, 0xc1, 0xc2]);
+
 function u16(bytes: Uint8Array, offset: number): number {
   const high = bytes[offset];
   const low = bytes[offset + 1];
@@ -41,7 +43,7 @@ function u16(bytes: Uint8Array, offset: number): number {
   return (high << 8) | low;
 }
 
-/** Read baseline JPEG dimensions and colour metadata without decoding pixels. */
+/** Read JPEG dimensions and colour metadata without decoding pixels. */
 export function parseJpeg(bytes: Uint8Array): JpegInfo {
   if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
     throw new TypeError('Invalid JPEG start marker');
@@ -53,7 +55,7 @@ export function parseJpeg(bytes: Uint8Array): JpegInfo {
   let bitsPerComponent = 0;
   let components = 0;
   let adobeTransform: number | null = null;
-  let foundBaseline = false;
+  let foundFrame = false;
 
   while (offset < bytes.length) {
     if (bytes[offset] !== 0xff) throw new RangeError(`Invalid JPEG marker at offset ${offset}`);
@@ -70,15 +72,17 @@ export function parseJpeg(bytes: Uint8Array): JpegInfo {
     if (dataEnd > bytes.length) throw new RangeError('Truncated JPEG segment');
 
     if (SOF_MARKERS.includes(marker)) {
-      if (marker !== 0xc0) throw new RangeError('Only baseline JPEG images are supported');
-      if (length < 8) throw new RangeError('Truncated JPEG baseline frame');
+      if (!DCT_SOF_MARKERS.includes(marker)) {
+        throw new RangeError(`Unsupported JPEG frame marker 0x${marker.toString(16)}`);
+      }
+      if (length < 8) throw new RangeError('Truncated JPEG frame');
       bitsPerComponent = bytes[dataStart]!;
       height = u16(bytes, dataStart + 1);
       width = u16(bytes, dataStart + 3);
       components = bytes[dataStart + 5]!;
       const expectedLength = 8 + components * 3;
       if (length < expectedLength) throw new RangeError('Truncated JPEG component table');
-      foundBaseline = true;
+      foundFrame = true;
     } else if (
       marker === 0xee &&
       length >= 14 &&
@@ -93,7 +97,7 @@ export function parseJpeg(bytes: Uint8Array): JpegInfo {
     offset = dataEnd;
   }
 
-  if (!foundBaseline) throw new RangeError('Unable to find a baseline JPEG frame');
+  if (!foundFrame) throw new RangeError('Unable to find a JPEG frame');
   if (width <= 0 || height <= 0) throw new RangeError('JPEG dimensions must be positive');
   if (bitsPerComponent !== 8) throw new RangeError(`Unsupported JPEG precision ${bitsPerComponent}`);
   const colorSpace = components === 1 ? 'gray' : components === 3 ? 'rgb' : components === 4 ? 'cmyk' : null;
