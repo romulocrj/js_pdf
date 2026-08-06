@@ -15,8 +15,7 @@
  *   - pdf/lib/src/widgets/image.dart
  *
  * Crop geometry is part of the layout result rather than cached on the widget.
- * Painting converts the widget layer's top-left coordinates only at the final
- * `PdfCanvas.drawImage` call.
+ * Painting delegates widget-to-PDF coordinate conversion to `PdfCanvas`.
  */
 
 import type { PdfImage } from '../pdf/obj/image.ts';
@@ -65,6 +64,7 @@ export class Image extends Widget<ImageLayoutData> {
     applyBoxFit(fit, { width: 1, height: 1 }, { width: 1, height: 1 });
     if (width !== null && (!Number.isFinite(width) || width < 0)) throw new RangeError('Image width must be non-negative');
     if (height !== null && (!Number.isFinite(height) || height < 0)) throw new RangeError('Image height must be non-negative');
+    if (dpi !== null && (!Number.isFinite(dpi) || dpi <= 0)) throw new RangeError('Image DPI must be positive');
     this.image = image;
     this.fit = fit;
     this.alignment = resolveBasicAlignment(alignment);
@@ -75,34 +75,42 @@ export class Image extends Widget<ImageLayoutData> {
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<ImageLayoutData> {
     const parent = BoxConstraints.from(constraints);
-    const image = this.image.resolve();
     const offered = {
       width: parent.constrainWidth(this.width ?? (parent.hasBoundedWidth ? parent.maxWidth : this.image.width)),
       height: parent.constrainHeight(this.height ?? (parent.hasBoundedHeight ? parent.maxHeight : this.image.height))
     };
-    const fitted = applyBoxFit(
+    const layoutFit = applyBoxFit(
       this.fit,
       { width: this.image.width, height: this.image.height },
       offered
+    );
+    const image = this.image.resolve(
+      { x: layoutFit.destination.width, y: layoutFit.destination.height },
+      this.dpi
+    );
+    const fitted = applyBoxFit(
+      this.fit,
+      { width: image.width, height: image.height },
+      layoutFit.destination
     );
     const sourceOffset = inscribe(
       this.alignment,
       fitted.source.width,
       fitted.source.height,
-      this.image.width,
-      this.image.height
+      image.width,
+      image.height
     );
     const destinationOffset = inscribe(
       this.alignment,
       fitted.destination.width,
       fitted.destination.height,
-      offered.width,
-      offered.height
+      layoutFit.destination.width,
+      layoutFit.destination.height
     );
     return {
       widget: this,
-      width: fitted.destination.width,
-      height: fitted.destination.height,
+      width: layoutFit.destination.width,
+      height: layoutFit.destination.height,
       data: {
         image,
         source: fitted.source,
@@ -122,15 +130,15 @@ export class Image extends Widget<ImageLayoutData> {
     const scaleY = data.destination.height / data.source.height;
     const destinationX = box.x + data.destinationX;
     const destinationY = box.y + data.destinationY;
-    const fullWidth = this.image.width * scaleX;
-    const fullHeight = this.image.height * scaleY;
+    const fullWidth = data.image.width * scaleX;
+    const fullHeight = data.image.height * scaleY;
     const fullX = destinationX - data.sourceX * scaleX;
     const fullTop = destinationY - data.sourceY * scaleY;
 
     context.canvas.saveContext();
     context.canvas.drawRect(
       destinationX,
-      context.canvas.pageHeight - destinationY - data.destination.height,
+      context.canvas.toPdfY(destinationY + data.destination.height),
       data.destination.width,
       data.destination.height
     );
@@ -138,7 +146,7 @@ export class Image extends Widget<ImageLayoutData> {
     context.canvas.drawImage(
       data.image,
       fullX,
-      context.canvas.pageHeight - fullTop - fullHeight,
+      context.canvas.toPdfY(fullTop + fullHeight),
       fullWidth,
       fullHeight
     );

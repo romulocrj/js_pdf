@@ -11575,6 +11575,7 @@ class Image extends Widget {
     });
     if (width !== null && (!Number.isFinite(width) || width < 0)) throw new RangeError("Image width must be non-negative");
     if (height !== null && (!Number.isFinite(height) || height < 0)) throw new RangeError("Image height must be non-negative");
+    if (dpi !== null && (!Number.isFinite(dpi) || dpi <= 0)) throw new RangeError("Image DPI must be positive");
     this.image = image;
     this.fit = fit;
     this.alignment = resolveBasicAlignment(alignment);
@@ -11584,21 +11585,28 @@ class Image extends Widget {
   }
   layout(_context, constraints) {
     const parent = BoxConstraints.from(constraints);
-    const image = this.image.resolve();
     const offered = {
       width: parent.constrainWidth(this.width ?? (parent.hasBoundedWidth ? parent.maxWidth : this.image.width)),
       height: parent.constrainHeight(this.height ?? (parent.hasBoundedHeight ? parent.maxHeight : this.image.height))
     };
-    const fitted = applyBoxFit$1(this.fit, {
+    const layoutFit = applyBoxFit$1(this.fit, {
       width: this.image.width,
       height: this.image.height
     }, offered);
-    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, this.image.width, this.image.height);
-    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, offered.width, offered.height);
+    const image = this.image.resolve({
+      x: layoutFit.destination.width,
+      y: layoutFit.destination.height
+    }, this.dpi);
+    const fitted = applyBoxFit$1(this.fit, {
+      width: image.width,
+      height: image.height
+    }, layoutFit.destination);
+    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, image.width, image.height);
+    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, layoutFit.destination.width, layoutFit.destination.height);
     return {
       widget: this,
-      width: fitted.destination.width,
-      height: fitted.destination.height,
+      width: layoutFit.destination.width,
+      height: layoutFit.destination.height,
       data: {
         image,
         source: fitted.source,
@@ -11617,25 +11625,58 @@ class Image extends Widget {
     const scaleY = data.destination.height / data.source.height;
     const destinationX = box.x + data.destinationX;
     const destinationY = box.y + data.destinationY;
-    const fullWidth = this.image.width * scaleX;
-    const fullHeight = this.image.height * scaleY;
+    const fullWidth = data.image.width * scaleX;
+    const fullHeight = data.image.height * scaleY;
     const fullX = destinationX - data.sourceX * scaleX;
     const fullTop = destinationY - data.sourceY * scaleY;
     context.canvas.saveContext();
-    context.canvas.drawRect(destinationX, context.canvas.pageHeight - destinationY - data.destination.height, data.destination.width, data.destination.height);
+    context.canvas.drawRect(destinationX, context.canvas.toPdfY(destinationY + data.destination.height), data.destination.width, data.destination.height);
     context.canvas.clipPath();
-    context.canvas.drawImage(data.image, fullX, context.canvas.pageHeight - fullTop - fullHeight, fullWidth, fullHeight);
+    context.canvas.drawImage(data.image, fullX, context.canvas.toPdfY(fullTop + fullHeight), fullWidth, fullHeight);
     context.canvas.restoreContext();
   }
 }
 
+function validateDpi(dpi) {
+  if (dpi !== null && (!Number.isFinite(dpi) || dpi <= 0)) {
+    throw new RangeError("Image DPI must be positive");
+  }
+  return dpi;
+}
+
+function resizeDecodedImage(image, width) {
+  const pixels = image.pixels;
+  if (pixels === null || width === image.sourceWidth) return image;
+  const height = Math.max(1, Math.round(image.sourceHeight * width / image.sourceWidth));
+  const resized = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const sourceY = Math.min(image.sourceHeight - 1, Math.floor(y * image.sourceHeight / height));
+    for (let x = 0; x < width; x++) {
+      const sourceX = Math.min(image.sourceWidth - 1, Math.floor(x * image.sourceWidth / width));
+      const source = (sourceY * image.sourceWidth + sourceX) * 4;
+      const destination = (y * width + x) * 4;
+      resized[destination] = pixels[source];
+      resized[destination + 1] = pixels[source + 1];
+      resized[destination + 2] = pixels[source + 2];
+      resized[destination + 3] = pixels[source + 3];
+    }
+  }
+  return new PdfImage({
+    pixels: resized,
+    width,
+    height,
+    orientation: image.orientation,
+    hasAlpha: image.hasAlpha
+  });
+}
+
 class ImageProvider {
   constructor(width, height, orientation, dpi) {
-    this.cached = null;
+    this.cache = new Map;
     this.sourceWidth = width;
     this.sourceHeight = height;
     this.orientation = orientation;
-    this.dpi = dpi;
+    this.dpi = validateDpi(dpi);
   }
   get width() {
     return this.orientation === "leftTop" || this.orientation === "rightTop" || this.orientation === "rightBottom" || this.orientation === "leftBottom" ? this.sourceHeight : this.sourceWidth;
@@ -11643,9 +11684,26 @@ class ImageProvider {
   get height() {
     return this.orientation === "leftTop" || this.orientation === "rightTop" || this.orientation === "rightBottom" || this.orientation === "leftBottom" ? this.sourceWidth : this.sourceHeight;
   }
-  resolve(_size, _dpi) {
-    this.cached ?? (this.cached = this.buildImage());
-    return this.cached;
+  resolve(size, dpi = null) {
+    const effectiveDpi = validateDpi(dpi ?? this.dpi);
+    if (effectiveDpi === null || size === undefined) {
+      let image = this.cache.get(0);
+      if (image === undefined) {
+        image = this.buildImage();
+        this.cache.set(0, image);
+      }
+      return image;
+    }
+    if (!Number.isFinite(size.x) || size.x < 0 || !Number.isFinite(size.y) || size.y < 0) {
+      throw new RangeError("Image resolve size must be finite and non-negative");
+    }
+    const width = Math.max(1, Math.trunc(size.x / PageUnit.inch * effectiveDpi));
+    let image = this.cache.get(width);
+    if (image === undefined) {
+      image = this.buildImage(width);
+      this.cache.set(width, image);
+    }
+    return image;
   }
 }
 
@@ -11654,7 +11712,7 @@ class ImageProxy extends ImageProvider {
     super(image.sourceWidth, image.sourceHeight, image.orientation, dpi);
     this.image = image;
   }
-  buildImage() {
+  buildImage(_width) {
     return this.image;
   }
 }
@@ -11673,8 +11731,8 @@ class MemoryImage extends ImageProvider {
     this.bytes = bytes.slice();
     this.image = image;
   }
-  buildImage() {
-    return this.image;
+  buildImage(width) {
+    return width === undefined ? this.image : resizeDecodedImage(this.image, width);
   }
 }
 
@@ -11690,8 +11748,8 @@ class RawImage extends ImageProvider {
     super(width, height, orientation, dpi);
     this.image = image;
   }
-  buildImage() {
-    return this.image;
+  buildImage(width) {
+    return width === undefined ? this.image : resizeDecodedImage(this.image, width);
   }
 }
 

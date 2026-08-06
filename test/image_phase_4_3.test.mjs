@@ -78,6 +78,65 @@ test('Image layout exposes immutable BoxFit crop and destination geometry', () =
   assert.deepEqual(second.data, first.data);
 });
 
+test('contain layout keeps its destination inside the returned box', () => {
+  const document = new Pdf.Document();
+  const context = {
+    document,
+    canvas: null,
+    pageFormat: { width: 300, height: 300 },
+    pageNumber: 1,
+    theme: document.theme
+  };
+  const widget = new Pdf.Image(rgba(4, 2), {
+    width: 80,
+    height: 80,
+    fit: 'contain',
+    alignment: 'bottomRight'
+  });
+  const box = widget.layout(context, { maxWidth: 100, maxHeight: 100 });
+  assert.deepEqual([box.width, box.height], [80, 40]);
+  assert.deepEqual(box.data.destination, { width: 80, height: 40 });
+  assert.deepEqual([box.data.destinationX, box.data.destinationY], [0, 0]);
+  assert.ok(box.data.destinationX + box.data.destination.width <= box.width);
+  assert.ok(box.data.destinationY + box.data.destination.height <= box.height);
+});
+
+test('DPI selects and caches a proportional decoded raster resolution', () => {
+  const provider = rgba(100, 50);
+  const first = provider.resolve({ x: 144, y: 72 }, 25);
+  const second = provider.resolve({ x: 144, y: 72 }, 25);
+  assert.deepEqual([first.sourceWidth, first.sourceHeight], [50, 25]);
+  assert.equal(second, first);
+
+  const document = new Pdf.Document();
+  const context = {
+    document,
+    canvas: null,
+    pageFormat: { width: 300, height: 300 },
+    pageNumber: 1,
+    theme: document.theme
+  };
+  const box = new Pdf.Image(provider, {
+    width: 144,
+    height: 72,
+    dpi: 25
+  }).layout(context, { maxWidth: 200, maxHeight: 200 });
+  assert.deepEqual([box.data.image.sourceWidth, box.data.image.sourceHeight], [50, 25]);
+
+  const cropped = new Pdf.Image(provider, {
+    width: 72,
+    height: 72,
+    dpi: 25,
+    fit: 'cover',
+    alignment: 'centerRight'
+  }).layout(context, { maxWidth: 200, maxHeight: 200 });
+  assert.deepEqual([cropped.data.image.width, cropped.data.image.height], [25, 13]);
+  assert.deepEqual([cropped.data.source.width, cropped.data.source.height], [13, 13]);
+  assert.equal(cropped.data.sourceX, 12);
+  assert.throws(() => new Pdf.Image(provider, { dpi: 0 }), /DPI/);
+  assert.throws(() => provider.resolve({ x: 10, y: 10 }, -1), /DPI/);
+});
+
 function rawImage(image) {
   return image;
 }

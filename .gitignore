@@ -1,6 +1,7 @@
 node_modules/
 .DS_Store
 examples/*.pdf
+examples/out/*.pdf
 
 # tsc's JavaScript output — an intermediate that rollup consumes.
 # Declarations go straight to dist/types/ and are committed.

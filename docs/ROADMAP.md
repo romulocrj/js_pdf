@@ -117,6 +117,7 @@ no code from the separately licensed Dart `qr` library is ported. Seven focused
 tests cover the public surface, a reference QR matrix, capacity, PDF417,
 row-major matrices and pure widget layout. `invoice.pdf` now generates 70,824
 bytes, the gate reaches 5/8 examples and the missing total falls 25 → 7.
+`examples/barcode-phase-5.2.mjs` is the retained host-free visual/V8 proof.
 
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
@@ -249,7 +250,7 @@ executable definition of "done" for each phase.
 npm run examples     # build, then try to generate all of them
 ```
 
-Successful runs write `examples/<name>.pdf`; failures land in
+Successful runs write `examples/out/<name>.pdf`; failures land in
 `examples/generation-results.json` with the list of missing APIs, and one
 failure does not stop the rest. **Expect a non-zero exit until phase 5** — that
 is the gate working, not a broken build.
@@ -1094,10 +1095,18 @@ Node and bare V8.
 Phase 4.3 ports the image widget/provider layer over that object model:
 `MemoryImage` detects PNG/JPEG bytes synchronously, `Image` performs BoxFit and
 alignment crop geometry in pure layout data, and paint scopes clipping before
-drawing the resolved resource. Six focused tests cover API exposure,
-orientation-aware dimensions, immutable layout data, clipping/crop operators and
-resource reuse. `examples/image-phase-4.3.mjs` adds the retained host-free
-proof and generates 3,677 bytes under both Node and bare V8.
+drawing the resolved resource. A follow-up fixed contained images being painted
+outside their shrink-wrapped layout box, delegated vertical conversion to the
+canvas, and made DPI select a cached, proportionally resized raster for decoded
+PNG and Raw providers. Encoded JPEG and `ImageProxy` resources remain unchanged,
+because this runtime does not decode JPEG pixels. Eight focused tests cover API
+exposure, all corrected geometry, DPI, orientation-aware dimensions,
+clipping/crop operators and resource reuse. `examples/image-phase-4.3.mjs` is a
+four-page host-free gallery of every `BoxFit`, every alignment, all providers,
+DPI and all eight orientations. Its 3:1 corpus is compared at three target
+sizes that exercise downscaling, cropping and upscaling, while every alignment
+has separate horizontal and vertical crop probes; the gallery generates
+70,176 bytes under Node and bare V8.
 
 The upstream early-SOF exit can miss a later legal APP14 marker and invert
 direct CMYK incorrectly; the correction and reproduction are recorded in
@@ -1138,6 +1147,9 @@ The last four examples all land here, one per sub-phase.
   widgets do not cache a measured symbol. Header/footer measurement was aligned
   with upstream's width-only `MultiPage` constraints when invoice exposed the
   earlier bounded-height divergence.
+- `examples/barcode-phase-5.2.mjs` exercises the independent QR encoder,
+  invoice PDF417 and representative one-dimensional generators under both the
+  local bundle and the bare V8 harness.
 - **Example gate:** ⇒ **`invoice` generates end to end here** (70,824 bytes).
   Also advances `resume`.
 

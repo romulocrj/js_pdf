@@ -29,11 +29,13 @@ Run all examples:
 
 ```sh
 npm run examples        # builds first
+npm run phase-examples  # retained visual proofs for completed phases
 ```
 
-Successful files are written beside the sources. Failures are collected in
+Successful PDFs are written to `out/`. Failures are collected in
 `generation-results.json`; one failure does not stop the remaining examples.
 The assets and fonts are the same resources referenced by the Dart examples.
+Both runners place generated PDFs in `out/`.
 
 **A non-zero exit is expected until phase 5** — that is the gate working, not a
 broken build.

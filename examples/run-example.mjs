@@ -8,7 +8,7 @@
  * host-free. Run `npm run example`.
  */
 
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { createSalesReport } from './create-sales-report.mjs';
 
 const model = {
@@ -35,5 +35,7 @@ const model = {
 };
 
 const bytes = createSalesReport(model);
-await writeFile(new URL('./sales-report.pdf', import.meta.url), bytes);
-console.log(`Generated ${bytes.length} bytes`);
+const outputDirectory = new URL('./out/', import.meta.url);
+await mkdir(outputDirectory, { recursive: true });
+await writeFile(new URL('sales-report.pdf', outputDirectory), bytes);
+console.log(`Generated out/sales-report.pdf (${bytes.length} bytes)`);

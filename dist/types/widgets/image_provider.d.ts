@@ -6,19 +6,19 @@ export declare abstract class ImageProvider {
     readonly orientation: PdfImageOrientation;
     private readonly sourceWidth;
     private readonly sourceHeight;
-    private cached;
+    private readonly cache;
     protected constructor(width: number, height: number, orientation: PdfImageOrientation, dpi: number | null);
     get width(): number;
     get height(): number;
-    protected abstract buildImage(): PdfImage;
-    resolve(_size?: PdfPoint, _dpi?: number | null): PdfImage;
+    protected abstract buildImage(width?: number): PdfImage;
+    resolve(size?: PdfPoint, dpi?: number | null): PdfImage;
 }
 export declare class ImageProxy extends ImageProvider {
     private readonly image;
     constructor(image: PdfImage, { dpi }?: {
         readonly dpi?: number | null;
     });
-    protected buildImage(): PdfImage;
+    protected buildImage(_width?: number): PdfImage;
 }
 export interface MemoryImageOptions {
     readonly orientation?: PdfImageOrientation;
@@ -28,7 +28,7 @@ export declare class MemoryImage extends ImageProvider {
     readonly bytes: Uint8Array;
     private readonly image;
     constructor(bytes: Uint8Array, { orientation, dpi }?: MemoryImageOptions);
-    protected buildImage(): PdfImage;
+    protected buildImage(width?: number): PdfImage;
 }
 export interface RawImageOptions {
     readonly bytes: Uint8Array;
@@ -40,5 +40,5 @@ export interface RawImageOptions {
 export declare class RawImage extends ImageProvider {
     private readonly image;
     constructor({ bytes, width, height, orientation, dpi }: RawImageOptions);
-    protected buildImage(): PdfImage;
+    protected buildImage(width?: number): PdfImage;
 }

@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0.
  */
 
-import { readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { generateCalendar } from './calendar.mjs';
 import { generateCertificate } from './certificate.mjs';
 import { generateDocument } from './document.mjs';
@@ -106,9 +106,11 @@ const examples = [
 ];
 
 const results = [];
+const outputDirectory = new URL('./out/', import.meta.url);
+await mkdir(outputDirectory, { recursive: true });
 
 for (const example of examples) {
-  const output = new URL(`./${example.name}.pdf`, import.meta.url);
+  const output = new URL(`${example.name}.pdf`, outputDirectory);
   await unlink(output).catch(error => {
     if (error.code !== 'ENOENT') throw error;
   });
@@ -118,7 +120,7 @@ for (const example of examples) {
     const pdfBytes = generated instanceof Uint8Array ? generated : new Uint8Array(generated);
     await writeFile(output, pdfBytes);
     results.push({ name: example.name, status: 'generated', bytes: pdfBytes.length });
-    console.log(`GENERATED ${example.name}.pdf (${pdfBytes.length} bytes)`);
+    console.log(`GENERATED out/${example.name}.pdf (${pdfBytes.length} bytes)`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     results.push({ name: example.name, status: 'failed', error: message });
