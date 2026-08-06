@@ -62,20 +62,28 @@ The build emits four single-file ES modules plus declarations:
 
 | Artifact | |
 |---|---|
-| `dist/js_pdf.mjs` | readable, canonical — what `import 'js_pdf'` resolves to |
-| `dist/js_pdf.min.mjs` | minified, canonical — `import 'js_pdf/min'` |
-| `dist/js_pdf-0.1.2.mjs` | readable, versioned — for vendoring into a host directory |
-| `dist/js_pdf-0.1.2.min.mjs` | minified, versioned |
+| `dist/js_pdf.mjs` | readable, canonical — what `import '@romulocrj/js_pdf'` resolves to |
+| `dist/js_pdf.min.mjs` | minified, canonical — `import '@romulocrj/js_pdf/min'` |
+| `dist/js_pdf-0.1.3.mjs` | readable, versioned — for vendoring into a host directory |
+| `dist/js_pdf-0.1.3.min.mjs` | minified, versioned |
 | `dist/types/**.d.ts` | type declarations |
 
 Each JavaScript artifact carries the attribution banner and no other comment.
+
+## Installation via CDN
+
+Import the latest minified ES module directly from jsDelivr:
+
+```js
+import * as pw from 'https://cdn.jsdelivr.net/gh/romulocrj/js_pdf/dist/js_pdf.min.mjs';
+```
 
 ## Use
 
 Node, or any bundler:
 
 ```js
-import * as pw from 'js_pdf';
+import * as pw from '@romulocrj/js_pdf';
 
 const document = new pw.Document({ title: 'Report' });
 
