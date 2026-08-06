@@ -28,6 +28,10 @@
   "types": "./dist/types/index.d.ts",
   "unpkg": "./dist/js_pdf.min.mjs",
   "jsdelivr": "./dist/js_pdf.min.mjs",
+  "esm.sh": {
+    "bundle": false,
+    "keepNames": true
+  },
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
