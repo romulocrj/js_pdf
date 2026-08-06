@@ -1,6 +1,6 @@
 # Roadmap
 
-Ordered plan for the port dart_pdf-master folder. Current coverage is in
+Ordered plan for the port dart_pdf-master. Current coverage is in
 [PORTING-STATUS.md](PORTING-STATUS.md); conventions are in
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
