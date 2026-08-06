@@ -1,6 +1,7 @@
 import type { ColorInput, Rgb } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
+import type { AnnotationBuilder } from './annotations.ts';
 import { DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT, TextStyle } from './text_style.ts';
 import type { TextDecorationName } from './text_style.ts';
 import { SpanningWidget } from './widget.ts';
@@ -12,18 +13,17 @@ export type TextOverflow = 'clip' | 'visible' | 'span';
 export interface InlineSpanOptions {
     readonly style?: TextStyle | null;
     readonly baseline?: number;
-    /** Retained for source compatibility; phase 5.3 supplies annotation painters. */
-    readonly annotation?: unknown;
+    readonly annotation?: AnnotationBuilder | null;
 }
-export type InlineSpanVisitor = (span: InlineSpan, style: TextStyle, annotation: unknown) => boolean;
+export type InlineSpanVisitor = (span: InlineSpan, style: TextStyle, annotation: AnnotationBuilder | null) => boolean;
 /** Immutable node in a styled inline tree. */
 export declare abstract class InlineSpan {
     readonly style: TextStyle | null;
     readonly baseline: number;
-    readonly annotation: unknown;
+    readonly annotation: AnnotationBuilder | null;
     constructor({ style, baseline, annotation }?: InlineSpanOptions);
     abstract copyWith(options?: InlineSpanOptions): InlineSpan;
-    abstract visitChildren(visitor: InlineSpanVisitor, parentStyle: TextStyle, annotation?: unknown): boolean;
+    abstract visitChildren(visitor: InlineSpanVisitor, parentStyle: TextStyle, annotation?: AnnotationBuilder | null): boolean;
     toPlainText(): string;
 }
 export interface TextSpanOptions extends InlineSpanOptions {
@@ -35,7 +35,7 @@ export declare class TextSpan extends InlineSpan {
     readonly children: readonly InlineSpan[];
     constructor({ text, children, ...options }?: TextSpanOptions);
     copyWith(options?: TextSpanOptions): TextSpan;
-    visitChildren(visitor: InlineSpanVisitor, parentStyle: TextStyle, annotation?: unknown): boolean;
+    visitChildren(visitor: InlineSpanVisitor, parentStyle: TextStyle, annotation?: AnnotationBuilder | null): boolean;
 }
 export interface WidgetSpanOptions extends InlineSpanOptions {
     readonly child: AnyWidget;
@@ -44,7 +44,7 @@ export declare class WidgetSpan extends InlineSpan {
     readonly child: AnyWidget;
     constructor({ child, ...options }: WidgetSpanOptions);
     copyWith(options?: InlineSpanOptions): WidgetSpan;
-    visitChildren(visitor: InlineSpanVisitor, parentStyle: TextStyle, annotation?: unknown): boolean;
+    visitChildren(visitor: InlineSpanVisitor, parentStyle: TextStyle, annotation?: AnnotationBuilder | null): boolean;
 }
 export interface RichTextOptions {
     readonly text: InlineSpan;
@@ -93,6 +93,7 @@ interface TextFlowToken {
     readonly text: string;
     readonly width: number;
     readonly style: ResolvedTextStyle;
+    readonly annotation: AnnotationBuilder | null;
 }
 interface WidgetFlowToken {
     readonly kind: 'widget';
@@ -100,6 +101,7 @@ interface WidgetFlowToken {
     readonly height: number;
     readonly style: ResolvedTextStyle;
     readonly childBox: AnyLayoutBox;
+    readonly annotation: AnnotationBuilder | null;
 }
 type FlowToken = TextFlowToken | WidgetFlowToken;
 interface BreakToken {
@@ -117,6 +119,7 @@ export interface RichTextRunLayout {
     readonly baseline: number;
     readonly style: ResolvedTextStyle;
     readonly childBox: AnyLayoutBox | null;
+    readonly annotation: AnnotationBuilder | null;
 }
 export interface RichTextLineLayout {
     readonly runs: readonly RichTextRunLayout[];

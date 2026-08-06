@@ -17,7 +17,7 @@
  * `/Resources` is inherited from `PdfGraphicStream`, which is where per-page
  * `/Font`, `/XObject` and `/ExtGState` registration lives as of phase 0.3.
  *
- * PORT GAP: no `/Rotate` and no `/Annots`. Annotations are phase 5.3.
+ * PORT GAP: no `/Rotate`.
  */
 
 import { PdfArray } from '../format/array.ts';
@@ -29,12 +29,14 @@ import type { PageSize } from '../page_format.ts';
 import { PdfGraphicStream } from './graphic_stream.ts';
 import type { PdfObjectRegistry } from './object.ts';
 import type { PdfPageList } from './page_list.ts';
+import type { PdfAnnotation } from './annotation.ts';
 
 /** One page object, holding its size and a reference to its content stream. */
 export class PdfPage extends PdfGraphicStream {
   readonly pageFormat: PageSize;
   readonly pageList: PdfPageList;
   readonly contents: PdfObjectBase<PdfDataType>[] = [];
+  readonly annotations: PdfAnnotation[] = [];
 
   constructor(
     document: PdfObjectRegistry,
@@ -64,6 +66,9 @@ export class PdfPage extends PdfGraphicStream {
       this.params.set('/Contents', this.contents[0]!.ref());
     } else if (this.contents.length > 1) {
       this.params.set('/Contents', PdfArray.fromObjects(this.contents));
+    }
+    if (this.annotations.length > 0) {
+      this.params.set('/Annots', PdfArray.fromObjects(this.annotations));
     }
   }
 }

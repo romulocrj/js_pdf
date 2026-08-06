@@ -44,7 +44,8 @@ import { formatNumber } from './format/num.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
 import type { PdfImage } from './obj/image.ts';
-import { identityMatrix, multiplyMatrix } from './matrix.ts';
+import type { PdfLinkAnnotation } from './obj/annotation.ts';
+import { identityMatrix, multiplyMatrix, transformPoint } from './matrix.ts';
 import type { PdfMatrix } from './matrix.ts';
 import type { PdfRect } from './rect.ts';
 
@@ -150,6 +151,7 @@ export class PdfCanvas {
   private readonly patternNames = new Map<string, string>();
   private readonly patternDicts = new Map<string, PdfDict>();
   private readonly imageNames = new Map<PdfImage, string>();
+  private readonly linkAnnotations: PdfLinkAnnotation[] = [];
 
   /**
    * The current transformation matrix, tracked so a widget can ask what space
@@ -173,6 +175,11 @@ export class PdfCanvas {
   /** Widget-space (top-left, y-down) to PDF user space. */
   toPdfY(top: number): number {
     return this.pageHeight - top;
+  }
+
+  /** A widget-space point after the canvas transformation currently in force. */
+  transformWidgetPoint(x: number, top: number): { readonly x: number; readonly y: number } {
+    return transformPoint(this.currentTransform, x, this.toPdfY(top));
   }
 
   /**
@@ -216,6 +223,47 @@ export class PdfCanvas {
   /** The images this page drew with, mapped to page-local `/I…` names. */
   get images(): ReadonlyMap<PdfImage, string> {
     return this.imageNames;
+  }
+
+  /** Clickable rectangles registered while this page was painted. */
+  get annotations(): readonly PdfLinkAnnotation[] {
+    return this.linkAnnotations;
+  }
+
+  addUrlLink(destination: string, x: number, top: number, width: number, height: number): void {
+    this.addLink('url', destination, x, top, width, height);
+  }
+
+  addNamedLink(destination: string, x: number, top: number, width: number, height: number): void {
+    this.addLink('destination', destination, x, top, width, height);
+  }
+
+  private addLink(
+    kind: PdfLinkAnnotation['kind'],
+    destination: string,
+    x: number,
+    top: number,
+    width: number,
+    height: number
+  ): void {
+    if (width <= 0 || height <= 0) return;
+    const points = [
+      this.transformWidgetPoint(x, top),
+      this.transformWidgetPoint(x + width, top),
+      this.transformWidgetPoint(x, top + height),
+      this.transformWidgetPoint(x + width, top + height)
+    ];
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    this.linkAnnotations.push({
+      kind,
+      destination,
+      rect: { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+    });
   }
 
   private addImage(image: PdfImage): string {

@@ -4,6 +4,7 @@ import { PdfDict } from './format/dict.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
 import type { PdfImage } from './obj/image.ts';
+import type { PdfLinkAnnotation } from './obj/annotation.ts';
 import type { PdfMatrix } from './matrix.ts';
 import type { PdfRect } from './rect.ts';
 /**
@@ -79,6 +80,7 @@ export declare class PdfCanvas {
     private readonly patternNames;
     private readonly patternDicts;
     private readonly imageNames;
+    private readonly linkAnnotations;
     /**
      * The current transformation matrix, tracked so a widget can ask what space
      * it is drawing in. `q`/`Q` save and restore it, as they do in the reader.
@@ -93,6 +95,11 @@ export declare class PdfCanvas {
     push(command: string): void;
     /** Widget-space (top-left, y-down) to PDF user space. */
     toPdfY(top: number): number;
+    /** A widget-space point after the canvas transformation currently in force. */
+    transformWidgetPoint(x: number, top: number): {
+        readonly x: number;
+        readonly y: number;
+    };
     /**
      * Register `font` on this page and return the name a `Tf` operator should
      * use. Names are allocated in first-use order — `/F1`, `/F2`, … — and repeat
@@ -114,6 +121,11 @@ export declare class PdfCanvas {
     get patterns(): ReadonlyMap<string, PdfDict>;
     /** The images this page drew with, mapped to page-local `/I…` names. */
     get images(): ReadonlyMap<PdfImage, string>;
+    /** Clickable rectangles registered while this page was painted. */
+    get annotations(): readonly PdfLinkAnnotation[];
+    addUrlLink(destination: string, x: number, top: number, width: number, height: number): void;
+    addNamedLink(destination: string, x: number, top: number, width: number, height: number): void;
+    private addLink;
     private addImage;
     /**
      * `q`. Upstream calls this `saveContext`; `save` is kept as the name the

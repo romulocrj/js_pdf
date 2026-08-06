@@ -57,6 +57,15 @@ import { BarcodeWidget } from './widgets/barcode.ts';
 import { Container, DecoratedBox } from './widgets/container.ts';
 import { ClipOval, ClipRect, ClipRRect } from './widgets/clip.ts';
 import { Bullet, Header, Paragraph, TableOfContent } from './widgets/content.ts';
+import {
+  Anchor,
+  Annotation,
+  AnnotationBuilder,
+  AnnotationLink,
+  AnnotationUrl,
+  Link,
+  UrlLink
+} from './widgets/annotations.ts';
 import { BarDataSet } from './widgets/chart/bar_chart.ts';
 import { Chart, ChartFrame, ChartGrid, Dataset } from './widgets/chart/chart.ts';
 import { FixedAxis, GridAxis } from './widgets/chart/grid_axis.ts';
@@ -104,6 +113,11 @@ import type { DocumentOptions } from './widgets/document.ts';
 export {
   Align,
   Alignment,
+  Anchor,
+  Annotation,
+  AnnotationBuilder,
+  AnnotationLink,
+  AnnotationUrl,
   AspectRatio,
   BarcodeFactory as Barcode,
   BarcodeCodabarStartStop,
@@ -163,6 +177,7 @@ export {
   ImageProxy,
   IntrinsicColumnWidth,
   LayoutBuilder,
+  Link,
   LineDataSet,
   LimitedBox,
   LinearGradient,
@@ -217,6 +232,7 @@ export {
   Theme,
   ThemeData,
   Transform,
+  UrlLink,
   RawImage,
   Vector,
   VerticalDivider,
@@ -238,6 +254,13 @@ export type {
   ItfFixedFactoryOptions
 } from './barcode/barcode_factory.ts';
 export type { BarcodeWidgetOptions } from './widgets/barcode.ts';
+export type {
+  AnchorOptions,
+  AnnotationLayoutData,
+  AnnotationOptions,
+  AnnotationRect,
+  LinkOptions
+} from './widgets/annotations.ts';
 
 export type { ColorInput, Rgb } from './pdf/color.ts';
 export { PdfGraphicState } from './pdf/graphic_state.ts';
@@ -533,9 +556,12 @@ export type {
   PdfLogoOptions,
   PlaceholderOptions
 } from './widgets/placeholders.ts';
-export type { DocumentOptions } from './widgets/document.ts';
-export type { DocumentOutlineEntry } from './widgets/document.ts';
-export type { PdfPageMode, SerializedOutline } from './pdf/document.ts';
+export type {
+  DocumentDestinationEntry,
+  DocumentOptions,
+  DocumentOutlineEntry
+} from './widgets/document.ts';
+export type { PdfPageMode, SerializedDestination, SerializedOutline } from './pdf/document.ts';
 export type { PdfOutlineStyle } from './pdf/obj/outline.ts';
 
 /** The widget constructors handed to a `createPdf` build callback. */
@@ -547,6 +573,13 @@ export interface PublicApi {
   readonly BarcodeQRCorrectionLevel: typeof BarcodeQRCorrectionLevel;
   readonly Pdf417SecurityLevel: typeof Pdf417SecurityLevel;
   readonly Document: typeof Document;
+  readonly Anchor: typeof Anchor;
+  readonly Annotation: typeof Annotation;
+  readonly AnnotationBuilder: typeof AnnotationBuilder;
+  readonly AnnotationLink: typeof AnnotationLink;
+  readonly AnnotationUrl: typeof AnnotationUrl;
+  readonly Link: typeof Link;
+  readonly UrlLink: typeof UrlLink;
   readonly Page: typeof Page;
   readonly MultiPage: typeof MultiPage;
   readonly Text: typeof Text;
@@ -668,6 +701,13 @@ const publicApi: PublicApi = Object.freeze({
   BarcodeQRCorrectionLevel,
   Pdf417SecurityLevel,
   Document,
+  Anchor,
+  Annotation,
+  AnnotationBuilder,
+  AnnotationLink,
+  AnnotationUrl,
+  Link,
+  UrlLink,
   Page,
   MultiPage,
   Text,

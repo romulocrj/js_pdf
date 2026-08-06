@@ -44,6 +44,8 @@ import type { PageSize } from './page_format.ts';
 import type { Rgb } from './color.ts';
 import { PdfImageObject } from './obj/image.ts';
 import type { PdfImage } from './obj/image.ts';
+import { PdfAnnotation } from './obj/annotation.ts';
+import type { PdfLinkAnnotation } from './obj/annotation.ts';
 
 export type { DocumentMetadata } from './obj/info.ts';
 
@@ -66,6 +68,9 @@ export interface SerializedPage {
 
   /** The image resources `content` selected, by their page-local names. */
   readonly images?: ReadonlyMap<PdfImage, string>;
+
+  /** Link annotations registered while the page was painted. */
+  readonly annotations?: readonly PdfLinkAnnotation[];
 }
 
 export interface SerializedOutline {
@@ -78,6 +83,15 @@ export interface SerializedOutline {
   readonly y: number;
   readonly color?: Rgb | null;
   readonly style?: PdfOutlineStyle;
+}
+
+export interface SerializedDestination {
+  readonly name: string;
+  /** One-based physical page number. */
+  readonly page: number;
+  readonly x?: number | null;
+  readonly y?: number | null;
+  readonly zoom?: number | null;
 }
 
 export type PdfPageMode = 'none' | 'outlines';
@@ -171,7 +185,8 @@ export class PdfDocument {
     fonts: ReadonlyMap<PdfFont, string> = new Map(),
     graphicStates: ReadonlyMap<string, PdfDict> = new Map(),
     patterns: ReadonlyMap<string, PdfDict> = new Map(),
-    images: ReadonlyMap<PdfImage, string> = new Map()
+    images: ReadonlyMap<PdfImage, string> = new Map(),
+    annotations: readonly PdfLinkAnnotation[] = []
   ): PdfPage {
     const resources: [string, PdfObject<PdfDict>][] = [];
     for (const [font, name] of fonts) {
@@ -197,39 +212,55 @@ export class PdfDocument {
       page.addXObject(name, this.imageObject(image));
     }
 
+    for (const annotation of annotations) {
+      new PdfAnnotation(this, page, annotation);
+    }
+
     page.contents.push(stream);
     return page;
   }
 
-  addNavigation(outlines: readonly SerializedOutline[], pageMode: PdfPageMode): void {
-    if (outlines.length === 0) {
-      this.catalog.showOutlines = pageMode === 'outlines';
-      return;
-    }
-
-    const names = new PdfNames(this);
-    const root = new PdfOutline(this);
-    const levels: PdfOutline[] = [root];
-
-    for (const entry of outlines) {
+  addNavigation(
+    outlines: readonly SerializedOutline[],
+    pageMode: PdfPageMode,
+    destinations: readonly SerializedDestination[] = []
+  ): void {
+    const names = outlines.length > 0 || destinations.length > 0 ? new PdfNames(this) : null;
+    for (const entry of destinations) {
       const page = this.pageList.pages[entry.page - 1];
-      if (page === undefined) continue;
-      names.addDestination(entry.anchor, page, { y: entry.y });
-      const node = new PdfOutline(this, {
-        title: entry.title,
-        anchor: entry.anchor,
-        color: entry.color ?? null,
-        style: entry.style ?? 'normal'
-      });
-      const parentIndex = Math.min(entry.level, levels.length - 1);
-      const parent = levels[parentIndex] ?? root;
-      parent.add(node);
-      levels.length = parentIndex + 1;
-      levels.push(node);
+      if (page !== undefined) {
+        names?.addDestination(entry.name, page, {
+          x: entry.x ?? undefined,
+          y: entry.y ?? undefined,
+          zoom: entry.zoom ?? undefined
+        });
+      }
     }
 
-    this.catalog.names = names;
-    this.catalog.outline = root;
+    if (outlines.length > 0) {
+      const root = new PdfOutline(this);
+      const levels: PdfOutline[] = [root];
+
+      for (const entry of outlines) {
+        const page = this.pageList.pages[entry.page - 1];
+        if (page === undefined) continue;
+        names?.addDestination(entry.anchor, page, { y: entry.y });
+        const node = new PdfOutline(this, {
+          title: entry.title,
+          anchor: entry.anchor,
+          color: entry.color ?? null,
+          style: entry.style ?? 'normal'
+        });
+        const parentIndex = Math.min(entry.level, levels.length - 1);
+        const parent = levels[parentIndex] ?? root;
+        parent.add(node);
+        levels.length = parentIndex + 1;
+        levels.push(node);
+      }
+      this.catalog.outline = root;
+    }
+
+    if (names !== null) this.catalog.names = names;
     this.catalog.showOutlines = pageMode === 'outlines';
   }
 
@@ -252,15 +283,24 @@ export function serializePdf(
   pages: readonly SerializedPage[],
   metadata: DocumentMetadata,
   outlines: readonly SerializedOutline[] = [],
-  pageMode: PdfPageMode = 'none'
+  pageMode: PdfPageMode = 'none',
+  destinations: readonly SerializedDestination[] = []
 ): Uint8Array {
   const document = new PdfDocument(metadata);
 
   for (const page of pages) {
-    document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns, page.images);
+    document.addPage(
+      page.format,
+      page.content,
+      page.fonts,
+      page.graphicStates,
+      page.patterns,
+      page.images,
+      page.annotations
+    );
   }
 
-  document.addNavigation(outlines, pageMode);
+  document.addNavigation(outlines, pageMode, destinations);
 
   return document.save();
 }

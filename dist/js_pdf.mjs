@@ -7632,6 +7632,127 @@ class Column extends Flex {
   }
 }
 
+class AnnotationBuilder {}
+
+class AnnotationLink extends AnnotationBuilder {
+  constructor(destination) {
+    super();
+    this.destination = String(destination);
+    if (this.destination.length === 0) throw new RangeError("Annotation destination cannot be empty");
+  }
+  build(context, rect) {
+    context.canvas.addNamedLink(this.destination, rect.x, rect.y, rect.width, rect.height);
+  }
+}
+
+class AnnotationUrl extends AnnotationBuilder {
+  constructor(destination) {
+    super();
+    this.destination = String(destination);
+    if (this.destination.length === 0) throw new RangeError("Annotation URL cannot be empty");
+  }
+  build(context, rect) {
+    context.canvas.addUrlLink(this.destination, rect.x, rect.y, rect.width, rect.height);
+  }
+}
+
+class Annotation extends Widget {
+  constructor({child = null, builder = null} = {}) {
+    super();
+    this.child = child;
+    this.builder = builder;
+  }
+  layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const childBox = this.child?.layout(context, parent) ?? null;
+    const size = parent.constrain(childBox ?? {
+      width: 0,
+      height: 0
+    });
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox?.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+    if (box.width > 0 && box.height > 0) {
+      this.builder?.build(context, box);
+    }
+  }
+}
+
+class Link extends Annotation {
+  constructor({child, destination}) {
+    super({
+      child,
+      builder: new AnnotationLink(destination)
+    });
+  }
+}
+
+class UrlLink extends Annotation {
+  constructor({child, destination}) {
+    super({
+      child,
+      builder: new AnnotationUrl(destination)
+    });
+  }
+}
+
+class Anchor extends Widget {
+  constructor({child = null, name, zoom = null, setX = false}) {
+    super();
+    this.child = child;
+    this.name = String(name);
+    this.zoom = zoom;
+    this.setX = setX;
+    if (this.name.length === 0) throw new RangeError("Anchor name cannot be empty");
+    if (zoom !== null && !Number.isFinite(zoom)) throw new RangeError("Anchor zoom must be finite");
+  }
+  layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const childBox = this.child?.layout(context, parent) ?? null;
+    const size = parent.constrain(childBox ?? {
+      width: 0,
+      height: 0
+    });
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox?.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+    const point = context.canvas.transformWidgetPoint(box.x, box.y);
+    context.document.registerDestination({
+      name: this.name,
+      pageNumber: context.pageNumber,
+      x: this.setX ? point.x : null,
+      y: point.y,
+      zoom: this.zoom
+    });
+  }
+}
+
 class InlineSpan {
   constructor({style = null, baseline = 0, annotation = null} = {}) {
     this.style = style;
@@ -7779,12 +7900,13 @@ function positionLine(line, y, contentWidth, align, direction) {
   const paintTokens = [];
   for (const token of line.tokens) {
     const previous = paintTokens[paintTokens.length - 1];
-    if (extraPerGap === 0 && token.kind !== "widget" && previous !== undefined && previous.kind !== "widget" && previous.style === token.style) {
+    if (extraPerGap === 0 && token.kind !== "widget" && previous !== undefined && previous.kind !== "widget" && previous.style === token.style && previous.annotation === token.annotation) {
       paintTokens[paintTokens.length - 1] = {
         kind: "text",
         text: previous.text + token.text,
         width: previous.width + token.width,
-        style: token.style
+        style: token.style,
+        annotation: token.annotation
       };
     } else {
       paintTokens.push(token);
@@ -7807,7 +7929,8 @@ function positionLine(line, y, contentWidth, align, direction) {
       height: token.kind === "widget" ? token.height : token.style.lineAdvance,
       baseline: tokenBaseline,
       style: token.style,
-      childBox: token.kind === "widget" ? token.childBox : null
+      childBox: token.kind === "widget" ? token.childBox : null,
+      annotation: token.annotation
     });
     x += token.width;
     if (token.kind === "gap") accumulatedExtra += extraPerGap;
@@ -7855,7 +7978,7 @@ class RichText extends SpanningWidget {
   inputTokens(context, maxWidth) {
     const result = [];
     const scale = this.textScaleFactor;
-    this.text.visitChildren((span, textStyle) => {
+    this.text.visitChildren((span, textStyle, annotation) => {
       const baseStyle = resolveStyle(context, textStyle, span.baseline, scale);
       if (span instanceof WidgetSpan) {
         const childBox = span.child.layout(context, new BoxConstraints({
@@ -7867,7 +7990,8 @@ class RichText extends SpanningWidget {
           width: childBox.width,
           height: childBox.height,
           style: baseStyle,
-          childBox
+          childBox,
+          annotation
         });
         return true;
       }
@@ -7889,7 +8013,8 @@ class RichText extends SpanningWidget {
             kind: /^\s+$/u.test(part) ? "gap" : "text",
             text: part,
             width: textWidth(style, part),
-            style
+            style,
+            annotation
           });
         }
         group = "";
@@ -8044,6 +8169,14 @@ class RichText extends SpanningWidget {
       for (const run of line.runs) {
         const x = box.x + this.margin.left + run.x;
         const y = box.y + run.y;
+        if (run.annotation !== null && run.width > 0 && run.height > 0) {
+          run.annotation.build(context, {
+            x,
+            y,
+            width: run.width,
+            height: run.height
+          });
+        }
         if (run.style.background !== null && run.width > 0) {
           run.style.background.paint(context, x, y, run.width, run.height, "all", this.textDirection);
         }
@@ -8286,27 +8419,30 @@ class TableOfContent extends StatelessWidget {
   }
   build(context) {
     context.document.requestOutlineRerender();
-    const rows = context.document.outlines.map(entry => new Padding({
-      padding: {
-        bottom: 2
-      },
-      child: new Row({
-        children: [ new SizedBox({
-          width: this.indent * entry.level
-        }), new Text(entry.title, {
-          style: this.textStyle ?? undefined
-        }), new SizedBox({
-          width: this.gap
-        }), new Expanded({
-          child: new Divider({
-            height: 4,
-            thickness: .2
-          })
-        }), new SizedBox({
-          width: this.gap
-        }), new Text(String(entry.page), {
-          style: this.textStyle ?? undefined
-        }) ]
+    const rows = context.document.outlines.map(entry => new Link({
+      destination: entry.anchor,
+      child: new Padding({
+        padding: {
+          bottom: 2
+        },
+        child: new Row({
+          children: [ new SizedBox({
+            width: this.indent * entry.level
+          }), new Text(entry.title, {
+            style: this.textStyle ?? undefined
+          }), new SizedBox({
+            width: this.gap
+          }), new Expanded({
+            child: new Divider({
+              height: 4,
+              thickness: .2
+            })
+          }), new SizedBox({
+            width: this.gap
+          }), new Text(String(entry.page), {
+            style: this.textStyle ?? undefined
+          }) ]
+        })
       })
     }));
     return new Column({
@@ -10060,6 +10196,7 @@ class PdfPage extends PdfGraphicStream {
   constructor(document, pageList, pageFormat) {
     super(document, new PdfDict([ [ "/Type", new PdfName("/Page") ] ]));
     this.contents = [];
+    this.annotations = [];
     this.pageFormat = pageFormat;
     this.pageList = pageList;
     pageList.pages.push(this);
@@ -10072,6 +10209,9 @@ class PdfPage extends PdfGraphicStream {
       this.params.set("/Contents", this.contents[0].ref());
     } else if (this.contents.length > 1) {
       this.params.set("/Contents", PdfArray.fromObjects(this.contents));
+    }
+    if (this.annotations.length > 0) {
+      this.params.set("/Annots", PdfArray.fromObjects(this.annotations));
     }
   }
 }
@@ -10171,6 +10311,24 @@ class PdfOutline extends PdfObject {
   }
 }
 
+class PdfAnnotation extends PdfObject {
+  constructor(document, page, annotation) {
+    super(document, new PdfDict([ [ "/Type", new PdfName("/Annot") ] ]));
+    this.page = page;
+    this.annotation = annotation;
+    page.annotations.push(this);
+  }
+  prepare() {
+    const {rect, destination, kind} = this.annotation;
+    this.params.set("/Subtype", new PdfName("/Link"));
+    this.params.set("/Rect", PdfArray.fromNum([ rect.x, rect.y, rect.x + rect.width, rect.y + rect.height ]));
+    this.params.set("/P", this.page.ref());
+    this.params.set("/Border", PdfArray.fromNum([ 0, 0, 0 ]));
+    this.params.set("/F", new PdfNum(4));
+    this.params.set("/A", new PdfDict([ [ "/S", new PdfName(kind === "url" ? "/URI" : "/GoTo") ], [ kind === "url" ? "/URI" : "/D", new PdfString(destination) ] ]));
+  }
+}
+
 class PdfDocument {
   constructor(metadata) {
     this.serial = 0;
@@ -10209,7 +10367,7 @@ class PdfDocument {
     this.imageObjects.set(image, object);
     return object;
   }
-  addPage(format, content, fonts = new Map, graphicStates = new Map, patterns = new Map, images = new Map) {
+  addPage(format, content, fonts = new Map, graphicStates = new Map, patterns = new Map, images = new Map, annotations = []) {
     const resources = [];
     for (const [font, name] of fonts) {
       resources.push([ name, this.fontObject(font) ]);
@@ -10228,37 +10386,48 @@ class PdfDocument {
     for (const [image, name] of images) {
       page.addXObject(name, this.imageObject(image));
     }
+    for (const annotation of annotations) {
+      new PdfAnnotation(this, page, annotation);
+    }
     page.contents.push(stream);
     return page;
   }
-  addNavigation(outlines, pageMode) {
-    if (outlines.length === 0) {
-      this.catalog.showOutlines = pageMode === "outlines";
-      return;
-    }
-    const names = new PdfNames(this);
-    const root = new PdfOutline(this);
-    const levels = [ root ];
-    for (const entry of outlines) {
+  addNavigation(outlines, pageMode, destinations = []) {
+    const names = outlines.length > 0 || destinations.length > 0 ? new PdfNames(this) : null;
+    for (const entry of destinations) {
       const page = this.pageList.pages[entry.page - 1];
-      if (page === undefined) continue;
-      names.addDestination(entry.anchor, page, {
-        y: entry.y
-      });
-      const node = new PdfOutline(this, {
-        title: entry.title,
-        anchor: entry.anchor,
-        color: entry.color ?? null,
-        style: entry.style ?? "normal"
-      });
-      const parentIndex = Math.min(entry.level, levels.length - 1);
-      const parent = levels[parentIndex] ?? root;
-      parent.add(node);
-      levels.length = parentIndex + 1;
-      levels.push(node);
+      if (page !== undefined) {
+        names?.addDestination(entry.name, page, {
+          x: entry.x ?? undefined,
+          y: entry.y ?? undefined,
+          zoom: entry.zoom ?? undefined
+        });
+      }
     }
-    this.catalog.names = names;
-    this.catalog.outline = root;
+    if (outlines.length > 0) {
+      const root = new PdfOutline(this);
+      const levels = [ root ];
+      for (const entry of outlines) {
+        const page = this.pageList.pages[entry.page - 1];
+        if (page === undefined) continue;
+        names?.addDestination(entry.anchor, page, {
+          y: entry.y
+        });
+        const node = new PdfOutline(this, {
+          title: entry.title,
+          anchor: entry.anchor,
+          color: entry.color ?? null,
+          style: entry.style ?? "normal"
+        });
+        const parentIndex = Math.min(entry.level, levels.length - 1);
+        const parent = levels[parentIndex] ?? root;
+        parent.add(node);
+        levels.length = parentIndex + 1;
+        levels.push(node);
+      }
+      this.catalog.outline = root;
+    }
+    if (names !== null) this.catalog.names = names;
     this.catalog.showOutlines = pageMode === "outlines";
   }
   save() {
@@ -10273,12 +10442,12 @@ class PdfDocument {
   }
 }
 
-function serializePdf(pages, metadata, outlines = [], pageMode = "none") {
+function serializePdf(pages, metadata, outlines = [], pageMode = "none", destinations = []) {
   const document = new PdfDocument(metadata);
   for (const page of pages) {
-    document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns, page.images);
+    document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns, page.images, page.annotations);
   }
-  document.addNavigation(outlines, pageMode);
+  document.addNavigation(outlines, pageMode, destinations);
   return document.save();
 }
 
@@ -10309,6 +10478,7 @@ class PdfCanvas {
     this.patternNames = new Map;
     this.patternDicts = new Map;
     this.imageNames = new Map;
+    this.linkAnnotations = [];
     this.currentTransform = identityMatrix;
     this.transformStack = [];
     this.currentLetterSpacing = 0;
@@ -10322,6 +10492,9 @@ class PdfCanvas {
   }
   toPdfY(top) {
     return this.pageHeight - top;
+  }
+  transformWidgetPoint(x, top) {
+    return transformPoint(this.currentTransform, x, this.toPdfY(top));
   }
   addFont(font) {
     const existing = this.fontNames.get(font);
@@ -10343,6 +10516,35 @@ class PdfCanvas {
   }
   get images() {
     return this.imageNames;
+  }
+  get annotations() {
+    return this.linkAnnotations;
+  }
+  addUrlLink(destination, x, top, width, height) {
+    this.addLink("url", destination, x, top, width, height);
+  }
+  addNamedLink(destination, x, top, width, height) {
+    this.addLink("destination", destination, x, top, width, height);
+  }
+  addLink(kind, destination, x, top, width, height) {
+    if (width <= 0 || height <= 0) return;
+    const points = [ this.transformWidgetPoint(x, top), this.transformWidgetPoint(x + width, top), this.transformWidgetPoint(x, top + height), this.transformWidgetPoint(x + width, top + height) ];
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    this.linkAnnotations.push({
+      kind,
+      destination,
+      rect: {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
+      }
+    });
   }
   addImage(image) {
     const existing = this.imageNames.get(image);
@@ -10894,7 +11096,8 @@ class MultiPage {
       fonts: canvas.fonts,
       graphicStates: canvas.graphicStates,
       patterns: canvas.patterns,
-      images: canvas.images
+      images: canvas.images,
+      annotations: canvas.annotations
     }));
   }
 }
@@ -10950,7 +11153,8 @@ class Page {
       fonts: canvas.fonts,
       graphicStates: canvas.graphicStates,
       patterns: canvas.patterns,
-      images: canvas.images
+      images: canvas.images,
+      annotations: canvas.annotations
     } ];
   }
   paintLayer(build, context, format) {
@@ -11133,6 +11337,7 @@ class Document {
   constructor({title = null, author = null, subject = null, creator = "js_pdf", producer = "js_pdf", theme = undefined, font = undefined, pageMode = "none"} = {}) {
     this.sections = [];
     this.outlineEntries = [];
+    this.destinationEntries = [];
     this.outlineReplay = false;
     this.outlineCursor = 0;
     this.outlineRerenderRequested = false;
@@ -11207,9 +11412,19 @@ class Document {
       style
     });
   }
+  registerDestination({name, pageNumber, x = null, y = null, zoom = null}) {
+    this.destinationEntries.push({
+      name,
+      page: this.renderPageOffset + pageNumber,
+      x,
+      y,
+      zoom
+    });
+  }
   renderSections(replay) {
     this.outlineReplay = replay;
     this.outlineCursor = 0;
+    this.destinationEntries.length = 0;
     const pages = [];
     for (const section of this.sections) {
       this.renderPageOffset = pages.length;
@@ -11232,7 +11447,10 @@ class Document {
     const outlines = this.outlineEntries.map(entry => ({
       ...entry
     }));
-    return serializePdf(pages, this.metadata, outlines, this.pageMode);
+    const destinations = this.destinationEntries.map(entry => ({
+      ...entry
+    }));
+    return serializePdf(pages, this.metadata, outlines, this.pageMode, destinations);
   }
 }
 
@@ -15018,6 +15236,13 @@ const publicApi = Object.freeze({
   BarcodeQRCorrectionLevel,
   Pdf417SecurityLevel,
   Document,
+  Anchor,
+  Annotation,
+  AnnotationBuilder,
+  AnnotationLink,
+  AnnotationUrl,
+  Link,
+  UrlLink,
   Page,
   MultiPage,
   Text,
@@ -15149,4 +15374,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridAxis, GridView, Header, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationLink, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridAxis, GridView, Header, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, Link, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

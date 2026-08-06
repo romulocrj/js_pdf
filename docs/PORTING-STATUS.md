@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-06
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 129 `.ts` files, ~28,100 lines (TypeScript)
+**Ported:** 131 `.ts` files, ~28,600 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -27,11 +27,11 @@ table. Run `npm run examples`; current state, from
 | `certificate` | ✅ generated (126,677 bytes) | 0 | 3.9 |
 | `report` | ✅ generated (30,332 bytes) | 0 | 5.1 |
 | `invoice` | ✅ generated (70,824 bytes) | 0 | 5.2 |
-| `document` | failed | 1 | 5.3 |
-| `server` | failed | 2 | 5.3 |
-| `resume` | failed | 4 | 5.5 |
+| `document` | ✅ generated (101,311 bytes) | 0 | 5.3 |
+| `server` | ✅ generated (81,692 bytes) | 0 | 5.3 |
+| `resume` | failed | 3 | 5.5 |
 
-**5 of 8**, with the missing-API total down from 124 to 7 — phase 1.4 cleared
+**7 of 8**, with the missing-API total down from 124 to 3 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
 from every one of the seven, phase 2.7 cleared `SvgImage` from six, and phase
 3.1 cleared `TableHelper` from four. Phase 3.3 then cleared the composition
@@ -44,7 +44,9 @@ cleared all four content widgets from document. Phase 3.9 then supplied the
 placeholders used by four examples and made certificate generate; phase 3.10
 then removed `ClipOval` from resume; phase 4.3 then removed `Image` and
 `MemoryImage` from resume. Phase 5.2 supplied `Barcode` and `BarcodeWidget`,
-making invoice generate and advancing resume. See
+making invoice generate and advancing resume. Phase 5.3 supplied URL and named
+destination links, making document and server generate and leaving resume with
+only icons and progress. See
 [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which phase clears
 each one.
 
@@ -107,7 +109,7 @@ on: an object registers itself with the document, hands out references through
 | `obj/object_stream.dart` | 51 | `src/pdf/obj/object_stream.ts` | partial — no Ascii85 flag, no deflate |
 | `obj/catalog.dart` | 178 | `src/pdf/obj/catalog.ts` | partial — `/Type`, `/Pages`, `/Names`, `/Outlines`, outline page mode; no page labels or `/AcroForm` |
 | `obj/page_list.dart` | 46 | `src/pdf/obj/page_list.ts` | done — flat page tree |
-| `obj/page.dart` | 164 | `src/pdf/obj/page.ts` | partial — `/Resources` inherited from `PdfGraphicStream`; no `/Rotate`, no `/Annots` |
+| `obj/page.dart` | 164 | `src/pdf/obj/page.ts` | partial — `/Resources` inherited from `PdfGraphicStream` and link `/Annots`; no `/Rotate` |
 | `obj/info.dart` | 69 | `src/pdf/obj/info.ts` | partial — no `/CreationDate` (no clock) and no `/Keywords` |
 | `obj/array.dart` | 30 | — | — |
 | `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; `resourceDict(registry)` returns a `PdfDict` and may create the objects it references |
@@ -118,7 +120,7 @@ on: an object registers itself with the document, hands out references through
 | `obj/image.dart`, `smask.dart` | 347 | `src/pdf/obj/image.ts`, `src/pdf/image/png.ts`, `src/pdf/image/jpeg.ts` | partial — **4.1–4.2 done:** PNG decode, baseline JPEG pass-through, RGB/gray/CMYK colour spaces and image alpha `/SMask`; generic luminosity form masks remain |
 | `obj/shading.dart`, `pattern.dart`, `function.dart` | 349 | `src/pdf/obj/shading.ts`, `pattern.ts`, `function.ts` | partial — axial/radial DeviceRGB shadings, type-2 interpolation and type-3 stitching, direct shading-pattern dictionaries; no sampled streams or tiling patterns |
 | `obj/names.dart`, `outline.dart` | 296 | `src/pdf/obj/names.ts`, `outline.ts` | done — sorted named destinations and hierarchical outline tree with title, style, colour, siblings and closed descendants |
-| `obj/annotation.dart`, `border.dart` | 1070 | — | — links **phase 5.3** |
+| `obj/annotation.dart`, `border.dart` | 1070 | `src/pdf/obj/annotation.ts` | partial — borderless printable URL and named-destination link annotations; text notes, geometric annotations, custom borders and form fields remain |
 | `obj/metadata.dart`, `page_label.dart` | 248 | — | — |
 | `obj/encryption.dart`, `signature.dart` | 151 | — | — |
 | `obj/pdfa/*.dart` | 342 | — | — |
@@ -164,7 +166,7 @@ both, and will grow the shape factories in 2.5.
 |---|---:|---|---|
 | `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | partial — pure layout protocol, `StatelessWidget`, immutable `SpanningWidget` continuation state and theme on the render context; no `InheritedWidget` |
 | `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — `BoxConstraints` with factories/transforms, `EdgeInsets`, `Alignment`, `inscribe`; no directional geometry or `TextDirection` |
-| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, inherited per-run styles and fallback fonts, wrapping, immutable page continuation, LTR/explicit RTL placement, justification, backgrounds and combined decorations; no Arabic shaping or Unicode bidi reordering |
+| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, inherited per-run styles, annotations and fallback fonts, wrapping, immutable page continuation, LTR/explicit RTL placement, justification, backgrounds and combined decorations; no Arabic shaping or Unicode bidi reordering |
 | `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — full `Flex`/`Row`/`Column` allocation, all main/cross alignments, `mainAxisSize`, vertical direction, `Expanded`, `Flexible`, proportional `Spacer`, plus `gap`/weighted-row extensions; no `ListView`, bidi direction or baseline alignment |
 | `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts`, `decoration.ts`, `box_border.ts` | partial — `Container`, `DecoratedBox`, background/foreground `BoxDecoration`, per-side/dashed borders, axial/radial gradients and vector shadows; no decoration image painter yet |
 | `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground; **one document may mix orientations and paper sizes**, per section; no `clip` |
@@ -179,9 +181,9 @@ both, and will grow the shape factories in 2.5.
 | `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | `src/widgets/stack.ts`, `wrap.ts`, `grid_view.ts`, `partitions.ts` | done — positioned overlays/clipping, multi-run wrap, fixed-track grid and parallel partitions; immutable continuation for wrap/grid/partitions |
 | `widgets/clip.dart` | 134 | `src/widgets/clip.ts` | done — rectangular, scaled rounded-rectangle and elliptical clip scopes over immutable child layout |
 | `widgets/chart/*.dart` | 1989 | `src/widgets/chart/*.ts` | done — `Chart`, `CartesianGrid`, `PieGrid`, `RadialGrid`, `FixedAxis`, `ChartLegend`, `PointDataSet`, `BarDataSet`, `LineDataSet`, `PieDataSet`; grids resolve a frame at layout and hand it to the data sets, in place of upstream's mutable boxes |
-| `widgets/annotations.dart`, `forms.dart` | 1244 | — | — `UrlLink`, `AnnotationUrl` — **phase 5.3**; forms 5.6 |
+| `widgets/annotations.dart`, `forms.dart` | 1244 | `src/widgets/annotations.ts` | partial — `Annotation`, `Link`, `UrlLink`, inline builders and `Anchor`; forms remain for 5.6 |
 | `widgets/barcode.dart` | 298 | `src/widgets/barcode.ts` | done — `Barcode`, `BarcodeWidget`; symbol operations are immutable layout data |
-| `widgets/content.dart` | 360 | `src/widgets/content.ts` | partial — `Header`, `Paragraph`, `Bullet`, `TableOfContent`, named destinations and conditional two-pass TOC; no `Watermark` or `Footer` |
+| `widgets/content.dart` | 360 | `src/widgets/content.ts` | partial — `Header`, `Paragraph`, `Bullet`, clickable `TableOfContent`, named destinations and conditional two-pass TOC; no `Watermark` or `Footer` |
 | `widgets/placeholders.dart` | 187 | `src/widgets/placeholders.ts` | done — `Placeholder`, vector `PdfLogo`, SVG `FlutterLogo`, deterministic `LoremText` and stable `Lorem` widget |
 | `widgets/icon.dart` | 146 | — | — `Icon`, `IconData` — **phase 5.4** |
 | `widgets/progress.dart` | 202 | — | — `CircularProgressIndicator` — **phase 5.5** |
@@ -198,7 +200,7 @@ both, and will grow the shape factories in 2.5.
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
 | SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping and gradients done; SVG text and embedded raster content remain |
-| Widgets | ~14,000 | ~73 public widget/value constructors, plus tables, rich styles, content and themes |
+| Widgets | ~14,000 | ~80 public widget/value constructors, plus tables, rich styles, content and themes |
 
 **Phases 0, 1 and 2 are complete.** The WinAnsi ceiling is gone: a TrueType font
 is parsed, subset to the glyphs a document used, embedded as a
@@ -207,10 +209,9 @@ Type0/CIDFontType2 composite with `/Identity-H`, and selected through `Font`,
 — it is drawn from the embedded font and stays searchable through the
 `/ToUnicode` CMap. The public SVG pipeline now reaches PDF shading patterns.
 
-**Phase 5.2 is complete**, and `invoice` generates. The Apache-licensed
-`barcode` generators live under `src/barcode/`; QR keeps the upstream adapter
-surface but uses an independent js_pdf byte-mode encoder rather than porting
-the separately licensed Dart `qr` library. What now limits the three remaining
-examples is links, icons and progress.
+**Phase 5.3 is complete**, and `document` plus `server` generate. Page link
+annotations, external URLs, named destinations, anchors, inline span links and
+clickable table-of-content rows are now serialized end to end. Only `resume`
+remains, waiting on icons and progress.
 See
 [ROADMAP.md](ROADMAP.md).

@@ -14,6 +14,7 @@ import type { PageSize } from './page_format.ts';
 import type { Rgb } from './color.ts';
 import { PdfImageObject } from './obj/image.ts';
 import type { PdfImage } from './obj/image.ts';
+import type { PdfLinkAnnotation } from './obj/annotation.ts';
 export type { DocumentMetadata } from './obj/info.ts';
 /** One physical page, with its content stream already rendered to operators. */
 export interface SerializedPage {
@@ -30,6 +31,8 @@ export interface SerializedPage {
     readonly patterns?: ReadonlyMap<string, PdfDict>;
     /** The image resources `content` selected, by their page-local names. */
     readonly images?: ReadonlyMap<PdfImage, string>;
+    /** Link annotations registered while the page was painted. */
+    readonly annotations?: readonly PdfLinkAnnotation[];
 }
 export interface SerializedOutline {
     readonly title: string;
@@ -41,6 +44,14 @@ export interface SerializedOutline {
     readonly y: number;
     readonly color?: Rgb | null;
     readonly style?: PdfOutlineStyle;
+}
+export interface SerializedDestination {
+    readonly name: string;
+    /** One-based physical page number. */
+    readonly page: number;
+    readonly x?: number | null;
+    readonly y?: number | null;
+    readonly zoom?: number | null;
 }
 export type PdfPageMode = 'none' | 'outlines';
 /**
@@ -89,9 +100,9 @@ export declare class PdfDocument {
      * wrote for that font — see `PdfCanvas.addFont`. A page that drew no text
      * passes nothing and gets no `/Resources` at all, as upstream does.
      */
-    addPage(format: PageSize, content: string, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>, images?: ReadonlyMap<PdfImage, string>): PdfPage;
-    addNavigation(outlines: readonly SerializedOutline[], pageMode: PdfPageMode): void;
+    addPage(format: PageSize, content: string, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>, images?: ReadonlyMap<PdfImage, string>, annotations?: readonly PdfLinkAnnotation[]): PdfPage;
+    addNavigation(outlines: readonly SerializedOutline[], pageMode: PdfPageMode, destinations?: readonly SerializedDestination[]): void;
     save(): Uint8Array;
 }
 /** Build a document from already-rendered pages and write it. */
-export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata, outlines?: readonly SerializedOutline[], pageMode?: PdfPageMode): Uint8Array;
+export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata, outlines?: readonly SerializedOutline[], pageMode?: PdfPageMode, destinations?: readonly SerializedDestination[]): Uint8Array;

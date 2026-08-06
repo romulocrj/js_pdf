@@ -37,8 +37,11 @@ Successful PDFs are written to `out/`. Failures are collected in
 The assets and fonts are the same resources referenced by the Dart examples.
 Both runners place generated PDFs in `out/`.
 
-**A non-zero exit is expected until phase 5** — that is the gate working, not a
-broken build.
+`annotations-phase-5.3.mjs` is the focused visual proof for whole-widget URL
+links, inline span annotations and internal named destinations.
+
+**A non-zero exit is expected until phase 5 completes** — that is the gate
+working, not a broken build.
 
 ## Roadmap gates
 
@@ -49,13 +52,13 @@ per-phase breakdown of which APIs each one is still waiting on.
 
 | Example | Unlocks at | What it proves |
 |---|---|---|
-| `hello-world` | ✅ now | document, page, text, serializer |
-| `calendar` | **3.6** | TTF + theming + SVG + grid layout |
-| `certificate` | **3.9** | absolute positioning, transforms, rich text |
-| `report` | **5.1** | charts and tables — the only example needing no SVG and no images |
-| `invoice` | **5.2** | tables, decoration, barcodes |
-| `document` | **5.3** | long-form content: headers, paragraphs, TOC, links |
-| `server` | **5.3** | charts + SVG + links together |
+| `hello-world` | ✅ init | document, page, text, serializer |
+| `calendar` | ✅ **3.6** | TTF + theming + SVG + grid layout |
+| `certificate` | ✅ **3.9** | absolute positioning, transforms, rich text |
+| `report` | ✅ **5.1** | charts and tables — the only example needing no SVG and no images |
+| `invoice` | ✅ **5.2** | tables, decoration, barcodes |
+| `document` | ✅ **5.3** | long-form content: headers, paragraphs, TOC, links |
+| `server` | ✅ **5.3** | charts + SVG + links together |
 | `resume` | **5.5** | everything: images, icons, clipping, partitions, progress |
 
 When a phase lands, run `npm run examples`, commit the refreshed

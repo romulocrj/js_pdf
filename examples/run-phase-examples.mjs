@@ -21,6 +21,7 @@ import { generateJpegPhase42 } from './jpeg-phase-4.2.mjs';
 import { generateImagePhase43 } from './image-phase-4.3.mjs';
 import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
 import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
+import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
 
 const examples = [
   ['svg-gradients-phase-2.8', generateSvgGradientsPhase28],
@@ -38,7 +39,8 @@ const examples = [
   ['jpeg-phase-4.2', generateJpegPhase42],
   ['image-phase-4.3', generateImagePhase43],
   ['charts-phase-5.1', generateChartsPhase51],
-  ['barcode-phase-5.2', generateBarcodePhase52]
+  ['barcode-phase-5.2', generateBarcodePhase52],
+  ['annotations-phase-5.3', generateAnnotationsPhase53]
 ];
 
 const outputDirectory = new URL('./out/', import.meta.url);

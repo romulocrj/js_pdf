@@ -119,6 +119,15 @@ row-major matrices and pure widget layout. `invoice.pdf` now generates 70,824
 bytes, the gate reaches 5/8 examples and the missing total falls 25 → 7.
 `examples/barcode-phase-5.2.mjs` is the retained host-free visual/V8 proof.
 
+**Phase 5.3 — annotations and links — landed 2026-08-06.** URL and named
+destination link annotations now flow from `UrlLink`, `Link`, `Anchor` and
+inline `AnnotationUrl`/`AnnotationLink` spans into each page's `/Annots` array.
+Clickable table-of-content rows reuse the outline destinations. Five focused
+tests and `examples/annotations-phase-5.3.mjs` cover widget rectangles, active
+transforms, inline inheritance and internal navigation. `document.pdf` and
+`server.pdf` now generate in Node and bare V8, taking the gate to 7/8 examples
+and reducing the missing total 7 → 3.
+
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
 option on `Page` and `MultiPage` as well as on `PageTheme`, and every physical
@@ -188,12 +197,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 5.3 — annotations and links (`document`, `server`).** Port URL and
-> internal-destination annotations plus `UrlLink` and `AnnotationUrl` to unlock
-> both examples and advance resume.
+> **Phase 5.4 — icons.** Port `Icon` and `IconData` over the existing embedded
+> TrueType font pipeline, using the retained Material Icons asset. This leaves
+> only progress indicators before `resume` and the full example set generate.
 
-Phase 5.2 is complete: PDF417 unlocks invoice, and the QR implementation used by
-resume is ready. The gate now waits on links, icons and progress.
+Phase 5.3 is complete: document and server generate, and resume now waits only
+on icons and progress.
 
 ---
 
@@ -1153,11 +1162,19 @@ The last four examples all land here, one per sub-phase.
 - **Example gate:** ⇒ **`invoice` generates end to end here** (70,824 bytes).
   Also advances `resume`.
 
-### 5.3 Annotations and links ⇒ `document`, `server`
+### 5.3 Annotations and links ⇒ `document`, `server` ✅ *(landed 2026-08-06)*
 
 - **Ports:** `obj/annotation.dart`, `widgets/annotations.dart`
-- `UrlLink`, `AnnotationUrl`, plus internal destinations.
-- **Example gate:** ⇒ **`document` and `server` generate end to end here.**
+- `Annotation`, `UrlLink`, `Link`, `Anchor`, `AnnotationUrl` and
+  `AnnotationLink`, including transformed widget rectangles and inherited
+  inline-span annotations.
+- Pages serialize borderless printable `/Link` annotations; the name tree
+  resolves both explicit anchors and outline destinations.
+- `TableOfContent` rows are internal links to their corresponding headers.
+- `examples/annotations-phase-5.3.mjs` is the retained visual proof and runs in
+  both the local bundle and the bare V8 harness.
+- **Example gate:** ⇒ **`document` (101,311 bytes) and `server` (81,692 bytes)
+  generate end to end here.**
   Also advances `resume`.
 
 ### 5.4 Icons

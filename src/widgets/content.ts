@@ -30,6 +30,7 @@ import { BoxDecoration } from './decoration.ts';
 import type { BoxDecorationInput, BoxShape } from './decoration.ts';
 import { Column, Expanded, Row } from './flex.ts';
 import type { InsetsInput } from './geometry.ts';
+import { Link } from './annotations.ts';
 import { Text } from './text.ts';
 import type { TextAlign } from './text.ts';
 import type { TextStyle } from './text_style.ts';
@@ -288,17 +289,20 @@ export class TableOfContent extends StatelessWidget {
 
   override build(context: RenderContext): AnyWidget {
     context.document.requestOutlineRerender();
-    const rows = context.document.outlines.map(entry => new Padding({
-      padding: { bottom: 2 },
-      child: new Row({
-        children: [
-          new SizedBox({ width: this.indent * entry.level }),
-          new Text(entry.title, { style: this.textStyle ?? undefined }),
-          new SizedBox({ width: this.gap }),
-          new Expanded({ child: new Divider({ height: 4, thickness: 0.2 }) }),
-          new SizedBox({ width: this.gap }),
-          new Text(String(entry.page), { style: this.textStyle ?? undefined })
-        ]
+    const rows = context.document.outlines.map(entry => new Link({
+      destination: entry.anchor,
+      child: new Padding({
+        padding: { bottom: 2 },
+        child: new Row({
+          children: [
+            new SizedBox({ width: this.indent * entry.level }),
+            new Text(entry.title, { style: this.textStyle ?? undefined }),
+            new SizedBox({ width: this.gap }),
+            new Expanded({ child: new Divider({ height: 4, thickness: 0.2 }) }),
+            new SizedBox({ width: this.gap }),
+            new Text(String(entry.page), { style: this.textStyle ?? undefined })
+          ]
+        })
       })
     }));
 

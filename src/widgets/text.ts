@@ -32,6 +32,7 @@ import type { PdfFont } from '../pdf/font/font.ts';
 import { defaultPdfFont } from '../pdf/font/type1_fonts.ts';
 import { BoxConstraints, normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
+import type { AnnotationBuilder } from './annotations.ts';
 import { DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT, TextStyle } from './text_style.ts';
 import type { TextDecorationName } from './text_style.ts';
 import { SpanningWidget } from './widget.ts';
@@ -54,21 +55,20 @@ export type TextOverflow = 'clip' | 'visible' | 'span';
 export interface InlineSpanOptions {
   readonly style?: TextStyle | null;
   readonly baseline?: number;
-  /** Retained for source compatibility; phase 5.3 supplies annotation painters. */
-  readonly annotation?: unknown;
+  readonly annotation?: AnnotationBuilder | null;
 }
 
 export type InlineSpanVisitor = (
   span: InlineSpan,
   style: TextStyle,
-  annotation: unknown
+  annotation: AnnotationBuilder | null
 ) => boolean;
 
 /** Immutable node in a styled inline tree. */
 export abstract class InlineSpan {
   readonly style: TextStyle | null;
   readonly baseline: number;
-  readonly annotation: unknown;
+  readonly annotation: AnnotationBuilder | null;
 
   constructor({ style = null, baseline = 0, annotation = null }: InlineSpanOptions = {}) {
     this.style = style;
@@ -81,7 +81,7 @@ export abstract class InlineSpan {
   abstract visitChildren(
     visitor: InlineSpanVisitor,
     parentStyle: TextStyle,
-    annotation?: unknown
+    annotation?: AnnotationBuilder | null
   ): boolean;
 
   toPlainText(): string {
@@ -122,7 +122,7 @@ export class TextSpan extends InlineSpan {
   override visitChildren(
     visitor: InlineSpanVisitor,
     parentStyle: TextStyle,
-    annotation: unknown = null
+    annotation: AnnotationBuilder | null = null
   ): boolean {
     const style = parentStyle.merge(this.style);
     const effectiveAnnotation = this.annotation ?? annotation;
@@ -158,7 +158,7 @@ export class WidgetSpan extends InlineSpan {
   override visitChildren(
     visitor: InlineSpanVisitor,
     parentStyle: TextStyle,
-    annotation: unknown = null
+    annotation: AnnotationBuilder | null = null
   ): boolean {
     return visitor(this, parentStyle.merge(this.style), this.annotation ?? annotation);
   }
@@ -214,6 +214,7 @@ interface TextFlowToken {
   readonly text: string;
   readonly width: number;
   readonly style: ResolvedTextStyle;
+  readonly annotation: AnnotationBuilder | null;
 }
 
 interface WidgetFlowToken {
@@ -222,6 +223,7 @@ interface WidgetFlowToken {
   readonly height: number;
   readonly style: ResolvedTextStyle;
   readonly childBox: AnyLayoutBox;
+  readonly annotation: AnnotationBuilder | null;
 }
 
 type FlowToken = TextFlowToken | WidgetFlowToken;
@@ -243,6 +245,7 @@ export interface RichTextRunLayout {
   readonly baseline: number;
   readonly style: ResolvedTextStyle;
   readonly childBox: AnyLayoutBox | null;
+  readonly annotation: AnnotationBuilder | null;
 }
 
 export interface RichTextLineLayout {
@@ -429,13 +432,15 @@ function positionLine(
     const previous = paintTokens[paintTokens.length - 1];
     if (
       extraPerGap === 0 && token.kind !== 'widget' && previous !== undefined &&
-      previous.kind !== 'widget' && previous.style === token.style
+      previous.kind !== 'widget' && previous.style === token.style &&
+      previous.annotation === token.annotation
     ) {
       paintTokens[paintTokens.length - 1] = {
         kind: 'text',
         text: previous.text + token.text,
         width: previous.width + token.width,
-        style: token.style
+        style: token.style,
+        annotation: token.annotation
       };
     } else {
       paintTokens.push(token);
@@ -460,7 +465,8 @@ function positionLine(
       height: token.kind === 'widget' ? token.height : token.style.lineAdvance,
       baseline: tokenBaseline,
       style: token.style,
-      childBox: token.kind === 'widget' ? token.childBox : null
+      childBox: token.kind === 'widget' ? token.childBox : null,
+      annotation: token.annotation
     });
     x += token.width;
     if (token.kind === 'gap') accumulatedExtra += extraPerGap;
@@ -522,7 +528,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
   protected inputTokens(context: RenderContext, maxWidth: number): InputToken[] {
     const result: InputToken[] = [];
     const scale = this.textScaleFactor;
-    this.text.visitChildren((span, textStyle) => {
+    this.text.visitChildren((span, textStyle, annotation) => {
       const baseStyle = resolveStyle(context, textStyle, span.baseline, scale);
       if (span instanceof WidgetSpan) {
         const childBox = span.child.layout(context, new BoxConstraints({
@@ -534,7 +540,8 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
           width: childBox.width,
           height: childBox.height,
           style: baseStyle,
-          childBox
+          childBox,
+          annotation
         });
         return true;
       }
@@ -554,7 +561,8 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
             kind: /^\s+$/u.test(part) ? 'gap' : 'text',
             text: part,
             width: textWidth(style, part),
-            style
+            style,
+            annotation
           });
         }
         group = '';
@@ -723,6 +731,9 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
       for (const run of line.runs) {
         const x = box.x + this.margin.left + run.x;
         const y = box.y + run.y;
+        if (run.annotation !== null && run.width > 0 && run.height > 0) {
+          run.annotation.build(context, { x, y, width: run.width, height: run.height });
+        }
         if (run.style.background !== null && run.width > 0) {
           run.style.background.paint(context, x, y, run.width, run.height, 'all', this.textDirection);
         }

@@ -13,6 +13,7 @@
  *
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/widgets/document.dart
+ *   - pdf/lib/src/widgets/annotations.dart
  *
  * `save()` is synchronous here. Upstream returns a `Future<Uint8List>` because
  * it may await image decoding and font loading; the port keeps every stage
@@ -23,6 +24,7 @@ import { serializePdf } from '../pdf/document.ts';
 import type {
   DocumentMetadata,
   PdfPageMode,
+  SerializedDestination,
   SerializedOutline,
   SerializedPage
 } from '../pdf/document.ts';
@@ -67,12 +69,21 @@ export interface DocumentOutlineEntry {
   readonly style: PdfOutlineStyle;
 }
 
+export interface DocumentDestinationEntry {
+  readonly name: string;
+  readonly page: number;
+  readonly x: number | null;
+  readonly y: number | null;
+  readonly zoom: number | null;
+}
+
 export class Document {
   readonly metadata: DocumentMetadata;
   readonly theme: ThemeData;
   readonly pageMode: PdfPageMode;
   readonly sections: Section[] = [];
   private readonly outlineEntries: DocumentOutlineEntry[] = [];
+  private readonly destinationEntries: DocumentDestinationEntry[] = [];
   private outlineReplay = false;
   private outlineCursor = 0;
   private outlineRerenderRequested = false;
@@ -191,9 +202,32 @@ export class Document {
     });
   }
 
+  registerDestination({
+    name,
+    pageNumber,
+    x = null,
+    y = null,
+    zoom = null
+  }: {
+    readonly name: string;
+    readonly pageNumber: number;
+    readonly x?: number | null;
+    readonly y?: number | null;
+    readonly zoom?: number | null;
+  }): void {
+    this.destinationEntries.push({
+      name,
+      page: this.renderPageOffset + pageNumber,
+      x,
+      y,
+      zoom
+    });
+  }
+
   private renderSections(replay: boolean): SerializedPage[] {
     this.outlineReplay = replay;
     this.outlineCursor = 0;
+    this.destinationEntries.length = 0;
     const pages: SerializedPage[] = [];
     for (const section of this.sections) {
       this.renderPageOffset = pages.length;
@@ -216,6 +250,7 @@ export class Document {
     }
 
     const outlines: SerializedOutline[] = this.outlineEntries.map(entry => ({ ...entry }));
-    return serializePdf(pages, this.metadata, outlines, this.pageMode);
+    const destinations: SerializedDestination[] = this.destinationEntries.map(entry => ({ ...entry }));
+    return serializePdf(pages, this.metadata, outlines, this.pageMode, destinations);
   }
 }

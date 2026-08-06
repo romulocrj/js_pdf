@@ -32,12 +32,20 @@ export interface DocumentOutlineEntry {
     readonly color: Rgb | null;
     readonly style: PdfOutlineStyle;
 }
+export interface DocumentDestinationEntry {
+    readonly name: string;
+    readonly page: number;
+    readonly x: number | null;
+    readonly y: number | null;
+    readonly zoom: number | null;
+}
 export declare class Document {
     readonly metadata: DocumentMetadata;
     readonly theme: ThemeData;
     readonly pageMode: PdfPageMode;
     readonly sections: Section[];
     private readonly outlineEntries;
+    private readonly destinationEntries;
     private outlineReplay;
     private outlineCursor;
     private outlineRerenderRequested;
@@ -70,6 +78,13 @@ export declare class Document {
         readonly y: number;
         readonly color?: Rgb | null;
         readonly style?: PdfOutlineStyle;
+    }): void;
+    registerDestination({ name, pageNumber, x, y, zoom }: {
+        readonly name: string;
+        readonly pageNumber: number;
+        readonly x?: number | null;
+        readonly y?: number | null;
+        readonly zoom?: number | null;
     }): void;
     private renderSections;
     save(): Uint8Array;

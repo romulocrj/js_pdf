@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-06T02:33:22.827Z",
+  "generatedAt": "2026-08-06T02:57:23.914Z",
   "results": [
     {
       "name": "hello-world",
@@ -18,8 +18,8 @@
     },
     {
       "name": "document",
-      "status": "failed",
-      "error": "document requires unported js_pdf APIs: UrlLink"
+      "status": "generated",
+      "bytes": 101311
     },
     {
       "name": "invoice",
@@ -34,12 +34,12 @@
     {
       "name": "resume",
       "status": "failed",
-      "error": "resume requires unported js_pdf APIs: CircularProgressIndicator, Icon, IconData, UrlLink"
+      "error": "resume requires unported js_pdf APIs: CircularProgressIndicator, Icon, IconData"
     },
     {
       "name": "server",
-      "status": "failed",
-      "error": "server requires unported js_pdf APIs: AnnotationUrl, UrlLink"
+      "status": "generated",
+      "bytes": 81692
     }
   ]
 }

@@ -87,6 +87,8 @@ test('TableOfContent replays only when needed and sees later headings', () => {
   assert.ok((pdf.match(/\(First topic\) Tj/g) ?? []).length >= 2);
   assert.ok((pdf.match(/\(Second topic\) Tj/g) ?? []).length >= 2);
   assert.ok((pdf.match(/\(2\) Tj/g) ?? []).length >= 2, 'both headings are on physical page two');
+  assert.match(pdf, /\/A << \/S \/GoTo \/D \(outline-1\) >>/);
+  assert.match(pdf, /\/A << \/S \/GoTo \/D \(outline-2\) >>/);
 });
 
 test('a document without TableOfContent stays single-pass', () => {
