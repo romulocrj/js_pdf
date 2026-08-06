@@ -10953,14 +10953,18 @@ class PageTheme {
 }
 
 class MultiPage {
-  constructor({format = undefined, pageFormat = undefined, margin = undefined, orientation = "natural", gap = 8, theme = undefined, build, header = null, footer = null, background = null, maxPages = 20}) {
+  constructor({pageTheme = undefined, format = undefined, pageFormat = undefined, margin = undefined, orientation = undefined, gap = 8, theme = undefined, build, header = null, footer = null, background = null, maxPages = 20}) {
     if (typeof build !== "function") throw new TypeError("MultiPage.build must be a function");
-    this.pageTheme = new PageTheme({
-      pageFormat: pageFormat ?? format ?? PageFormat.A4,
-      margin,
-      orientation
+    const base = pageTheme ?? new PageTheme({
+      pageFormat: PageFormat.A4
     });
-    this.theme = theme ?? null;
+    this.pageTheme = base.copyWith({
+      pageFormat: pageFormat ?? format,
+      margin,
+      orientation,
+      theme
+    });
+    this.theme = this.pageTheme.theme;
     this.gap = Number(gap);
     this.build = build;
     this.header = header;
@@ -10978,16 +10982,14 @@ class MultiPage {
     return this.pageTheme.margin;
   }
   render(documentContext) {
-    const children = this.build(documentContext);
-    if (!Array.isArray(children)) throw new TypeError("MultiPage.build must return an array of widgets");
-    const canvases = [];
+    const pages = [];
     const startPage = () => {
-      if (canvases.length >= this.maxPages) {
+      if (pages.length >= this.maxPages) {
         throw new RangeError(`MultiPage exceeded its ${this.maxPages} page limit`);
       }
       const canvas = new PdfCanvas(this.format.height);
       if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
-      const pageNumber = canvases.length + 1;
+      const pageNumber = pages.length + 1;
       const context = {
         ...documentContext,
         canvas,
@@ -10995,6 +10997,7 @@ class MultiPage {
         pageNumber,
         theme: this.theme ?? documentContext.document.theme
       };
+      this.paintLayer(this.pageTheme.buildBackground, context);
       const maxWidth = this.format.width - this.margin.left - this.margin.right;
       let top = this.margin.top;
       let bottom = this.format.height - this.margin.bottom;
@@ -11022,8 +11025,7 @@ class MultiPage {
           y: bottom + this.gap
         });
       }
-      canvases.push(canvas);
-      return {
+      const state = {
         canvas,
         context,
         maxWidth,
@@ -11031,8 +11033,12 @@ class MultiPage {
         bottom,
         cursor: top
       };
+      pages.push(state);
+      return state;
     };
     let page = startPage();
+    const children = this.build(page.context);
+    if (!Array.isArray(children)) throw new TypeError("MultiPage.build must return an array of widgets");
     for (const child of children) {
       if (child instanceof SpanningWidget && child.canSpan) {
         let state = child.initialSpanState();
@@ -11090,7 +11096,10 @@ class MultiPage {
       });
       page.cursor += box.height + this.gap;
     }
-    return canvases.map(canvas => ({
+    for (const state of pages) {
+      this.paintLayer(this.pageTheme.buildForeground, state.context);
+    }
+    return pages.map(({canvas}) => ({
       format: this.format,
       content: canvas.output(),
       fonts: canvas.fonts,
@@ -11099,6 +11108,19 @@ class MultiPage {
       images: canvas.images,
       annotations: canvas.annotations
     }));
+  }
+  paintLayer(build, context) {
+    if (build === null) return;
+    const widget = build(context);
+    const box = widget.layout(context, new BoxConstraints({
+      maxWidth: this.format.width,
+      maxHeight: this.format.height
+    }));
+    widget.paint(context, {
+      ...box,
+      x: 0,
+      y: 0
+    });
   }
 }
 
@@ -12071,6 +12093,168 @@ class RawImage extends ImageProvider {
   }
   buildImage(width) {
     return width === undefined ? this.image : resizeDecodedImage(this.image, width);
+  }
+}
+
+const DEFAULT_CIRCULAR_COLOR = "#3f51b5";
+
+const DEFAULT_LINEAR_COLOR = "#2196f3";
+
+function finiteNumber(value, name) {
+  const resolved = Number(value);
+  if (!Number.isFinite(resolved)) {
+    throw new TypeError(`${name} must be a finite number`);
+  }
+  return resolved;
+}
+
+function nonNegativeNumber(value, name) {
+  const resolved = finiteNumber(value, name);
+  if (resolved < 0) {
+    throw new RangeError(`${name} must be non-negative`);
+  }
+  return resolved;
+}
+
+function hueFor(red, green, blue, maximum, delta) {
+  if (delta === 0 || maximum === 0) return 0;
+  let hue;
+  if (maximum === red) {
+    hue = 60 * ((green - blue) / delta % 6);
+  } else if (maximum === green) {
+    hue = 60 * ((blue - red) / delta + 2);
+  } else {
+    hue = 60 * ((red - green) / delta + 4);
+  }
+  return hue < 0 ? hue + 360 : hue;
+}
+
+function shadeColor(color, strength) {
+  const [red, green, blue] = normalizeColor(color);
+  const maximum = Math.max(red, green, blue);
+  const minimum = Math.min(red, green, blue);
+  const delta = maximum - minimum;
+  const hue = hueFor(red, green, blue, maximum, delta);
+  const lightness = (maximum + minimum) / 2;
+  const saturation = lightness === 1 ? 0 : Math.min(1, Math.max(0, delta / (1 - Math.abs(2 * lightness - 1))));
+  const shadedLightness = Math.min(1, Math.max(0, lightness * (1.5 - strength)));
+  const chroma = (1 - Math.abs(2 * shadedLightness - 1)) * saturation;
+  const secondary = chroma * (1 - Math.abs(hue / 60 % 2 - 1));
+  const match = shadedLightness - chroma / 2;
+  let resolved;
+  if (hue < 60) resolved = [ chroma, secondary, 0 ]; else if (hue < 120) resolved = [ secondary, chroma, 0 ]; else if (hue < 180) resolved = [ 0, chroma, secondary ]; else if (hue < 240) resolved = [ 0, secondary, chroma ]; else if (hue < 300) resolved = [ secondary, 0, chroma ]; else resolved = [ chroma, 0, secondary ];
+  return [ Math.min(1, Math.max(0, resolved[0] + match)), Math.min(1, Math.max(0, resolved[1] + match)), Math.min(1, Math.max(0, resolved[2] + match)) ];
+}
+
+class CircularProgressIndicator extends Widget {
+  constructor({value, color = null, strokeWidth = 4, backgroundColor = null}) {
+    super();
+    this.value = finiteNumber(value, "CircularProgressIndicator.value");
+    this.color = color;
+    this.strokeWidth = nonNegativeNumber(strokeWidth, "CircularProgressIndicator.strokeWidth");
+    this.backgroundColor = backgroundColor;
+  }
+  layout(_context, constraints) {
+    const size = BoxConstraints.from(constraints).biggest;
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: null
+    };
+  }
+  paint(context, box) {
+    const adjustedValue = Math.min(.99999, Math.max(1e-5, this.value));
+    const left = box.x;
+    const bottom = context.canvas.pageHeight - box.y - box.height;
+    const rx = box.width / 2;
+    const ry = box.height / 2;
+    const angleStart = Math.PI / 2;
+    const angleEnd = angleStart - Math.PI * 2 * adjustedValue;
+    const startTop = {
+      x: left + rx + Math.cos(angleStart) * rx,
+      y: bottom + ry + Math.sin(angleStart) * ry
+    };
+    const endTop = {
+      x: left + rx + Math.cos(angleEnd) * rx,
+      y: bottom + ry + Math.sin(angleEnd) * ry
+    };
+    const startBottom = {
+      x: left + rx + Math.cos(angleStart) * (rx - this.strokeWidth),
+      y: bottom + ry + Math.sin(angleStart) * (ry - this.strokeWidth)
+    };
+    const endBottom = {
+      x: left + rx + Math.cos(angleEnd) * (rx - this.strokeWidth),
+      y: bottom + ry + Math.sin(angleEnd) * (ry - this.strokeWidth)
+    };
+    const {canvas} = context;
+    if (this.backgroundColor !== null && this.value < 1) {
+      canvas.moveTo(startTop.x, startTop.y);
+      canvas.bezierArc(startTop.x, startTop.y, rx, ry, endTop.x, endTop.y, {
+        large: adjustedValue < .5,
+        sweep: true
+      });
+      canvas.lineTo(endBottom.x, endBottom.y);
+      canvas.bezierArc(endBottom.x, endBottom.y, rx - this.strokeWidth, ry - this.strokeWidth, startBottom.x, startBottom.y, {
+        large: adjustedValue < .5
+      });
+      canvas.lineTo(startTop.x, startTop.y);
+      canvas.setFillColor(this.backgroundColor);
+      canvas.fillPath();
+    }
+    if (this.value > 0) {
+      canvas.moveTo(startTop.x, startTop.y);
+      canvas.bezierArc(startTop.x, startTop.y, rx, ry, endTop.x, endTop.y, {
+        large: adjustedValue > .5
+      });
+      canvas.lineTo(endBottom.x, endBottom.y);
+      canvas.bezierArc(endBottom.x, endBottom.y, rx - this.strokeWidth, ry - this.strokeWidth, startBottom.x, startBottom.y, {
+        large: adjustedValue > .5,
+        sweep: true
+      });
+      canvas.lineTo(startTop.x, startTop.y);
+      canvas.setFillColor(this.color ?? DEFAULT_CIRCULAR_COLOR);
+      canvas.fillPath();
+    }
+  }
+}
+
+class LinearProgressIndicator extends Widget {
+  constructor({value, backgroundColor = null, valueColor = null, minHeight = null}) {
+    super();
+    this.value = finiteNumber(value, "LinearProgressIndicator.value");
+    this.backgroundColor = backgroundColor;
+    this.valueColor = valueColor;
+    this.minHeight = minHeight === null ? null : nonNegativeNumber(minHeight, "LinearProgressIndicator.minHeight");
+  }
+  layout(_context, constraints) {
+    const size = new BoxConstraints({
+      minWidth: Infinity,
+      minHeight: this.minHeight ?? 4
+    }).enforce(constraints).smallest;
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: null
+    };
+  }
+  paint(context, box) {
+    const value = Math.min(1, Math.max(0, this.value));
+    const valueColor = this.valueColor ?? DEFAULT_LINEAR_COLOR;
+    const backgroundColor = this.backgroundColor ?? shadeColor(valueColor, .1);
+    const bottom = context.canvas.pageHeight - box.y - box.height;
+    if (value < 1) {
+      const epsilon = value === 0 ? 0 : .01;
+      context.canvas.drawRect(box.x + box.width * value - epsilon, bottom, box.width * (1 - value) + epsilon, box.height);
+      context.canvas.setFillColor(backgroundColor);
+      context.canvas.fillPath();
+    }
+    if (value > 0) {
+      context.canvas.drawRect(box.x, bottom, box.width * value, box.height);
+      context.canvas.setFillColor(valueColor);
+      context.canvas.fillPath();
+    }
   }
 }
 
@@ -15342,6 +15526,8 @@ const publicApi = Object.freeze({
   Icon,
   IconData,
   IconThemeData,
+  CircularProgressIndicator,
+  LinearProgressIndicator,
   Anchor,
   Annotation,
   AnnotationBuilder,
@@ -15480,4 +15666,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationLink, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridAxis, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, Link, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationLink, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, FractionColumnWidth, FullPage, Gradient, GridAxis, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, InlineSpan, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, Lorem, LoremText, MemoryImage, MultiPage, Opacity, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, RichText, Row, SizedBox, Spacer, SpanningWidget, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, rotationMatrix, scaleMatrix, skewMatrix, transformPoint, translationMatrix };

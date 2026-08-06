@@ -41,9 +41,10 @@ Both runners place generated PDFs in `out/`.
 links, inline span annotations and internal named destinations.
 `icons-phase-5.4.mjs` proves themed glyph size, colour, opacity and RTL
 mirroring using the retained Material Icons font.
+`progress-phase-5.5.mjs` compares circular values, track colours, stroke widths,
+elliptical constraints and linear values/heights.
 
-**A non-zero exit is expected until phase 5 completes** — that is the gate
-working, not a broken build.
+`npm run examples` now generates the complete 8/8 upstream set.
 
 ## Roadmap gates
 
@@ -61,7 +62,7 @@ per-phase breakdown of which APIs each one is still waiting on.
 | `invoice` | ✅ **5.2** | tables, decoration, barcodes |
 | `document` | ✅ **5.3** | long-form content: headers, paragraphs, TOC, links |
 | `server` | ✅ **5.3** | charts + SVG + links together |
-| `resume` | **5.5** | everything: images, icons, clipping, partitions, progress |
+| `resume` | ✅ **5.5** | everything: images, icons, clipping, partitions, progress |
 
 When a phase lands, run `npm run examples`, commit the refreshed
 `generation-results.json`, and inspect the PDFs the phase was supposed to

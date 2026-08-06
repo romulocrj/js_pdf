@@ -34,6 +34,9 @@ import { SpanningWidget } from './widget.ts';
 import type { AnyWidget, DocumentContext, RenderContext } from './widget.ts';
 
 export interface MultiPageOptions {
+  /** Everything about each physical page but its body. */
+  readonly pageTheme?: PageTheme;
+
   readonly format?: PageSize;
 
   /** Upstream's name for the same option. */
@@ -51,7 +54,7 @@ export interface MultiPageOptions {
   /** The styles this section's widgets inherit; defaults to the document's. */
   readonly theme?: ThemeData;
   readonly gap?: number;
-  readonly build: (context: DocumentContext) => AnyWidget[];
+  readonly build: (context: RenderContext) => AnyWidget[];
   readonly header?: ((context: RenderContext) => AnyWidget) | null;
   readonly footer?: ((context: RenderContext) => AnyWidget) | null;
   readonly background?: ColorInput | null;
@@ -77,17 +80,18 @@ export class MultiPage implements Section {
   readonly pageTheme: PageTheme;
   readonly gap: number;
   readonly theme: ThemeData | null;
-  readonly build: (context: DocumentContext) => AnyWidget[];
+  readonly build: (context: RenderContext) => AnyWidget[];
   readonly header: ((context: RenderContext) => AnyWidget) | null;
   readonly footer: ((context: RenderContext) => AnyWidget) | null;
   readonly background: ColorInput | null;
   readonly maxPages: number;
 
   constructor({
+    pageTheme = undefined,
     format = undefined,
     pageFormat = undefined,
     margin = undefined,
-    orientation = 'natural',
+    orientation = undefined,
     gap = 8,
     theme = undefined,
     build,
@@ -97,12 +101,14 @@ export class MultiPage implements Section {
     maxPages = 20
   }: MultiPageOptions) {
     if (typeof build !== 'function') throw new TypeError('MultiPage.build must be a function');
-    this.pageTheme = new PageTheme({
-      pageFormat: pageFormat ?? format ?? PageFormat.A4,
+    const base = pageTheme ?? new PageTheme({ pageFormat: PageFormat.A4 });
+    this.pageTheme = base.copyWith({
+      pageFormat: pageFormat ?? format,
       margin,
-      orientation
+      orientation,
+      theme
     });
-    this.theme = theme ?? null;
+    this.theme = this.pageTheme.theme;
     this.gap = Number(gap);
     this.build = build;
     this.header = header;
@@ -125,19 +131,16 @@ export class MultiPage implements Section {
   }
 
   render(documentContext: DocumentContext): SerializedPage[] {
-    const children = this.build(documentContext);
-    if (!Array.isArray(children)) throw new TypeError('MultiPage.build must return an array of widgets');
-
-    const canvases: PdfCanvas[] = [];
+    const pages: PageState[] = [];
 
     const startPage = (): PageState => {
-      if (canvases.length >= this.maxPages) {
+      if (pages.length >= this.maxPages) {
         throw new RangeError(`MultiPage exceeded its ${this.maxPages} page limit`);
       }
       const canvas = new PdfCanvas(this.format.height);
       if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
 
-      const pageNumber = canvases.length + 1;
+      const pageNumber = pages.length + 1;
       const context: RenderContext = {
         ...documentContext,
         canvas,
@@ -145,6 +148,8 @@ export class MultiPage implements Section {
         pageNumber,
         theme: this.theme ?? documentContext.document.theme
       };
+
+      this.paintLayer(this.pageTheme.buildBackground, context);
 
       const maxWidth = this.format.width - this.margin.left - this.margin.right;
       let top = this.margin.top;
@@ -168,11 +173,14 @@ export class MultiPage implements Section {
         footerWidget.paint(context, { ...footerBox, x: this.margin.left, y: bottom + this.gap });
       }
 
-      canvases.push(canvas);
-      return { canvas, context, maxWidth, top, bottom, cursor: top };
+      const state = { canvas, context, maxWidth, top, bottom, cursor: top };
+      pages.push(state);
+      return state;
     };
 
     let page = startPage();
+    const children = this.build(page.context);
+    if (!Array.isArray(children)) throw new TypeError('MultiPage.build must return an array of widgets');
 
     for (const child of children) {
       if (child instanceof SpanningWidget && child.canSpan) {
@@ -242,7 +250,11 @@ export class MultiPage implements Section {
       page.cursor += box.height + this.gap;
     }
 
-    return canvases.map(canvas => ({
+    for (const state of pages) {
+      this.paintLayer(this.pageTheme.buildForeground, state.context);
+    }
+
+    return pages.map(({ canvas }) => ({
       format: this.format,
       content: canvas.output(),
       fonts: canvas.fonts,
@@ -251,5 +263,18 @@ export class MultiPage implements Section {
       images: canvas.images,
       annotations: canvas.annotations
     }));
+  }
+
+  private paintLayer(
+    build: ((context: RenderContext) => AnyWidget) | null,
+    context: RenderContext
+  ): void {
+    if (build === null) return;
+    const widget = build(context);
+    const box = widget.layout(context, new BoxConstraints({
+      maxWidth: this.format.width,
+      maxHeight: this.format.height
+    }));
+    widget.paint(context, { ...box, x: 0, y: 0 });
   }
 }

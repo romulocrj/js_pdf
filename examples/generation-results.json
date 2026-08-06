@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-06T03:19:59.991Z",
+  "generatedAt": "2026-08-06T03:38:05.572Z",
   "results": [
     {
       "name": "hello-world",
@@ -24,7 +24,7 @@
     {
       "name": "invoice",
       "status": "generated",
-      "bytes": 70824
+      "bytes": 102709
     },
     {
       "name": "report",
@@ -33,8 +33,8 @@
     },
     {
       "name": "resume",
-      "status": "failed",
-      "error": "resume requires unported js_pdf APIs: CircularProgressIndicator"
+      "status": "generated",
+      "bytes": 73119
     },
     {
       "name": "server",

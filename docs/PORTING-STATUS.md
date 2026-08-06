@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-06
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 132 `.ts` files, ~28,800 lines (TypeScript)
+**Ported:** 133 `.ts` files, ~29,100 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -26,12 +26,12 @@ table. Run `npm run examples`; current state, from
 | `calendar` | ✅ generated (22,027 bytes) | 0 | 3.6 |
 | `certificate` | ✅ generated (126,677 bytes) | 0 | 3.9 |
 | `report` | ✅ generated (30,332 bytes) | 0 | 5.1 |
-| `invoice` | ✅ generated (70,824 bytes) | 0 | 5.2 |
+| `invoice` | ✅ generated (102,709 bytes) | 0 | 5.2 |
 | `document` | ✅ generated (101,311 bytes) | 0 | 5.3 |
 | `server` | ✅ generated (81,692 bytes) | 0 | 5.3 |
-| `resume` | failed | 1 | 5.5 |
+| `resume` | ✅ generated (73,119 bytes) | 0 | 5.5 |
 
-**7 of 8**, with the missing-API total down from 124 to 1 — phase 1.4 cleared
+**8 of 8**, with the missing-API total down from 124 to 0 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
 from every one of the seven, phase 2.7 cleared `SvgImage` from six, and phase
 3.1 cleared `TableHelper` from four. Phase 3.3 then cleared the composition
@@ -47,7 +47,10 @@ then removed `ClipOval` from resume; phase 4.3 then removed `Image` and
 making invoice generate and advancing resume. Phase 5.3 supplied URL and named
 destination links, making document and server generate and leaving resume with
 only icons and progress. Phase 5.4 then supplied `Icon`, `IconData` and the
-inherited icon theme, leaving only progress. See
+inherited icon theme, leaving only progress. Phase 5.5 supplied both progress
+indicators and made resume generate; while exercising the complete example it
+also fixed `MultiPage.pageTheme`, so the theme and background/foreground layers
+now reach every physical page. See
 [ROADMAP.md § Example gates](ROADMAP.md#example-gates) for which phase clears
 each one.
 
@@ -187,7 +190,7 @@ both, and will grow the shape factories in 2.5.
 | `widgets/content.dart` | 360 | `src/widgets/content.ts` | partial — `Header`, `Paragraph`, `Bullet`, clickable `TableOfContent`, named destinations and conditional two-pass TOC; no `Watermark` or `Footer` |
 | `widgets/placeholders.dart` | 187 | `src/widgets/placeholders.ts` | done — `Placeholder`, vector `PdfLogo`, SVG `FlutterLogo`, deterministic `LoremText` and stable `Lorem` widget |
 | `widgets/icon.dart` | 146 | `src/widgets/icon.ts` | done — `Icon`, `IconData`, `IconThemeData`, themed size/color/opacity and RTL mirroring over a caller-supplied font |
-| `widgets/progress.dart` | 202 | — | — `CircularProgressIndicator` — **phase 5.5** |
+| `widgets/progress.dart` | 202 | `src/widgets/progress.ts` | done — `CircularProgressIndicator`, `LinearProgressIndicator`, clamped values, defaults and custom colours/thickness |
 | `widgets/grid_paper.dart` | 338 | — | — no example depends on it |
 
 ---
@@ -201,7 +204,7 @@ both, and will grow the shape factories in 2.5.
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, content streams, page resources, embedded fonts |
 | Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType both done: parse, subset, embed as Type0/Identity-H with a `/ToUnicode` CMap |
 | SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping and gradients done; SVG text and embedded raster content remain |
-| Widgets | ~14,000 | ~83 public widget/value constructors, plus tables, rich styles, content and themes |
+| Widgets | ~14,000 | ~85 public widget/value constructors, plus tables, rich styles, content and themes |
 
 **Phases 0, 1 and 2 are complete.** The WinAnsi ceiling is gone: a TrueType font
 is parsed, subset to the glyphs a document used, embedded as a
@@ -210,8 +213,7 @@ Type0/CIDFontType2 composite with `/Identity-H`, and selected through `Font`,
 — it is drawn from the embedded font and stays searchable through the
 `/ToUnicode` CMap. The public SVG pipeline now reaches PDF shading patterns.
 
-**Phase 5.4 is complete.** `Icon`, `IconData` and `IconThemeData` draw subsetted
-private-use glyphs through the existing embedded TrueType pipeline, including
-the Material Icons used by resume. Only `resume` remains, waiting on progress.
-See
-[ROADMAP.md](ROADMAP.md).
+**Phase 5.5 is complete.** Both progress indicators use pure layout data and
+the existing PDF path surface. All eight upstream examples now generate with
+zero missing APIs; `resume` exercises images, SVG, icons, clipping, partitions,
+links and circular progress together. See [ROADMAP.md](ROADMAP.md).

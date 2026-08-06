@@ -29,6 +29,7 @@ const mediaBoxes = bytes =>
 const A4_PORTRAIT = '0 0 595.28 841.89';
 const A4_LANDSCAPE = '0 0 841.89 595.28';
 const LETTER_PORTRAIT = '0 0 612 792';
+const LETTER_LANDSCAPE = '0 0 792 612';
 
 test('one document holds pages of different orientations', () => {
   const bytes = Pdf.createPdf({}, api => [
@@ -141,6 +142,32 @@ test('MultiPage takes an orientation, and every page it emits carries it', () =>
   for (const box of boxes.slice(1)) {
     assert.equal(box, A4_LANDSCAPE);
   }
+});
+
+test('MultiPage inherits its build context and page layers from PageTheme', () => {
+  const theme = Pdf.ThemeData.withFont({ base: Pdf.Font.courier() });
+  let seenTheme = null;
+  const bytes = Pdf.createPdf({}, api => new api.MultiPage({
+    pageTheme: new api.PageTheme({
+      pageFormat: api.PageFormat.LETTER,
+      orientation: 'landscape',
+      margin: 20,
+      theme,
+      buildBackground: () => new api.Container({ width: 20, height: 20, background: '#00ff00' }),
+      buildForeground: () => new api.Container({ width: 10, height: 10, background: '#0000ff' })
+    }),
+    build: context => {
+      seenTheme = api.Theme.of(context);
+      return [new api.Text('themed multipage')];
+    }
+  }));
+
+  const source = latin1(bytes);
+  assert.equal(seenTheme, theme);
+  assert.deepEqual(mediaBoxes(bytes), [LETTER_LANDSCAPE]);
+  assert.match(source, /\/BaseFont \/Courier\b/);
+  assert.ok(source.indexOf('0 1 0 rg') < source.indexOf('BT '));
+  assert.ok(source.indexOf('BT ') < source.indexOf('0 0 1 rg'));
 });
 
 test('margins rotate with the paper', () => {

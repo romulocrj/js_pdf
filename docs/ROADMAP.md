@@ -4,7 +4,7 @@ Ordered plan for the port dart_pdf-master folder. Current coverage is in
 [PORTING-STATUS.md](PORTING-STATUS.md); conventions are in
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**Last updated:** 2026-08-05
+**Last updated:** 2026-08-06
 
 
 **Important** if you find a bug in original code, correct it in the port and document it in [ORIGINAL-BUG.md](ORIGINAL-BUG.md) with a brief instruction on how to reproduce and correct it.
@@ -21,9 +21,9 @@ clipping and PDF shading-pattern gradients, tables lay out fixed, intrinsic and
 flexible tracks across as many pages as their rows require, and raster images
 flow through the public `Image` widget/provider surface.
 
-**Phases 0, 1, 2, 3 and 4 are complete.** The foundations, layout system, SVG
-surface and raster image pipeline are all in place; the remaining examples now
-wait only on phase-5 document features.
+**Phases 0, 1, 2, 3 and 4 are complete, and phases 5.1–5.5 have landed.** The
+foundations, layout system, SVG/raster pipelines and every API required by the
+ported upstream examples are in place; all eight examples now generate.
 
 **Phase 0.0 — TypeScript migration — landed 2026-08-05.** Every module is `.ts`;
 `tsconfig.json` compiles against the ES2020 lib with no DOM and no host types,
@@ -115,7 +115,7 @@ the Apache-licensed `barcode` generators are public, including PDF417 for the
 invoice. QR preserves the adapter API but is an independent js_pdf encoder;
 no code from the separately licensed Dart `qr` library is ported. Seven focused
 tests cover the public surface, a reference QR matrix, capacity, PDF417,
-row-major matrices and pure widget layout. `invoice.pdf` now generates 70,824
+row-major matrices and pure widget layout. `invoice.pdf` now generates 102,709
 bytes, the gate reaches 5/8 examples and the missing total falls 25 → 7.
 `examples/barcode-phase-5.2.mjs` is the retained host-free visual/V8 proof.
 
@@ -135,6 +135,15 @@ used. The widget inherits size, colour and opacity, accepts explicit overrides
 and mirrors directional glyphs in RTL. Six tests and
 `examples/icons-phase-5.4.mjs` cover the surface in Node and bare V8. Resume's
 missing total falls 3 → 1.
+
+**Phase 5.5 — progress — landed 2026-08-06.** `CircularProgressIndicator` and
+`LinearProgressIndicator` port upstream's determinate ring/bar painting,
+clamping, default colours and HSL-shaded linear track. Seven focused tests and
+`examples/progress-phase-5.5.mjs` cover the surface. Finishing the resume also
+exposed and fixed the port's ignored `MultiPage.pageTheme`: the build callback
+now receives a complete themed render context and page background/foreground
+layers paint on every physical page. `resume.pdf` generates 73,119 bytes and
+the complete upstream example gate reaches 8/8 with zero missing APIs.
 
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
@@ -205,12 +214,12 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **Phase 5.5 — progress (`resume`).** Port `CircularProgressIndicator` and
-> `LinearProgressIndicator`. The circular widget is resume's final missing API,
-> so this phase makes the complete upstream example set generate end to end.
+> **Phase 5.6 — remaining document features.** Port forms
+> (`widgets/forms.dart`), page labels, metadata and XMP. No retained example
+> depends on these, so add focused tests and a visual proof for the forms.
 
-Phase 5.4 is complete: icons render from the subsetted Material Icons font, and
-resume now waits only on progress.
+Phase 5.5 is complete: both progress indicators render, `MultiPage.pageTheme`
+is honored, and the complete upstream example set generates end to end.
 
 ---
 
@@ -1168,7 +1177,7 @@ The last four examples all land here, one per sub-phase.
 - `examples/barcode-phase-5.2.mjs` exercises the independent QR encoder,
   invoice PDF417 and representative one-dimensional generators under both the
   local bundle and the bare V8 harness.
-- **Example gate:** ⇒ **`invoice` generates end to end here** (70,824 bytes).
+- **Example gate:** ⇒ **`invoice` generates end to end here** (102,709 bytes).
   Also advances `resume`.
 
 ### 5.3 Annotations and links ⇒ `document`, `server` ✅ *(landed 2026-08-06)*
@@ -1198,12 +1207,17 @@ The last four examples all land here, one per sub-phase.
   9,034 bytes under both the local bundle and bare V8.
 - **Example gate:** advances `resume`; only `CircularProgressIndicator` remains.
 
-### 5.5 Progress ⇒ `resume`
+### 5.5 Progress ✅ *(landed 2026-08-06)* ⇒ `resume`
 
 - **Ports:** `widgets/progress.dart`
-- `CircularProgressIndicator`, `LinearProgressIndicator`.
+- `CircularProgressIndicator` and `LinearProgressIndicator`, including value
+  clamping, default colours, custom tracks and configurable thickness.
+- `MultiPage.pageTheme` now scopes the build callback and paints page theme
+  background/foreground layers on every generated page.
+- `examples/progress-phase-5.5.mjs` is the retained visual proof and generates
+  13,402 bytes under the local bundle.
 - **Example gate:** ⇒ **`resume` generates end to end here — the whole example
-  set now passes.**
+  set now passes (73,119 bytes, 8/8 examples, zero missing APIs).**
 
 ### 5.6 Remaining
 

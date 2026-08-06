@@ -89,6 +89,7 @@ import { PageTheme } from './widgets/page_theme.ts';
 import { Image } from './widgets/image.ts';
 import { ImageProvider, ImageProxy, MemoryImage, RawImage } from './widgets/image_provider.ts';
 import { Icon, IconData, IconThemeData } from './widgets/icon.ts';
+import { CircularProgressIndicator, LinearProgressIndicator } from './widgets/progress.ts';
 import { FlutterLogo, Lorem, LoremText, PdfLogo, Placeholder } from './widgets/placeholders.ts';
 import { Vector } from './widgets/shape.ts';
 import { Positioned, PositionedDirectional, Stack } from './widgets/stack.ts';
@@ -141,6 +142,7 @@ export {
   CartesianFrame,
   CartesianGrid,
   Center,
+  CircularProgressIndicator,
   Chart,
   ChartFrame,
   ChartGrid,
@@ -184,6 +186,7 @@ export {
   Link,
   LineDataSet,
   LimitedBox,
+  LinearProgressIndicator,
   LinearGradient,
   Lorem,
   LoremText,
@@ -544,6 +547,10 @@ export type {
   IconThemeDataOptions
 } from './widgets/icon.ts';
 export type {
+  CircularProgressIndicatorOptions,
+  LinearProgressIndicatorOptions
+} from './widgets/progress.ts';
+export type {
   MemoryImageOptions,
   RawImageOptions
 } from './widgets/image_provider.ts';
@@ -585,6 +592,8 @@ export interface PublicApi {
   readonly Icon: typeof Icon;
   readonly IconData: typeof IconData;
   readonly IconThemeData: typeof IconThemeData;
+  readonly CircularProgressIndicator: typeof CircularProgressIndicator;
+  readonly LinearProgressIndicator: typeof LinearProgressIndicator;
   readonly Anchor: typeof Anchor;
   readonly Annotation: typeof Annotation;
   readonly AnnotationBuilder: typeof AnnotationBuilder;
@@ -716,6 +725,8 @@ const publicApi: PublicApi = Object.freeze({
   Icon,
   IconData,
   IconThemeData,
+  CircularProgressIndicator,
+  LinearProgressIndicator,
   Anchor,
   Annotation,
   AnnotationBuilder,
