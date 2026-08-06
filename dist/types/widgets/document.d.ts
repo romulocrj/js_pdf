@@ -11,6 +11,7 @@ export interface DocumentOptions {
     readonly author?: string | null;
     readonly subject?: string | null;
     readonly creator?: string | null;
+    /** The port URL is used by default and appended to caller-supplied values. */
     readonly producer?: string | null;
     readonly keywords?: string | null;
     /** Caller-supplied XMP packet, serialized as UTF-8 XML metadata. */

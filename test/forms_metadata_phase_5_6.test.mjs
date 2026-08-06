@@ -10,6 +10,32 @@ import * as Pdf from '../src/index.ts';
 
 const source = bytes => Buffer.from(bytes).toString('latin1');
 
+test('document metadata attributes the producer without claiming a default creator', () => {
+  const defaultDocument = new Pdf.Document();
+  defaultDocument.addPage(new Pdf.Page({ build: () => new Pdf.Text('Default metadata') }));
+  const defaultPdf = source(defaultDocument.save());
+
+  assert.equal(defaultDocument.metadata.creator, null);
+  assert.equal(defaultDocument.metadata.producer, null);
+  assert.doesNotMatch(defaultPdf, /\/Creator/);
+  assert.match(defaultPdf, /\/Producer \(https:\/\/github\.com\/romulocrj\/js_pdf\)/);
+  assert.match(defaultPdf, /\/CreationDate \(D:\d{14}Z\)/);
+
+  const customDocument = new Pdf.Document({
+    creator: 'Report application',
+    producer: 'Acme PDF service'
+  });
+  customDocument.addPage(new Pdf.Page({ build: () => new Pdf.Text('Custom metadata') }));
+  const customPdf = source(customDocument.save());
+
+  assert.match(customPdf, /\/Creator \(Report application\)/);
+  assert.match(
+    customPdf,
+    /\/Producer \(Acme PDF service \\\(https:\/\/github\.com\/romulocrj\/js_pdf\\\)\)/
+  );
+  assert.match(customPdf, /\/CreationDate \(D:\d{14}Z\)/);
+});
+
 test('phase 5.6 form widgets are public and serialize one AcroForm field each', () => {
   for (const name of ['Checkbox', 'ChoiceField', 'FlatButton', 'TextField']) {
     assert.equal(typeof Pdf[name], 'function', name);

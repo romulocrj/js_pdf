@@ -14,9 +14,9 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/format/string.dart
  *
- * PORT GAP: no UTF-16BE text and no PDF dates. Upstream emits both; the port has
- * the literal `(...)` and hex `<...>` branches, which is what the standard fonts
- * and an `/Identity-H` composite font need respectively.
+ * PORT GAP: no UTF-16BE text. Upstream emits it for strings outside Latin-1;
+ * the port has the literal `(...)` and hex `<...>` branches, which is what the
+ * standard fonts and an `/Identity-H` composite font need respectively.
  */
 
 import { PdfDataType } from './base.ts';
@@ -93,6 +93,22 @@ export class PdfString extends PdfDataType {
   constructor(value: string) {
     super();
     this.value = value;
+  }
+
+  /** A PDF date normalized to UTC, matching upstream's second precision. */
+  static fromDate(date: Date): PdfString {
+    if (!Number.isFinite(date.getTime())) {
+      throw new RangeError('PDF date must be valid');
+    }
+
+    const year = String(date.getUTCFullYear()).padStart(4, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hour = String(date.getUTCHours()).padStart(2, '0');
+    const minute = String(date.getUTCMinutes()).padStart(2, '0');
+    const second = String(date.getUTCSeconds()).padStart(2, '0');
+
+    return new PdfString(`D:${year}${month}${day}${hour}${minute}${second}Z`);
   }
 
   override output(s: PdfStream): void {

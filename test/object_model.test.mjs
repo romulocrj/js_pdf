@@ -90,6 +90,11 @@ test('PdfString, PdfBool, PdfNull and PdfIndirect serialize to PDF syntax', () =
   assert.equal(write(new PdfString('js_pdf')), '(js_pdf)');
   assert.equal(write(new PdfString('Relatório')), '(Relat\\363rio)');
   assert.equal(write(new PdfString('a(b)c\\d')), '(a\\(b\\)c\\\\d)');
+  assert.equal(
+    write(PdfString.fromDate(new Date('2026-08-06T19:23:45.987-03:00'))),
+    '(D:20260806222345Z)'
+  );
+  assert.throws(() => PdfString.fromDate(new Date(Number.NaN)), /must be valid/);
   assert.equal(write(new PdfBool(true)), 'true');
   assert.equal(write(new PdfBool(false)), 'false');
   assert.equal(write(new PdfNull()), 'null');

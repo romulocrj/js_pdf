@@ -1,5 +1,5 @@
 /*!
- * @license romulocrj/js_pdf v0.1.3
+ * @license romulocrj/js_pdf v0.1.4
  *
  * An independent JavaScript port of DavBfr/dart_pdf.
  *
@@ -3271,6 +3271,18 @@ class PdfString extends PdfDataType {
   constructor(value) {
     super();
     this.value = value;
+  }
+  static fromDate(date) {
+    if (!Number.isFinite(date.getTime())) {
+      throw new RangeError("PDF date must be valid");
+    }
+    const year = String(date.getUTCFullYear()).padStart(4, "0");
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    const hour = String(date.getUTCHours()).padStart(2, "0");
+    const minute = String(date.getUTCMinutes()).padStart(2, "0");
+    const second = String(date.getUTCSeconds()).padStart(2, "0");
+    return new PdfString(`D:${year}${month}${day}${hour}${minute}${second}Z`);
   }
   output(s) {
     s.putString(pdfLiteral(this.value));
@@ -11328,15 +11340,19 @@ class PdfCatalog extends PdfObject {
   }
 }
 
+const LIBRARY_NAME = "https://github.com/romulocrj/js_pdf";
+
 class PdfInfo extends PdfObject {
   constructor(document, metadata) {
     super(document, new PdfDict);
-    const entries = [ [ "/Title", metadata.title ], [ "/Author", metadata.author ], [ "/Subject", metadata.subject ], [ "/Keywords", metadata.keywords ], [ "/Creator", metadata.creator ], [ "/Producer", metadata.producer ] ];
+    const producer = metadata.producer == null ? LIBRARY_NAME : `${metadata.producer} (${LIBRARY_NAME})`;
+    const entries = [ [ "/Title", metadata.title ], [ "/Author", metadata.author ], [ "/Subject", metadata.subject ], [ "/Keywords", metadata.keywords ], [ "/Creator", metadata.creator ], [ "/Producer", producer ] ];
     for (const [key, value] of entries) {
       if (value) {
         this.params.set(key, new PdfString(value));
       }
     }
+    this.params.set("/CreationDate", PdfString.fromDate(new Date));
   }
 }
 
@@ -12944,7 +12960,7 @@ class DefaultTextStyle extends InheritedTheme {
 }
 
 class Document {
-  constructor({title = null, author = null, subject = null, creator = "js_pdf", producer = "js_pdf", keywords = null, xmpMetadata = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none"} = {}) {
+  constructor({title = null, author = null, subject = null, creator = null, producer = null, keywords = null, xmpMetadata = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none"} = {}) {
     this.sections = [];
     this.outlineEntries = [];
     this.destinationEntries = [];

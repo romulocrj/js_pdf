@@ -31,6 +31,10 @@ const skip = ARTIFACTS.every(({ name }) => existsSync(urlOf(name)))
   ? false
   : 'run `npm run build` first';
 
+const withoutCreationDate = bytes => Buffer.from(bytes)
+  .toString('latin1')
+  .replace(/\/CreationDate \(D:\d{14}Z\)/, '/CreationDate (D:00000000000000Z)');
+
 for (const { name, minified } of ARTIFACTS) {
   test(`${name} is self-contained and host-free`, { skip }, async () => {
     const source = await readFile(urlOf(name), 'utf8');
@@ -59,9 +63,9 @@ for (const { name, minified } of ARTIFACTS) {
     ]);
 
     const build = api => new api.Page({ build: () => new api.Text('Hello js_pdf') });
-    assert.deepEqual(
-      Array.from(dist.createPdf({ title: 'x' }, build)),
-      Array.from(src.createPdf({ title: 'x' }, build))
+    assert.equal(
+      withoutCreationDate(dist.createPdf({ title: 'x' }, build)),
+      withoutCreationDate(src.createPdf({ title: 'x' }, build))
     );
   });
 

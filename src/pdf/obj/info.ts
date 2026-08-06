@@ -14,20 +14,16 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/obj/info.dart
  *
- * PORT GAP: no `/CreationDate`. Upstream stamps the current
- * time, which the port cannot do — reading a clock is a host capability the
- * library does not have, and a document that varies run to run cannot be
- * asserted byte for byte. A caller that wants a creation date can pass it once
- * the string type grows a PDF-date branch in roadmap phase 1.3.
- *
- * Upstream also appends its own URL to `/Producer`; the port leaves the caller's
- * value alone.
+ * `/Producer` follows upstream: the port URL is the default, and is appended in
+ * parentheses when the caller supplies an application name.
  */
 
 import { PdfDict } from '../format/dict.ts';
 import { PdfString } from '../format/string.ts';
 import { PdfObject } from './object.ts';
 import type { PdfObjectRegistry } from './object.ts';
+
+const LIBRARY_NAME = 'https://github.com/romulocrj/js_pdf';
 
 export interface DocumentMetadata {
   readonly title?: string | null;
@@ -44,6 +40,10 @@ export class PdfInfo extends PdfObject<PdfDict> {
   constructor(document: PdfObjectRegistry, metadata: DocumentMetadata) {
     super(document, new PdfDict());
 
+    const producer = metadata.producer == null
+      ? LIBRARY_NAME
+      : `${metadata.producer} (${LIBRARY_NAME})`;
+
     // Insertion order is emission order. Empty values are omitted rather than
     // written as empty strings, so an unset field is absent from the file.
     const entries: readonly (readonly [string, string | null | undefined])[] = [
@@ -52,7 +52,7 @@ export class PdfInfo extends PdfObject<PdfDict> {
       ['/Subject', metadata.subject],
       ['/Keywords', metadata.keywords],
       ['/Creator', metadata.creator],
-      ['/Producer', metadata.producer]
+      ['/Producer', producer]
     ];
 
     for (const [key, value] of entries) {
@@ -60,5 +60,7 @@ export class PdfInfo extends PdfObject<PdfDict> {
         this.params.set(key, new PdfString(value));
       }
     }
+
+    this.params.set('/CreationDate', PdfString.fromDate(new Date()));
   }
 }

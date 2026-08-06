@@ -414,7 +414,11 @@ Landed as a 13-module `format/` layer (`PdfDataType` and the value types, plus
 (`PdfObject`, `PdfObjectStream`, `PdfCatalog`, `PdfPageList`, `PdfPage`,
 `PdfInfo`). Verified byte-identical across 20 fixtures — the 14 standard fonts,
 both page formats, accented text, empty and full metadata, multi-page overflow
-and vector drawing — and `hello-world` currently generates at 743 bytes.
+and vector drawing — and `hello-world` currently generates at 788 bytes.
+
+`PdfInfo` leaves `/Creator` absent by default and mirrors upstream producer
+attribution: the port URL alone, or `caller value (port URL)`. It also stamps
+`/CreationDate` at construction in upstream's UTC `D:YYYYMMDDHHmmssZ` format.
 
 Divergences worth knowing, each noted in the file that makes it:
 

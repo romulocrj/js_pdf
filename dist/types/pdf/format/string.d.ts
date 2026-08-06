@@ -20,5 +20,7 @@ export declare function pdfHexString(values: readonly number[], digits?: number)
 export declare class PdfString extends PdfDataType {
     readonly value: string;
     constructor(value: string);
+    /** A PDF date normalized to UTC, matching upstream's second precision. */
+    static fromDate(date: Date): PdfString;
     output(s: PdfStream): void;
 }

@@ -68,7 +68,7 @@ each one.
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
 | `format/num.dart` | 96 | `src/pdf/format/num.ts` | done — `PdfNum`, `PdfNumList`; 4-decimal precision vs. upstream's 5 |
-| `format/string.dart` | 204 | `src/pdf/format/string.ts` | partial — `PdfString`, literal + WinAnsi, hex strings for CIDs; no UTF-16BE, no PDF-date |
+| `format/string.dart` | 204 | `src/pdf/format/string.ts` | partial — `PdfString`, literal + WinAnsi, UTC PDF dates, hex strings for CIDs; no UTF-16BE |
 | `format/stream.dart` | 83 | `src/pdf/format/stream.ts` | done — growable `PdfStream` byte buffer |
 | `format/base.dart` | 50 | `src/pdf/format/base.ts` | done — `PdfDataType`; `output(stream)` only, no settings or indent |
 | `format/object_base.dart` | 118 | `src/pdf/format/object_base.ts` | partial — `PdfObjectBase`, `ref()`, `prepare()`; no `PdfSettings` |
@@ -114,7 +114,7 @@ on: an object registers itself with the document, hands out references through
 | `obj/catalog.dart` | 178 | `src/pdf/obj/catalog.ts` | partial — pages, names, outlines, XML metadata, page labels and `/AcroForm`; no PDF/A output intents |
 | `obj/page_list.dart` | 46 | `src/pdf/obj/page_list.ts` | done — flat page tree |
 | `obj/page.dart` | 164 | `src/pdf/obj/page.ts` | partial — `/Resources` inherited from `PdfGraphicStream`, link, geometric and form `/Annots`; no `/Rotate` |
-| `obj/info.dart` | 69 | `src/pdf/obj/info.ts` | partial — title, author, subject, keywords, creator and producer; no `/CreationDate` (no clock) |
+| `obj/info.dart` | 69 | `src/pdf/obj/info.ts` | done — title, author, subject, keywords, creator, upstream-style producer attribution and UTC `/CreationDate` |
 | `obj/array.dart` | 30 | — | — |
 | `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; `resourceDict(registry)` returns a `PdfDict` and may create the objects it references |
 | `obj/font_descriptor.dart` | 139 | `src/pdf/obj/font_descriptor.ts` | partial — bbox, flags, ascent/descent, `/FontFile2`; `/ItalicAngle`, `/CapHeight` and `/StemV` are upstream's constants |
