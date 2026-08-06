@@ -115,7 +115,7 @@ the Apache-licensed `barcode` generators are public, including PDF417 for the
 invoice. QR preserves the adapter API but is an independent js_pdf encoder;
 no code from the separately licensed Dart `qr` library is ported. Seven focused
 tests cover the public surface, a reference QR matrix, capacity, PDF417,
-row-major matrices and pure widget layout. `invoice.pdf` now generates 102,709
+row-major matrices and pure widget layout. `invoice.pdf` now generates 102,664
 bytes, the gate reaches 5/8 examples and the missing total falls 25 → 7.
 `examples/barcode-phase-5.2.mjs` is the retained host-free visual/V8 proof.
 
@@ -142,8 +142,18 @@ clamping, default colours and HSL-shaded linear track. Seven focused tests and
 `examples/progress-phase-5.5.mjs` cover the surface. Finishing the resume also
 exposed and fixed the port's ignored `MultiPage.pageTheme`: the build callback
 now receives a complete themed render context and page background/foreground
-layers paint on every physical page. `resume.pdf` generates 73,119 bytes and
+layers paint on every physical page. `resume.pdf` generates 74,273 bytes and
 the complete upstream example gate reaches 8/8 with zero missing APIs.
+
+**Upstream example parity follow-up — landed 2026-08-06.** Comparison against
+the retained original PDFs completed the pure continuation protocol for
+`Flex`/`Column`, `Container` and `StatelessWidget`; `MultiPage` now measures a
+spanning child intrinsically before fragmenting it and rebuilds headers and
+footers with global page numbers and the final total. Text line boxes use the
+selected font's ascent/descent and apply `lineSpacing` only between lines.
+Contained SVG backgrounds keep their fitted size, `FullPage` positions them at
+the physical bottom, and `PdfLogo` keeps its intrinsic 24×27 ratio. The result
+matches the original page counts: document 6, invoice 2, resume 2 and server 1.
 
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
@@ -187,7 +197,10 @@ removed `TableHelper` from four example gates; the missing total fell 88 → 84.
 **Phase 3.2 — spanning widgets — landed 2026-08-05.** `SpanningWidget` returns
 an immutable continuation snapshot with each page fragment. `MultiPage` drives
 those fragments inside the space left by its header/footer, and `Table` resumes
-at the next unpainted row while repeating marked headers.
+at the next unpainted row while repeating marked headers. The parity follow-up
+completed upstream's delegation through `StatelessWidget` and `Container`, and
+vertical `Flex` resumes at direct-child boundaries without making horizontal
+rows fragmentable.
 
 **Phase 2.3 — XML reader — landed 2026-08-05.** `src/svg/xml.ts` reads
 elements, attributes, text, CDATA, comments, entities and namespaces. Every SVG
@@ -564,11 +577,10 @@ and `Theme.of(context)` is a field read.
 
 Other divergences worth knowing:
 
-- `TextStyle.defaultStyle()` uses `height: 1.2`, not upstream's `1`. The port has
-  used 1.2 since before styles existed, and changing it would move every line of
-  every existing document. `letterSpacing` and `wordSpacing` default to `0`
-  rather than upstream's `0`/`1`, and are absolute PDF units — the `Tc` and `Tw`
-  operands, which `PdfCanvas.text` now emits when they are non-zero.
+- `letterSpacing` and `wordSpacing` default to `0` and are absolute PDF units —
+  the `Tc` and `Tw` operands, which `PdfCanvas.text` emits when they are
+  non-zero. Text height follows upstream's selected-font metrics and a default
+  `height` multiplier of `1`.
 - `PageTheme.mustRotate` swaps the paper's dimensions rather than rotating the
   content through the CTM, which needs **2.1**. The page a reader sees is the
   same; `/MediaBox` reports the rotated size.
@@ -1177,7 +1189,7 @@ The last four examples all land here, one per sub-phase.
 - `examples/barcode-phase-5.2.mjs` exercises the independent QR encoder,
   invoice PDF417 and representative one-dimensional generators under both the
   local bundle and the bare V8 harness.
-- **Example gate:** ⇒ **`invoice` generates end to end here** (102,709 bytes).
+- **Example gate:** ⇒ **`invoice` generates end to end here** (102,664 bytes).
   Also advances `resume`.
 
 ### 5.3 Annotations and links ⇒ `document`, `server` ✅ *(landed 2026-08-06)*
@@ -1191,7 +1203,7 @@ The last four examples all land here, one per sub-phase.
 - `TableOfContent` rows are internal links to their corresponding headers.
 - `examples/annotations-phase-5.3.mjs` is the retained visual proof and runs in
   both the local bundle and the bare V8 harness.
-- **Example gate:** ⇒ **`document` (101,311 bytes) and `server` (81,692 bytes)
+- **Example gate:** ⇒ **`document` (137,164 bytes) and `server` (82,684 bytes)
   generate end to end here.**
   Also advances `resume`.
 
@@ -1214,10 +1226,13 @@ The last four examples all land here, one per sub-phase.
   clamping, default colours, custom tracks and configurable thickness.
 - `MultiPage.pageTheme` now scopes the build callback and paints page theme
   background/foreground layers on every generated page.
+- Header/footer paint is post-processed with global page numbers and the final
+  `pagesCount`; vertical flex, stateless content and containers carry immutable
+  continuation state.
 - `examples/progress-phase-5.5.mjs` is the retained visual proof and generates
   13,402 bytes under the local bundle.
 - **Example gate:** ⇒ **`resume` generates end to end here — the whole example
-  set now passes (73,119 bytes, 8/8 examples, zero missing APIs).**
+  set now passes (74,273 bytes, 8/8 examples, zero missing APIs).**
 
 ### 5.6 Remaining
 

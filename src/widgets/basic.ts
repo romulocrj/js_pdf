@@ -44,6 +44,8 @@ import {
 } from './geometry.ts';
 import type { BoxConstraintsInput, Insets, InsetsInput, Offset } from './geometry.ts';
 import type { BoxFit } from './svg.ts';
+import { BorderSide } from './box_border.ts';
+import type { BorderStyle, BorderStyleInput } from './box_border.ts';
 import { StatelessWidget, Widget } from './widget.ts';
 import type {
   AnyLayoutBox,
@@ -123,8 +125,28 @@ export interface AlignLayoutData extends SingleChildLayoutData {
   readonly dy: number;
 }
 
+export type BasicAlignmentName =
+  | 'topLeft'
+  | 'topCenter'
+  | 'topRight'
+  | 'centerLeft'
+  | 'center'
+  | 'centerRight'
+  | 'bottomLeft'
+  | 'bottomCenter'
+  | 'bottomRight';
+
+export type BasicAlignmentInput = Alignment | BasicAlignmentName;
+
+export function resolveBasicAlignment(value: BasicAlignmentInput): Alignment {
+  if (typeof value !== 'string') return value;
+  const result = Alignment[value];
+  if (result === undefined) throw new TypeError(`Unknown alignment: ${value}`);
+  return result;
+}
+
 export interface AlignOptions {
-  readonly alignment?: Alignment;
+  readonly alignment?: BasicAlignmentInput;
   readonly widthFactor?: number | null;
   readonly heightFactor?: number | null;
   readonly child?: AnyWidget | null;
@@ -149,7 +171,7 @@ export class Align extends Widget<AlignLayoutData> {
     child = null
   }: AlignOptions = {}) {
     super();
-    this.alignment = alignment;
+    this.alignment = resolveBasicAlignment(alignment);
     this.widthFactor = widthFactor;
     this.heightFactor = heightFactor;
     this.child = child;
@@ -294,6 +316,7 @@ export interface DividerOptions {
   readonly indent?: number;
   readonly endIndent?: number;
   readonly color?: ColorInput;
+  readonly borderStyle?: BorderStyleInput;
 }
 
 export const DEFAULT_DIVIDER_HEIGHT = 16;
@@ -313,13 +336,15 @@ export class Divider extends Widget<null> {
   readonly indent: number;
   readonly endIndent: number;
   readonly color: Rgb;
+  readonly borderStyle: BorderStyle;
 
   constructor({
     height = DEFAULT_DIVIDER_HEIGHT,
     thickness = DEFAULT_DIVIDER_THICKNESS,
     indent = 0,
     endIndent = 0,
-    color = '#000000'
+    color = '#000000',
+    borderStyle = 'solid'
   }: DividerOptions = {}) {
     super();
     this.height = Math.max(0, Number(height));
@@ -327,6 +352,7 @@ export class Divider extends Widget<null> {
     this.indent = Math.max(0, Number(indent));
     this.endIndent = Math.max(0, Number(endIndent));
     this.color = normalizeColor(color);
+    this.borderStyle = new BorderSide({ style: borderStyle }).style;
   }
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<null> {
@@ -344,7 +370,33 @@ export class Divider extends Widget<null> {
 
   override paint(context: RenderContext, box: PositionedBox<null>): void {
     const width = Math.max(0, box.width - this.indent - this.endIndent);
-    if (width === 0 || this.thickness === 0) return;
+    if (width === 0 || this.thickness === 0 || !this.borderStyle.paint) return;
+
+    const pattern = this.borderStyle.pattern;
+    if (pattern !== null && pattern.length > 0) {
+      let cursor = -this.borderStyle.phase;
+      let index = 0;
+      while (cursor < width) {
+        const segment = Math.max(0, pattern[index % pattern.length] ?? 0);
+        if (index % 2 === 0 && segment > 0) {
+          const start = Math.max(0, cursor);
+          const end = Math.min(width, cursor + segment);
+          if (end > start) {
+            context.canvas.fillRect(
+              box.x + this.indent + start,
+              box.y + (box.height - this.thickness) / 2,
+              end - start,
+              this.thickness,
+              this.color
+            );
+          }
+        }
+        cursor += segment;
+        index++;
+        if (segment === 0 && index >= pattern.length) break;
+      }
+      return;
+    }
 
     context.canvas.fillRect(
       box.x + this.indent,
@@ -354,26 +406,6 @@ export class Divider extends Widget<null> {
       this.color
     );
   }
-}
-
-export type BasicAlignmentName =
-  | 'topLeft'
-  | 'topCenter'
-  | 'topRight'
-  | 'centerLeft'
-  | 'center'
-  | 'centerRight'
-  | 'bottomLeft'
-  | 'bottomCenter'
-  | 'bottomRight';
-
-export type BasicAlignmentInput = Alignment | BasicAlignmentName;
-
-export function resolveBasicAlignment(value: BasicAlignmentInput): Alignment {
-  if (typeof value !== 'string') return value;
-  const result = Alignment[value];
-  if (result === undefined) throw new TypeError(`Unknown alignment: ${value}`);
-  return result;
 }
 
 function finiteMatrix(value: PdfMatrix): PdfMatrix {
@@ -940,9 +972,7 @@ export class FullPage extends Widget<SingleChildLayoutData> {
     childBox.widget.paint(context, {
       ...childBox,
       x: this.ignoreMargins ? 0 : box.x,
-      y: this.ignoreMargins ? 0 : box.y,
-      width: box.width,
-      height: box.height
+      y: (this.ignoreMargins ? 0 : box.y) + box.height - childBox.height
     });
     context.canvas.restoreContext();
   }

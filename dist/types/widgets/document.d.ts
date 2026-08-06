@@ -49,7 +49,6 @@ export declare class Document {
     private outlineReplay;
     private outlineCursor;
     private outlineRerenderRequested;
-    private renderPageOffset;
     /**
      * One `PdfFont` per declaration, for this document only. An embedded font
      * accumulates the code points it is asked to encode, so the cache cannot be

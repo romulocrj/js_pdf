@@ -8,12 +8,8 @@ export type TextDecoration = TextDecorationName | readonly TextDecorationName[];
 export type TextDecorationStyle = 'solid' | 'double';
 /** 12 points, upstream's `TextStyle._defaultFontSize`. */
 export declare const DEFAULT_FONT_SIZE = 12;
-/**
- * Upstream's default `height` is 1 — a line box exactly one em tall. The port
- * has used 1.2 since before styles existed, and `Text` still reads this value,
- * so changing it would move every line of every existing document.
- */
-export declare const DEFAULT_LINE_HEIGHT = 1.2;
+/** Upstream's default multiplier over the selected font's ascent/descent. */
+export declare const DEFAULT_LINE_HEIGHT = 1;
 export interface TextStyleOptions {
     readonly inherit?: boolean;
     readonly color?: ColorInput | null;

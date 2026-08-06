@@ -23,14 +23,15 @@ import { BoxDecoration, normalizeBoxDecoration } from './decoration.ts';
 import type { BoxDecorationInput, DecorationPosition } from './decoration.ts';
 import { Alignment, BoxConstraints, inscribe, normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
-import { Widget } from './widget.ts';
+import { SpanningWidget, Widget } from './widget.ts';
 import type {
   AnyLayoutBox,
   AnyWidget,
   Constraints,
   LayoutBox,
   PositionedBox,
-  RenderContext
+  RenderContext,
+  SpanLayout
 } from './widget.ts';
 
 export interface ContainerOptions {
@@ -53,6 +54,10 @@ export interface ContainerLayoutData {
   readonly boxHeight: number;
   readonly childX: number;
   readonly childY: number;
+}
+
+export interface ContainerState {
+  readonly childState: unknown;
 }
 
 export interface DecoratedBoxOptions {
@@ -99,7 +104,7 @@ export class DecoratedBox extends Widget<{ readonly childBox: AnyLayoutBox | nul
   }
 }
 
-export class Container extends Widget<ContainerLayoutData> {
+export class Container extends SpanningWidget<ContainerLayoutData, ContainerState> {
   readonly child: AnyWidget | null;
   readonly width: number | null;
   readonly height: number | null;
@@ -111,6 +116,12 @@ export class Container extends Widget<ContainerLayoutData> {
   readonly decoration: BoxDecoration | null;
   readonly foregroundDecoration: BoxDecoration | null;
   readonly alignment: Alignment | null;
+
+  override get canSpan(): boolean {
+    return this.height === null
+      && this.child instanceof SpanningWidget
+      && this.child.canSpan;
+  }
 
   constructor({
     child = null,
@@ -142,22 +153,19 @@ export class Container extends Widget<ContainerLayoutData> {
     }
   }
 
-  override layout(context: RenderContext, constraints: Constraints): LayoutBox<ContainerLayoutData> {
-    const parent = BoxConstraints.from(constraints);
-    const outer = parent.deflate(this.margin);
-    /*
-     * Upstream wraps the child in `Align` when an alignment is given, and in an
-     * expanding `ConstrainedBox` when there is no child; both fill a bounded
-     * axis. With neither, upstream shrink-wraps the child — a container that
-     * always filled would stretch every decorated box to the full line width.
-     */
-    const fill = this.alignment !== null || this.child === null;
-    const desired = outer.tighten({
-      width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
-      height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
-    });
-    const inner = desired.deflate(this.padding);
-    const childBox = this.child?.layout(context, this.alignment === null ? inner : inner.loosen()) ?? null;
+  override initialSpanState(): ContainerState {
+    return {
+      childState: this.child instanceof SpanningWidget
+        ? this.child.initialSpanState()
+        : null
+    };
+  }
+
+  private finishLayout(
+    parent: BoxConstraints,
+    desired: BoxConstraints,
+    childBox: AnyLayoutBox | null
+  ): LayoutBox<ContainerLayoutData> {
     const content = childBox ?? { width: 0, height: 0 };
     const decorated = desired.constrain({
       width: content.width + this.padding.left + this.padding.right,
@@ -186,6 +194,58 @@ export class Container extends Widget<ContainerLayoutData> {
         childX: childOffset.dx,
         childY: childOffset.dy
       }
+    };
+  }
+
+  override layout(context: RenderContext, constraints: Constraints): LayoutBox<ContainerLayoutData> {
+    const parent = BoxConstraints.from(constraints);
+    const outer = parent.deflate(this.margin);
+    /*
+     * Upstream wraps the child in `Align` when an alignment is given, and in an
+     * expanding `ConstrainedBox` when there is no child; both fill a bounded
+     * axis. With neither, upstream shrink-wraps the child — a container that
+     * always filled would stretch every decorated box to the full line width.
+     */
+    const fill = this.alignment !== null || this.child === null;
+    const desired = outer.tighten({
+      width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
+      height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
+    });
+    const inner = desired.deflate(this.padding);
+    const childBox = this.child?.layout(context, this.alignment === null ? inner : inner.loosen()) ?? null;
+    return this.finishLayout(parent, desired, childBox);
+  }
+
+  override layoutSpan(
+    context: RenderContext,
+    constraints: Constraints,
+    state: ContainerState
+  ): SpanLayout<ContainerLayoutData, ContainerState> {
+    if (!(this.child instanceof SpanningWidget) || !this.canSpan) {
+      return {
+        box: this.layout(context, constraints),
+        nextState: state,
+        hasMore: false
+      };
+    }
+
+    const parent = BoxConstraints.from(constraints);
+    const outer = parent.deflate(this.margin);
+    const fill = this.alignment !== null || this.child === null;
+    const desired = outer.tighten({
+      width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
+      height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
+    });
+    const inner = desired.deflate(this.padding);
+    const fragment = this.child.layoutSpan(
+      context,
+      this.alignment === null ? inner : inner.loosen(),
+      state.childState
+    );
+    return {
+      box: this.finishLayout(parent, desired, fragment.box),
+      nextState: { childState: fragment.nextState },
+      hasMore: fragment.hasMore
     };
   }
 

@@ -5,6 +5,10 @@ import type { ThemeData } from './theme.ts';
 /** The context before a page exists: everything a section needs to render. */
 export interface DocumentContext {
     readonly document: Document;
+    /** Number of physical pages emitted before the current section. */
+    readonly pageOffset: number;
+    /** Total physical pages, or zero while the first layout pass is running. */
+    readonly pagesCount: number;
 }
 /**
  * The context threaded through `layout` and `paint`.
@@ -18,6 +22,7 @@ export interface RenderContext extends DocumentContext {
     readonly canvas: PdfCanvas;
     readonly pageFormat: PageSize;
     readonly pageNumber: number;
+    readonly pagesCount: number;
     readonly theme: ThemeData;
 }
 export interface Constraints {
@@ -82,13 +87,18 @@ export interface SpanLayout<TData, TState> {
  * the next alongside the box it applies to.
  */
 export declare abstract class SpanningWidget<TData = unknown, TState = unknown> extends Widget<TData> {
-    readonly canSpan = true;
+    get canSpan(): boolean;
     abstract initialSpanState(): TState;
     abstract layoutSpan(context: RenderContext, constraints: Constraints, state: TState): SpanLayout<TData, TState>;
 }
 /** What a `StatelessWidget` hands from `layout` to `paint`: the built subtree. */
 export interface StatelessLayoutData {
     readonly childBox: AnyLayoutBox;
+}
+export interface StatelessState {
+    readonly child: AnyWidget | null;
+    readonly childState: unknown;
+    readonly done: boolean;
 }
 /**
  * A widget defined by composition: `build()` returns the subtree that does the
@@ -100,11 +110,11 @@ export interface StatelessLayoutData {
  * Upstream can keep the built child in a field because it re-builds on every
  * layout pass; here the pure protocol makes the hand-off explicit.
  *
- * PORT GAP: upstream mixes in `SpanningWidget` so a stateless widget can split
- * across pages. Spanning is phase 3.2.
  */
-export declare abstract class StatelessWidget extends Widget<StatelessLayoutData> {
+export declare abstract class StatelessWidget extends SpanningWidget<StatelessLayoutData, StatelessState> {
     abstract build(context: RenderContext): AnyWidget;
+    initialSpanState(): StatelessState;
+    layoutSpan(context: RenderContext, constraints: Constraints, state: StatelessState): SpanLayout<StatelessLayoutData, StatelessState>;
     layout(context: RenderContext, constraints: Constraints): LayoutBox<StatelessLayoutData>;
     paint(context: RenderContext, box: PositionedBox<StatelessLayoutData>): void;
 }

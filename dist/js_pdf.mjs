@@ -5362,16 +5362,408 @@ function inscribe(alignment, childWidth, childHeight, boxWidth, boxHeight) {
   };
 }
 
-class Widget {}
-
-class SpanningWidget extends Widget {
-  constructor() {
-    super(...arguments);
-    this.canSpan = true;
+class Radius {
+  constructor(x, y = x) {
+    this.x = Math.max(0, Number(x));
+    this.y = Math.max(0, Number(y));
+  }
+  static circular(radius) {
+    return new Radius(radius);
+  }
+  static elliptical(x, y) {
+    return new Radius(x, y);
+  }
+  equals(other) {
+    return this.x === other.x && this.y === other.y;
   }
 }
 
-class StatelessWidget extends Widget {
+Radius.zero = new Radius(0, 0);
+
+function radius(value = Radius.zero) {
+  if (typeof value === "number") return Radius.circular(value);
+  if (value instanceof Radius) return value;
+  return new Radius(value.x, value.y ?? value.x);
+}
+
+class BorderRadiusGeometry {}
+
+class BorderRadius extends BorderRadiusGeometry {
+  constructor({topLeft = Radius.zero, topRight = Radius.zero, bottomLeft = Radius.zero, bottomRight = Radius.zero} = {}) {
+    super();
+    this.topLeft = radius(topLeft);
+    this.topRight = radius(topRight);
+    this.bottomLeft = radius(bottomLeft);
+    this.bottomRight = radius(bottomRight);
+  }
+  static all(value) {
+    const resolved = radius(value);
+    return new BorderRadius({
+      topLeft: resolved,
+      topRight: resolved,
+      bottomLeft: resolved,
+      bottomRight: resolved
+    });
+  }
+  static circular(value) {
+    return BorderRadius.all(value);
+  }
+  static vertical({top = Radius.zero, bottom = Radius.zero} = {}) {
+    return new BorderRadius({
+      topLeft: top,
+      topRight: top,
+      bottomLeft: bottom,
+      bottomRight: bottom
+    });
+  }
+  static horizontal({left = Radius.zero, right = Radius.zero} = {}) {
+    return new BorderRadius({
+      topLeft: left,
+      bottomLeft: left,
+      topRight: right,
+      bottomRight: right
+    });
+  }
+  static only(options = {}) {
+    return new BorderRadius(options);
+  }
+  get isUniform() {
+    return this.topLeft.equals(this.topRight) && this.topLeft.equals(this.bottomLeft) && this.topLeft.equals(this.bottomRight);
+  }
+  get uniform() {
+    return this.isUniform ? this.topLeft : Radius.zero;
+  }
+  resolve() {
+    return this;
+  }
+  paint(canvas, x, top, width, height) {
+    const bottom = canvas.pageHeight - top - height;
+    const scale = Math.min(1, width / Math.max(1, this.topLeft.x + this.topRight.x, this.bottomLeft.x + this.bottomRight.x), height / Math.max(1, this.topLeft.y + this.bottomLeft.y, this.topRight.y + this.bottomRight.y));
+    const tl = new Radius(this.topLeft.x * scale, this.topLeft.y * scale);
+    const tr = new Radius(this.topRight.x * scale, this.topRight.y * scale);
+    const bl = new Radius(this.bottomLeft.x * scale, this.bottomLeft.y * scale);
+    const br = new Radius(this.bottomRight.x * scale, this.bottomRight.y * scale);
+    const m4 = .551784;
+    canvas.moveTo(x, bottom + bl.y);
+    canvas.curveTo(x, bottom + bl.y * (1 - m4), x + bl.x * (1 - m4), bottom, x + bl.x, bottom);
+    canvas.lineTo(x + width - br.x, bottom);
+    canvas.curveTo(x + width - br.x * (1 - m4), bottom, x + width, bottom + br.y * (1 - m4), x + width, bottom + br.y);
+    canvas.lineTo(x + width, bottom + height - tr.y);
+    canvas.curveTo(x + width, bottom + height - tr.y * (1 - m4), x + width - tr.x * (1 - m4), bottom + height, x + width - tr.x, bottom + height);
+    canvas.lineTo(x + tl.x, bottom + height);
+    canvas.curveTo(x + tl.x * (1 - m4), bottom + height, x, bottom + height - tl.y * (1 - m4), x, bottom + height - tl.y);
+    canvas.lineTo(x, bottom + bl.y);
+    canvas.closePath();
+  }
+}
+
+BorderRadius.zero = BorderRadius.all(0);
+
+class BorderRadiusDirectional extends BorderRadiusGeometry {
+  constructor({topStart = Radius.zero, topEnd = Radius.zero, bottomStart = Radius.zero, bottomEnd = Radius.zero} = {}) {
+    super();
+    this.topStart = radius(topStart);
+    this.topEnd = radius(topEnd);
+    this.bottomStart = radius(bottomStart);
+    this.bottomEnd = radius(bottomEnd);
+  }
+  static all(value) {
+    const resolved = radius(value);
+    return new BorderRadiusDirectional({
+      topStart: resolved,
+      topEnd: resolved,
+      bottomStart: resolved,
+      bottomEnd: resolved
+    });
+  }
+  static circular(value) {
+    return BorderRadiusDirectional.all(value);
+  }
+  static vertical({top = Radius.zero, bottom = Radius.zero} = {}) {
+    return new BorderRadiusDirectional({
+      topStart: top,
+      topEnd: top,
+      bottomStart: bottom,
+      bottomEnd: bottom
+    });
+  }
+  static horizontal({start = Radius.zero, end = Radius.zero} = {}) {
+    return new BorderRadiusDirectional({
+      topStart: start,
+      bottomStart: start,
+      topEnd: end,
+      bottomEnd: end
+    });
+  }
+  static only(options = {}) {
+    return new BorderRadiusDirectional(options);
+  }
+  get isUniform() {
+    return this.topStart.equals(this.topEnd) && this.topStart.equals(this.bottomStart) && this.topStart.equals(this.bottomEnd);
+  }
+  get uniform() {
+    return this.isUniform ? this.topStart : Radius.zero;
+  }
+  resolve(direction = "ltr") {
+    if (direction === "rtl") {
+      return new BorderRadius({
+        topLeft: this.topEnd,
+        topRight: this.topStart,
+        bottomLeft: this.bottomEnd,
+        bottomRight: this.bottomStart
+      });
+    }
+    return new BorderRadius({
+      topLeft: this.topStart,
+      topRight: this.topEnd,
+      bottomLeft: this.bottomStart,
+      bottomRight: this.bottomEnd
+    });
+  }
+}
+
+BorderRadiusDirectional.zero = BorderRadiusDirectional.all(0);
+
+class BorderStyle {
+  constructor({paint = true, pattern = null, phase = 0} = {}) {
+    this.paint = Boolean(paint);
+    this.pattern = pattern === null ? null : pattern.map(Number);
+    this.phase = Number(phase);
+  }
+  setStyle(canvas) {
+    if (!this.paint || this.pattern === null) return false;
+    canvas.saveContext();
+    canvas.setLineCap("butt");
+    canvas.setLineDashPattern(this.pattern, this.phase);
+    return true;
+  }
+  unsetStyle(canvas, saved) {
+    if (saved) canvas.restoreContext();
+  }
+}
+
+BorderStyle.none = new BorderStyle({
+  paint: false
+});
+
+BorderStyle.solid = new BorderStyle;
+
+BorderStyle.dashed = new BorderStyle({
+  pattern: [ 3, 3 ]
+});
+
+BorderStyle.dotted = new BorderStyle({
+  pattern: [ 1, 1 ]
+});
+
+function normalizeStyle(value) {
+  if (value instanceof BorderStyle) return value;
+  return BorderStyle[value];
+}
+
+class BorderSide {
+  constructor({color = "#000000", width = 1, style = BorderStyle.solid} = {}) {
+    this.color = normalizeColor(color);
+    this.width = Math.max(0, Number(width));
+    this.style = normalizeStyle(style);
+  }
+  copyWith({color, width, style} = {}) {
+    return new BorderSide({
+      color: color ?? this.color,
+      width: width ?? this.width,
+      style: style ?? this.style
+    });
+  }
+  equals(other) {
+    return this.width === other.width && this.style.paint === other.style.paint && this.style.phase === other.style.phase && String(this.style.pattern) === String(other.style.pattern) && this.color[0] === other.color[0] && this.color[1] === other.color[1] && this.color[2] === other.color[2];
+  }
+}
+
+BorderSide.none = new BorderSide({
+  width: 0,
+  style: BorderStyle.none
+});
+
+function side$1(value) {
+  if (value === null || value === undefined) return BorderSide.none;
+  return value instanceof BorderSide ? value : new BorderSide(value);
+}
+
+class BoxBorder {}
+
+class Border extends BoxBorder {
+  constructor({top = null, right = null, bottom = null, left = null} = {}) {
+    super();
+    this.top = side$1(top);
+    this.right = side$1(right);
+    this.bottom = side$1(bottom);
+    this.left = side$1(left);
+  }
+  static all(options = {}) {
+    return Border.fromBorderSide(new BorderSide(options));
+  }
+  static fromBorderSide(value) {
+    const resolved = side$1(value);
+    return new Border({
+      top: resolved,
+      right: resolved,
+      bottom: resolved,
+      left: resolved
+    });
+  }
+  static symmetric({vertical = BorderSide.none, horizontal = BorderSide.none} = {}) {
+    return new Border({
+      top: horizontal,
+      right: vertical,
+      bottom: horizontal,
+      left: vertical
+    });
+  }
+  get isUniform() {
+    return this.top.equals(this.right) && this.top.equals(this.bottom) && this.top.equals(this.left);
+  }
+  paintUniform(context, x, y, width, height, shape, borderRadius) {
+    const {canvas} = context;
+    const value = this.top;
+    if (!value.style.paint || value.width <= 0) return;
+    const saved = value.style.setStyle(canvas);
+    canvas.setStrokeColor(value.color);
+    canvas.setLineWidth(value.width);
+    canvas.setLineJoin("miter");
+    canvas.setMiterLimit(4);
+    if (shape === "circle") {
+      canvas.drawEllipse(x + width / 2, canvas.pageHeight - y - height / 2, width / 2, height / 2);
+    } else if (borderRadius !== null) {
+      borderRadius.paint(canvas, x, y, width, height);
+    } else {
+      canvas.drawRect(x, canvas.pageHeight - y - height, width, height);
+    }
+    canvas.strokePath();
+    value.style.unsetStyle(canvas, saved);
+  }
+  paintSide(canvas, value, x1, y1, x2, y2) {
+    if (!value.style.paint || value.width <= 0) return;
+    const saved = value.style.setStyle(canvas);
+    canvas.setStrokeColor(value.color);
+    canvas.setLineWidth(value.width);
+    canvas.drawLine(x1, canvas.toPdfY(y1), x2, canvas.toPdfY(y2));
+    canvas.strokePath();
+    value.style.unsetStyle(canvas, saved);
+  }
+  paint(context, x, y, width, height, {shape = "rectangle", borderRadius = null} = {}) {
+    if (this.isUniform) {
+      this.paintUniform(context, x, y, width, height, shape, borderRadius);
+      return;
+    }
+    if (shape !== "rectangle") {
+      throw new Error("A non-uniform Border can only paint a rectangle");
+    }
+    if (borderRadius !== null) {
+      throw new Error("A border radius requires a uniform Border");
+    }
+    const {canvas} = context;
+    canvas.setLineCap("square");
+    canvas.setLineJoin("miter");
+    canvas.setMiterLimit(4);
+    this.paintSide(canvas, this.top, x, y, x + width, y);
+    this.paintSide(canvas, this.right, x + width, y, x + width, y + height);
+    this.paintSide(canvas, this.bottom, x + width, y + height, x, y + height);
+    this.paintSide(canvas, this.left, x, y + height, x, y);
+  }
+}
+
+function isSideOptions(value) {
+  const options = value;
+  return options.top === undefined && options.right === undefined && options.bottom === undefined && options.left === undefined && (options.color !== undefined || options.width !== undefined || options.style !== undefined);
+}
+
+function normalizeBoxBorder(value) {
+  if (value === null || value === undefined) return null;
+  if (value instanceof BoxBorder) return value;
+  return isSideOptions(value) ? Border.all(value) : new Border(value);
+}
+
+class Widget {}
+
+class SpanningWidget extends Widget {
+  get canSpan() {
+    return true;
+  }
+}
+
+class StatelessWidget extends SpanningWidget {
+  initialSpanState() {
+    return {
+      child: null,
+      childState: null,
+      done: false
+    };
+  }
+  layoutSpan(context, constraints, state) {
+    const child = state.child ?? this.build(context);
+    if (child instanceof SpanningWidget && child.canSpan) {
+      const childState = state.child === null ? child.initialSpanState() : state.childState;
+      const fragment = child.layoutSpan(context, constraints, childState);
+      return {
+        box: {
+          widget: this,
+          width: fragment.box.width,
+          height: fragment.box.height,
+          data: {
+            childBox: fragment.box
+          }
+        },
+        nextState: {
+          child,
+          childState: fragment.nextState,
+          done: !fragment.hasMore
+        },
+        hasMore: fragment.hasMore
+      };
+    }
+    const parent = BoxConstraints.from(constraints);
+    const childBox = child.layout(context, parent.copyWith({
+      minHeight: 0,
+      maxHeight: Infinity
+    }));
+    if (childBox.height > parent.maxHeight + .001) {
+      return {
+        box: {
+          widget: this,
+          width: parent.constrainWidth(childBox.width),
+          height: 0,
+          data: {
+            childBox: {
+              ...childBox,
+              height: 0
+            }
+          }
+        },
+        nextState: {
+          child,
+          childState: null,
+          done: false
+        },
+        hasMore: true
+      };
+    }
+    return {
+      box: {
+        widget: this,
+        width: childBox.width,
+        height: childBox.height,
+        data: {
+          childBox
+        }
+      },
+      nextState: {
+        child,
+        childState: null,
+        done: true
+      },
+      hasMore: false
+    };
+  }
   layout(context, constraints) {
     const childBox = this.build(context).layout(context, constraints);
     return {
@@ -5442,10 +5834,17 @@ class Padding extends Widget {
   }
 }
 
+function resolveBasicAlignment(value) {
+  if (typeof value !== "string") return value;
+  const result = Alignment[value];
+  if (result === undefined) throw new TypeError(`Unknown alignment: ${value}`);
+  return result;
+}
+
 class Align extends Widget {
   constructor({alignment = Alignment.center, widthFactor = null, heightFactor = null, child = null} = {}) {
     super();
-    this.alignment = alignment;
+    this.alignment = resolveBasicAlignment(alignment);
     this.widthFactor = widthFactor;
     this.heightFactor = heightFactor;
     this.child = child;
@@ -5577,13 +5976,16 @@ const DEFAULT_DIVIDER_HEIGHT = 16;
 const DEFAULT_DIVIDER_THICKNESS = 1;
 
 class Divider extends Widget {
-  constructor({height = DEFAULT_DIVIDER_HEIGHT, thickness = DEFAULT_DIVIDER_THICKNESS, indent = 0, endIndent = 0, color = "#000000"} = {}) {
+  constructor({height = DEFAULT_DIVIDER_HEIGHT, thickness = DEFAULT_DIVIDER_THICKNESS, indent = 0, endIndent = 0, color = "#000000", borderStyle = "solid"} = {}) {
     super();
     this.height = Math.max(0, Number(height));
     this.thickness = Math.max(0, Number(thickness));
     this.indent = Math.max(0, Number(indent));
     this.endIndent = Math.max(0, Number(endIndent));
     this.color = normalizeColor(color);
+    this.borderStyle = new BorderSide({
+      style: borderStyle
+    }).style;
   }
   layout(_context, constraints) {
     const size = BoxConstraints.from(constraints).constrain({
@@ -5599,16 +6001,28 @@ class Divider extends Widget {
   }
   paint(context, box) {
     const width = Math.max(0, box.width - this.indent - this.endIndent);
-    if (width === 0 || this.thickness === 0) return;
+    if (width === 0 || this.thickness === 0 || !this.borderStyle.paint) return;
+    const pattern = this.borderStyle.pattern;
+    if (pattern !== null && pattern.length > 0) {
+      let cursor = -this.borderStyle.phase;
+      let index = 0;
+      while (cursor < width) {
+        const segment = Math.max(0, pattern[index % pattern.length] ?? 0);
+        if (index % 2 === 0 && segment > 0) {
+          const start = Math.max(0, cursor);
+          const end = Math.min(width, cursor + segment);
+          if (end > start) {
+            context.canvas.fillRect(box.x + this.indent + start, box.y + (box.height - this.thickness) / 2, end - start, this.thickness, this.color);
+          }
+        }
+        cursor += segment;
+        index++;
+        if (segment === 0 && index >= pattern.length) break;
+      }
+      return;
+    }
     context.canvas.fillRect(box.x + this.indent, box.y + (box.height - this.thickness) / 2, width, this.thickness, this.color);
   }
-}
-
-function resolveBasicAlignment(value) {
-  if (typeof value !== "string") return value;
-  const result = Alignment[value];
-  if (result === undefined) throw new TypeError(`Unknown alignment: ${value}`);
-  return result;
 }
 
 function finiteMatrix(value) {
@@ -6109,9 +6523,7 @@ class FullPage extends Widget {
     childBox.widget.paint(context, {
       ...childBox,
       x: this.ignoreMargins ? 0 : box.x,
-      y: this.ignoreMargins ? 0 : box.y,
-      width: box.width,
-      height: box.height
+      y: (this.ignoreMargins ? 0 : box.y) + box.height - childBox.height
     });
     context.canvas.restoreContext();
   }
@@ -6232,327 +6644,6 @@ class VerticalDivider extends Widget {
     if (height === 0 || this.thickness === 0) return;
     context.canvas.fillRect(box.x + (box.width - this.thickness) / 2, box.y + this.indent, this.thickness, height, this.color);
   }
-}
-
-class Radius {
-  constructor(x, y = x) {
-    this.x = Math.max(0, Number(x));
-    this.y = Math.max(0, Number(y));
-  }
-  static circular(radius) {
-    return new Radius(radius);
-  }
-  static elliptical(x, y) {
-    return new Radius(x, y);
-  }
-  equals(other) {
-    return this.x === other.x && this.y === other.y;
-  }
-}
-
-Radius.zero = new Radius(0, 0);
-
-function radius(value = Radius.zero) {
-  if (typeof value === "number") return Radius.circular(value);
-  if (value instanceof Radius) return value;
-  return new Radius(value.x, value.y ?? value.x);
-}
-
-class BorderRadiusGeometry {}
-
-class BorderRadius extends BorderRadiusGeometry {
-  constructor({topLeft = Radius.zero, topRight = Radius.zero, bottomLeft = Radius.zero, bottomRight = Radius.zero} = {}) {
-    super();
-    this.topLeft = radius(topLeft);
-    this.topRight = radius(topRight);
-    this.bottomLeft = radius(bottomLeft);
-    this.bottomRight = radius(bottomRight);
-  }
-  static all(value) {
-    const resolved = radius(value);
-    return new BorderRadius({
-      topLeft: resolved,
-      topRight: resolved,
-      bottomLeft: resolved,
-      bottomRight: resolved
-    });
-  }
-  static circular(value) {
-    return BorderRadius.all(value);
-  }
-  static vertical({top = Radius.zero, bottom = Radius.zero} = {}) {
-    return new BorderRadius({
-      topLeft: top,
-      topRight: top,
-      bottomLeft: bottom,
-      bottomRight: bottom
-    });
-  }
-  static horizontal({left = Radius.zero, right = Radius.zero} = {}) {
-    return new BorderRadius({
-      topLeft: left,
-      bottomLeft: left,
-      topRight: right,
-      bottomRight: right
-    });
-  }
-  static only(options = {}) {
-    return new BorderRadius(options);
-  }
-  get isUniform() {
-    return this.topLeft.equals(this.topRight) && this.topLeft.equals(this.bottomLeft) && this.topLeft.equals(this.bottomRight);
-  }
-  get uniform() {
-    return this.isUniform ? this.topLeft : Radius.zero;
-  }
-  resolve() {
-    return this;
-  }
-  paint(canvas, x, top, width, height) {
-    const bottom = canvas.pageHeight - top - height;
-    const scale = Math.min(1, width / Math.max(1, this.topLeft.x + this.topRight.x, this.bottomLeft.x + this.bottomRight.x), height / Math.max(1, this.topLeft.y + this.bottomLeft.y, this.topRight.y + this.bottomRight.y));
-    const tl = new Radius(this.topLeft.x * scale, this.topLeft.y * scale);
-    const tr = new Radius(this.topRight.x * scale, this.topRight.y * scale);
-    const bl = new Radius(this.bottomLeft.x * scale, this.bottomLeft.y * scale);
-    const br = new Radius(this.bottomRight.x * scale, this.bottomRight.y * scale);
-    const m4 = .551784;
-    canvas.moveTo(x, bottom + bl.y);
-    canvas.curveTo(x, bottom + bl.y * (1 - m4), x + bl.x * (1 - m4), bottom, x + bl.x, bottom);
-    canvas.lineTo(x + width - br.x, bottom);
-    canvas.curveTo(x + width - br.x * (1 - m4), bottom, x + width, bottom + br.y * (1 - m4), x + width, bottom + br.y);
-    canvas.lineTo(x + width, bottom + height - tr.y);
-    canvas.curveTo(x + width, bottom + height - tr.y * (1 - m4), x + width - tr.x * (1 - m4), bottom + height, x + width - tr.x, bottom + height);
-    canvas.lineTo(x + tl.x, bottom + height);
-    canvas.curveTo(x + tl.x * (1 - m4), bottom + height, x, bottom + height - tl.y * (1 - m4), x, bottom + height - tl.y);
-    canvas.lineTo(x, bottom + bl.y);
-    canvas.closePath();
-  }
-}
-
-BorderRadius.zero = BorderRadius.all(0);
-
-class BorderRadiusDirectional extends BorderRadiusGeometry {
-  constructor({topStart = Radius.zero, topEnd = Radius.zero, bottomStart = Radius.zero, bottomEnd = Radius.zero} = {}) {
-    super();
-    this.topStart = radius(topStart);
-    this.topEnd = radius(topEnd);
-    this.bottomStart = radius(bottomStart);
-    this.bottomEnd = radius(bottomEnd);
-  }
-  static all(value) {
-    const resolved = radius(value);
-    return new BorderRadiusDirectional({
-      topStart: resolved,
-      topEnd: resolved,
-      bottomStart: resolved,
-      bottomEnd: resolved
-    });
-  }
-  static circular(value) {
-    return BorderRadiusDirectional.all(value);
-  }
-  static vertical({top = Radius.zero, bottom = Radius.zero} = {}) {
-    return new BorderRadiusDirectional({
-      topStart: top,
-      topEnd: top,
-      bottomStart: bottom,
-      bottomEnd: bottom
-    });
-  }
-  static horizontal({start = Radius.zero, end = Radius.zero} = {}) {
-    return new BorderRadiusDirectional({
-      topStart: start,
-      bottomStart: start,
-      topEnd: end,
-      bottomEnd: end
-    });
-  }
-  static only(options = {}) {
-    return new BorderRadiusDirectional(options);
-  }
-  get isUniform() {
-    return this.topStart.equals(this.topEnd) && this.topStart.equals(this.bottomStart) && this.topStart.equals(this.bottomEnd);
-  }
-  get uniform() {
-    return this.isUniform ? this.topStart : Radius.zero;
-  }
-  resolve(direction = "ltr") {
-    if (direction === "rtl") {
-      return new BorderRadius({
-        topLeft: this.topEnd,
-        topRight: this.topStart,
-        bottomLeft: this.bottomEnd,
-        bottomRight: this.bottomStart
-      });
-    }
-    return new BorderRadius({
-      topLeft: this.topStart,
-      topRight: this.topEnd,
-      bottomLeft: this.bottomStart,
-      bottomRight: this.bottomEnd
-    });
-  }
-}
-
-BorderRadiusDirectional.zero = BorderRadiusDirectional.all(0);
-
-class BorderStyle {
-  constructor({paint = true, pattern = null, phase = 0} = {}) {
-    this.paint = Boolean(paint);
-    this.pattern = pattern === null ? null : pattern.map(Number);
-    this.phase = Number(phase);
-  }
-  setStyle(canvas) {
-    if (!this.paint || this.pattern === null) return false;
-    canvas.saveContext();
-    canvas.setLineCap("butt");
-    canvas.setLineDashPattern(this.pattern, this.phase);
-    return true;
-  }
-  unsetStyle(canvas, saved) {
-    if (saved) canvas.restoreContext();
-  }
-}
-
-BorderStyle.none = new BorderStyle({
-  paint: false
-});
-
-BorderStyle.solid = new BorderStyle;
-
-BorderStyle.dashed = new BorderStyle({
-  pattern: [ 3, 3 ]
-});
-
-BorderStyle.dotted = new BorderStyle({
-  pattern: [ 1, 1 ]
-});
-
-function normalizeStyle(value) {
-  if (value instanceof BorderStyle) return value;
-  return BorderStyle[value];
-}
-
-class BorderSide {
-  constructor({color = "#000000", width = 1, style = BorderStyle.solid} = {}) {
-    this.color = normalizeColor(color);
-    this.width = Math.max(0, Number(width));
-    this.style = normalizeStyle(style);
-  }
-  copyWith({color, width, style} = {}) {
-    return new BorderSide({
-      color: color ?? this.color,
-      width: width ?? this.width,
-      style: style ?? this.style
-    });
-  }
-  equals(other) {
-    return this.width === other.width && this.style.paint === other.style.paint && this.style.phase === other.style.phase && String(this.style.pattern) === String(other.style.pattern) && this.color[0] === other.color[0] && this.color[1] === other.color[1] && this.color[2] === other.color[2];
-  }
-}
-
-BorderSide.none = new BorderSide({
-  width: 0,
-  style: BorderStyle.none
-});
-
-function side$1(value) {
-  if (value === null || value === undefined) return BorderSide.none;
-  return value instanceof BorderSide ? value : new BorderSide(value);
-}
-
-class BoxBorder {}
-
-class Border extends BoxBorder {
-  constructor({top = null, right = null, bottom = null, left = null} = {}) {
-    super();
-    this.top = side$1(top);
-    this.right = side$1(right);
-    this.bottom = side$1(bottom);
-    this.left = side$1(left);
-  }
-  static all(options = {}) {
-    return Border.fromBorderSide(new BorderSide(options));
-  }
-  static fromBorderSide(value) {
-    const resolved = side$1(value);
-    return new Border({
-      top: resolved,
-      right: resolved,
-      bottom: resolved,
-      left: resolved
-    });
-  }
-  static symmetric({vertical = BorderSide.none, horizontal = BorderSide.none} = {}) {
-    return new Border({
-      top: horizontal,
-      right: vertical,
-      bottom: horizontal,
-      left: vertical
-    });
-  }
-  get isUniform() {
-    return this.top.equals(this.right) && this.top.equals(this.bottom) && this.top.equals(this.left);
-  }
-  paintUniform(context, x, y, width, height, shape, borderRadius) {
-    const {canvas} = context;
-    const value = this.top;
-    if (!value.style.paint || value.width <= 0) return;
-    const saved = value.style.setStyle(canvas);
-    canvas.setStrokeColor(value.color);
-    canvas.setLineWidth(value.width);
-    canvas.setLineJoin("miter");
-    canvas.setMiterLimit(4);
-    if (shape === "circle") {
-      canvas.drawEllipse(x + width / 2, canvas.pageHeight - y - height / 2, width / 2, height / 2);
-    } else if (borderRadius !== null) {
-      borderRadius.paint(canvas, x, y, width, height);
-    } else {
-      canvas.drawRect(x, canvas.pageHeight - y - height, width, height);
-    }
-    canvas.strokePath();
-    value.style.unsetStyle(canvas, saved);
-  }
-  paintSide(canvas, value, x1, y1, x2, y2) {
-    if (!value.style.paint || value.width <= 0) return;
-    const saved = value.style.setStyle(canvas);
-    canvas.setStrokeColor(value.color);
-    canvas.setLineWidth(value.width);
-    canvas.drawLine(x1, canvas.toPdfY(y1), x2, canvas.toPdfY(y2));
-    canvas.strokePath();
-    value.style.unsetStyle(canvas, saved);
-  }
-  paint(context, x, y, width, height, {shape = "rectangle", borderRadius = null} = {}) {
-    if (this.isUniform) {
-      this.paintUniform(context, x, y, width, height, shape, borderRadius);
-      return;
-    }
-    if (shape !== "rectangle") {
-      throw new Error("A non-uniform Border can only paint a rectangle");
-    }
-    if (borderRadius !== null) {
-      throw new Error("A border radius requires a uniform Border");
-    }
-    const {canvas} = context;
-    canvas.setLineCap("square");
-    canvas.setLineJoin("miter");
-    canvas.setMiterLimit(4);
-    this.paintSide(canvas, this.top, x, y, x + width, y);
-    this.paintSide(canvas, this.right, x + width, y, x + width, y + height);
-    this.paintSide(canvas, this.bottom, x + width, y + height, x, y + height);
-    this.paintSide(canvas, this.left, x, y + height, x, y);
-  }
-}
-
-function isSideOptions(value) {
-  const options = value;
-  return options.top === undefined && options.right === undefined && options.bottom === undefined && options.left === undefined && (options.color !== undefined || options.width !== undefined || options.style !== undefined);
-}
-
-function normalizeBoxBorder(value) {
-  if (value === null || value === undefined) return null;
-  if (value instanceof BoxBorder) return value;
-  return isSideOptions(value) ? Border.all(value) : new Border(value);
 }
 
 function interpolation(start, end) {
@@ -6869,7 +6960,10 @@ class DecoratedBox extends Widget {
   }
 }
 
-class Container extends Widget {
+class Container extends SpanningWidget {
+  get canSpan() {
+    return this.height === null && this.child instanceof SpanningWidget && this.child.canSpan;
+  }
   constructor({child = null, width = null, height = null, padding = 0, margin = 0, background = null, borderColor = null, borderWidth = 1, decoration = null, foregroundDecoration = null, alignment = null} = {}) {
     super();
     this.child = child;
@@ -6887,16 +6981,12 @@ class Container extends Widget {
       throw new Error("Container cannot have both background and decoration");
     }
   }
-  layout(context, constraints) {
-    const parent = BoxConstraints.from(constraints);
-    const outer = parent.deflate(this.margin);
-    const fill = this.alignment !== null || this.child === null;
-    const desired = outer.tighten({
-      width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
-      height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
-    });
-    const inner = desired.deflate(this.padding);
-    const childBox = this.child?.layout(context, this.alignment === null ? inner : inner.loosen()) ?? null;
+  initialSpanState() {
+    return {
+      childState: this.child instanceof SpanningWidget ? this.child.initialSpanState() : null
+    };
+  }
+  finishLayout(parent, desired, childBox) {
     const content = childBox ?? {
       width: 0,
       height: 0
@@ -6928,6 +7018,43 @@ class Container extends Widget {
         childX: childOffset.dx,
         childY: childOffset.dy
       }
+    };
+  }
+  layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const outer = parent.deflate(this.margin);
+    const fill = this.alignment !== null || this.child === null;
+    const desired = outer.tighten({
+      width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
+      height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
+    });
+    const inner = desired.deflate(this.padding);
+    const childBox = this.child?.layout(context, this.alignment === null ? inner : inner.loosen()) ?? null;
+    return this.finishLayout(parent, desired, childBox);
+  }
+  layoutSpan(context, constraints, state) {
+    if (!(this.child instanceof SpanningWidget) || !this.canSpan) {
+      return {
+        box: this.layout(context, constraints),
+        nextState: state,
+        hasMore: false
+      };
+    }
+    const parent = BoxConstraints.from(constraints);
+    const outer = parent.deflate(this.margin);
+    const fill = this.alignment !== null || this.child === null;
+    const desired = outer.tighten({
+      width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
+      height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
+    });
+    const inner = desired.deflate(this.padding);
+    const fragment = this.child.layoutSpan(context, this.alignment === null ? inner : inner.loosen(), state.childState);
+    return {
+      box: this.finishLayout(parent, desired, fragment.box),
+      nextState: {
+        childState: fragment.nextState
+      },
+      hasMore: fragment.hasMore
     };
   }
   paint(context, box) {
@@ -7042,7 +7169,7 @@ class Font {
 
 const DEFAULT_FONT_SIZE = 12;
 
-const DEFAULT_LINE_HEIGHT = 1.2;
+const DEFAULT_LINE_HEIGHT = 1;
 
 class TextStyle {
   constructor({inherit = true, color = null, font = null, fontNormal = null, fontBold = null, fontItalic = null, fontBoldItalic = null, fontFallback = null, fontSize = null, fontWeight = null, fontStyle = null, letterSpacing = null, wordSpacing = null, lineSpacing = null, height = null, background = null, decoration = null, decorationColor = null, decorationStyle = null, decorationThickness = null} = {}) {
@@ -7439,7 +7566,10 @@ class Spacer extends Expanded {
   }
 }
 
-class Flex extends Widget {
+class Flex extends SpanningWidget {
+  get canSpan() {
+    return this.direction === "vertical";
+  }
   constructor({direction, children = [], mainAxisAlignment = "start", mainAxisSize = "max", crossAxisAlignment = "center", verticalDirection = "down", gap = 0, margin = 0, widths = null}) {
     super();
     if (direction !== "horizontal" && direction !== "vertical") {
@@ -7476,6 +7606,68 @@ class Flex extends Widget {
       return [ maximum, maximum ];
     }
     return [ 0, maximum ];
+  }
+  initialSpanState() {
+    return {
+      firstChild: 0
+    };
+  }
+  layoutSpan(context, incoming, state) {
+    if (this.direction === "horizontal" || state.firstChild >= this.children.length) {
+      const box = this.layout(context, incoming);
+      return {
+        box,
+        nextState: {
+          firstChild: this.children.length
+        },
+        hasMore: false
+      };
+    }
+    const outer = BoxConstraints.from(incoming);
+    const constraints = outer.deflate(this.margin);
+    const [, childMaxCross] = this.crossConstraints(constraints);
+    const childMinCross = this.crossAxisAlignment === "stretch" && Number.isFinite(childMaxCross) ? childMaxCross : 0;
+    const available = constraints.maxHeight;
+    let allocated = 0;
+    let lastChild = state.firstChild;
+    for (let index = state.firstChild; index < this.children.length; index++) {
+      const child = this.children[index];
+      if (child instanceof Flexible && child.flex > 0) {
+        lastChild = index + 1;
+        continue;
+      }
+      const childBox = child.layout(context, axisConstraints(this.direction, 0, Infinity, childMinCross, childMaxCross));
+      const next = allocated + (lastChild > state.firstChild ? this.gap : 0) + childBox.height;
+      if (next > available && lastChild > state.firstChild) break;
+      allocated = next;
+      lastChild = index + 1;
+      if (next > available) break;
+    }
+    if (lastChild === state.firstChild && state.firstChild < this.children.length) {
+      lastChild++;
+    }
+    const fragment = new Flex({
+      direction: this.direction,
+      children: this.children.slice(state.firstChild, lastChild),
+      mainAxisAlignment: this.mainAxisAlignment,
+      mainAxisSize: this.mainAxisSize,
+      crossAxisAlignment: this.crossAxisAlignment,
+      verticalDirection: this.verticalDirection,
+      gap: this.gap,
+      margin: this.margin,
+      widths: this.widths
+    }).layout(context, incoming);
+    const nextState = {
+      firstChild: lastChild
+    };
+    return {
+      box: {
+        ...fragment,
+        widget: this
+      },
+      nextState,
+      hasMore: lastChild < this.children.length
+    };
   }
   layout(context, incoming) {
     const outer = BoxConstraints.from(incoming);
@@ -7842,7 +8034,8 @@ function resolveStyle(context, style, baseline, scale, directFont = null) {
     font,
     fontSize,
     color: style.color ?? [ 0, 0, 0 ],
-    lineAdvance: fontSize * (style.height ?? DEFAULT_LINE_HEIGHT) + (style.lineSpacing ?? 0) * scale,
+    lineAdvance: fontSize * (font.ascent - font.descent) * (style.height ?? DEFAULT_LINE_HEIGHT),
+    lineSpacing: (style.lineSpacing ?? 0) * scale,
     letterSpacing: (style.letterSpacing ?? 0) * scale,
     wordSpacing: (style.wordSpacing ?? 0) * scale,
     baseline: baseline * scale,
@@ -7877,17 +8070,19 @@ function trimTrailingGaps(line) {
 }
 
 function positionLine(line, y, contentWidth, align, direction) {
+  let lineSpacing = line.emptyStyle.lineSpacing;
   let ascent = line.emptyStyle.fontSize + Math.max(0, line.emptyStyle.baseline);
-  let descent = Math.max(0, line.emptyStyle.lineAdvance - line.emptyStyle.fontSize - line.emptyStyle.baseline);
-  let minimumHeight = line.emptyStyle.lineAdvance;
+  let descent = Math.max(0, line.emptyStyle.lineAdvance + lineSpacing - line.emptyStyle.fontSize - line.emptyStyle.baseline);
+  let minimumHeight = line.emptyStyle.lineAdvance + lineSpacing;
   for (const token of line.tokens) {
-    minimumHeight = Math.max(minimumHeight, token.style.lineAdvance);
+    lineSpacing = Math.max(lineSpacing, token.style.lineSpacing);
+    minimumHeight = Math.max(minimumHeight, token.style.lineAdvance + token.style.lineSpacing);
     if (token.kind === "widget") {
       ascent = Math.max(ascent, token.height + token.style.baseline);
       descent = Math.max(descent, -token.style.baseline);
     } else {
       ascent = Math.max(ascent, token.style.fontSize + token.style.baseline);
-      descent = Math.max(descent, token.style.lineAdvance - token.style.fontSize - token.style.baseline);
+      descent = Math.max(descent, token.style.lineAdvance + token.style.lineSpacing - token.style.fontSize - token.style.baseline);
     }
   }
   const height = Math.max(minimumHeight, ascent + descent);
@@ -7941,6 +8136,7 @@ function positionLine(line, y, contentWidth, align, direction) {
     y,
     width: usedWidth,
     height,
+    lineSpacing,
     wrapped: line.wrapped
   };
 }
@@ -8103,6 +8299,13 @@ class RichText extends SpanningWidget {
       const positioned = positionLine(line, y, targetWidth, align, this.textDirection);
       lines.push(positioned);
       y += positioned.height;
+    }
+    const last = lines[lines.length - 1];
+    if (last !== undefined && last.lineSpacing > 0) {
+      lines[lines.length - 1] = {
+        ...last,
+        height: Math.max(0, last.height - last.lineSpacing)
+      };
     }
     return lines;
   }
@@ -8434,7 +8637,7 @@ class TableOfContent extends StatelessWidget {
             width: this.gap
           }), new Expanded({
             child: new Divider({
-              height: 4,
+              borderStyle: "dotted",
               thickness: .2
             })
           }), new SizedBox({
@@ -10953,7 +11156,8 @@ class PageTheme {
 }
 
 class MultiPage {
-  constructor({pageTheme = undefined, format = undefined, pageFormat = undefined, margin = undefined, orientation = undefined, gap = 8, theme = undefined, build, header = null, footer = null, background = null, maxPages = 20}) {
+  constructor({pageTheme = undefined, format = undefined, pageFormat = undefined, margin = undefined, orientation = undefined, gap = 0, theme = undefined, build, header = null, footer = null, background = null, maxPages = 20}) {
+    this.renderedPages = [];
     if (typeof build !== "function") throw new TypeError("MultiPage.build must be a function");
     const base = pageTheme ?? new PageTheme({
       pageFormat: PageFormat.A4
@@ -10989,12 +11193,13 @@ class MultiPage {
       }
       const canvas = new PdfCanvas(this.format.height);
       if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
-      const pageNumber = pages.length + 1;
+      const pageNumber = documentContext.pageOffset + pages.length + 1;
       const context = {
         ...documentContext,
         canvas,
         pageFormat: this.format,
         pageNumber,
+        pagesCount: documentContext.pagesCount || pageNumber,
         theme: this.theme ?? documentContext.document.theme
       };
       this.paintLayer(this.pageTheme.buildBackground, context);
@@ -11006,11 +11211,6 @@ class MultiPage {
         const headerBox = headerWidget.layout(context, new BoxConstraints({
           maxWidth
         }));
-        headerWidget.paint(context, {
-          ...headerBox,
-          x: this.margin.left,
-          y: top
-        });
         top += headerBox.height + this.gap;
       }
       if (this.footer) {
@@ -11019,11 +11219,6 @@ class MultiPage {
           maxWidth
         }));
         bottom -= footerBox.height + this.gap;
-        footerWidget.paint(context, {
-          ...footerBox,
-          x: this.margin.left,
-          y: bottom + this.gap
-        });
       }
       const state = {
         canvas,
@@ -11042,6 +11237,35 @@ class MultiPage {
     for (const child of children) {
       if (child instanceof SpanningWidget && child.canSpan) {
         let state = child.initialSpanState();
+        const natural = child.layout(page.context, new BoxConstraints({
+          maxWidth: page.maxWidth,
+          maxHeight: Infinity
+        }));
+        const initialAvailable = page.bottom - page.cursor;
+        if (natural.height <= initialAvailable + .001) {
+          child.paint(page.context, {
+            ...natural,
+            x: this.margin.left,
+            y: page.cursor
+          });
+          page.cursor += natural.height + this.gap;
+          continue;
+        }
+        const fullAvailable = page.bottom - page.top;
+        if (child instanceof Flex && natural.height <= fullAvailable + .001 && page.cursor > page.top + .001) {
+          page = startPage();
+          const moved = child.layout(page.context, new BoxConstraints({
+            maxWidth: page.maxWidth,
+            maxHeight: Infinity
+          }));
+          child.paint(page.context, {
+            ...moved,
+            x: this.margin.left,
+            y: page.cursor
+          });
+          page.cursor += moved.height + this.gap;
+          continue;
+        }
         while (true) {
           const available = page.bottom - page.cursor;
           const fragment = child.layoutSpan(page.context, new BoxConstraints({
@@ -11096,9 +11320,43 @@ class MultiPage {
       });
       page.cursor += box.height + this.gap;
     }
-    for (const state of pages) {
-      this.paintLayer(this.pageTheme.buildForeground, state.context);
+    this.renderedPages = pages;
+    return this.serialize(pages);
+  }
+  postProcess(documentContext) {
+    for (const state of this.renderedPages) {
+      const context = {
+        ...state.context,
+        ...documentContext,
+        pagesCount: documentContext.pagesCount
+      };
+      if (this.header) {
+        const headerWidget = this.header(context);
+        const headerBox = headerWidget.layout(context, new BoxConstraints({
+          maxWidth: state.maxWidth
+        }));
+        headerWidget.paint(context, {
+          ...headerBox,
+          x: this.margin.left,
+          y: this.margin.top
+        });
+      }
+      if (this.footer) {
+        const footerWidget = this.footer(context);
+        const footerBox = footerWidget.layout(context, new BoxConstraints({
+          maxWidth: state.maxWidth
+        }));
+        footerWidget.paint(context, {
+          ...footerBox,
+          x: this.margin.left,
+          y: this.format.height - this.margin.bottom - footerBox.height
+        });
+      }
+      this.paintLayer(this.pageTheme.buildForeground, context);
     }
+    return this.serialize(this.renderedPages);
+  }
+  serialize(pages) {
     return pages.map(({canvas}) => ({
       format: this.format,
       content: canvas.output(),
@@ -11149,7 +11407,8 @@ class Page {
       ...documentContext,
       canvas,
       pageFormat: format,
-      pageNumber: 1,
+      pageNumber: documentContext.pageOffset + 1,
+      pagesCount: documentContext.pagesCount || documentContext.pageOffset + 1,
       theme: this.pageTheme.theme ?? documentContext.document.theme
     };
     const maxWidth = format.width - margin.left - margin.right;
@@ -11466,7 +11725,6 @@ class Document {
     this.outlineReplay = false;
     this.outlineCursor = 0;
     this.outlineRerenderRequested = false;
-    this.renderPageOffset = 0;
     this.fonts = new Map;
     this.fallbackFont = Font.helvetica();
     this.metadata = {
@@ -11507,7 +11765,7 @@ class Document {
     this.outlineRerenderRequested = true;
   }
   registerOutline({title, level, pageNumber, y, color = null, style = "normal"}) {
-    const page = this.renderPageOffset + pageNumber;
+    const page = pageNumber;
     if (this.outlineReplay) {
       const existing = this.outlineEntries[this.outlineCursor];
       if (existing !== undefined) {
@@ -11540,31 +11798,49 @@ class Document {
   registerDestination({name, pageNumber, x = null, y = null, zoom = null}) {
     this.destinationEntries.push({
       name,
-      page: this.renderPageOffset + pageNumber,
+      page: pageNumber,
       x,
       y,
       zoom
     });
   }
-  renderSections(replay) {
+  renderSections(replay, expectedPagesCount = 0) {
     this.outlineReplay = replay;
     this.outlineCursor = 0;
     this.destinationEntries.length = 0;
     const pages = [];
+    const rendered = [];
     for (const section of this.sections) {
-      this.renderPageOffset = pages.length;
-      pages.push(...section.render({
-        document: this
-      }));
+      const pageOffset = pages.length;
+      const sectionPages = section.render({
+        document: this,
+        pageOffset,
+        pagesCount: expectedPagesCount
+      });
+      rendered.push({
+        section,
+        pageOffset,
+        pages: sectionPages
+      });
+      pages.push(...sectionPages);
     }
-    return pages;
+    const pagesCount = pages.length;
+    const processed = [];
+    for (const entry of rendered) {
+      processed.push(...entry.section.postProcess?.({
+        document: this,
+        pageOffset: entry.pageOffset,
+        pagesCount
+      }) ?? entry.pages);
+    }
+    return processed;
   }
   save() {
     this.outlineEntries.length = 0;
     this.outlineRerenderRequested = false;
     let pages = this.renderSections(false);
     if (this.outlineRerenderRequested) {
-      pages = this.renderSections(true);
+      pages = this.renderSections(true, pages.length);
     }
     if (pages.length === 0) {
       throw new Error("Document must contain at least one page");
@@ -14736,11 +15012,10 @@ class SvgImage extends Widget {
     const offeredHeight = this.height !== null || this.parser.height !== null ? constrain(this.height ?? this.parser.height, parent.maxHeight) : parent.hasBoundedHeight ? parent.maxHeight : constrain(this.parser.viewBox.height, parent.maxHeight);
     const fitted = applyBoxFit(this.fit, size(this.parser.viewBox.width, this.parser.viewBox.height), size(offeredWidth, offeredHeight));
     const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, this.parser.viewBox.width, this.parser.viewBox.height);
-    const constrainedSize = parent.constrain(fitted.destination);
     return {
       widget: this,
-      width: constrainedSize.width,
-      height: constrainedSize.height,
+      width: fitted.destination.width,
+      height: fitted.destination.height,
       data: {
         source: fitted.source,
         destination: fitted.destination,
@@ -14812,8 +15087,6 @@ class PdfLogo extends StatelessWidget {
   build() {
     return new SvgImage({
       svg: `<svg viewBox="0 0 24 27"><path d="${PDF_LOGO_PATH}" fill="#000000"/></svg>`,
-      width: 24,
-      height: 27,
       fit: this.fit,
       colorFilter: this.color
     });

@@ -99,7 +99,7 @@ export function generateServer(pageFormat = pw.PageFormat.A4, _data = customData
 function buildHeader(plan, resources) {
   return new pw.Column({
     children: [
-      new pw.Align({ alignment: 'centerLeft', child: new pw.SvgImage({ svg: resources.logoSvg, height: 20 }) }),
+      new pw.Align({ alignment: pw.Alignment.centerLeft, child: new pw.SvgImage({ svg: resources.logoSvg, height: 20 }) }),
       new pw.Container({
         padding: new pw.EdgeInsets({ left: 20, right: 20, top: 10, bottom: 40 }),
         child: new pw.Row({

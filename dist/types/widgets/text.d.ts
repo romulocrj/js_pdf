@@ -79,6 +79,7 @@ export interface ResolvedTextStyle {
     readonly fontSize: number;
     readonly color: Rgb;
     readonly lineAdvance: number;
+    readonly lineSpacing: number;
     readonly letterSpacing: number;
     readonly wordSpacing: number;
     readonly baseline: number;
@@ -126,6 +127,7 @@ export interface RichTextLineLayout {
     readonly y: number;
     readonly width: number;
     readonly height: number;
+    readonly lineSpacing: number;
     readonly wrapped: boolean;
 }
 export interface RichTextLayoutData {

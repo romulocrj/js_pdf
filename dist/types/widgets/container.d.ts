@@ -4,8 +4,8 @@ import { BoxDecoration } from './decoration.ts';
 import type { BoxDecorationInput, DecorationPosition } from './decoration.ts';
 import { Alignment } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
-import { Widget } from './widget.ts';
-import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
+import { SpanningWidget, Widget } from './widget.ts';
+import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext, SpanLayout } from './widget.ts';
 export interface ContainerOptions {
     readonly child?: AnyWidget | null;
     readonly width?: number | null;
@@ -25,6 +25,9 @@ export interface ContainerLayoutData {
     readonly boxHeight: number;
     readonly childX: number;
     readonly childY: number;
+}
+export interface ContainerState {
+    readonly childState: unknown;
 }
 export interface DecoratedBoxOptions {
     readonly decoration: BoxDecorationInput;
@@ -46,7 +49,7 @@ export declare class DecoratedBox extends Widget<{
         readonly childBox: AnyLayoutBox | null;
     }>): void;
 }
-export declare class Container extends Widget<ContainerLayoutData> {
+export declare class Container extends SpanningWidget<ContainerLayoutData, ContainerState> {
     readonly child: AnyWidget | null;
     readonly width: number | null;
     readonly height: number | null;
@@ -58,7 +61,11 @@ export declare class Container extends Widget<ContainerLayoutData> {
     readonly decoration: BoxDecoration | null;
     readonly foregroundDecoration: BoxDecoration | null;
     readonly alignment: Alignment | null;
+    get canSpan(): boolean;
     constructor({ child, width, height, padding, margin, background, borderColor, borderWidth, decoration, foregroundDecoration, alignment }?: ContainerOptions);
+    initialSpanState(): ContainerState;
+    private finishLayout;
     layout(context: RenderContext, constraints: Constraints): LayoutBox<ContainerLayoutData>;
+    layoutSpan(context: RenderContext, constraints: Constraints, state: ContainerState): SpanLayout<ContainerLayoutData, ContainerState>;
     paint(context: RenderContext, box: PositionedBox<ContainerLayoutData>): void;
 }

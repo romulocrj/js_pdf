@@ -1,6 +1,6 @@
 import type { Insets, InsetsInput } from './geometry.ts';
-import { Widget } from './widget.ts';
-import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
+import { SpanningWidget, Widget } from './widget.ts';
+import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext, SpanLayout } from './widget.ts';
 export type Axis = 'horizontal' | 'vertical';
 export type FlexFit = 'tight' | 'loose';
 export type MainAxisSize = 'min' | 'max';
@@ -39,6 +39,9 @@ export interface FlexChildLayout {
 export interface FlexLayoutData {
     readonly children: readonly FlexChildLayout[];
 }
+export interface FlexState {
+    readonly firstChild: number;
+}
 export interface FlexibleLayoutData {
     readonly childBox: AnyLayoutBox;
 }
@@ -62,7 +65,7 @@ export declare class Spacer extends Expanded {
     });
 }
 /** The shared upstream flex algorithm behind `Row` and `Column`. */
-export declare class Flex extends Widget<FlexLayoutData> {
+export declare class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
     readonly direction: Axis;
     readonly children: readonly AnyWidget[];
     readonly mainAxisAlignment: MainAxisAlignment;
@@ -72,8 +75,11 @@ export declare class Flex extends Widget<FlexLayoutData> {
     readonly gap: number;
     readonly margin: Insets;
     readonly widths: readonly number[] | null;
+    get canSpan(): boolean;
     constructor({ direction, children, mainAxisAlignment, mainAxisSize, crossAxisAlignment, verticalDirection, gap, margin, widths }: FlexOptions);
     private crossConstraints;
+    initialSpanState(): FlexState;
+    layoutSpan(context: RenderContext, incoming: Constraints, state: FlexState): SpanLayout<FlexLayoutData, FlexState>;
     layout(context: RenderContext, incoming: Constraints): LayoutBox<FlexLayoutData>;
     paint(context: RenderContext, box: PositionedBox<FlexLayoutData>): void;
 }

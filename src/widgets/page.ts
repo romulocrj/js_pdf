@@ -38,6 +38,7 @@ import type { ThemeData } from './theme.ts';
  */
 export interface Section {
   render(documentContext: DocumentContext): SerializedPage[];
+  postProcess?(documentContext: DocumentContext): SerializedPage[];
 }
 
 export interface PageOptions {
@@ -116,7 +117,8 @@ export class Page implements Section {
       ...documentContext,
       canvas,
       pageFormat: format,
-      pageNumber: 1,
+      pageNumber: documentContext.pageOffset + 1,
+      pagesCount: documentContext.pagesCount || documentContext.pageOffset + 1,
       theme: this.pageTheme.theme ?? documentContext.document.theme
     };
 

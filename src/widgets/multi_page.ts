@@ -24,6 +24,7 @@ import type { SerializedPage } from '../pdf/document.ts';
 import { PdfCanvas } from '../pdf/graphics.ts';
 import { PageFormat } from '../pdf/page_format.ts';
 import type { PageSize } from '../pdf/page_format.ts';
+import { Flex } from './flex.ts';
 import { BoxConstraints } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import { PageTheme } from './page_theme.ts';
@@ -85,6 +86,7 @@ export class MultiPage implements Section {
   readonly footer: ((context: RenderContext) => AnyWidget) | null;
   readonly background: ColorInput | null;
   readonly maxPages: number;
+  private renderedPages: PageState[] = [];
 
   constructor({
     pageTheme = undefined,
@@ -92,7 +94,7 @@ export class MultiPage implements Section {
     pageFormat = undefined,
     margin = undefined,
     orientation = undefined,
-    gap = 8,
+    gap = 0,
     theme = undefined,
     build,
     header = null,
@@ -140,12 +142,13 @@ export class MultiPage implements Section {
       const canvas = new PdfCanvas(this.format.height);
       if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
 
-      const pageNumber = pages.length + 1;
+      const pageNumber = documentContext.pageOffset + pages.length + 1;
       const context: RenderContext = {
         ...documentContext,
         canvas,
         pageFormat: this.format,
         pageNumber,
+        pagesCount: documentContext.pagesCount || pageNumber,
         theme: this.theme ?? documentContext.document.theme
       };
 
@@ -160,7 +163,6 @@ export class MultiPage implements Section {
         const headerBox = headerWidget.layout(context, new BoxConstraints({
           maxWidth
         }));
-        headerWidget.paint(context, { ...headerBox, x: this.margin.left, y: top });
         top += headerBox.height + this.gap;
       }
 
@@ -170,7 +172,6 @@ export class MultiPage implements Section {
           maxWidth
         }));
         bottom -= footerBox.height + this.gap;
-        footerWidget.paint(context, { ...footerBox, x: this.margin.left, y: bottom + this.gap });
       }
 
       const state = { canvas, context, maxWidth, top, bottom, cursor: top };
@@ -185,6 +186,45 @@ export class MultiPage implements Section {
     for (const child of children) {
       if (child instanceof SpanningWidget && child.canSpan) {
         let state: unknown = child.initialSpanState();
+        const natural = child.layout(page.context, new BoxConstraints({
+          maxWidth: page.maxWidth,
+          maxHeight: Infinity
+        }));
+        const initialAvailable = page.bottom - page.cursor;
+
+        if (natural.height <= initialAvailable + 0.001) {
+          child.paint(page.context, {
+            ...natural,
+            x: this.margin.left,
+            y: page.cursor
+          });
+          page.cursor += natural.height + this.gap;
+          continue;
+        }
+
+        const fullAvailable = page.bottom - page.top;
+        /*
+         * A vertical flex with `mainAxisSize: max` expands only after it is
+         * given a finite fragment. If its intrinsic form fits a fresh page,
+         * keep it together instead of turning a tiny tail fragment into a
+         * page-filling continuation.
+         */
+        if (child instanceof Flex
+            && natural.height <= fullAvailable + 0.001
+            && page.cursor > page.top + 0.001) {
+          page = startPage();
+          const moved = child.layout(page.context, new BoxConstraints({
+            maxWidth: page.maxWidth,
+            maxHeight: Infinity
+          }));
+          child.paint(page.context, {
+            ...moved,
+            x: this.margin.left,
+            y: page.cursor
+          });
+          page.cursor += moved.height + this.gap;
+          continue;
+        }
 
         while (true) {
           const available = page.bottom - page.cursor;
@@ -250,10 +290,50 @@ export class MultiPage implements Section {
       page.cursor += box.height + this.gap;
     }
 
-    for (const state of pages) {
-      this.paintLayer(this.pageTheme.buildForeground, state.context);
+    this.renderedPages = pages;
+
+    return this.serialize(pages);
+  }
+
+  postProcess(documentContext: DocumentContext): SerializedPage[] {
+    for (const state of this.renderedPages) {
+      const context: RenderContext = {
+        ...state.context,
+        ...documentContext,
+        pagesCount: documentContext.pagesCount
+      };
+
+      if (this.header) {
+        const headerWidget = this.header(context);
+        const headerBox = headerWidget.layout(context, new BoxConstraints({
+          maxWidth: state.maxWidth
+        }));
+        headerWidget.paint(context, {
+          ...headerBox,
+          x: this.margin.left,
+          y: this.margin.top
+        });
+      }
+
+      if (this.footer) {
+        const footerWidget = this.footer(context);
+        const footerBox = footerWidget.layout(context, new BoxConstraints({
+          maxWidth: state.maxWidth
+        }));
+        footerWidget.paint(context, {
+          ...footerBox,
+          x: this.margin.left,
+          y: this.format.height - this.margin.bottom - footerBox.height
+        });
+      }
+
+      this.paintLayer(this.pageTheme.buildForeground, context);
     }
 
+    return this.serialize(this.renderedPages);
+  }
+
+  private serialize(pages: readonly PageState[]): SerializedPage[] {
     return pages.map(({ canvas }) => ({
       format: this.format,
       content: canvas.output(),

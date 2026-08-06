@@ -4,7 +4,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
 **Last updated:** 2026-08-06
 **Upstream reference:** `pdf/lib/` — 137 Dart files, ~31,800 lines
-**Ported:** 133 `.ts` files, ~29,100 lines (TypeScript)
+**Ported:** 133 `.ts` files, ~29,500 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -23,13 +23,13 @@ table. Run `npm run examples`; current state, from
 | Example | Status | Missing APIs | Unlocks at |
 |---|---|---:|---|
 | `hello-world` | ✅ generated (743 bytes) | 0 | — |
-| `calendar` | ✅ generated (22,027 bytes) | 0 | 3.6 |
-| `certificate` | ✅ generated (126,677 bytes) | 0 | 3.9 |
-| `report` | ✅ generated (30,332 bytes) | 0 | 5.1 |
-| `invoice` | ✅ generated (102,709 bytes) | 0 | 5.2 |
-| `document` | ✅ generated (101,311 bytes) | 0 | 5.3 |
-| `server` | ✅ generated (81,692 bytes) | 0 | 5.3 |
-| `resume` | ✅ generated (73,119 bytes) | 0 | 5.5 |
+| `calendar` | ✅ generated (22,102 bytes) | 0 | 3.6 |
+| `certificate` | ✅ generated (126,676 bytes) | 0 | 3.9 |
+| `report` | ✅ generated (30,358 bytes) | 0 | 5.1 |
+| `invoice` | ✅ generated (102,664 bytes) | 0 | 5.2 |
+| `document` | ✅ generated (137,164 bytes) | 0 | 5.3 |
+| `server` | ✅ generated (82,684 bytes) | 0 | 5.3 |
+| `resume` | ✅ generated (74,273 bytes) | 0 | 5.5 |
 
 **8 of 8**, with the missing-API total down from 124 to 0 — phase 1.4 cleared
 `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and `DefaultTextStyle`
@@ -168,13 +168,13 @@ both, and will grow the shape factories in 2.5.
 
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
-| `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | partial — pure layout protocol, `StatelessWidget`, immutable `SpanningWidget` continuation state and theme on the render context; no `InheritedWidget` |
+| `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | partial — pure layout protocol, spanning `StatelessWidget`, immutable continuation state and theme on the render context; no `InheritedWidget` |
 | `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — `BoxConstraints` with factories/transforms, `EdgeInsets`, `Alignment`, `inscribe`; no directional geometry or `TextDirection` |
-| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, inherited per-run styles, annotations and fallback fonts, wrapping, immutable page continuation, LTR/explicit RTL placement, justification, backgrounds and combined decorations; no Arabic shaping or Unicode bidi reordering |
-| `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — full `Flex`/`Row`/`Column` allocation, all main/cross alignments, `mainAxisSize`, vertical direction, `Expanded`, `Flexible`, proportional `Spacer`, plus `gap`/weighted-row extensions; no `ListView`, bidi direction or baseline alignment |
-| `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts`, `decoration.ts`, `box_border.ts` | partial — `Container`, `DecoratedBox`, background/foreground `BoxDecoration`, per-side/dashed borders, axial/radial gradients and vector shadows; no decoration image painter yet |
+| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, font-metric line boxes, between-line spacing, inherited per-run styles, annotations and fallback fonts, wrapping, immutable page continuation, LTR/explicit RTL placement, justification, backgrounds and combined decorations; no Arabic shaping or Unicode bidi reordering |
+| `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — full `Flex`/`Row`/`Column` allocation and vertical continuation, all main/cross alignments, `mainAxisSize`, vertical direction, `Expanded`, `Flexible`, proportional `Spacer`, plus `gap`/weighted-row extensions; no `ListView`, bidi direction or baseline alignment |
+| `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts`, `decoration.ts`, `box_border.ts` | partial — spanning `Container`, `DecoratedBox`, background/foreground `BoxDecoration`, per-side/dashed borders, axial/radial gradients and vector shadows; no decoration image painter yet |
 | `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground; **one document may mix orientations and paper sizes**, per section; no `clip` |
-| `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — header/footer, atomic page breaks, direct spanning children, `maxPages` and per-section `orientation` |
+| `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — global page totals, post-processed header/footer, atomic page breaks, intrinsic-first spanning children, `maxPages` and per-section `orientation` |
 | `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`; owns the theme and the per-document font cache |
 | `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts`, `src/widgets/svg.ts` | partial — imperative `Vector`; public `SvgImage` with all `BoxFit` modes, alignment, clipping and colour filter; no SVG text or embedded raster content |
 | `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | done — all upstream public classes, including tight `SizedBox`, `ConstrainedBox`, minimum-preserving `LimitedBox` and aligned `OverflowBox`; dividers paint the equivalent rule directly |

@@ -87,7 +87,6 @@ export class Document {
   private outlineReplay = false;
   private outlineCursor = 0;
   private outlineRerenderRequested = false;
-  private renderPageOffset = 0;
 
   /**
    * One `PdfFont` per declaration, for this document only. An embedded font
@@ -170,7 +169,7 @@ export class Document {
     readonly color?: Rgb | null;
     readonly style?: PdfOutlineStyle;
   }): void {
-    const page = this.renderPageOffset + pageNumber;
+    const page = pageNumber;
     if (this.outlineReplay) {
       const existing = this.outlineEntries[this.outlineCursor];
       if (existing !== undefined) {
@@ -217,23 +216,44 @@ export class Document {
   }): void {
     this.destinationEntries.push({
       name,
-      page: this.renderPageOffset + pageNumber,
+      page: pageNumber,
       x,
       y,
       zoom
     });
   }
 
-  private renderSections(replay: boolean): SerializedPage[] {
+  private renderSections(replay: boolean, expectedPagesCount = 0): SerializedPage[] {
     this.outlineReplay = replay;
     this.outlineCursor = 0;
     this.destinationEntries.length = 0;
     const pages: SerializedPage[] = [];
+    const rendered: Array<{
+      readonly section: Section;
+      readonly pageOffset: number;
+      readonly pages: SerializedPage[];
+    }> = [];
     for (const section of this.sections) {
-      this.renderPageOffset = pages.length;
-      pages.push(...section.render({ document: this }));
+      const pageOffset = pages.length;
+      const sectionPages = section.render({
+        document: this,
+        pageOffset,
+        pagesCount: expectedPagesCount
+      });
+      rendered.push({ section, pageOffset, pages: sectionPages });
+      pages.push(...sectionPages);
     }
-    return pages;
+
+    const pagesCount = pages.length;
+    const processed: SerializedPage[] = [];
+    for (const entry of rendered) {
+      processed.push(...(entry.section.postProcess?.({
+        document: this,
+        pageOffset: entry.pageOffset,
+        pagesCount
+      }) ?? entry.pages));
+    }
+    return processed;
   }
 
   save(): Uint8Array {
@@ -242,7 +262,7 @@ export class Document {
     let pages = this.renderSections(false);
 
     if (this.outlineRerenderRequested) {
-      pages = this.renderSections(true);
+      pages = this.renderSections(true, pages.length);
     }
 
     if (pages.length === 0) {

@@ -43,11 +43,14 @@ export declare class MultiPage implements Section {
     readonly footer: ((context: RenderContext) => AnyWidget) | null;
     readonly background: ColorInput | null;
     readonly maxPages: number;
+    private renderedPages;
     constructor({ pageTheme, format, pageFormat, margin, orientation, gap, theme, build, header, footer, background, maxPages }: MultiPageOptions);
     /** The paper as written, with the orientation applied. */
     get format(): PageSize;
     /** Margins in the resolved orientation, rotated with the paper. */
     get margin(): Insets;
     render(documentContext: DocumentContext): SerializedPage[];
+    postProcess(documentContext: DocumentContext): SerializedPage[];
+    private serialize;
     private paintLayer;
 }

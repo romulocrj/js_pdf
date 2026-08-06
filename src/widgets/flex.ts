@@ -22,14 +22,15 @@
 
 import { BoxConstraints, normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
-import { Widget } from './widget.ts';
+import { SpanningWidget, Widget } from './widget.ts';
 import type {
   AnyLayoutBox,
   AnyWidget,
   Constraints,
   LayoutBox,
   PositionedBox,
-  RenderContext
+  RenderContext,
+  SpanLayout
 } from './widget.ts';
 
 export type Axis = 'horizontal' | 'vertical';
@@ -80,6 +81,10 @@ export interface FlexChildLayout {
 
 export interface FlexLayoutData {
   readonly children: readonly FlexChildLayout[];
+}
+
+export interface FlexState {
+  readonly firstChild: number;
 }
 
 export interface FlexibleLayoutData {
@@ -180,7 +185,7 @@ export class Spacer extends Expanded {
 }
 
 /** The shared upstream flex algorithm behind `Row` and `Column`. */
-export class Flex extends Widget<FlexLayoutData> {
+export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
   readonly direction: Axis;
   readonly children: readonly AnyWidget[];
   readonly mainAxisAlignment: MainAxisAlignment;
@@ -190,6 +195,10 @@ export class Flex extends Widget<FlexLayoutData> {
   readonly gap: number;
   readonly margin: Insets;
   readonly widths: readonly number[] | null;
+
+  override get canSpan(): boolean {
+    return this.direction === 'vertical';
+  }
 
   constructor({
     direction,
@@ -241,6 +250,79 @@ export class Flex extends Widget<FlexLayoutData> {
       return [maximum, maximum];
     }
     return [0, maximum];
+  }
+
+  override initialSpanState(): FlexState {
+    return { firstChild: 0 };
+  }
+
+  override layoutSpan(
+    context: RenderContext,
+    incoming: Constraints,
+    state: FlexState
+  ): SpanLayout<FlexLayoutData, FlexState> {
+    if (this.direction === 'horizontal' || state.firstChild >= this.children.length) {
+      const box = this.layout(context, incoming);
+      return {
+        box,
+        nextState: { firstChild: this.children.length },
+        hasMore: false
+      };
+    }
+
+    const outer = BoxConstraints.from(incoming);
+    const constraints = outer.deflate(this.margin);
+    const [, childMaxCross] = this.crossConstraints(constraints);
+    const childMinCross = this.crossAxisAlignment === 'stretch' && Number.isFinite(childMaxCross)
+      ? childMaxCross
+      : 0;
+    const available = constraints.maxHeight;
+    let allocated = 0;
+    let lastChild = state.firstChild;
+
+    for (let index = state.firstChild; index < this.children.length; index++) {
+      const child = this.children[index]!;
+      if (child instanceof Flexible && child.flex > 0) {
+        lastChild = index + 1;
+        continue;
+      }
+      const childBox = child.layout(context, axisConstraints(
+        this.direction,
+        0,
+        Infinity,
+        childMinCross,
+        childMaxCross
+      ));
+      const next = allocated
+        + (lastChild > state.firstChild ? this.gap : 0)
+        + childBox.height;
+      if (next > available && lastChild > state.firstChild) break;
+      allocated = next;
+      lastChild = index + 1;
+      if (next > available) break;
+    }
+
+    if (lastChild === state.firstChild && state.firstChild < this.children.length) {
+      lastChild++;
+    }
+
+    const fragment = new Flex({
+      direction: this.direction,
+      children: this.children.slice(state.firstChild, lastChild),
+      mainAxisAlignment: this.mainAxisAlignment,
+      mainAxisSize: this.mainAxisSize,
+      crossAxisAlignment: this.crossAxisAlignment,
+      verticalDirection: this.verticalDirection,
+      gap: this.gap,
+      margin: this.margin,
+      widths: this.widths
+    }).layout(context, incoming);
+    const nextState = { firstChild: lastChild };
+    return {
+      box: { ...fragment, widget: this },
+      nextState,
+      hasMore: lastChild < this.children.length
+    };
   }
 
   override layout(context: RenderContext, incoming: Constraints): LayoutBox<FlexLayoutData> {

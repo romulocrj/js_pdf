@@ -99,8 +99,6 @@ export class PdfLogo extends StatelessWidget {
   override build(): AnyWidget {
     return new SvgImage({
       svg: `<svg viewBox="0 0 24 27"><path d="${PDF_LOGO_PATH}" fill="#000000"/></svg>`,
-      width: 24,
-      height: 27,
       fit: this.fit,
       colorFilter: this.color
     });

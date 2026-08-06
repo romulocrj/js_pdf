@@ -186,7 +186,7 @@ export function generateResume(format = pw.PageFormat.A4, _data = customData, re
               child: new pw.Column({
                 children: [
                   new pw.Container({
-                    height: pageTheme.pageFormat.availableHeight,
+                    height: pageTheme.resolvedFormat.height - pageTheme.margin.top - pageTheme.margin.bottom,
                     child: new pw.Column({
                       crossAxisAlignment: 'center',
                       mainAxisAlignment: 'spaceBetween',

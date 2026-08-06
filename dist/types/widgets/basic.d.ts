@@ -5,6 +5,7 @@ import type { PdfPoint } from '../pdf/rect.ts';
 import { Alignment, BoxConstraints } from './geometry.ts';
 import type { BoxConstraintsInput, Insets, InsetsInput, Offset } from './geometry.ts';
 import type { BoxFit } from './svg.ts';
+import type { BorderStyle, BorderStyleInput } from './box_border.ts';
 import { StatelessWidget, Widget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext, StatelessLayoutData } from './widget.ts';
 /** What a widget with one optional child hands from `layout` to `paint`. */
@@ -28,8 +29,11 @@ export interface AlignLayoutData extends SingleChildLayoutData {
     readonly dx: number;
     readonly dy: number;
 }
+export type BasicAlignmentName = 'topLeft' | 'topCenter' | 'topRight' | 'centerLeft' | 'center' | 'centerRight' | 'bottomLeft' | 'bottomCenter' | 'bottomRight';
+export type BasicAlignmentInput = Alignment | BasicAlignmentName;
+export declare function resolveBasicAlignment(value: BasicAlignmentInput): Alignment;
 export interface AlignOptions {
-    readonly alignment?: Alignment;
+    readonly alignment?: BasicAlignmentInput;
     readonly widthFactor?: number | null;
     readonly heightFactor?: number | null;
     readonly child?: AnyWidget | null;
@@ -90,6 +94,7 @@ export interface DividerOptions {
     readonly indent?: number;
     readonly endIndent?: number;
     readonly color?: ColorInput;
+    readonly borderStyle?: BorderStyleInput;
 }
 export declare const DEFAULT_DIVIDER_HEIGHT = 16;
 export declare const DEFAULT_DIVIDER_THICKNESS = 1;
@@ -107,13 +112,11 @@ export declare class Divider extends Widget<null> {
     readonly indent: number;
     readonly endIndent: number;
     readonly color: Rgb;
-    constructor({ height, thickness, indent, endIndent, color }?: DividerOptions);
+    readonly borderStyle: BorderStyle;
+    constructor({ height, thickness, indent, endIndent, color, borderStyle }?: DividerOptions);
     layout(_context: RenderContext, constraints: Constraints): LayoutBox<null>;
     paint(context: RenderContext, box: PositionedBox<null>): void;
 }
-export type BasicAlignmentName = 'topLeft' | 'topCenter' | 'topRight' | 'centerLeft' | 'center' | 'centerRight' | 'bottomLeft' | 'bottomCenter' | 'bottomRight';
-export type BasicAlignmentInput = Alignment | BasicAlignmentName;
-export declare function resolveBasicAlignment(value: BasicAlignmentInput): Alignment;
 export interface TransformOptions {
     readonly transform?: PdfMatrix | null;
     readonly rotate?: number | null;

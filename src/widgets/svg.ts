@@ -195,11 +195,13 @@ export class SvgImage extends Widget<SvgImageLayoutData> {
       this.parser.viewBox.height
     );
 
-    const constrainedSize = parent.constrain(fitted.destination);
     return {
       widget: this,
-      width: constrainedSize.width,
-      height: constrainedSize.height,
+      // Upstream's image widgets return the BoxFit destination directly. In
+      // particular, a contained image may remain shorter than a tight parent;
+      // wrappers such as FullPage then position that intrinsic destination.
+      width: fitted.destination.width,
+      height: fitted.destination.height,
       data: {
         source: fitted.source,
         destination: fitted.destination,

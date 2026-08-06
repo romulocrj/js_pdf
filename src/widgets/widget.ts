@@ -19,11 +19,16 @@
 import type { PdfCanvas } from '../pdf/graphics.ts';
 import type { PageSize } from '../pdf/page_format.ts';
 import type { Document } from './document.ts';
+import { BoxConstraints } from './geometry.ts';
 import type { ThemeData } from './theme.ts';
 
 /** The context before a page exists: everything a section needs to render. */
 export interface DocumentContext {
   readonly document: Document;
+  /** Number of physical pages emitted before the current section. */
+  readonly pageOffset: number;
+  /** Total physical pages, or zero while the first layout pass is running. */
+  readonly pagesCount: number;
 }
 
 /**
@@ -38,6 +43,7 @@ export interface RenderContext extends DocumentContext {
   readonly canvas: PdfCanvas;
   readonly pageFormat: PageSize;
   readonly pageNumber: number;
+  readonly pagesCount: number;
   readonly theme: ThemeData;
 }
 
@@ -110,7 +116,9 @@ export interface SpanLayout<TData, TState> {
  * the next alongside the box it applies to.
  */
 export abstract class SpanningWidget<TData = unknown, TState = unknown> extends Widget<TData> {
-  readonly canSpan = true;
+  get canSpan(): boolean {
+    return true;
+  }
 
   abstract initialSpanState(): TState;
 
@@ -126,6 +134,12 @@ export interface StatelessLayoutData {
   readonly childBox: AnyLayoutBox;
 }
 
+export interface StatelessState {
+  readonly child: AnyWidget | null;
+  readonly childState: unknown;
+  readonly done: boolean;
+}
+
 /**
  * A widget defined by composition: `build()` returns the subtree that does the
  * real work, and layout and paint delegate to it.
@@ -136,11 +150,69 @@ export interface StatelessLayoutData {
  * Upstream can keep the built child in a field because it re-builds on every
  * layout pass; here the pure protocol makes the hand-off explicit.
  *
- * PORT GAP: upstream mixes in `SpanningWidget` so a stateless widget can split
- * across pages. Spanning is phase 3.2.
  */
-export abstract class StatelessWidget extends Widget<StatelessLayoutData> {
+export abstract class StatelessWidget extends SpanningWidget<StatelessLayoutData, StatelessState> {
   abstract build(context: RenderContext): AnyWidget;
+
+  override initialSpanState(): StatelessState {
+    return { child: null, childState: null, done: false };
+  }
+
+  override layoutSpan(
+    context: RenderContext,
+    constraints: Constraints,
+    state: StatelessState
+  ): SpanLayout<StatelessLayoutData, StatelessState> {
+    const child = state.child ?? this.build(context);
+    if (child instanceof SpanningWidget && child.canSpan) {
+      const childState = state.child === null
+        ? child.initialSpanState()
+        : state.childState;
+      const fragment = child.layoutSpan(context, constraints, childState);
+      return {
+        box: {
+          widget: this,
+          width: fragment.box.width,
+          height: fragment.box.height,
+          data: { childBox: fragment.box }
+        },
+        nextState: {
+          child,
+          childState: fragment.nextState,
+          done: !fragment.hasMore
+        },
+        hasMore: fragment.hasMore
+      };
+    }
+
+    const parent = BoxConstraints.from(constraints);
+    const childBox = child.layout(context, parent.copyWith({
+      minHeight: 0,
+      maxHeight: Infinity
+    }));
+    if (childBox.height > parent.maxHeight + 0.001) {
+      return {
+        box: {
+          widget: this,
+          width: parent.constrainWidth(childBox.width),
+          height: 0,
+          data: { childBox: { ...childBox, height: 0 } }
+        },
+        nextState: { child, childState: null, done: false },
+        hasMore: true
+      };
+    }
+    return {
+      box: {
+        widget: this,
+        width: childBox.width,
+        height: childBox.height,
+        data: { childBox }
+      },
+      nextState: { child, childState: null, done: true },
+      hasMore: false
+    };
+  }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<StatelessLayoutData> {
     const childBox = this.build(context).layout(context, constraints);

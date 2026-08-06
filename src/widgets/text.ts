@@ -199,6 +199,7 @@ export interface ResolvedTextStyle {
   readonly fontSize: number;
   readonly color: Rgb;
   readonly lineAdvance: number;
+  readonly lineSpacing: number;
   readonly letterSpacing: number;
   readonly wordSpacing: number;
   readonly baseline: number;
@@ -253,6 +254,7 @@ export interface RichTextLineLayout {
   readonly y: number;
   readonly width: number;
   readonly height: number;
+  readonly lineSpacing: number;
   readonly wrapped: boolean;
 }
 
@@ -305,7 +307,10 @@ function resolveStyle(
     font,
     fontSize,
     color: style.color ?? [0, 0, 0],
-    lineAdvance: fontSize * (style.height ?? DEFAULT_LINE_HEIGHT) + (style.lineSpacing ?? 0) * scale,
+    lineAdvance: fontSize
+      * (font.ascent - font.descent)
+      * (style.height ?? DEFAULT_LINE_HEIGHT),
+    lineSpacing: (style.lineSpacing ?? 0) * scale,
     letterSpacing: (style.letterSpacing ?? 0) * scale,
     wordSpacing: (style.wordSpacing ?? 0) * scale,
     baseline: baseline * scale,
@@ -344,7 +349,8 @@ export function wrapText(
     font,
     fontSize,
     color: [0, 0, 0],
-    lineAdvance: fontSize * DEFAULT_LINE_HEIGHT,
+    lineAdvance: fontSize * (font.ascent - font.descent) * DEFAULT_LINE_HEIGHT,
+    lineSpacing: 0,
     letterSpacing: 0,
     wordSpacing: 0,
     baseline: 0,
@@ -400,17 +406,32 @@ function positionLine(
   align: TextAlign,
   direction: TextDirection
 ): RichTextLineLayout {
+  let lineSpacing = line.emptyStyle.lineSpacing;
   let ascent = line.emptyStyle.fontSize + Math.max(0, line.emptyStyle.baseline);
-  let descent = Math.max(0, line.emptyStyle.lineAdvance - line.emptyStyle.fontSize - line.emptyStyle.baseline);
-  let minimumHeight = line.emptyStyle.lineAdvance;
+  let descent = Math.max(
+    0,
+    line.emptyStyle.lineAdvance + lineSpacing
+      - line.emptyStyle.fontSize
+      - line.emptyStyle.baseline
+  );
+  let minimumHeight = line.emptyStyle.lineAdvance + lineSpacing;
   for (const token of line.tokens) {
-    minimumHeight = Math.max(minimumHeight, token.style.lineAdvance);
+    lineSpacing = Math.max(lineSpacing, token.style.lineSpacing);
+    minimumHeight = Math.max(
+      minimumHeight,
+      token.style.lineAdvance + token.style.lineSpacing
+    );
     if (token.kind === 'widget') {
       ascent = Math.max(ascent, token.height + token.style.baseline);
       descent = Math.max(descent, -token.style.baseline);
     } else {
       ascent = Math.max(ascent, token.style.fontSize + token.style.baseline);
-      descent = Math.max(descent, token.style.lineAdvance - token.style.fontSize - token.style.baseline);
+      descent = Math.max(
+        descent,
+        token.style.lineAdvance + token.style.lineSpacing
+          - token.style.fontSize
+          - token.style.baseline
+      );
     }
   }
   const height = Math.max(minimumHeight, ascent + descent);
@@ -472,7 +493,7 @@ function positionLine(
     if (token.kind === 'gap') accumulatedExtra += extraPerGap;
   }
   const usedWidth = extraPerGap === 0 ? line.width : contentWidth;
-  return { runs, y, width: usedWidth, height, wrapped: line.wrapped };
+  return { runs, y, width: usedWidth, height, lineSpacing, wrapped: line.wrapped };
 }
 
 function rebaseLines(lines: readonly RichTextLineLayout[], top: number): RichTextLineLayout[] {
@@ -653,6 +674,13 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
       const positioned = positionLine(line, y, targetWidth, align, this.textDirection);
       lines.push(positioned);
       y += positioned.height;
+    }
+    const last = lines[lines.length - 1];
+    if (last !== undefined && last.lineSpacing > 0) {
+      lines[lines.length - 1] = {
+        ...last,
+        height: Math.max(0, last.height - last.lineSpacing)
+      };
     }
     return lines;
   }

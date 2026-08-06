@@ -298,7 +298,7 @@ export class TableOfContent extends StatelessWidget {
             new SizedBox({ width: this.indent * entry.level }),
             new Text(entry.title, { style: this.textStyle ?? undefined }),
             new SizedBox({ width: this.gap }),
-            new Expanded({ child: new Divider({ height: 4, thickness: 0.2 }) }),
+            new Expanded({ child: new Divider({ borderStyle: 'dotted', thickness: 0.2 }) }),
             new SizedBox({ width: this.gap }),
             new Text(String(entry.page), { style: this.textStyle ?? undefined })
           ]

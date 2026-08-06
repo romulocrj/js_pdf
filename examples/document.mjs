@@ -52,7 +52,7 @@ export function generateDocument(format = pw.PageFormat.A4, data = customData, r
             new pw.Container({ alignment: 'topRight', height: 150, child: new pw.PdfLogo() }),
             new pw.Spacer(2),
             new pw.Align({
-              alignment: 'topLeft',
+              alignment: pw.Alignment.topLeft,
               child: new pw.UrlLink({
                 destination: 'https://wikipedia.org/wiki/PDF',
                 child: new pw.Text('https://wikipedia.org/wiki/PDF', {
@@ -84,7 +84,7 @@ export function generateDocument(format = pw.PageFormat.A4, data = customData, r
     })
   );
 
-  const paragraphs = [
+  const buildParagraphs = context => [
     new pw.Header({
       level: 0,
       title: 'Portable Document Format',
@@ -129,6 +129,7 @@ export function generateDocument(format = pw.PageFormat.A4, data = customData, r
     new pw.Header({ level: 1, text: 'File formats and Adobe Acrobat versions' }),
     new pw.Paragraph({ text: 'The PDF file format has changed several times, and continues to evolve, along with the release of new versions of Adobe Acrobat. There have been nine versions of PDF and the corresponding version of the software:' }),
     pw.TableHelper.fromTextArray({
+      context,
       data: [
         ['Date', 'PDF Version', 'Acrobat Version'], ['1993', 'PDF 1.0', 'Acrobat 1'],
         ['1994', 'PDF 1.1', 'Acrobat 2'], ['1996', 'PDF 1.2', 'Acrobat 3'],
@@ -163,7 +164,7 @@ export function generateDocument(format = pw.PageFormat.A4, data = customData, r
         margin: new pw.EdgeInsets({ top: 28.35 }),
         child: new pw.Text(`Page ${context.pageNumber} of ${context.pagesCount}`, { style: new pw.TextStyle({ color: '#9e9e9e' }) })
       }),
-      build: () => paragraphs
+      build: context => buildParagraphs(context)
     })
   );
 

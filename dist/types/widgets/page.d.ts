@@ -18,6 +18,7 @@ import type { ThemeData } from './theme.ts';
  */
 export interface Section {
     render(documentContext: DocumentContext): SerializedPage[];
+    postProcess?(documentContext: DocumentContext): SerializedPage[];
 }
 export interface PageOptions {
     /** Everything about the page but its body. Takes precedence field by field. */
