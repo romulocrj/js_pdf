@@ -20,20 +20,23 @@
  * page continuation is an immutable line index. That keeps repeated layout and
  * MultiPage pagination deterministic.
  *
- * PORT GAP: Arabic shaping and the Unicode bidi algorithm depend on the still
- * unported `pdf/font/arabic.dart` and `pdf/font/bidi_utils.dart`. Explicit RTL
- * direction and start/end alignment are supported by mirroring laid-out runs.
+ * RTL spans are converted to visual runs and Arabic presentation forms before
+ * measurement, while immutable run placement still handles start/end layout.
  */
 
 import { assertFiniteNumber } from '../base/assert.ts';
 import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput, Rgb } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
+import type { PdfFontBitmap } from '../pdf/font/font.ts';
+import { logicalToVisual } from '../pdf/font/bidi_utils.ts';
 import { defaultPdfFont } from '../pdf/font/type1_fonts.ts';
 import { BoxConstraints, normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import type { AnnotationBuilder } from './annotations.ts';
 import { Directionality } from './directionality.ts';
+import { Image } from './image.ts';
+import { MemoryImage } from './image_provider.ts';
 import { DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT, TextStyle } from './text_style.ts';
 import type { TextDecorationName } from './text_style.ts';
 import { SpanningWidget } from './widget.ts';
@@ -287,6 +290,20 @@ function textWidth(style: ResolvedTextStyle, value: string): number {
 function supportsRune(font: PdfFont, codePoint: number): boolean {
   const candidate = font as PdfFont & { readonly isRuneSupported?: (value: number) => boolean };
   return candidate.isRuneSupported?.(codePoint) ?? codePoint <= 0xff;
+}
+
+const bitmapProviders = new WeakMap<PdfFontBitmap, MemoryImage>();
+
+function bitmapWidget(bitmap: PdfFontBitmap, fontSize: number): Image {
+  let provider = bitmapProviders.get(bitmap);
+  if (provider === undefined) {
+    provider = new MemoryImage(bitmap.data);
+    bitmapProviders.set(bitmap, provider);
+  }
+  return new Image(provider, {
+    width: fontSize * bitmap.width / bitmap.height,
+    height: fontSize
+  });
 }
 
 function decorationNames(style: TextStyle): readonly TextDecorationName[] {
@@ -551,6 +568,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
   protected inputTokens(context: RenderContext, maxWidth: number): InputToken[] {
     const result: InputToken[] = [];
     const scale = this.textScaleFactor;
+    const direction = this.textDirection ?? Directionality.of(context);
     this.text.visitChildren((span, textStyle, annotation) => {
       const baseStyle = resolveStyle(context, textStyle, span.baseline, scale);
       if (span instanceof WidgetSpan) {
@@ -591,17 +609,43 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
         group = '';
       };
 
-      for (const character of span.text) {
+      const visualText = direction === 'rtl' ? logicalToVisual(span.text) : span.text;
+      for (const character of visualText) {
         const codePoint = character.codePointAt(0) ?? 0;
         let font = baseStyle.font;
+        let bitmap: PdfFontBitmap | null = null;
         if (!supportsRune(font, codePoint)) {
           for (const fallback of textStyle.fontFallback) {
             const candidate = fallback.getFont(context);
             if (supportsRune(candidate, codePoint)) {
               font = candidate;
+              bitmap = candidate.getBitmap?.(codePoint) ?? null;
               break;
             }
           }
+        }
+        if (bitmap !== null) {
+          flush();
+          const metrics = bitmap.metrics.scale(baseStyle.fontSize);
+          const widget = bitmapWidget(bitmap, baseStyle.fontSize);
+          const childBox = widget.layout(context, new BoxConstraints({
+            maxWidth,
+            maxHeight: Infinity
+          }));
+          result.push({
+            kind: 'widget',
+            width: childBox.width,
+            height: childBox.height,
+            style: {
+              ...baseStyle,
+              font,
+              baseline: baseStyle.baseline + metrics.ascent + metrics.descent - metrics.height
+            },
+            childBox,
+            annotation
+          });
+          groupFont = baseStyle.font;
+          continue;
         }
         if (font !== groupFont && group !== '') flush();
         groupFont = font;

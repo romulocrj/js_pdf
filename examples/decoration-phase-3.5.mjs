@@ -8,6 +8,14 @@ import * as pw from '../dist/js_pdf.mjs';
 
 /** Synchronous, host-free phase proof shared by the local and V8 runners. */
 export function generateDecorationPhase35() {
+  const image = new pw.RawImage({
+    bytes: new Uint8Array([
+      15, 118, 110, 255, 34, 197, 94, 255, 250, 204, 21, 255, 249, 115, 22, 255,
+      30, 58, 138, 255, 96, 165, 250, 255, 124, 58, 237, 255, 220, 38, 38, 255
+    ]),
+    width: 4,
+    height: 2
+  });
   const document = new pw.Document();
   document.addPage(new pw.Page({
     margin: 36,
@@ -89,6 +97,22 @@ export function generateDecorationPhase35() {
               })
             })
           ]
+        }),
+        new pw.Container({
+          height: 82,
+          alignment: 'center',
+          decoration: new pw.BoxDecoration({
+            borderRadius: pw.BorderRadius.all(14),
+            image: new pw.DecorationImage({
+              image,
+              fit: 'cover',
+              alignment: 'centerRight'
+            }),
+            border: pw.Border.all({ color: '#172554', width: 2 })
+          }),
+          child: new pw.Text('DecorationImage · cover · centerRight', {
+            style: new pw.TextStyle({ color: '#ffffff', fontWeight: 'bold' })
+          })
         }),
         new pw.Container({
           height: 52,

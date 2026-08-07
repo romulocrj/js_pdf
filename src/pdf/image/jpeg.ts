@@ -19,6 +19,15 @@
  */
 
 export type JpegColorSpace = 'gray' | 'rgb' | 'cmyk';
+export type JpegOrientation =
+  | 'topLeft'
+  | 'topRight'
+  | 'bottomRight'
+  | 'bottomLeft'
+  | 'leftTop'
+  | 'rightTop'
+  | 'rightBottom'
+  | 'leftBottom';
 
 export interface JpegInfo {
   readonly width: number;
@@ -27,6 +36,7 @@ export interface JpegInfo {
   readonly components: number;
   readonly colorSpace: JpegColorSpace;
   readonly inverted: boolean;
+  readonly orientation: JpegOrientation;
 }
 
 const SOF_MARKERS = Object.freeze([
@@ -43,6 +53,49 @@ function u16(bytes: Uint8Array, offset: number): number {
   return (high << 8) | low;
 }
 
+function exifOrientation(bytes: Uint8Array, start: number, end: number): JpegOrientation | null {
+  if (
+    end - start < 14 ||
+    bytes[start] !== 0x45 || bytes[start + 1] !== 0x78 ||
+    bytes[start + 2] !== 0x69 || bytes[start + 3] !== 0x66 ||
+    bytes[start + 4] !== 0 || bytes[start + 5] !== 0
+  ) return null;
+
+  const tiff = start + 6;
+  const little = bytes[tiff] === 0x49 && bytes[tiff + 1] === 0x49;
+  const big = bytes[tiff] === 0x4d && bytes[tiff + 1] === 0x4d;
+  if (!little && !big) return null;
+  const read16 = (offset: number): number | null => {
+    if (offset < tiff || offset + 2 > end) return null;
+    return little
+      ? bytes[offset]! | (bytes[offset + 1]! << 8)
+      : (bytes[offset]! << 8) | bytes[offset + 1]!;
+  };
+  const read32 = (offset: number): number | null => {
+    if (offset < tiff || offset + 4 > end) return null;
+    return little
+      ? (bytes[offset]! + bytes[offset + 1]! * 0x100 + bytes[offset + 2]! * 0x10000 + bytes[offset + 3]! * 0x1000000) >>> 0
+      : (bytes[offset]! * 0x1000000 + bytes[offset + 1]! * 0x10000 + bytes[offset + 2]! * 0x100 + bytes[offset + 3]!) >>> 0;
+  };
+  if (read16(tiff + 2) !== 42) return null;
+  const firstIfd = read32(tiff + 4);
+  if (firstIfd === null) return null;
+  const directory = tiff + firstIfd;
+  const count = read16(directory);
+  if (count === null || directory + 2 + count * 12 > end) return null;
+  const orientations: readonly JpegOrientation[] = [
+    'topLeft', 'topRight', 'bottomRight', 'bottomLeft',
+    'leftTop', 'rightTop', 'rightBottom', 'leftBottom'
+  ];
+  for (let index = 0; index < count; index++) {
+    const entry = directory + 2 + index * 12;
+    if (read16(entry) !== 0x0112 || read16(entry + 2) !== 3 || read32(entry + 4) !== 1) continue;
+    const value = read16(entry + 8);
+    return value === null ? null : orientations[value - 1] ?? null;
+  }
+  return null;
+}
+
 /** Read JPEG dimensions and colour metadata without decoding pixels. */
 export function parseJpeg(bytes: Uint8Array): JpegInfo {
   if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
@@ -55,6 +108,7 @@ export function parseJpeg(bytes: Uint8Array): JpegInfo {
   let bitsPerComponent = 0;
   let components = 0;
   let adobeTransform: number | null = null;
+  let orientation: JpegOrientation = 'topLeft';
   let foundFrame = false;
 
   while (offset < bytes.length) {
@@ -83,6 +137,8 @@ export function parseJpeg(bytes: Uint8Array): JpegInfo {
       const expectedLength = 8 + components * 3;
       if (length < expectedLength) throw new RangeError('Truncated JPEG component table');
       foundFrame = true;
+    } else if (marker === 0xe1) {
+      orientation = exifOrientation(bytes, dataStart, dataEnd) ?? orientation;
     } else if (
       marker === 0xee &&
       length >= 14 &&
@@ -108,6 +164,7 @@ export function parseJpeg(bytes: Uint8Array): JpegInfo {
     bitsPerComponent,
     components,
     colorSpace,
-    inverted: colorSpace === 'cmyk' && adobeTransform !== 0
+    inverted: colorSpace === 'cmyk' && adobeTransform !== 0,
+    orientation
   };
 }

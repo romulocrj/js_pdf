@@ -30,13 +30,101 @@ import { BorderRadius, BorderRadiusGeometry } from './border_radius.ts';
 import type { RadiusValue, TextDirection } from './border_radius.ts';
 import { BoxBorder, normalizeBoxBorder } from './box_border.ts';
 import type { BoxBorderInput } from './box_border.ts';
-import { Alignment } from './geometry.ts';
+import { applyBoxFit, resolveBasicAlignment } from './basic.ts';
+import type { BasicAlignmentInput } from './basic.ts';
+import { Alignment, inscribe } from './geometry.ts';
+import type { BoxFit } from './svg.ts';
+import type { ImageProvider } from './image_provider.ts';
 import type { RenderContext } from './widget.ts';
 
 export type DecorationPosition = 'background' | 'foreground';
 export type TileMode = 'clamp';
 export type BoxShape = 'circle' | 'rectangle';
 export type PaintPhase = 'all' | 'background' | 'foreground';
+
+/** A graphic that can paint inside a decoration box. */
+export abstract class DecorationGraphic {
+  abstract paint(context: RenderContext, box: PdfRect): void;
+}
+
+export interface DecorationImageOptions {
+  readonly image: ImageProvider;
+  readonly fit?: BoxFit;
+  readonly alignment?: BasicAlignmentInput;
+  readonly dpi?: number | null;
+}
+
+/** An image fitted, aligned and clipped inside a decoration box. */
+export class DecorationImage extends DecorationGraphic {
+  readonly image: ImageProvider;
+  readonly fit: BoxFit;
+  readonly alignment: Alignment;
+  readonly dpi: number | null;
+
+  constructor({
+    image,
+    fit = 'cover',
+    alignment = 'center',
+    dpi = null
+  }: DecorationImageOptions) {
+    super();
+    applyBoxFit(fit, { width: 1, height: 1 }, { width: 1, height: 1 });
+    if (dpi !== null && (!Number.isFinite(dpi) || dpi <= 0)) {
+      throw new RangeError('Decoration image DPI must be positive');
+    }
+    this.image = image;
+    this.fit = fit;
+    this.alignment = resolveBasicAlignment(alignment);
+    this.dpi = dpi;
+  }
+
+  override paint(context: RenderContext, box: PdfRect): void {
+    if (box.width <= 0 || box.height <= 0) return;
+    const image = this.image.resolve({ x: box.width, y: box.height }, this.dpi);
+    const fitted = applyBoxFit(
+      this.fit,
+      { width: image.width, height: image.height },
+      { width: box.width, height: box.height }
+    );
+    if (fitted.source.width <= 0 || fitted.source.height <= 0) return;
+
+    const sourceOffset = inscribe(
+      this.alignment,
+      fitted.source.width,
+      fitted.source.height,
+      image.width,
+      image.height
+    );
+    const destinationOffset = inscribe(
+      this.alignment,
+      fitted.destination.width,
+      fitted.destination.height,
+      box.width,
+      box.height
+    );
+    const scaleX = fitted.destination.width / fitted.source.width;
+    const scaleY = fitted.destination.height / fitted.source.height;
+    const boxTop = context.canvas.pageHeight - box.y - box.height;
+    const destinationX = box.x + destinationOffset.dx;
+    const destinationTop = boxTop + destinationOffset.dy;
+    const fullWidth = image.width * scaleX;
+    const fullHeight = image.height * scaleY;
+    const fullX = destinationX - sourceOffset.dx * scaleX;
+    const fullTop = destinationTop - sourceOffset.dy * scaleY;
+
+    context.canvas.saveContext();
+    context.canvas.drawBox(box);
+    context.canvas.clipPath();
+    context.canvas.drawImage(
+      image,
+      fullX,
+      context.canvas.toPdfY(fullTop + fullHeight),
+      fullWidth,
+      fullHeight
+    );
+    context.canvas.restoreContext();
+  }
+}
 
 function alignmentPoint(alignment: Alignment, box: PdfRect): PdfPoint {
   return {
@@ -260,6 +348,7 @@ export interface BoxDecorationOptions {
   readonly borderRadius?: BorderRadiusGeometry | RadiusValue | null;
   readonly boxShadow?: readonly BoxShadowInput[] | null;
   readonly gradient?: Gradient | null;
+  readonly image?: DecorationGraphic | null;
   readonly shape?: BoxShape;
 }
 
@@ -270,6 +359,7 @@ export class BoxDecoration {
   readonly borderRadius: BorderRadiusGeometry | null;
   readonly boxShadow: readonly BoxShadow[];
   readonly gradient: Gradient | null;
+  readonly image: DecorationGraphic | null;
   readonly shape: BoxShape;
 
   constructor({
@@ -278,6 +368,7 @@ export class BoxDecoration {
     borderRadius = null,
     boxShadow = null,
     gradient = null,
+    image = null,
     shape = 'rectangle'
   }: BoxDecorationOptions = {}) {
     this.color = color === null ? null : normalizeColor(color);
@@ -291,6 +382,7 @@ export class BoxDecoration {
       ? []
       : boxShadow.map(value => value instanceof BoxShadow ? value : new BoxShadow(value));
     this.gradient = gradient;
+    this.image = image;
     this.shape = shape;
     if (shape === 'circle' && borderRadius !== null) {
       throw new Error('A circular BoxDecoration cannot have a border radius');
@@ -329,6 +421,16 @@ export class BoxDecoration {
         appendShape(context, x, y, width, height, this.shape, resolvedRadius);
         context.canvas.clipPath();
         this.gradient.paint(context, box);
+        context.canvas.restoreContext();
+      }
+
+      if (this.image !== null) {
+        context.canvas.saveContext();
+        if (this.shape === 'circle' || resolvedRadius !== null) {
+          appendShape(context, x, y, width, height, this.shape, resolvedRadius);
+          context.canvas.clipPath();
+        }
+        this.image.paint(context, box);
         context.canvas.restoreContext();
       }
     }

@@ -16,7 +16,7 @@
  *
  * The common paint scope for every SVG operation.
  *
- * PORT GAP: masks wait for form XObjects in phase 4.
+ * Masked elements are wrapped in a luminosity soft-mask form by `SvgPainter`.
  */
 
 import { PdfGraphicState } from '../pdf/graphic_state.ts';

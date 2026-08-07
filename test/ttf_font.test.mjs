@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import * as Pdf from '../src/index.ts';
 import { PdfTtfFont } from '../src/pdf/obj/ttf_font.ts';
 import { latin1 } from "./support/pdf-text.mjs";
+import { withBitmapGlyph } from './support/bitmap-font.mjs';
 
 const asset = name => new Uint8Array(
   readFileSync(new URL(`../examples/assets/${name}`, import.meta.url))
@@ -72,6 +73,36 @@ test('text becomes hex CIDs, and /ToUnicode maps them back to the source string'
   assert.equal(decoded, text, 'the CMap must round-trip the text a reader copies');
 });
 
+test('word spacing in a composite font uses TJ adjustments instead of Tw', () => {
+  const bytes = Pdf.createPdf(
+    { theme: Pdf.ThemeData.withFont({ base: Pdf.Font.ttf(openSans) }) },
+    () => new Pdf.Page({
+      build: () => new Pdf.Text('one two', {
+        style: new Pdf.TextStyle({ fontSize: 10, wordSpacing: 4 })
+      })
+    })
+  );
+
+  const source = latin1(bytes);
+  assert.match(source, /\[<[0-9a-f]+> -400 <[0-9a-f]+>\] TJ/);
+  assert.doesNotMatch(source, / 4 Tw /);
+});
+
+test('a CBLC/CBDT fallback glyph is painted as an image', () => {
+  const codePoint = 0x20ac;
+  const fallback = Pdf.Font.ttf(withBitmapGlyph(openSans, codePoint));
+  const bytes = Pdf.createPdf({}, () => new Pdf.Page({
+    build: () => new Pdf.Text(`A${String.fromCodePoint(codePoint)}B`, {
+      style: new Pdf.TextStyle({ fontFallback: [fallback] })
+    })
+  }));
+
+  const source = latin1(bytes);
+  assert.match(source, /\/Subtype \/Image/);
+  assert.match(source, /\/I1 Do/);
+  assert.doesNotMatch(source, /\/BaseFont \/OpenSans-Regular/);
+});
+
 test('the embedded program is a subset, not the whole file', () => {
   const bytes = Pdf.createPdf(
     { theme: Pdf.ThemeData.withFont({ base: Pdf.Font.ttf(openSans) }) },
@@ -116,13 +147,23 @@ test('the same declaration is embedded once per document, twice across documents
   assert.equal(toUnicodeMap(other).size, 2, 'only .notdef and `a`');
 });
 
-test('a font the port cannot subset is rejected at construction', () => {
-  // `OTTO` marks PostScript outlines. The port embeds only sfnt 0x00010000,
-  // which is what has the `glyf`/`loca` pair the subsetter rebuilds.
-  const notTrueType = new Uint8Array(asset('OpenSans-Regular.ttf'));
-  new DataView(notTrueType.buffer).setUint32(0, 0x4f54544f);
+test('a CFF font is rejected with an explicit unsupported-format error', () => {
+  const cff = new Uint8Array(asset('OpenSans-Regular.ttf'));
+  const view = new DataView(cff.buffer);
+  const tableCount = view.getUint16(4);
+  for (let index = 0; index < tableCount; index++) {
+    const tag = 12 + index * 16;
+    if (String.fromCharCode(...cff.subarray(tag, tag + 4)) === 'glyf') {
+      cff.set([0x43, 0x46, 0x46, 0x20], tag);
+      break;
+    }
+  }
+  view.setUint32(0, 0x4f54544f);
 
-  assert.throws(() => new PdfTtfFont(notTrueType), /TrueType/);
+  assert.throws(
+    () => new PdfTtfFont(cff),
+    { name: 'TypeError', message: /CFF fonts are not supported/ }
+  );
 });
 
 // ---------------------------------------------------------------------------

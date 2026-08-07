@@ -16,6 +16,10 @@ export declare class PdfStream {
     putString(value: string): void;
     /** The bytes written, as a copy the caller owns. */
     output(): Uint8Array;
+    /** Copy the filled prefix and release the growable backing allocation. */
+    take(finalByte?: number): Uint8Array;
+    /** Read-only view used internally while the stream remains alive. */
+    view(): Uint8Array;
 }
 /**
  * Encode a string where every code unit is already a byte value (0..255).

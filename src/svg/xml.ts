@@ -38,7 +38,8 @@
  *     newline instead of collapsing to a space. Every SVG attribute the port
  *     reads is then split on whitespace anyway.
  *
- * PORT GAP: no DTD validation, no XInclude, no `xml:space`.
+ * RUNTIME SCOPE: no DTD validation, no XInclude and no `xml:space`. XInclude
+ * would require external resource loading, which `src/` deliberately cannot do.
  */
 
 /** A text or CDATA run. Whitespace is kept; SVG's own rules decide what matters. */

@@ -115,11 +115,11 @@ licensed Dart `qr` implementation is neither ported nor distributed.
 
 - **`format/num.ts`** — number serialization for content-stream operators: no
   exponent form, no trailing zeros, no negative zero.
-- **`format/string.ts`** — PDF literal strings with the Unicode→WinAnsi (CP1252)
-  down-conversion, and the hex strings an embedded font's CIDs are written as.
-- **`format/stream.ts`** — byte helpers. Content is assembled as Latin-1
-  strings and encoded once at the end, which is why no text-encoding host API
-  is needed.
+- **`format/string.ts`** — WinAnsi (CP1252) literals where representable,
+  UTF-16BE text strings otherwise, and the hex strings an embedded font's CIDs
+  are written as.
+- **`format/stream.ts`** — geometrically growing typed byte storage used by
+  object serialization and content canvases, with no host encoding API.
 - **`color.ts`** — `#RRGGBB` or `[r,g,b]` → normalized triple, plus the
   `rg`/`RG` operators. DeviceRGB only.
 - **`page_format.ts`** — page dimensions in PDF points.
@@ -162,8 +162,8 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   the latter three paginate through immutable continuation cursors.
 - **`container.ts` / `decoration.ts` / `box_border.ts` /
   `border_radius.ts`** — `Container` and `DecoratedBox`, background/foreground
-  fills, PDF shading gradients, vector shadows, per-side rules and rounded
-  rectangle paths.
+  fills, fitted/clipped decoration images, PDF shading gradients, vector
+  shadows, per-side rules and rounded rectangle paths.
 - **`basic.ts`** — composition, fitting, transforms, opacity, builders,
   custom painting and basic sizing widgets.
 - **`shape.ts` / `image.ts` / `grid_paper.ts`** — geometric widgets,
@@ -270,9 +270,9 @@ divergences or narrower compatibility gaps between the port and upstream.
 |---|---|---|
 | Embedded TTF | Type0 for `0x00010000` fonts, WinAnsi `/TrueType` otherwise | Type0 only; a non-`0x00010000` or `CFF ` font is rejected at construction |
 | Inherited values | Mutable context registry plus dependency lookup | `InheritedWidget` copies an immutable constructor-keyed map; theme keeps a direct context field (§3) |
-| Text layout | Full breaker with rich text, Unicode bidi, Arabic shaping, justification and decorations | Rich text, fallback fonts, justification, decorations and explicit RTL placement; no Unicode bidi reordering or Arabic shaping |
+| Text layout | Full breaker with rich text, Unicode bidi, Arabic shaping, justification and decorations | Rich text, fallback fonts, Unicode bidi/Arabic shaping, justification and decorations over the port's immutable layout protocol |
 | Page orientation | Content rotated through the CTM, paper size unchanged | Paper dimensions are swapped per section so `/MediaBox` reports the resolved physical orientation |
-| Object serialization | A value consults its owning object for compression, encryption and a verbose pretty-printer | `output(stream)` only, no `PdfSettings`; dictionaries and arrays keep the port's `<< /Type /Page >>` spacing |
+| Object serialization | A value consults its owning object for compression, encryption and a verbose pretty-printer | `output(stream)` stays context-free; stream objects consult document compression settings, with no encryption or verbose mode |
 | Font naming | `/F$objser`, derived from the font object's serial | Page-local `/F1`, `/F2`, … allocated as the content stream is written |
 | Colors | `PdfColor` value type with CMYK and HSL variants | RGB triple, DeviceRGB only |
 | Pagination | `SpanningWidget` saves mutable widget context between pages | Direct spanning children return immutable continuation state; indivisible widgets or rows taller than a full content area still throw `RangeError` |

@@ -24,9 +24,8 @@
  * and the `font` getter reads the slot back out, falling through the other
  * three when the requested one is empty.
  *
- * PORT GAP: `fontFallback` is stored and merged but never consulted. Choosing a
- * different font per glyph means resolving fonts inside the line breaker, which
- * belongs with `RichText` in roadmap phase 3.7.
+ * `fontFallback` is resolved per glyph by `RichText`, so measurement, wrapping
+ * and painting all use the same selected face.
  *
  * Text decorations accept either one name or a list, the JavaScript equivalent
  * of upstream's combinable bitmask. Per-run backgrounds use the phase-3.5 box

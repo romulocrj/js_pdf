@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Pdf from '../src/index.ts';
+import { replaceFrameMarker } from '../examples/jpeg-phase-4.2.mjs';
 
 const PROFILE = new Uint8Array(readFileSync(new URL('../examples/assets/profile.jpg', import.meta.url)));
 const PROGRESSIVE = new Uint8Array(Buffer.from(
@@ -41,7 +42,8 @@ test('parseJpeg reads the real profile dimensions and baseline colour model', ()
     bitsPerComponent: 8,
     components: 3,
     colorSpace: 'rgb',
-    inverted: false
+    inverted: false,
+    orientation: 'topLeft'
   });
 });
 
@@ -68,14 +70,63 @@ test('parseJpeg recognizes grayscale and CMYK Adobe transforms', () => {
 });
 
 test('parseJpeg accepts progressive JPEG metadata', () => {
+  assert.equal(PROGRESSIVE[158], 0xff, 'fixture must carry a marker at the expected offset');
+  assert.equal(PROGRESSIVE[159], 0xc2, 'fixture must carry an SOF2 frame');
   assert.deepEqual(Pdf.parseJpeg(PROGRESSIVE), {
     width: 2,
     height: 2,
     bitsPerComponent: 8,
     components: 3,
     colorSpace: 'rgb',
-    inverted: false
+    inverted: false,
+    orientation: 'topLeft'
   });
+});
+
+test('parseJpeg accepts extended sequential JPEG metadata', () => {
+  assert.deepEqual(Pdf.parseJpeg(jpeg(sof(0xc1, 19, 11, 3))), {
+    width: 19,
+    height: 11,
+    bitsPerComponent: 8,
+    components: 3,
+    colorSpace: 'rgb',
+    inverted: false,
+    orientation: 'topLeft'
+  });
+});
+
+test('EXIF orientation is parsed and swaps the public dimensions', () => {
+  const exif = segment(0xe1, [
+    0x45, 0x78, 0x69, 0x66, 0, 0,
+    0x49, 0x49, 42, 0, 8, 0, 0, 0,
+    1, 0,
+    0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0,
+    0, 0, 0, 0
+  ]);
+  const bytes = jpeg(exif, sof(0xc0, 17, 9, 3));
+  assert.equal(Pdf.parseJpeg(bytes).orientation, 'rightTop');
+  const image = Pdf.PdfImage.fromJpeg(bytes);
+  assert.deepEqual([image.width, image.height], [9, 17]);
+});
+
+test('JPEG dpi decodes and resamples instead of embedding the full source', () => {
+  const provider = new Pdf.MemoryImage(PROFILE, { dpi: 72 });
+  const image = provider.resolve({ x: 10, y: 10 });
+  assert.deepEqual([image.sourceWidth, image.sourceHeight], [10, 10]);
+  assert.equal(image.jpeg, null);
+  assert.equal(image.channel('rgb').length, 300);
+});
+
+test('the phase example replaces only a real JPEG frame marker', () => {
+  const source = jpeg(
+    segment(0xe1, [0xff, 0xc0]),
+    sof(0xc0, 19, 11, 3)
+  );
+  const extended = replaceFrameMarker(source, 0xc0, 0xc1);
+
+  assert.equal(extended[7], 0xc0, 'marker-shaped APP payload must stay untouched');
+  assert.equal(extended[9], 0xc1, 'the actual SOF marker must change');
+  assert.equal(Pdf.parseJpeg(extended).width, 19);
 });
 
 test('parseJpeg rejects unsupported frames, truncated data and unsupported components', () => {

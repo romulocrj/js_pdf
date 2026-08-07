@@ -21,21 +21,20 @@ at build time rather than by convention.
 ## Why this port exists
 
 I have used many PDF libraries across different languages and ecosystems,
-including iText, PDFKit, pdfmake, jsPDF and React-pdf. Of all of them, I have
-always considered dart_pdf the best library for generating PDFs because its
-declarative API makes documents remarkably simple to compose. I have used it
-successfully in mobile applications, on servers, in desktop applications and
-on the web.
+including iText, PDFKit, pdfmake, jsPDF, and React-pdf. Among them, I have
+always considered dart_pdf the best library for PDF generation because its
+declarative API makes documents remarkably easy to compose. I have successfully
+used it in mobile, server, desktop, and web applications.
 
-What I still wanted was a 100% JavaScript declarative PDF library. React-pdf is
-the closest alternative, but it depends on React. I wanted a framework-free
-library that could run in a browser with plain JavaScript, in Node.js, or
-directly in a bare V8 host.
+What I still wanted was a fully declarative PDF library for JavaScript.
+React-pdf is the closest alternative, but it depends on React. I wanted a
+framework-free library that could run in a browser using plain JavaScript, in
+Node.js, or directly inside a bare V8 host.
 
 That is why I decided to port dart_pdf. This port was only possible because of
-the great and beautiful work David PHAM-VAN put into the original project, and
-because of the advances in LLM agents that made translating and validating a
-project of this scale feasible.
+the exceptional work David PHAM-VAN put into the original project and advances
+in LLM agents, which made it feasible to translate and validate a project of
+this scale.
 
 ## Status
 
@@ -64,8 +63,8 @@ The build emits four single-file ES modules plus declarations:
 |---|---|
 | `dist/js_pdf.mjs` | readable, canonical — what `import '@romulocrj/js_pdf'` resolves to |
 | `dist/js_pdf.min.mjs` | minified, canonical — `import '@romulocrj/js_pdf/min'` |
-| `dist/js_pdf-0.1.3.mjs` | readable, versioned — for vendoring into a host directory |
-| `dist/js_pdf-0.1.3.min.mjs` | minified, versioned |
+| `dist/js_pdf-0.1.6.mjs` | readable, versioned — for vendoring into a host directory |
+| `dist/js_pdf-0.1.6.min.mjs` | minified, versioned |
 | `dist/types/**.d.ts` | type declarations |
 
 Each JavaScript artifact carries the attribution banner and no other comment.
@@ -158,8 +157,7 @@ heading and chart on the same page.
 
 - Reading existing PDFs, rasterizing PDFs, encryption and digital signatures
   are out of scope.
-- PDF/A output intents, full Unicode bidi/Arabic shaping, SVG text and embedded
-  SVG raster content are not implemented.
+- PDF/A output intents are not implemented.
 - Library code performs no host I/O. Fonts, images and other external assets
   must be supplied by the caller as bytes or text.
 - An indivisible `MultiPage` child taller than one content area is rejected;
@@ -193,3 +191,8 @@ Romulo Campos
 
 Full attribution is in [NOTICE](NOTICE). Every ported file under `src/` names the
 upstream Dart sources it derives from in its header.
+
+## Warranty and support
+
+This software is provided “as is”, without warranties of any kind. No support
+is provided or implied.

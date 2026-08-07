@@ -100,6 +100,23 @@ test('a pie slice keeps its label inside and picks a readable colour', () => {
   assert.match(source, /0 0 0 rg[^\n]*\n?[^\n]*\(light\) Tj/);
 });
 
+test('a pie slice accepts a custom legend widget', () => {
+  const source = render(new Pdf.Chart({
+    grid: new Pdf.PieGrid(),
+    datasets: [
+      new Pdf.PieDataSet({
+        legend: 'generated legend',
+        legendWidget: new Pdf.Text('custom legend'),
+        value: 1,
+        color: '#101010'
+      })
+    ]
+  }));
+
+  assert.match(source, /\(custom legend\) Tj/);
+  assert.doesNotMatch(source, /generated legend/);
+});
+
 test('a pie shrinks until its outside labels fit the grid', () => {
   const wide = new Pdf.Chart({
     grid: new Pdf.PieGrid(),

@@ -31,8 +31,6 @@
  * A widget reaching for the path API converts with `toPdfY`, and a widget
  * setting a transform conjugates it with `flipMatrix` from `matrix.ts`.
  *
- * PORT GAP: no direct shading operator. SVG `drawShape` lives in `svg/path.ts`
- * to preserve the one-way import direction.
  */
 
 import { colorOperator } from './color.ts';
@@ -40,9 +38,13 @@ import type { ColorInput } from './color.ts';
 import type { PdfFont } from './font/font.ts';
 import { defaultPdfFont } from './font/type1_fonts.ts';
 import { PdfDict } from './format/dict.ts';
+import { PdfStream } from './format/stream.ts';
+import { PdfSoftMaskReference } from './soft_mask.ts';
+import type { PdfSoftMask } from './soft_mask.ts';
 import { formatNumber } from './format/num.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
+import type { PdfShading } from './obj/shading.ts';
 import type { PdfImage } from './obj/image.ts';
 import type {
   PdfAnnotationSpec,
@@ -66,13 +68,7 @@ export interface CanvasTextStyle {
   /** `Tc`, extra space per glyph. Omitted from the output when zero. */
   readonly letterSpacing?: number;
 
-  /**
-   * `Tw`, extra space per space character. Omitted when zero.
-   *
-   * PORT GAP: `Tw` applies to single-byte code 32 only, so a reader ignores it
-   * for the two-byte CIDs an embedded TrueType font emits. Word spacing has no
-   * effect on TTF text until the port measures and inserts the space itself.
-   */
+  /** Extra space per space character. Omitted when zero. */
   readonly wordSpacing?: number;
 }
 
@@ -111,6 +107,35 @@ function operands(values: readonly number[]): string {
   return values.map(formatNumber).join(' ');
 }
 
+/**
+ * A composite font cannot use `Tw`: PDF applies that operator only to the
+ * single-byte code 32. A `TJ` adjustment after each encoded space produces the
+ * same displacement for two-byte CIDs without expanding the text into bytes.
+ */
+function compositeTextOperand(
+  font: PdfFont,
+  text: string,
+  wordSpacing: number,
+  fontSize: number
+): string {
+  const parts: string[] = [];
+  let run = '';
+  const adjustment = formatNumber((-wordSpacing * 1000) / fontSize);
+
+  for (const character of String(text)) {
+    run += character;
+    if (character === ' ') {
+      parts.push(font.encodeText(run), adjustment);
+      run = '';
+    }
+  }
+
+  if (run !== '' || parts.length === 0) {
+    parts.push(font.encodeText(run));
+  }
+  return `[${parts.join(' ')}]`;
+}
+
 export interface FillOptions {
   /** Even-odd rather than the nonzero winding rule: `f*` instead of `f`. */
   readonly evenOdd?: boolean;
@@ -141,21 +166,26 @@ export interface BezierArcOptions {
 /**
  * Content-stream builder for one page.
  *
- * Like upstream `PdfGraphics`, operators are appended to a buffer and never
- * re-read. Unlike upstream, the buffer is a list of lines rather than a byte
- * stream, because the port assembles the whole content stream as a string
- * before any document exists.
+ * Like upstream `PdfGraphics`, operators are appended to a byte buffer and
+ * never re-read. Keeping bytes here avoids retaining one allocation per PDF
+ * operator and then duplicating the complete page during string joining.
  */
 export class PdfCanvas {
   readonly pageHeight: number;
-  private readonly commands: string[] = [];
+  private readonly content = new PdfStream();
+  private commandCount = 0;
   private readonly fontNames = new Map<PdfFont, string>();
   private readonly stateNames = new Map<string, string>();
   private readonly stateDicts = new Map<string, PdfDict>();
   private readonly patternNames = new Map<string, string>();
   private readonly patternDicts = new Map<string, PdfDict>();
+  private readonly shadingNames = new Map<string, string>();
+  private readonly shadingDicts = new Map<string, PdfDict>();
   private readonly imageNames = new Map<PdfImage, string>();
+  private readonly softMaskNames = new Map<PdfSoftMask, string>();
   private readonly pageAnnotations: PdfAnnotationSpec[] = [];
+  private currentSoftMask: PdfSoftMask | null = null;
+  private readonly softMaskStack: Array<PdfSoftMask | null> = [];
 
   /**
    * The current transformation matrix, tracked so a widget can ask what space
@@ -173,7 +203,11 @@ export class PdfCanvas {
   }
 
   push(command: string): void {
-    this.commands.push(command);
+    if (this.commandCount > 0) {
+      this.content.putByte(0x0a);
+    }
+    this.content.putString(command);
+    this.commandCount++;
   }
 
   /** Widget-space (top-left, y-down) to PDF user space. */
@@ -222,6 +256,11 @@ export class PdfCanvas {
   /** The `/Pattern` entries this page selected, by content-stream name. */
   get patterns(): ReadonlyMap<string, PdfDict> {
     return this.patternDicts;
+  }
+
+  /** The direct `/Shading` entries this page selected, by stream name. */
+  get shadings(): ReadonlyMap<string, PdfDict> {
+    return this.shadingDicts;
   }
 
   /** The images this page drew with, mapped to page-local `/I…` names. */
@@ -313,12 +352,14 @@ export class PdfCanvas {
     this.push('q');
     this.transformStack.push(this.currentTransform);
     this.textSpacingStack.push([this.currentLetterSpacing, this.currentWordSpacing]);
+    this.softMaskStack.push(this.currentSoftMask);
   }
 
   /** `Q`, restoring the CTM this canvas last saved. A no-op if nothing was saved. */
   restoreContext(): void {
     const restored = this.transformStack.pop();
     const spacing = this.textSpacingStack.pop();
+    const softMask = this.softMaskStack.pop();
     if (restored === undefined) {
       return;
     }
@@ -328,6 +369,7 @@ export class PdfCanvas {
       this.currentLetterSpacing = spacing[0];
       this.currentWordSpacing = spacing[1];
     }
+    this.currentSoftMask = softMask ?? null;
   }
 
   save(): void {
@@ -370,6 +412,26 @@ export class PdfCanvas {
     return name;
   }
 
+  setSoftMask(mask: PdfSoftMask): string {
+    this.currentSoftMask = mask;
+    const existing = this.softMaskNames.get(mask);
+    if (existing !== undefined) {
+      this.push(`${existing} gs`);
+      return existing;
+    }
+    const name = `/g${this.stateDicts.size + 1}`;
+    const state = new PdfDict();
+    state.set('/SMask', new PdfSoftMaskReference(mask));
+    this.softMaskNames.set(mask, name);
+    this.stateDicts.set(name, state);
+    this.push(`${name} gs`);
+    return name;
+  }
+
+  getSoftMask(): PdfSoftMask | null {
+    return this.currentSoftMask;
+  }
+
   private addPattern(pattern: PdfShadingPattern): string {
     const existing = this.patternNames.get(pattern.key);
     if (existing !== undefined) {
@@ -391,6 +453,20 @@ export class PdfCanvas {
   setStrokePattern(pattern: PdfShadingPattern): string {
     const name = this.addPattern(pattern);
     this.push(`/Pattern CS ${name} SCN`);
+    return name;
+  }
+
+  /** Register and paint a shading directly with PDF's `sh` operator. */
+  drawShading(shading: PdfShading): string {
+    const dict = shading.output();
+    const key = dict.toString();
+    let name = this.shadingNames.get(key);
+    if (name === undefined) {
+      name = `/s${this.shadingDicts.size + 1}`;
+      this.shadingNames.set(key, name);
+      this.shadingDicts.set(name, dict);
+    }
+    this.push(`${name} sh`);
     return name;
   }
 
@@ -744,9 +820,10 @@ export class PdfCanvas {
     const font = style.font ?? defaultPdfFont;
     const letterSpacing = style.letterSpacing ?? 0;
     const wordSpacing = style.wordSpacing ?? 0;
+    const operatorWordSpacing = font.isComposite === true ? 0 : wordSpacing;
 
     const spacingOperators: string[] = [];
-    if (letterSpacing === 0 && wordSpacing === 0 && this.textSpacingDirty) {
+    if (letterSpacing === 0 && operatorWordSpacing === 0 && this.textSpacingDirty) {
       spacingOperators.push('0', 'Tc', '0', 'Tw');
       this.currentLetterSpacing = 0;
       this.currentWordSpacing = 0;
@@ -756,14 +833,19 @@ export class PdfCanvas {
         spacingOperators.push(formatNumber(letterSpacing), 'Tc');
         this.currentLetterSpacing = letterSpacing;
       }
-      if (wordSpacing !== this.currentWordSpacing) {
-        spacingOperators.push(formatNumber(wordSpacing), 'Tw');
-        this.currentWordSpacing = wordSpacing;
+      if (operatorWordSpacing !== this.currentWordSpacing) {
+        spacingOperators.push(formatNumber(operatorWordSpacing), 'Tw');
+        this.currentWordSpacing = operatorWordSpacing;
       }
-      if (letterSpacing !== 0 || wordSpacing !== 0) {
+      if (letterSpacing !== 0 || operatorWordSpacing !== 0) {
         this.textSpacingDirty = true;
       }
     }
+
+    const usesTextArray = font.isComposite === true && wordSpacing !== 0;
+    const textOperand = usesTextArray
+      ? compositeTextOperand(font, text, wordSpacing, fontSize)
+      : font.encodeText(text);
 
     const command = [
       'BT',
@@ -771,10 +853,30 @@ export class PdfCanvas {
       colorOperator(style.color),
       ...spacingOperators,
       '1 0 0 1', formatNumber(x), formatNumber(baseline), 'Tm',
-      font.encodeText(text), 'Tj',
+      textOperand, usesTextArray ? 'TJ' : 'Tj',
       'ET'
     ].join(' ');
     this.push(command);
+  }
+
+  /** Draw text at a PDF user-space baseline, for vector formats such as SVG. */
+  drawString(
+    font: PdfFont,
+    fontSize: number,
+    text: string,
+    x: number,
+    y: number,
+    renderingMode: 0 | 1 | 2 | 7 = 0
+  ): void {
+    const mode = renderingMode === 0 ? [] : [String(renderingMode), 'Tr'];
+    this.push([
+      'BT',
+      this.addFont(font), formatNumber(fontSize), 'Tf',
+      ...mode,
+      '1 0 0 -1', formatNumber(x), formatNumber(y), 'Tm',
+      font.encodeText(text), 'Tj',
+      'ET'
+    ].join(' '));
   }
 
   line(x1: number, top1: number, x2: number, top2: number, color: ColorInput = '#000000', lineWidth = 1): void {
@@ -806,6 +908,26 @@ export class PdfCanvas {
   }
 
   output(): string {
-    return `${this.commands.join('\n')}\n`;
+    const bytes = this.content.view();
+    let result = '';
+    const chunkSize = 8192;
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      result += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+    }
+    return `${result}\n`;
+  }
+
+  /** Content-stream bytes, including the final line break. */
+  outputBytes(): Uint8Array {
+    const bytes = this.content.view();
+    const result = new Uint8Array(bytes.length + 1);
+    result.set(bytes);
+    result[bytes.length] = 0x0a;
+    return result;
+  }
+
+  /** Finalize the content and release the canvas's growable backing buffer. */
+  takeOutputBytes(): Uint8Array {
+    return this.content.take(0x0a);
   }
 }

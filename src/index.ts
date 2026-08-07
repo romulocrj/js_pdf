@@ -86,7 +86,15 @@ import { ChartLegend } from './widgets/chart/legend.ts';
 import { LineDataSet } from './widgets/chart/line_chart.ts';
 import { PieDataSet, PieFrame, PieGrid } from './widgets/chart/pie_chart.ts';
 import { PointChartValue, PointDataSet } from './widgets/chart/point_chart.ts';
-import { BoxDecoration, BoxShadow, Gradient, LinearGradient, RadialGradient } from './widgets/decoration.ts';
+import {
+  BoxDecoration,
+  BoxShadow,
+  DecorationGraphic,
+  DecorationImage,
+  Gradient,
+  LinearGradient,
+  RadialGradient
+} from './widgets/decoration.ts';
 import { Document } from './widgets/document.ts';
 import { Column, Expanded, Flex, Flexible, ListView, Row, Spacer } from './widgets/flex.ts';
 import { Font } from './widgets/font.ts';
@@ -162,6 +170,8 @@ export {
   BoxConstraints,
   BoxDecoration,
   BoxShadow,
+  DecorationGraphic,
+  DecorationImage,
   Bullet,
   BarDataSet,
   Builder,
@@ -349,6 +359,9 @@ export type {
 export type { ColorInput, Rgb } from './pdf/color.ts';
 export { PdfGraphicState } from './pdf/graphic_state.ts';
 export type { PdfBlendMode, PdfGraphicStateOptions } from './pdf/graphic_state.ts';
+export { PdfBaseFunction } from './pdf/obj/function.ts';
+export { PdfShading } from './pdf/obj/shading.ts';
+export type { PdfShadingOptions, PdfShadingType } from './pdf/obj/shading.ts';
 export { PdfPoint, PdfRect } from './pdf/rect.ts';
 export {
   composeMatrices,
@@ -372,7 +385,7 @@ export type {
   PdfLineJoin,
   StrokeOptions
 } from './pdf/graphics.ts';
-export type { PdfFont } from './pdf/font/font.ts';
+export type { PdfFont, PdfFontBitmap } from './pdf/font/font.ts';
 export type { PdfFontMetricsOptions } from './pdf/font/font_metrics.ts';
 export { PdfFontMetrics } from './pdf/font/font_metrics.ts';
 export type { PageSize } from './pdf/page_format.ts';
@@ -543,6 +556,7 @@ export type {
   BoxShadowOptions,
   BoxShape,
   DecorationPosition,
+  DecorationImageOptions,
   GradientOptions,
   LinearGradientOptions,
   PaintPhase,
@@ -769,6 +783,8 @@ export interface PublicApi {
   readonly DecoratedBox: typeof DecoratedBox;
   readonly BoxDecoration: typeof BoxDecoration;
   readonly BoxShadow: typeof BoxShadow;
+  readonly DecorationGraphic: typeof DecorationGraphic;
+  readonly DecorationImage: typeof DecorationImage;
   readonly Gradient: typeof Gradient;
   readonly LinearGradient: typeof LinearGradient;
   readonly RadialGradient: typeof RadialGradient;
@@ -933,6 +949,8 @@ const publicApi: PublicApi = Object.freeze({
   DecoratedBox,
   BoxDecoration,
   BoxShadow,
+  DecorationGraphic,
+  DecorationImage,
   Gradient,
   LinearGradient,
   RadialGradient,

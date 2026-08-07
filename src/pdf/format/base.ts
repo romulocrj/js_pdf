@@ -18,8 +18,8 @@
  * The port drops both extra parameters:
  *
  *   - `o` exists to reach `PdfSettings` for stream compression and encryption.
- *     The port has neither — encryption is out of scope per docs/ROADMAP.md, and
- *     no deflate is available, so a value never needs to consult its object.
+ *     The port's object streams own their compression setting directly;
+ *     encryption remains out of scope per docs/ROADMAP.md.
  *   - `indent` drives upstream's verbose pretty-printer, which the port does not
  *     reproduce.
  *

@@ -1,5 +1,6 @@
 import type { Rgb } from '../pdf/color.ts';
-import type { PdfCanvas } from '../pdf/graphics.ts';
+import { PdfCanvas } from '../pdf/graphics.ts';
+import type { PdfMatrix } from '../pdf/matrix.ts';
 import { PdfShadingPattern } from '../pdf/obj/pattern.ts';
 import { SvgColor } from './color.ts';
 import type { SvgOperation } from './operation.ts';
@@ -16,11 +17,19 @@ export declare abstract class SvgGradient extends SvgColor {
     readonly opacityList: readonly number[];
     readonly spreadMethod: SvgSpreadMethod;
     protected readonly hasSpreadMethod: boolean;
+    private readonly hasVariableOpacity;
     constructor(gradientUnits: SvgGradientUnits | null, transform: SvgTransform, colors: readonly Rgb[], stops: readonly number[], opacityList: readonly number[], spreadMethod: SvgSpreadMethod | null);
     get isEmpty(): boolean;
     get isNotEmpty(): boolean;
-    protected patternMatrix(operation: SvgOperation, canvas: PdfCanvas): import("../index.ts").PdfMatrix;
-    protected abstract buildGradient(operation: SvgOperation, canvas: PdfCanvas): PdfShadingPattern;
+    protected localMatrix(operation: SvgOperation): PdfMatrix;
+    protected patternMatrix(operation: SvgOperation, canvas: PdfCanvas): PdfMatrix;
+    protected operationCorners(operation: SvgOperation): readonly {
+        readonly x: number;
+        readonly y: number;
+    }[];
+    protected gradientFunction(colors: readonly Rgb[], start: number, end: number): import("../pdf/format/dict.ts").PdfDict;
+    protected abstract buildGradient(operation: SvgOperation, canvas: PdfCanvas, colors?: readonly Rgb[]): PdfShadingPattern;
+    private applyOpacityMask;
     setFillColor(operation: SvgOperation, canvas: PdfCanvas): void;
     setStrokeColor(operation: SvgOperation, canvas: PdfCanvas): void;
     static fromReference(value: string, parser: SvgParser): SvgGradient | null;
@@ -35,7 +44,7 @@ export declare class SvgLinearGradient extends SvgGradient {
     private static units;
     private static spread;
     mergeWith(other: SvgLinearGradient): SvgLinearGradient;
-    protected buildGradient(operation: SvgOperation, canvas: PdfCanvas): PdfShadingPattern;
+    protected buildGradient(operation: SvgOperation, canvas: PdfCanvas, colors?: readonly Rgb[]): PdfShadingPattern;
 }
 export declare class SvgRadialGradient extends SvgGradient {
     readonly r: number | null;
@@ -47,5 +56,5 @@ export declare class SvgRadialGradient extends SvgGradient {
     constructor(gradientUnits: SvgGradientUnits | null, r: number | null, cx: number | null, cy: number | null, fr: number | null, fx: number | null, fy: number | null, transform: SvgTransform, colors: readonly Rgb[], stops: readonly number[], opacities: readonly number[], spreadMethod: SvgSpreadMethod | null);
     static fromElement(element: XmlElement, parser: SvgParser, seen?: readonly string[]): SvgRadialGradient;
     mergeWith(other: SvgRadialGradient): SvgRadialGradient;
-    protected buildGradient(operation: SvgOperation, canvas: PdfCanvas): PdfShadingPattern;
+    protected buildGradient(operation: SvgOperation, canvas: PdfCanvas, colors?: readonly Rgb[]): PdfShadingPattern;
 }

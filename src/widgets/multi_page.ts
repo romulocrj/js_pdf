@@ -51,7 +51,15 @@ export class NewPage extends Widget<null> {
 
   constructor({ freeSpace = null }: NewPageOptions = {}) {
     super();
-    this.freeSpace = freeSpace === null ? null : Number(freeSpace);
+    if (freeSpace === null) {
+      this.freeSpace = null;
+      return;
+    }
+    const resolved = Number(freeSpace);
+    if (!Number.isFinite(resolved) || resolved < 0) {
+      throw new RangeError('NewPage.freeSpace must be a finite non-negative number');
+    }
+    this.freeSpace = resolved;
   }
 
   newPageNeeded(availableSpace: number): boolean {
@@ -329,54 +337,74 @@ export class MultiPage implements Section {
 
     this.renderedPages = pages;
 
-    return this.serialize(pages);
+    return this.summaries(pages);
   }
 
   postProcess(documentContext: DocumentContext): SerializedPage[] {
-    for (const state of this.renderedPages) {
-      const context: RenderContext = {
-        ...state.context,
-        ...documentContext,
-        pagesCount: documentContext.pagesCount
-      };
+    const pages = this.renderedPages;
+    try {
+      for (const state of pages) {
+        const context: RenderContext = {
+          ...state.context,
+          ...documentContext,
+          pagesCount: documentContext.pagesCount
+        };
 
-      if (this.header) {
-        const headerWidget = this.header(context);
-        const headerBox = headerWidget.layout(context, new BoxConstraints({
-          maxWidth: state.maxWidth
-        }));
-        headerWidget.paint(context, {
-          ...headerBox,
-          x: this.margin.left,
-          y: this.margin.top
-        });
+        if (this.header) {
+          const headerWidget = this.header(context);
+          const headerBox = headerWidget.layout(context, new BoxConstraints({
+            maxWidth: state.maxWidth
+          }));
+          headerWidget.paint(context, {
+            ...headerBox,
+            x: this.margin.left,
+            y: this.margin.top
+          });
+        }
+
+        if (this.footer) {
+          const footerWidget = this.footer(context);
+          const footerBox = footerWidget.layout(context, new BoxConstraints({
+            maxWidth: state.maxWidth
+          }));
+          footerWidget.paint(context, {
+            ...footerBox,
+            x: this.margin.left,
+            y: this.format.height - this.margin.bottom - footerBox.height
+          });
+        }
+
+        this.paintLayer(this.pageTheme.buildForeground, context);
       }
 
-      if (this.footer) {
-        const footerWidget = this.footer(context);
-        const footerBox = footerWidget.layout(context, new BoxConstraints({
-          maxWidth: state.maxWidth
-        }));
-        footerWidget.paint(context, {
-          ...footerBox,
-          x: this.margin.left,
-          y: this.format.height - this.margin.bottom - footerBox.height
-        });
-      }
-
-      this.paintLayer(this.pageTheme.buildForeground, context);
+      return this.serialize(pages);
+    } finally {
+      this.renderedPages = [];
     }
-
-    return this.serialize(this.renderedPages);
   }
 
   private serialize(pages: readonly PageState[]): SerializedPage[] {
     return pages.map(({ canvas }) => ({
       format: this.format,
-      content: canvas.output(),
+      content: canvas.takeOutputBytes(),
       fonts: canvas.fonts,
       graphicStates: canvas.graphicStates,
       patterns: canvas.patterns,
+      shadings: canvas.shadings,
+      images: canvas.images,
+      annotations: canvas.annotations
+    }));
+  }
+
+  /** Page-count placeholders which deliberately do not copy canvas content. */
+  private summaries(pages: readonly PageState[]): SerializedPage[] {
+    return pages.map(({ canvas }) => ({
+      format: this.format,
+      content: new Uint8Array(0),
+      fonts: canvas.fonts,
+      graphicStates: canvas.graphicStates,
+      patterns: canvas.patterns,
+      shadings: canvas.shadings,
       images: canvas.images,
       annotations: canvas.annotations
     }));

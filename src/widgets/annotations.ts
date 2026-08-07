@@ -208,6 +208,9 @@ abstract class GeometricAnnotationBuilder extends AnnotationBuilder {
     this.color = color === null ? null : normalizeColor(color);
     this.interiorColor = interiorColor === null ? null : normalizeColor(interiorColor);
     this.borderWidth = Number(border?.width ?? 1);
+    if (!Number.isFinite(this.borderWidth) || this.borderWidth < 0) {
+      throw new RangeError('Annotation border width must be a finite non-negative number');
+    }
     this.author = author;
     this.date = date;
     this.subject = subject;

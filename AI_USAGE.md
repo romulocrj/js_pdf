@@ -99,12 +99,12 @@ isolate one feature family at a time.
 | [server.mjs](examples/server.mjs) | Upstream | Charts, SVG, feature cards, pricing table and external links |
 | [Browser.html](examples/Browser.html) | Project | Browser-only PDF generation, live preview, download and opening the result in a new tab |
 | [create-sales-report.mjs](examples/create-sales-report.mjs) | Project | Small data-driven report using `Document`, `MultiPage`, cards, vector drawing and rows |
-| [svg-gradients-phase-2.8.mjs](examples/svg-gradients-phase-2.8.mjs) | Focused | Linear/radial SVG gradients and paint servers |
+| [svg-gradients-phase-2.8.mjs](examples/svg-gradients-phase-2.8.mjs) | Focused | Linear/radial SVG gradients, per-stop alpha and reflected spread |
 | [table-phase-3.1.mjs](examples/table-phase-3.1.mjs) | Focused | Table tracks, borders, decoration and `TableHelper` |
 | [table-spanning-phase-3.2.mjs](examples/table-spanning-phase-3.2.mjs) | Focused | Multipage tables, continuation and repeated headers |
 | [basic-widgets-phase-3.3.mjs](examples/basic-widgets-phase-3.3.mjs) | Focused | Transforms, opacity, fitting, aspect ratio and custom painting |
 | [flex-layout-phase-3.4.mjs](examples/flex-layout-phase-3.4.mjs) | Focused | Row/column allocation, expanded/flexible children, constraints and overflow |
-| [decoration-phase-3.5.mjs](examples/decoration-phase-3.5.mjs) | Focused | Borders, radii, gradients, shadows and foreground/background decoration |
+| [decoration-phase-3.5.mjs](examples/decoration-phase-3.5.mjs) | Focused | Borders, radii, gradients, images, shadows and foreground/background decoration |
 | [layout-phase-3.6.mjs](examples/layout-phase-3.6.mjs) | Focused | Stack, positioned children, wrap, grid and partitions |
 | [rich-text-phase-3.7.mjs](examples/rich-text-phase-3.7.mjs) | Focused | Text spans, inline widgets, styles, justification and decorations |
 | [content-phase-3.8.mjs](examples/content-phase-3.8.mjs) | Focused | Headers, paragraphs, bullets, outlines and table of content |
@@ -394,7 +394,7 @@ For a complete module loader, asset host and output conversion, see
 
 ## Images and SVG
 
-Encoded PNG or baseline JPEG bytes use `MemoryImage`, then `Image`:
+Encoded PNG or baseline/progressive JPEG bytes use `MemoryImage`, then `Image`:
 
 ```js
 const provider = new pw.MemoryImage(imageBytes, { dpi: 150 });
@@ -431,9 +431,14 @@ SVG markup is supplied directly:
 new pw.SvgImage({
   svg: svgMarkup,
   width: 120,
-  fit: 'contain'
+  fit: 'contain',
+  customFontLookup: family => loadedFonts.get(family) ?? null
 });
 ```
+
+SVG text, `tspan`, embedded PNG/JPEG data URLs, clipping and luminosity masks
+are rendered without host I/O. Supply `customFontLookup` when the SVG names a
+font beyond the standard PDF families.
 
 The library does not fetch assets. Fonts, images and SVG strings must be passed
 into the generator by its caller.
@@ -447,7 +452,8 @@ features, while checking the TypeScript declarations for exact constructors:
 - Barcodes: `Barcode`, `BarcodeWidget`, including QR and PDF417.
 - Navigation: `UrlLink`, `Link`, `Anchor`, headers, outlines and table of content.
 - Forms: `TextField`, `ChoiceField`, `Checkbox` and `FlatButton`.
-- Decorations: borders, radii, gradients, opacity, clipping and vector shadows.
+- Decorations: borders, radii, gradients, opacity, clipping, fitted images and
+  vector shadows.
 - Utility widgets: icons, progress indicators, placeholders, logos,
   `Watermark`, `Footer`, `GridPaper`, shapes and geometric annotations.
 - Metadata: title, author, subject, keywords, caller-supplied XMP and page labels.
@@ -455,9 +461,10 @@ features, while checking the TypeScript declarations for exact constructors:
 ### Stream compression
 
 Streams are deflated by default, which usually matters more than anything else
-about the file's size: images are embedded as raw samples, so a logo or a flat
-background collapses by one to two orders of magnitude. Nothing is needed to
-turn it on.
+about the file's size: decoded PNG/Raw images are embedded as compressed sample
+streams, while JPEG sources keep their existing `/DCTDecode` bytes. A logo or a
+flat background can collapse by one to two orders of magnitude. Nothing is
+needed to turn it on.
 
 ```js
 new pw.Document({ compress: false });   // trade file size back for speed
@@ -475,8 +482,6 @@ recompressed, and the XMP metadata packet is always left plain.
 - Coordinates and widget layout are top-left with the y-axis pointing down.
 - Reading or rasterizing existing PDFs is not supported.
 - Encryption, digital signatures and `Signature` are out of scope.
-- Full Unicode bidi reordering and Arabic shaping are not implemented.
-- SVG text and embedded SVG raster images are not implemented.
 - An indivisible widget or table row taller than a complete page cannot paginate.
 
 ## Output handling

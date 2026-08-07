@@ -27,8 +27,7 @@
  *   - `mix-blend-mode: color-dodge` and `color-burn` both mapped to the
  *     `color` blend mode.
  *
- * PORT GAP: `mask` is parsed nowhere — a soft mask needs a form XObject, which
- * is phase 4. An element carrying `mask` paints unmasked.
+ * A `mask` attribute is resolved by `SvgPainter` into a PDF luminosity form.
  */
 
 import type { PdfBlendMode } from '../pdf/graphic_state.ts';

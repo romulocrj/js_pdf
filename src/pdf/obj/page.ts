@@ -17,7 +17,9 @@
  * `/Resources` is inherited from `PdfGraphicStream`, which is where per-page
  * `/Font`, `/XObject` and `/ExtGState` registration lives as of phase 0.3.
  *
- * PORT GAP: no `/Rotate`.
+ * DELIBERATE DIVERGENCE: there is no `/Rotate`; `PageTheme` swaps the physical
+ * dimensions instead, so `/MediaBox` directly reports each section's resolved
+ * orientation and one document may mix formats without rotating content.
  */
 
 import { PdfArray } from '../format/array.ts';

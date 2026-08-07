@@ -152,6 +152,14 @@ function constrainedCanvas(constraints: Constraints): { readonly width: number; 
   };
 }
 
+function validatedStrokeWidth(value: number): number {
+  const width = Number(value);
+  if (!Number.isFinite(width) || width < 0) {
+    throw new RangeError('strokeWidth must be a finite non-negative number');
+  }
+  return width;
+}
+
 function paintPath(
   context: RenderContext,
   fillColor: ColorInput | null,
@@ -175,10 +183,7 @@ abstract class PaintedShape extends Widget<null> {
     super();
     this.fillColor = fillColor;
     this.strokeColor = strokeColor;
-    this.strokeWidth = Number(strokeWidth);
-    if (!Number.isFinite(this.strokeWidth) || this.strokeWidth < 0) {
-      throw new RangeError('strokeWidth must be a finite non-negative number');
-    }
+    this.strokeWidth = validatedStrokeWidth(strokeWidth);
   }
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<null> {
@@ -229,11 +234,12 @@ export class Polygon extends PaintedShape {
   }
 
   override paint(context: RenderContext, box: PositionedBox<null>): void {
-    if (this.points.length < 3) return;
+    if (this.points.length < (this.close ? 3 : 2)) return;
     context.canvas.saveContext();
     const first = this.points[0]!;
     context.canvas.moveTo(box.x + first.x, context.canvas.toPdfY(box.y + first.y));
-    for (const point of this.points) {
+    for (let index = 1; index < this.points.length; index++) {
+      const point = this.points[index]!;
       context.canvas.lineTo(box.x + point.x, context.canvas.toPdfY(box.y + point.y));
     }
     if (this.close) context.canvas.closePath();
@@ -258,7 +264,7 @@ export class InkList extends Widget<null> {
     super();
     this.points = points;
     this.strokeColor = strokeColor;
-    this.strokeWidth = Number(strokeWidth);
+    this.strokeWidth = validatedStrokeWidth(strokeWidth);
   }
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<null> {

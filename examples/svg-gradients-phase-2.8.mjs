@@ -23,11 +23,16 @@ const gradientSvg = `
       <stop offset="0.55" stop-color="#ff9f1c"/>
       <stop offset="1" stop-color="#e71d36"/>
     </radialGradient>
+    <linearGradient id="stripe" x1="0" y1="0" x2=".12" y2="0" spreadMethod="reflect">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".15"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity=".9"/>
+    </linearGradient>
   </defs>
   <rect x="0" y="0" width="500" height="260" rx="24" fill="url(#sky)"/>
   <circle cx="365" cy="105" r="72" fill="url(#sun)"/>
   <path d="M0 210 C90 160 165 245 250 196 C340 145 410 228 500 176 L500 260 L0 260 Z"
         fill="#172554" fill-opacity=".72"/>
+  <rect x="24" y="226" width="452" height="14" rx="7" fill="url(#stripe)"/>
 </svg>`;
 
 export function generateSvgGradientsPhase28() {
@@ -40,7 +45,7 @@ export function generateSvgGradientsPhase28() {
           fontSize: 22,
           color: '#172554'
         }),
-        new pw.Text('Linear and radial paint servers serialized as PDF shading patterns.', {
+        new pw.Text('Linear/radial ramps, per-stop alpha and reflected spread.', {
           fontSize: 11,
           color: '#475569'
         }),

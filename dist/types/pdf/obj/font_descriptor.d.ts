@@ -19,7 +19,7 @@ export interface PdfFontDescriptorOptions {
  * `prepare()`. The port passes the numbers, which keeps this module from
  * importing the font that constructs it.
  *
- * PORT GAP: `/ItalicAngle`, `/CapHeight` and `/StemV` are upstream's constants
+ * UPSTREAM PARITY: `/ItalicAngle`, `/CapHeight` and `/StemV` are upstream's constants
  * (0, 10, 79) rather than measurements. They are required entries that no
  * reader uses when the program is embedded, and deriving them properly means
  * reading `post` and `OS/2`, which is a separate piece of work.

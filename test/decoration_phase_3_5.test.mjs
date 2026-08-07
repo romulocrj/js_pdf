@@ -22,7 +22,8 @@ function pageSource(child) {
 
 test('phase 3.5 constructors are on named, namespace and callback APIs', () => {
   for (const name of [
-    'BoxDecoration', 'BoxShadow', 'LinearGradient', 'RadialGradient',
+    'BoxDecoration', 'BoxShadow', 'DecorationGraphic', 'DecorationImage',
+    'LinearGradient', 'RadialGradient',
     'Border', 'BorderSide', 'BorderStyle', 'BorderRadius', 'Radius', 'DecoratedBox'
   ]) {
     assert.equal(typeof Pdf[name], 'function', `${name} named`);
@@ -38,6 +39,35 @@ test('phase 3.5 constructors are on named, namespace and callback APIs', () => {
     })
   }));
   assert.match(latin1(bytes), /1 0 0 rg/);
+});
+
+test('DecorationImage covers, aligns and clips an image before the border', () => {
+  const image = new Pdf.RawImage({
+    bytes: new Uint8Array([
+      255, 0, 0, 255,
+      0, 0, 255, 255
+    ]),
+    width: 2,
+    height: 1
+  });
+  const source = pageSource(new Pdf.Container({
+    width: 100,
+    height: 100,
+    decoration: new Pdf.BoxDecoration({
+      borderRadius: Pdf.BorderRadius.all(10),
+      image: new Pdf.DecorationImage({
+        image,
+        fit: 'cover',
+        alignment: 'centerRight'
+      }),
+      border: Pdf.Border.all({ color: '#00ff00', width: 2 })
+    })
+  }));
+
+  assert.match(source, /\/XObject << \/I1 /);
+  assert.match(source, /W n[\s\S]*\/I1 Do/);
+  assert.match(source, /200 0 0 100 -100 741\.89 cm/);
+  assert.ok(source.indexOf('/I1 Do') < source.indexOf('0 1 0 RG'));
 });
 
 test('Border factories preserve uniform and per-side values', () => {

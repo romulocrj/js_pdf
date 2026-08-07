@@ -26,7 +26,7 @@ export interface MemoryImageOptions {
 }
 export declare class MemoryImage extends ImageProvider {
     readonly bytes: Uint8Array;
-    private readonly image;
+    private readonly jpegInfo;
     constructor(bytes: Uint8Array, { orientation, dpi }?: MemoryImageOptions);
     protected buildImage(width?: number): PdfImage;
 }

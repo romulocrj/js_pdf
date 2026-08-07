@@ -14,8 +14,9 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/widgets/chart/pie_chart.dart
  *
- * PORT GAP: `legendWidget` is built by the data set instead of being accepted
- * from the caller, and `debugPaint` is not ported.
+ * Caller-supplied legend widgets take precedence over the generated text,
+ * matching upstream. Its diagnostic-only debug-paint hook is not part of the
+ * port's widget protocol, which never retained mutable debug layout state.
  */
 
 import { isLightColor, normalizeColor } from '../../pdf/color.ts';
@@ -62,6 +63,7 @@ export type PieLegendPosition = 'none' | 'auto' | 'inside' | 'outside';
 
 export interface PieDataSetOptions extends DatasetOptions {
   readonly value: number;
+  readonly legendWidget?: AnyWidget | null;
   readonly drawBorder?: boolean | null;
   readonly drawSurface?: boolean;
   readonly surfaceOpacity?: number;
@@ -91,6 +93,7 @@ export interface PieSliceLayout {
 /** One slice of a pie, with its own legend placement. */
 export class PieDataSet extends Dataset<PieSliceLayout> {
   readonly value: number;
+  readonly legendWidget: AnyWidget | null;
   readonly drawBorder: boolean;
   readonly drawSurface: boolean;
   readonly surfaceOpacity: number;
@@ -106,6 +109,7 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
   constructor({
     value,
     legend = null,
+    legendWidget = null,
     color,
     borderColor = CHART_WHITE,
     borderWidth = 1.5,
@@ -126,6 +130,7 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
     if (offset < 0) throw new RangeError('PieDataSet offset must not be negative');
 
     this.value = Number(value);
+    this.legendWidget = legendWidget;
     const fill = this.color ?? normalizeColor(CHART_BLUE);
     const border = this.borderColor;
     this.drawBorder = drawBorder ?? (
@@ -172,7 +177,7 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
     const align = this.legendAlign
       ?? (position === 'inside' ? 'center' : (bisect > Math.PI ? 'right' : 'left'));
 
-    const legend = this.legend === null
+    const legend = this.legendWidget ?? (this.legend === null
       ? null
       : new RichText({
         text: new TextSpan({
@@ -184,7 +189,7 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
           })
         }),
         textAlign: align
-      });
+      }));
 
     let legendBox: AnyLayoutBox | null = null;
     let legendLeft = 0;

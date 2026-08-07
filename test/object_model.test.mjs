@@ -28,6 +28,8 @@ import { PdfDocument } from '../src/pdf/document.ts';
 import { PdfCanvas } from '../src/pdf/graphics.ts';
 import { PdfType1Font } from '../src/pdf/font/type1_fonts.ts';
 import { PdfGraphicStream } from '../src/pdf/obj/graphic_stream.ts';
+import { PdfBaseFunction } from '../src/pdf/obj/function.ts';
+import { PdfShading } from '../src/pdf/obj/shading.ts';
 import { PageFormat } from '../src/pdf/page_format.ts';
 import { latin1 } from "./support/pdf-text.mjs";
 
@@ -63,6 +65,16 @@ test('PdfStream keeps high bytes intact', () => {
   assert.deepEqual(Array.from(stream.output()), [0x25, 0xe2, 0xe3, 0xcf, 0xd3]);
 });
 
+test('PdfStream can finalize and release its growable allocation', () => {
+  const stream = new PdfStream();
+  stream.putString('page');
+  assert.equal(latin1(stream.take(0x0a)), 'page\n');
+  assert.equal(stream.offset, 0);
+
+  stream.putString('next');
+  assert.equal(latin1(stream.output()), 'next');
+});
+
 test('PdfName hex-escapes delimiters and keeps the leading slash literal', () => {
   assert.equal(write(new PdfName('/Type')), '/Type');
   assert.equal(write(new PdfName('/A B')), '/A#20B');
@@ -86,6 +98,7 @@ test('PdfString, PdfBool, PdfNull and PdfIndirect serialize to PDF syntax', () =
   assert.equal(write(new PdfString('js_pdf')), '(js_pdf)');
   assert.equal(write(new PdfString('Relatório')), '(Relat\\363rio)');
   assert.equal(write(new PdfString('a(b)c\\d')), '(a\\(b\\)c\\\\d)');
+  assert.equal(write(new PdfString('東京 🚀')), '<feff67714eac0020d83dde80>');
   assert.equal(
     write(PdfString.fromDate(new Date('2026-08-06T19:23:45.987-03:00'))),
     '(D:20260806222345Z)'
@@ -148,6 +161,21 @@ test('PdfDictStream derives /Length and terminates the data with one newline', (
 
   const empty = new PdfDictStream();
   assert.equal(write(empty), '<< /Length 0 >>\nstream\n\nendstream');
+});
+
+test('PdfDictStream compression is repeatable without mutating its dictionary', () => {
+  const value = new PdfDictStream(new Uint8Array(4096).fill(0x41), undefined, true);
+  const output = () => {
+    const stream = new PdfStream();
+    value.output(stream);
+    return stream.output();
+  };
+
+  const first = output();
+  assert.deepEqual(output(), first);
+  assert.match(Buffer.from(first).toString('latin1'), /\/Filter \/FlateDecode \/Length \d+/);
+  assert.equal(value.has('/Filter'), false);
+  assert.equal(value.has('/Length'), false);
 });
 
 test('PdfObjectBase wraps its value and reports the offset it started at', () => {
@@ -314,7 +342,7 @@ test('a page that drew nothing gets no /Resources at all', () => {
   assert.ok(!source.includes('/Resources'), 'an empty resource dict is omitted');
 });
 
-test('PdfGraphicStream collects /Font, /XObject and /ExtGState', () => {
+test('PdfGraphicStream collects fonts, XObjects, states and shadings', () => {
   const document = new PdfDocument({ creator: 'js_pdf' });
   const stream = new PdfGraphicStream(document, new PdfDict());
 
@@ -327,16 +355,43 @@ test('PdfGraphicStream collects /Font, /XObject and /ExtGState', () => {
   // dictionary inline, since phase 2.1 registers states per page rather than in
   // one document-wide object as upstream does.
   const state = new PdfDict([['/ca', new PdfNum(0.5)]]);
+  const shading = new PdfDict([['/ShadingType', new PdfNum(2)]]);
 
   stream.addFont('/F1', font);
   stream.addFont('/F1', new PdfObjectBase(99, new PdfDict()));
   stream.addXObject('/X1', image);
   stream.addGraphicState('/g1', state);
+  stream.addShading('/s1', shading);
   stream.prepare();
 
   assert.equal(
     write(stream.params),
     '<< /Resources << /Font << /F1 11 0 R >> /XObject << /X1 12 0 R >>'
-      + ' /ExtGState << /g1 << /ca 0.5 >> >> >> >>'
+      + ' /ExtGState << /g1 << /ca 0.5 >> >>'
+      + ' /Shading << /s1 << /ShadingType 2 >> >> >> >>'
   );
+});
+
+test('a canvas direct shading reaches the serialized page resources', () => {
+  const canvas = new PdfCanvas(PageFormat.A4.height);
+  canvas.drawShading(new PdfShading({
+    type: 'axial',
+    fn: PdfBaseFunction.colorsAndStops([[1, 0, 0], [0, 0, 1]]),
+    start: { x: 0, y: 0 },
+    end: { x: 100, y: 0 }
+  }));
+
+  const document = new PdfDocument({ creator: 'js_pdf' });
+  document.addPage(
+    PageFormat.A4,
+    canvas.takeOutputBytes(),
+    canvas.fonts,
+    canvas.graphicStates,
+    canvas.patterns,
+    canvas.shadings
+  );
+
+  const source = latin1(document.save());
+  assert.match(source, /\/Shading << \/s1 << \/ShadingType 2/);
+  assert.match(source, /\/s1 sh/);
 });

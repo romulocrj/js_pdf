@@ -42,6 +42,20 @@ test('three or more stops use a stitching function with bounds', () => {
   assert.equal((fn.match(/\/FunctionType 2/g) ?? []).length, 2);
 });
 
+test('spread functions repeat and reflect without per-pixel storage', () => {
+  const base = PdfBaseFunction.colorsAndStops([[1, 0, 0], [0, 0, 1]], [0, 1]);
+  const repeat = PdfBaseFunction.spread(base, 0, 4, 'repeat').toString();
+  const reflect = PdfBaseFunction.spread(base, 0, 4, 'reflect').toString();
+
+  assert.match(repeat, /\/Bounds \[0\.25 0\.5 0\.75\]/);
+  assert.match(repeat, /\/Encode \[0 1 0 1 0 1 0 1\]/);
+  assert.match(reflect, /\/Encode \[0 1 1 0 0 1 1 0\]/);
+  assert.throws(
+    () => PdfBaseFunction.spread(base, 0, 5000, 'repeat'),
+    /exceeds 4096 visible periods/
+  );
+});
+
 test('a shading pattern serializes axial coordinates and its matrix', () => {
   const shading = new PdfShading({
     type: 'axial',
@@ -141,6 +155,68 @@ test('a gradient can stroke, and a color filter still produces a solid fill', ()
   const filtered = latin1(bytes);
   assert.doesNotMatch(filtered, /\/PatternType 2/);
   assert.match(filtered, /0 1 0 RG/);
+});
+
+test('varying stop opacity creates a matching luminosity gradient mask', () => {
+  const source = pdfFor(`
+    <svg viewBox="0 0 100 100"><defs><linearGradient id="g">
+      <stop offset="0" stop-color="red" stop-opacity="0"/>
+      <stop offset="1" stop-color="blue" stop-opacity="1"/>
+    </linearGradient></defs><rect width="100" height="100" fill="url(#g)"
+      stroke="lime" stroke-width="2"/></svg>
+  `);
+
+  assert.match(source, /\/SMask << \/S \/Luminosity \/G \d+ 0 R >>/);
+  assert.match(source, /\/C0 \[0 0 0\] \/C1 \[1 1 1\]/);
+  assert.match(source, /\/C0 \[1 0 0\] \/C1 \[0 0 1\]/);
+  assert.match(source, /\/g\d+ gs[\s\S]*f\nQ\nq\n0 1 0 RG/);
+});
+
+test('a stop-opacity mask composes with an element mask instead of replacing it', () => {
+  const source = pdfFor(`
+    <svg viewBox="0 0 100 100"><defs>
+      <mask id="m"><rect width="100" height="100" fill="white"/></mask>
+      <linearGradient id="g">
+        <stop offset="0" stop-color="red" stop-opacity="0"/>
+        <stop offset="1" stop-color="blue" stop-opacity="1"/>
+      </linearGradient>
+    </defs><rect width="100" height="100" fill="url(#g)" mask="url(#m)"/></svg>
+  `);
+
+  assert.ok((source.match(/\/SMask << \/S \/Luminosity \/G \d+ 0 R >>/g) ?? []).length >= 2);
+});
+
+test('linear repeat and reflect expand the shading only across painted bounds', () => {
+  for (const [method, encode] of [
+    ['repeat', /\/Encode \[0 1 0 1 0 1 0 1\]/],
+    ['reflect', /\/Encode \[0 1 1 0 0 1 1 0\]/]
+  ]) {
+    const source = pdfFor(`
+      <svg viewBox="0 0 100 100"><defs>
+        <linearGradient id="g" x1="0" x2=".25" spreadMethod="${method}">
+          <stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/>
+        </linearGradient>
+      </defs><rect width="100" height="100" fill="url(#g)"/></svg>
+    `);
+    assert.match(source, /\/Coords \[0 0 1 0\]/, method);
+    assert.match(source, /\/Bounds \[0\.25 0\.5 0\.75\]/, method);
+    assert.match(source, encode, method);
+    assert.doesNotMatch(source, /\/Extend \[true true\]/, method);
+  }
+});
+
+test('radial repeat expands concentric periods to the painted corners', () => {
+  const source = pdfFor(`
+    <svg viewBox="0 0 100 100"><defs>
+      <radialGradient id="g" cx=".5" cy=".5" r=".25" spreadMethod="repeat">
+        <stop offset="0" stop-color="white"/><stop offset="1" stop-color="black"/>
+      </radialGradient>
+    </defs><rect width="100" height="100" fill="url(#g)"/></svg>
+  `);
+
+  assert.match(source, /\/Coords \[0\.5 0\.5 0 0\.5 0\.5 0\.75\]/);
+  assert.match(source, /\/Bounds \[0\.3333 0\.6667\]/);
+  assert.match(source, /\/Encode \[0 1 0 1 0 1\]/);
 });
 
 test('the real invoice and document gradient assets serialize end to end', () => {

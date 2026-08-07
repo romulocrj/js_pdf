@@ -23,15 +23,11 @@
  * the rest of phase 1 cannot subset or embed, so failing at parse time is where
  * the error is cheapest to understand.
  *
- * PORT GAP: no bitmap glyphs. Upstream parses `CBLC`/`CBDT` for colour emoji
- * fonts; that is a separate feature from the outline path phase 1 needs, and it
- * pulls in a whole second metrics shape.
- *
- * PORT GAP: no bidi coupling. Upstream's format 4 reader also maps each Arabic
- * codepoint's isolated form to the same glyph, guarded by a global option. That
- * belongs with `font/arabic.dart` and `bidi_utils.dart`, which are unported.
+ * Arabic isolated presentation forms are aliased to the basic glyph when a
+ * font omits the duplicate cmap entries, matching upstream's bidi coupling.
  */
 
+import { basicToIsolatedMappings } from './bidi_utils.ts';
 import { PdfFontMetrics } from './font_metrics.ts';
 
 /** `name` table name IDs, upstream's `TtfParserName` enum. */
@@ -72,7 +68,9 @@ export const TtfTable = Object.freeze({
   glyf: 'glyf',
   post: 'post',
   os2: 'OS/2',
-  cff: 'CFF '
+  cff: 'CFF ',
+  cblc: 'CBLC',
+  cbdt: 'CBDT'
 });
 
 /** One glyph's program, plus the glyphs a composite glyph refers to. */
@@ -80,6 +78,52 @@ export interface TtfGlyphInfo {
   readonly index: number;
   readonly data: Uint8Array;
   readonly compounds: readonly number[];
+}
+
+/** A PNG bitmap glyph and the strike metrics needed to align it with text. */
+export class TtfBitmapInfo {
+  readonly data: Uint8Array;
+  readonly height: number;
+  readonly width: number;
+  readonly horizontalBearingX: number;
+  readonly horizontalBearingY: number;
+  readonly horizontalAdvance: number;
+  readonly ascent: number;
+  readonly descent: number;
+
+  constructor(
+    data: Uint8Array,
+    height: number,
+    width: number,
+    horizontalBearingX: number,
+    horizontalBearingY: number,
+    horizontalAdvance: number,
+    ascent: number,
+    descent: number
+  ) {
+    this.data = data;
+    this.height = height;
+    this.width = width;
+    this.horizontalBearingX = horizontalBearingX;
+    this.horizontalBearingY = horizontalBearingY;
+    this.horizontalAdvance = horizontalAdvance;
+    this.ascent = ascent;
+    this.descent = descent;
+  }
+
+  get metrics(): PdfFontMetrics {
+    const scale = 1 / this.height;
+    return new PdfFontMetrics({
+      bottom: this.horizontalBearingY * scale,
+      left: this.horizontalBearingX * scale,
+      top: (this.horizontalBearingY - this.height) * scale,
+      right: this.horizontalAdvance * scale,
+      ascent: this.ascent * scale,
+      descent: this.horizontalBearingY * scale,
+      advanceWidth: this.horizontalAdvance * scale,
+      leftBearing: this.horizontalBearingX * scale
+    });
+  }
 }
 
 const REQUIRED_TABLES = [
@@ -104,6 +148,7 @@ export class TtfParser {
   readonly glyphOffsets: number[] = [];
   readonly glyphSizes: number[] = [];
   readonly glyphInfoMap = new Map<number, PdfFontMetrics>();
+  readonly bitmapInfoMap = new Map<number, TtfBitmapInfo>();
 
   constructor(bytes: Uint8Array) {
     this.bytes = bytes;
@@ -129,6 +174,9 @@ export class TtfParser {
     if (this.tableOffsets.has(TtfTable.loca) && this.tableOffsets.has(TtfTable.glyf)) {
       this.parseIndexes();
       this.parseGlyphs();
+    }
+    if (this.tableOffsets.has(TtfTable.cblc) && this.tableOffsets.has(TtfTable.cbdt)) {
+      this.parseBitmaps();
     }
   }
 
@@ -210,6 +258,15 @@ export class TtfParser {
     return this.tableOffsets.has(TtfTable.cff);
   }
 
+  get isBitmap(): boolean {
+    return this.bitmapInfoMap.size > 0 && this.glyphOffsets.length === 0;
+  }
+
+  getBitmap(codePoint: number): TtfBitmapInfo | null {
+    const glyph = this.charToGlyphIndexMap.get(codePoint);
+    return glyph === undefined ? null : (this.bitmapInfoMap.get(glyph) ?? null);
+  }
+
   /** https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6name.html */
   getNameID(nameID: number): string | null {
     const basePosition = this.tableOffsets.get(TtfTable.name);
@@ -277,6 +334,13 @@ export class TtfParser {
           // Formats 2, 8, 10, 13 and 14 are not understood. Skipping a subtable
           // is safe: another one in the same table normally covers the range.
           break;
+      }
+    }
+
+    for (const [basic, isolated] of basicToIsolatedMappings) {
+      const glyph = this.charToGlyphIndexMap.get(basic);
+      if (glyph !== undefined && !this.charToGlyphIndexMap.has(isolated)) {
+        this.charToGlyphIndexMap.set(isolated, glyph);
       }
     }
   }
@@ -569,6 +633,62 @@ export class TtfParser {
     }
 
     return { index: glyph, data: this.bytes.subarray(start, offset), compounds: components };
+  }
+
+  /** Parse PNG-backed bitmap strikes, matching upstream's CBLC format-1 path. */
+  private parseBitmaps(): void {
+    const cblc = this.tableOffset(TtfTable.cblc);
+    const cbdt = this.tableOffset(TtfTable.cbdt);
+    const numberOfSizes = this.view.getUint32(cblc + 4);
+    let sizeOffset = cblc + 8;
+
+    for (let sizeIndex = 0; sizeIndex < numberOfSizes; sizeIndex++) {
+      const subtableArray = cblc + this.view.getUint32(sizeOffset);
+      const numberOfSubtables = this.view.getUint32(sizeOffset + 8);
+      const ascent = this.view.getInt8(sizeOffset + 12);
+      const descent = this.view.getInt8(sizeOffset + 13);
+      let arrayOffset = subtableArray;
+
+      for (let tableIndex = 0; tableIndex < numberOfSubtables; tableIndex++) {
+        const firstGlyph = this.view.getUint16(arrayOffset);
+        const lastGlyph = this.view.getUint16(arrayOffset + 2);
+        const subtable = subtableArray + this.view.getUint32(arrayOffset + 4);
+        const indexFormat = this.view.getUint16(subtable);
+        const imageFormat = this.view.getUint16(subtable + 2);
+        const imageData = cbdt + this.view.getUint32(subtable + 4);
+
+        if (indexFormat === 1 && imageFormat === 17) {
+          for (let glyph = firstGlyph; glyph <= lastGlyph; glyph++) {
+            const offsetIndex = glyph - firstGlyph;
+            const bitmap = imageData + this.view.getUint32(subtable + 8 + offsetIndex * 4);
+            const height = this.view.getUint8(bitmap);
+            const width = this.view.getUint8(bitmap + 1);
+            const bearingX = this.view.getInt8(bitmap + 2);
+            const bearingY = this.view.getInt8(bitmap + 3);
+            const advance = this.view.getUint8(bitmap + 4);
+            const dataLength = this.view.getUint32(bitmap + 5);
+            const dataStart = bitmap + 9;
+            const dataEnd = dataStart + dataLength;
+
+            if (height > 0 && width > 0 && dataEnd <= this.bytes.length) {
+              this.bitmapInfoMap.set(glyph, new TtfBitmapInfo(
+                this.bytes.subarray(dataStart, dataEnd),
+                height,
+                width,
+                bearingX,
+                bearingY,
+                advance,
+                ascent,
+                descent
+              ));
+            }
+          }
+        }
+
+        arrayOffset += 8;
+      }
+      sizeOffset += 48;
+    }
   }
 }
 
