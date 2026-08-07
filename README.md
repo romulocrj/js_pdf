@@ -118,7 +118,7 @@ const bytes = pdf.save();
 // bytes instanceof Uint8Array
 ```
 
-Browser, via importmap (cdn or vendoring) — no build step on the consumer side (see [examples/Browser.html](examples/Browser.html)):
+Browser, via importmap (cdn or vendoring) — no build step on the consumer side (see [examples/Browser.html](examples/Browser.html) or live demo at [here](https://romulocrj.github.io/js_pdf/examples/Browser.html)):
 
 ```html
 <script type="importmap">
