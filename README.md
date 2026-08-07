@@ -21,21 +21,20 @@ at build time rather than by convention.
 ## Why this port exists
 
 I have used many PDF libraries across different languages and ecosystems,
-including iText, PDFKit, pdfmake, jsPDF and React-pdf. Of all of them, I have
-always considered dart_pdf the best library for generating PDFs because its
-declarative API makes documents remarkably simple to compose. I have used it
-successfully in mobile applications, on servers, in desktop applications and
-on the web.
+including iText, PDFKit, pdfmake, jsPDF, and React-pdf. Among them, I have
+always considered dart_pdf the best library for PDF generation because its
+declarative API makes documents remarkably easy to compose. I have successfully
+used it in mobile, server, desktop, and web applications.
 
-What I still wanted was a 100% JavaScript declarative PDF library. React-pdf is
-the closest alternative, but it depends on React. I wanted a framework-free
-library that could run in a browser with plain JavaScript, in Node.js, or
-directly in a bare V8 host.
+What I still wanted was a fully declarative PDF library for JavaScript.
+React-pdf is the closest alternative, but it depends on React. I wanted a
+framework-free library that could run in a browser using plain JavaScript, in
+Node.js, or directly inside a bare V8 host.
 
 That is why I decided to port dart_pdf. This port was only possible because of
-the great and beautiful work David PHAM-VAN put into the original project, and
-because of the advances in LLM agents that made translating and validating a
-project of this scale feasible.
+the exceptional work David PHAM-VAN put into the original project and advances
+in LLM agents, which made it feasible to translate and validate a project of
+this scale.
 
 ## Status
 
