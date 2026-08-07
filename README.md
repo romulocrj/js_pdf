@@ -146,7 +146,7 @@ engine.DocumentSettings.AccessFlags = DocumentAccessFlags.EnableFileLoading;
 engine.DocumentSettings.SearchPath = modulesDirectory;
 
 dynamic result = engine.Evaluate(new DocumentInfo { Category = ModuleCategory.Standard }, @"
-      import * as pw from 'js_pdf';
+      import * as pw from 'js_pdf.mjs';
 
       const pdf = new pw.Document();
 
