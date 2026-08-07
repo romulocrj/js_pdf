@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
-const FILES = ['README.md', 'examples/Browser.html'];
+const FILES = ['README.md', 'AI_USAGE.md', 'examples/Browser.html'];
 
 const { name, version } = JSON.parse(
   await readFile(join(ROOT, 'package.json'), 'utf8')

@@ -6,6 +6,30 @@ the original Dart package is useful for choosing widgets and composing a
 document. Use that knowledge as a design guide, then apply the JavaScript rules
 below.
 
+## Install and import specifier
+
+```sh
+npm install @romulocrj/js_pdf
+```
+
+The published package is **`@romulocrj/js_pdf`** on npm
+([package](https://www.npmjs.com/package/@romulocrj/js_pdf),
+[repository](https://github.com/romulocrj/js_pdf)). It is ESM-only, has no
+runtime dependencies, and ships its own type declarations.
+
+Use the specifier that matches the host, and do not mix them up:
+
+| Host | Specifier |
+|---|---|
+| Node, or any bundler | `import * as pw from '@romulocrj/js_pdf';` |
+| Minified build | `import * as pw from '@romulocrj/js_pdf/min';` |
+| Browser importmap | whatever the importmap maps — the examples map `js_pdf` |
+| Browser, no install | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs';` |
+| ClearScript | the module file resolved from `SearchPath` |
+
+A bare `'js_pdf'` only resolves where a host maps it. For an installed package
+it is always the scoped name.
+
 ## Primary instruction
 
 Generate code through the original `dart_pdf` document model:
@@ -24,8 +48,11 @@ the much larger body of learned `dart_pdf` composition patterns directly.
 
 When producing code, resolve uncertainty in this order:
 
-1. The installed TypeScript declarations under `dist/types/`.
-2. The public exports in `src/index.ts`.
+1. The installed TypeScript declarations under
+   `node_modules/@romulocrj/js_pdf/dist/types/`.
+2. The public exports in
+   [`src/index.ts`](https://github.com/romulocrj/js_pdf/blob/main/src/index.ts).
+   Sources are not part of the npm tarball, so read them in the repository.
 3. [PORTING-STATUS.md](https://github.com/romulocrj/js_pdf/blob/main/docs/PORTING-STATUS.md) for implemented gaps.
 4. Knowledge of `dart_pdf` for document structure and widget selection.
 
@@ -35,7 +62,7 @@ library, or a newer version of `dart_pdf`.
 ## Canonical JavaScript shape
 
 ```js
-import * as pw from 'js_pdf';
+import * as pw from '@romulocrj/js_pdf';
 
 export function generateReport(model) {
   const document = new pw.Document({
@@ -137,7 +164,7 @@ Runners:
 
 | dart_pdf concept | js_pdf form |
 |---|---|
-| `import ... as pw` | `import * as pw from 'js_pdf'` |
+| `import ... as pw` | `import * as pw from '@romulocrj/js_pdf'` |
 | `pw.Document()` | `new pw.Document()` |
 | `pdf.addPage(...)` | `document.addPage(...)` |
 | `pw.Page(build: ...)` | `new pw.Page({ build: ... })` |
@@ -269,7 +296,7 @@ Loading is asynchronous at the host boundary; PDF generation remains
 synchronous after the bytes arrive:
 
 ```js
-import * as pw from 'js_pdf';
+import * as pw from '@romulocrj/js_pdf';
 
 async function loadBytes(url) {
   const response = await fetch(url);
@@ -303,7 +330,7 @@ const pdfBytes = document.save();
 
 ```js
 import { readFile } from 'node:fs/promises';
-import * as pw from 'js_pdf';
+import * as pw from '@romulocrj/js_pdf';
 
 const [regularFile, boldFile] = await Promise.all([
   readFile(new URL('./fonts/OpenSans-Regular.ttf', import.meta.url)),
