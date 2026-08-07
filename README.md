@@ -192,3 +192,8 @@ Romulo Campos
 
 Full attribution is in [NOTICE](NOTICE). Every ported file under `src/` names the
 upstream Dart sources it derives from in its header.
+
+## Warranty and support
+
+This software is provided “as is”, without warranties of any kind. No support
+is provided or implied.
