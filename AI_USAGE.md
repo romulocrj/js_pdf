@@ -130,8 +130,8 @@ Runners:
 - [run-phase-examples.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/run-phase-examples.mjs) generates all
   focused phase examples.
 - [run-production-pagination.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/run-production-pagination.mjs)
-  generates the production pagination proof with
-  `npm run example:production-pagination`.
+  generates the production pagination proof; run it with
+  `node examples/run-production-pagination.mjs`.
 
 ## Translating familiar dart_pdf patterns
 

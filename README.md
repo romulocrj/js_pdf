@@ -55,7 +55,16 @@ hold, but is not frozen until 1.0.0.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the port is organized and where it diverges from dart_pdf
 - [AI_USAGE.md](AI_USAGE.md) — instructions for LLMs generating js_pdf code from dart_pdf knowledge
 
-## Install and build
+## Install
+
+```sh
+npm install @romulocrj/js_pdf
+```
+
+The package is ESM-only and has no runtime dependencies. Type declarations ship
+with it, so TypeScript needs no separate `@types` package.
+
+## Build from source
 
 ```sh
 npm install
@@ -69,36 +78,43 @@ The build emits four single-file ES modules plus declarations:
 |---|---|
 | `dist/js_pdf.mjs` | readable, canonical — what `import '@romulocrj/js_pdf'` resolves to |
 | `dist/js_pdf.min.mjs` | minified, canonical — `import '@romulocrj/js_pdf/min'` |
-| `dist/js_pdf-0.1.6.mjs` | readable, versioned — for vendoring into a host directory |
-| `dist/js_pdf-0.1.6.min.mjs` | minified, versioned |
+| `dist/js_pdf-<version>.mjs` | readable, versioned — for vendoring into a host directory |
+| `dist/js_pdf-<version>.min.mjs` | minified, versioned |
 | `dist/types/**.d.ts` | type declarations |
 
 Each JavaScript artifact carries the attribution banner and no other comment.
 
-## Installation via CDN
+## Install via CDN
 
-Import the latest minified ES module directly from jsDelivr:
+Import the minified ES module directly from jsDelivr, with no install step.
+Pinning the version is recommended — the unpinned URL follows whatever the
+latest published release is:
 
 ```js
-import * as pw from 'https://cdn.jsdelivr.net/gh/romulocrj/js_pdf/dist/js_pdf.min.mjs';
+import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs';
 ```
 
+unpkg serves the same file at
+`https://unpkg.com/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs`.
+
 ## Use
+
+The same document, [examples/hello-world.mjs](examples/hello-world.mjs), on each
+supported host. Only the wiring around it changes — the composition and
+`save()` are identical everywhere, because the library touches no host API.
 
 Node, or any bundler:
 
 ```js
 import * as pw from '@romulocrj/js_pdf';
 
-const document = new pw.Document({ title: 'Report' });
+const pdf = new pw.Document();
 
-document.addPage(new pw.Page({
-  build: () => new pw.Center({
-    child: new pw.Text('Hello js_pdf')
-  })
+pdf.addPage(new pw.Page({
+  build: () => new pw.Text('Hello World!', { align: 'center' })
 }));
 
-const bytes = document.save();
+const bytes = pdf.save();
 // bytes instanceof Uint8Array
 ```
 
@@ -111,25 +127,27 @@ Browser, via importmap — no build step on the consumer side:
 <script type="module">
   import * as pw from 'js_pdf';
 
-  const document = new pw.Document();
-  document.addPage(new pw.Page({
-    build: () => new pw.Text('Hello from the browser')
+  const pdf = new pw.Document();
+
+  pdf.addPage(new pw.Page({
+    build: () => new pw.Text('Hello World!', { align: 'center' })
   }));
-  const bytes = document.save();
+
+  const bytes = pdf.save();
 </script>
 ```
 
-ClearScript, as a standard module:
+ClearScript, as a standard module. The module below is the example file itself,
+resolved from `SearchPath`:
 
 ```csharp
 using var engine = new V8ScriptEngine();
 engine.DocumentSettings.AccessFlags = DocumentAccessFlags.EnableFileLoading;
 engine.DocumentSettings.SearchPath = modulesDirectory;
 
-engine.Script.model = model;
 dynamic result = engine.Evaluate(new DocumentInfo { Category = ModuleCategory.Standard }, @"
-    import { createSalesReport } from 'create-sales-report.mjs';
-    createSalesReport(model);
+    import { generateHelloWorld } from 'hello-world.mjs';
+    generateHelloWorld();
 ");
 ```
 
@@ -147,17 +165,28 @@ widgets, `TextField`, `ChoiceField`, `Checkbox`, `FlatButton`,
 See [docs/PORTING-STATUS.md](docs/PORTING-STATUS.md) for the complete implemented
 surface and the remaining upstream gaps.
 
-## Example
+## Examples
 
-[examples/create-sales-report.mjs](examples/create-sales-report.mjs) builds a
-paginated sales report with a header, footer, metric cards, a bar chart and a
-table using the `Document`/`MultiPage` API. Run it with `npm run example`.
+The eight examples retained from dart_pdf. Each is a synchronous, host-free
+module that returns PDF bytes, so the same file runs under Node.js and under
+bare ClearScript V8.
 
-[examples/widgets-phase-5.7.mjs](examples/widgets-phase-5.7.mjs) exercises all
-widgets added in phase 5.7. The English-only
-[examples/production-pagination.mjs](examples/production-pagination.mjs) is a
-production-sized regression example showing how `Inseparable` keeps a chart
-heading and chart on the same page.
+| Example | What it shows |
+|---|---|
+| [hello-world.mjs](examples/hello-world.mjs) | Minimal `Document`, `Page`, `Text` and synchronous `save()` |
+| [calendar.mjs](examples/calendar.mjs) | Grid layout, TrueType fonts, SVG and themed text |
+| [certificate.mjs](examples/certificate.mjs) | Stack/positioned layout, transformations, clipping, rich text and decorative SVG |
+| [document.mjs](examples/document.mjs) | Long-form multipage document, headers, paragraphs, table of content, outlines and links |
+| [invoice.mjs](examples/invoice.mjs) | Business invoice, repeated table headers, SVG, barcode, totals, header and footer |
+| [report.mjs](examples/report.mjs) | Cartesian and pie charts, legends, tables and embedded fonts |
+| [resume.mjs](examples/resume.mjs) | Images, icons, progress indicators, partitions, QR code and two-page layout |
+| [server.mjs](examples/server.mjs) | Charts, SVG, feature cards, pricing table and external links |
+
+Generate all eight with `npm run examples`.
+
+[examples/](examples/) also holds a browser page, a project sales report and one
+focused example per implementation phase. They are indexed, with what each one
+covers, in [AI_USAGE.md](AI_USAGE.md).
 
 ## Current limitations
 

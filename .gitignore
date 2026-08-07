@@ -72,6 +72,7 @@ temp/
 # Generated PDF examples. Reference PDFs under examples/original are committed.
 examples/*.pdf
 examples/out/
+examples/generation-results.json
 
 # tsc's JavaScript output — an intermediate that rollup consumes.
 # Declarations go straight to dist/types/ and are committed.

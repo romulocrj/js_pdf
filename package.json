@@ -60,7 +60,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "rm -rf dist && npm run compile && rollup --config rollup.config.mjs",
+    "build": "rm -rf dist && npm run compile && rollup --config rollup.config.mjs && node tools/sync-cdn-version.mjs",
     "compile": "tsc -p tsconfig.json",
     "test": "node --test \"test/**/*.test.mjs\"",
     "check": "node tools/check-source.mjs && tsc -p tsconfig.json --noEmit",
