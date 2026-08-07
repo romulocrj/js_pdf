@@ -31,8 +31,6 @@
  * A widget reaching for the path API converts with `toPdfY`, and a widget
  * setting a transform conjugates it with `flipMatrix` from `matrix.ts`.
  *
- * PORT GAP: no direct shading operator. SVG `drawShape` lives in `svg/path.ts`
- * to preserve the one-way import direction.
  */
 
 import { colorOperator } from './color.ts';
@@ -46,6 +44,7 @@ import type { PdfSoftMask } from './soft_mask.ts';
 import { formatNumber } from './format/num.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
+import type { PdfShading } from './obj/shading.ts';
 import type { PdfImage } from './obj/image.ts';
 import type {
   PdfAnnotationSpec,
@@ -69,13 +68,7 @@ export interface CanvasTextStyle {
   /** `Tc`, extra space per glyph. Omitted from the output when zero. */
   readonly letterSpacing?: number;
 
-  /**
-   * `Tw`, extra space per space character. Omitted when zero.
-   *
-   * PORT GAP: `Tw` applies to single-byte code 32 only, so a reader ignores it
-   * for the two-byte CIDs an embedded TrueType font emits. Word spacing has no
-   * effect on TTF text until the port measures and inserts the space itself.
-   */
+  /** Extra space per space character. Omitted when zero. */
   readonly wordSpacing?: number;
 }
 
@@ -112,6 +105,35 @@ const M4 = 0.551784;
 
 function operands(values: readonly number[]): string {
   return values.map(formatNumber).join(' ');
+}
+
+/**
+ * A composite font cannot use `Tw`: PDF applies that operator only to the
+ * single-byte code 32. A `TJ` adjustment after each encoded space produces the
+ * same displacement for two-byte CIDs without expanding the text into bytes.
+ */
+function compositeTextOperand(
+  font: PdfFont,
+  text: string,
+  wordSpacing: number,
+  fontSize: number
+): string {
+  const parts: string[] = [];
+  let run = '';
+  const adjustment = formatNumber((-wordSpacing * 1000) / fontSize);
+
+  for (const character of String(text)) {
+    run += character;
+    if (character === ' ') {
+      parts.push(font.encodeText(run), adjustment);
+      run = '';
+    }
+  }
+
+  if (run !== '' || parts.length === 0) {
+    parts.push(font.encodeText(run));
+  }
+  return `[${parts.join(' ')}]`;
 }
 
 export interface FillOptions {
@@ -157,6 +179,8 @@ export class PdfCanvas {
   private readonly stateDicts = new Map<string, PdfDict>();
   private readonly patternNames = new Map<string, string>();
   private readonly patternDicts = new Map<string, PdfDict>();
+  private readonly shadingNames = new Map<string, string>();
+  private readonly shadingDicts = new Map<string, PdfDict>();
   private readonly imageNames = new Map<PdfImage, string>();
   private readonly softMaskNames = new Map<PdfSoftMask, string>();
   private readonly pageAnnotations: PdfAnnotationSpec[] = [];
@@ -232,6 +256,11 @@ export class PdfCanvas {
   /** The `/Pattern` entries this page selected, by content-stream name. */
   get patterns(): ReadonlyMap<string, PdfDict> {
     return this.patternDicts;
+  }
+
+  /** The direct `/Shading` entries this page selected, by stream name. */
+  get shadings(): ReadonlyMap<string, PdfDict> {
+    return this.shadingDicts;
   }
 
   /** The images this page drew with, mapped to page-local `/I…` names. */
@@ -424,6 +453,20 @@ export class PdfCanvas {
   setStrokePattern(pattern: PdfShadingPattern): string {
     const name = this.addPattern(pattern);
     this.push(`/Pattern CS ${name} SCN`);
+    return name;
+  }
+
+  /** Register and paint a shading directly with PDF's `sh` operator. */
+  drawShading(shading: PdfShading): string {
+    const dict = shading.output();
+    const key = dict.toString();
+    let name = this.shadingNames.get(key);
+    if (name === undefined) {
+      name = `/s${this.shadingDicts.size + 1}`;
+      this.shadingNames.set(key, name);
+      this.shadingDicts.set(name, dict);
+    }
+    this.push(`${name} sh`);
     return name;
   }
 
@@ -777,9 +820,10 @@ export class PdfCanvas {
     const font = style.font ?? defaultPdfFont;
     const letterSpacing = style.letterSpacing ?? 0;
     const wordSpacing = style.wordSpacing ?? 0;
+    const operatorWordSpacing = font.isComposite === true ? 0 : wordSpacing;
 
     const spacingOperators: string[] = [];
-    if (letterSpacing === 0 && wordSpacing === 0 && this.textSpacingDirty) {
+    if (letterSpacing === 0 && operatorWordSpacing === 0 && this.textSpacingDirty) {
       spacingOperators.push('0', 'Tc', '0', 'Tw');
       this.currentLetterSpacing = 0;
       this.currentWordSpacing = 0;
@@ -789,14 +833,19 @@ export class PdfCanvas {
         spacingOperators.push(formatNumber(letterSpacing), 'Tc');
         this.currentLetterSpacing = letterSpacing;
       }
-      if (wordSpacing !== this.currentWordSpacing) {
-        spacingOperators.push(formatNumber(wordSpacing), 'Tw');
-        this.currentWordSpacing = wordSpacing;
+      if (operatorWordSpacing !== this.currentWordSpacing) {
+        spacingOperators.push(formatNumber(operatorWordSpacing), 'Tw');
+        this.currentWordSpacing = operatorWordSpacing;
       }
-      if (letterSpacing !== 0 || wordSpacing !== 0) {
+      if (letterSpacing !== 0 || operatorWordSpacing !== 0) {
         this.textSpacingDirty = true;
       }
     }
+
+    const usesTextArray = font.isComposite === true && wordSpacing !== 0;
+    const textOperand = usesTextArray
+      ? compositeTextOperand(font, text, wordSpacing, fontSize)
+      : font.encodeText(text);
 
     const command = [
       'BT',
@@ -804,7 +853,7 @@ export class PdfCanvas {
       colorOperator(style.color),
       ...spacingOperators,
       '1 0 0 1', formatNumber(x), formatNumber(baseline), 'Tm',
-      font.encodeText(text), 'Tj',
+      textOperand, usesTextArray ? 'TJ' : 'Tj',
       'ET'
     ].join(' ');
     this.push(command);

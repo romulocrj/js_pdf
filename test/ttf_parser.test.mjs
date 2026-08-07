@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { TtfParser, TtfParserName } from '../src/pdf/font/ttf_parser.ts';
+import { onePixelPng, withBitmapGlyph } from './support/bitmap-font.mjs';
 
 const asset = name => new Uint8Array(
   readFileSync(new URL(`../examples/assets/${name}`, import.meta.url))
@@ -99,6 +100,22 @@ test('hmtx advance widths are normalized to em units', () => {
   assert.ok(space.advanceWidth > 0);
 
   assert.equal(openSans.glyphInfoMap.size, openSans.numGlyphs);
+});
+
+test('CBLC/CBDT format 17 exposes a PNG bitmap without copying it', () => {
+  const codePoint = 0x20ac;
+  const png = onePixelPng();
+  const bytes = withBitmapGlyph(asset('OpenSans-Regular.ttf'), codePoint, png);
+  const font = new TtfParser(bytes);
+  const bitmap = font.getBitmap(codePoint);
+
+  assert.ok(bitmap);
+  assert.equal(bitmap.width, 1);
+  assert.equal(bitmap.height, 1);
+  assert.deepEqual(bitmap.data, png);
+  assert.equal(bitmap.data.buffer, bytes.buffer, 'bitmap bytes remain a view into the font');
+  assert.equal(bitmap.metrics.advanceWidth, 1);
+  assert.equal(font.isBitmap, false, 'the fixture still has outline glyphs too');
 });
 
 test('loca offsets are monotonic and stay inside glyf', () => {

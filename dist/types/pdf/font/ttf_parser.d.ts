@@ -37,12 +37,27 @@ export declare const TtfTable: Readonly<{
     post: "post";
     os2: "OS/2";
     cff: "CFF ";
+    cblc: "CBLC";
+    cbdt: "CBDT";
 }>;
 /** One glyph's program, plus the glyphs a composite glyph refers to. */
 export interface TtfGlyphInfo {
     readonly index: number;
     readonly data: Uint8Array;
     readonly compounds: readonly number[];
+}
+/** A PNG bitmap glyph and the strike metrics needed to align it with text. */
+export declare class TtfBitmapInfo {
+    readonly data: Uint8Array;
+    readonly height: number;
+    readonly width: number;
+    readonly horizontalBearingX: number;
+    readonly horizontalBearingY: number;
+    readonly horizontalAdvance: number;
+    readonly ascent: number;
+    readonly descent: number;
+    constructor(data: Uint8Array, height: number, width: number, horizontalBearingX: number, horizontalBearingY: number, horizontalAdvance: number, ascent: number, descent: number);
+    get metrics(): PdfFontMetrics;
 }
 export declare class TtfParser {
     readonly bytes: Uint8Array;
@@ -54,6 +69,7 @@ export declare class TtfParser {
     readonly glyphOffsets: number[];
     readonly glyphSizes: number[];
     readonly glyphInfoMap: Map<number, PdfFontMetrics>;
+    readonly bitmapInfoMap: Map<number, TtfBitmapInfo>;
     constructor(bytes: Uint8Array);
     /** A four-byte ASCII table tag. */
     private readTag;
@@ -77,6 +93,8 @@ export declare class TtfParser {
      * `glyf`/`loca` to subset, so phase 1.2 has to embed them whole.
      */
     get hasCff(): boolean;
+    get isBitmap(): boolean;
+    getBitmap(codePoint: number): TtfBitmapInfo | null;
     /** https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6name.html */
     getNameID(nameID: number): string | null;
     private parseCMap;
@@ -111,4 +129,6 @@ export declare class TtfParser {
     readGlyph(index: number): TtfGlyphInfo;
     private readSimpleGlyph;
     private readCompoundGlyph;
+    /** Parse PNG-backed bitmap strikes, matching upstream's CBLC format-1 path. */
+    private parseBitmaps;
 }

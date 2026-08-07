@@ -26,12 +26,12 @@
  * page to operators before the document exists; upstream instead defers the same
  * work to `prepare()`, since its fonts are indirect objects from birth.
  *
- * PORT GAP: no simple `/TrueType` branch. Upstream falls back to a WinAnsi
+ * DELIBERATE DIVERGENCE: no simple `/TrueType` branch. Upstream falls back to a WinAnsi
  * single-byte font, embedding the file whole, when the sfnt version is not
  * 0x00010000. That branch is strictly narrower than this one and reintroduces
  * the ceiling phase 1 exists to remove, so the port rejects such a font instead.
  *
- * PORT GAP: no `CFF `-flavoured OpenType — see `font/ttf_writer.ts`.
+ * FORMAT LIMIT: no `CFF `-flavoured OpenType — see `font/ttf_writer.ts`.
  *
  * Arabic diacritics retain their outlines but have zero advance after shaping,
  * matching upstream's bidi-enabled metrics.
@@ -40,6 +40,7 @@
 import { isArabicDiacritic } from '../font/arabic.ts';
 import { PdfFontMetrics } from '../font/font_metrics.ts';
 import type { PdfFont } from '../font/font.ts';
+import type { PdfFontBitmap } from '../font/font.ts';
 import { TtfParser } from '../font/ttf_parser.ts';
 import { TtfWriter } from '../font/ttf_writer.ts';
 import { PdfArray } from '../format/array.ts';
@@ -64,6 +65,7 @@ export interface PdfTtfFontOptions {
 export class PdfTtfFont implements PdfFont {
   readonly font: TtfParser;
   readonly protect: boolean;
+  readonly isComposite = true;
 
   /**
    * Code points in CID order: `cmap[cid]` is the rune drawn by CID `cid`. CID 0
@@ -108,6 +110,10 @@ export class PdfTtfFont implements PdfFont {
   /** Whether this font can draw `codePoint` at all. */
   isRuneSupported(codePoint: number): boolean {
     return this.font.charToGlyphIndexMap.has(codePoint);
+  }
+
+  getBitmap(codePoint: number): PdfFontBitmap | null {
+    return this.font.getBitmap(codePoint);
   }
 
   /** Metrics in em units, so the caller scales by the font size. */

@@ -17,7 +17,7 @@
  * The `transform` attribute: `matrix translate scale rotate skewX skewY`,
  * composed left to right into one `cm` operand.
  *
- * PORT GAP: no `preserveAspectRatio`. Upstream has none either — `SvgImage`
+ * UPSTREAM PARITY: no `preserveAspectRatio`. Upstream has none either — `SvgImage`
  * fits the viewBox into the widget's box with `BoxFit` and `Alignment` instead,
  * which covers every alignment `preserveAspectRatio` can express but is stated
  * by the caller rather than read from the document. `SvgImage` has provided

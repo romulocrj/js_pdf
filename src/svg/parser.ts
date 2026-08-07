@@ -23,7 +23,7 @@
  * without `findById` and `colorFilter`. The `SvgImage` widget that drives this
  * followed in phase 2.7.
  *
- * PORT GAP: `sizeValue` returns `value / 100` for a percentage, which is
+ * UPSTREAM COMPATIBILITY: `sizeValue` returns `value / 100` for a percentage, which is
  * upstream's behaviour and is wrong in the general case — a percentage is
  * relative to the viewport, or to the diagonal for a length with no axis. It is
  * kept because changing it would silently move every SVG that has one, and

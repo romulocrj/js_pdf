@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import * as Pdf from '../src/index.ts';
 import { PdfTtfFont } from '../src/pdf/obj/ttf_font.ts';
 import { latin1 } from "./support/pdf-text.mjs";
+import { withBitmapGlyph } from './support/bitmap-font.mjs';
 
 const asset = name => new Uint8Array(
   readFileSync(new URL(`../examples/assets/${name}`, import.meta.url))
@@ -70,6 +71,36 @@ test('text becomes hex CIDs, and /ToUnicode maps them back to the source string'
   const decoded = cids.map(cid => String.fromCodePoint(map.get(cid))).join('');
 
   assert.equal(decoded, text, 'the CMap must round-trip the text a reader copies');
+});
+
+test('word spacing in a composite font uses TJ adjustments instead of Tw', () => {
+  const bytes = Pdf.createPdf(
+    { theme: Pdf.ThemeData.withFont({ base: Pdf.Font.ttf(openSans) }) },
+    () => new Pdf.Page({
+      build: () => new Pdf.Text('one two', {
+        style: new Pdf.TextStyle({ fontSize: 10, wordSpacing: 4 })
+      })
+    })
+  );
+
+  const source = latin1(bytes);
+  assert.match(source, /\[<[0-9a-f]+> -400 <[0-9a-f]+>\] TJ/);
+  assert.doesNotMatch(source, / 4 Tw /);
+});
+
+test('a CBLC/CBDT fallback glyph is painted as an image', () => {
+  const codePoint = 0x20ac;
+  const fallback = Pdf.Font.ttf(withBitmapGlyph(openSans, codePoint));
+  const bytes = Pdf.createPdf({}, () => new Pdf.Page({
+    build: () => new Pdf.Text(`A${String.fromCodePoint(codePoint)}B`, {
+      style: new Pdf.TextStyle({ fontFallback: [fallback] })
+    })
+  }));
+
+  const source = latin1(bytes);
+  assert.match(source, /\/Subtype \/Image/);
+  assert.match(source, /\/I1 Do/);
+  assert.doesNotMatch(source, /\/BaseFont \/OpenSans-Regular/);
 });
 
 test('the embedded program is a subset, not the whole file', () => {

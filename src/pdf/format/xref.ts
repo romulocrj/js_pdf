@@ -14,7 +14,7 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/format/xref.dart
  *
- * PORT GAP: classic cross-reference table only. Upstream also writes PDF 1.5
+ * SERIALIZATION CHOICE: classic cross-reference table only. Upstream also writes PDF 1.5
  * cross-reference streams with compressed object entries, selected by
  * `PdfVersion`; the port emits the 1.7 header with a classic table, which every
  * reader accepts. No incremental update, so no `/Prev`.

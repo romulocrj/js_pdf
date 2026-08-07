@@ -248,12 +248,20 @@ search still work. The missing-API total across the seven examples fell from 124
 to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 `DefaultTextStyle` are gone from every list.
 
+**Post-roadmap PORT GAP audit — landed 2026-08-06.** Every retained marker was
+compared with the current upstream implementation. Direct canvas shadings,
+two-byte CID word spacing, caller-supplied pie legend widgets and format-17
+CBLC/CBDT colour-emoji fallback were real parity gaps and are now implemented.
+The remaining notes were reclassified explicitly as upstream parity,
+compatibility behaviour, serialization choices, deliberate divergences,
+runtime scope or format limits; no unresolved port-gap marker remains.
+
 ## Next step
 
 > **The implementation roadmap and the high-impact upstream parity audit are
-> complete.** The image-decoration and SVG-gradient follow-ups found by that
-> audit are also complete. Define and document a new phase before expanding a
-> narrower remaining surface.
+> complete.** The image-decoration, SVG-gradient and final marker-audit
+> follow-ups are also complete. Define and document a new phase before
+> expanding a narrower remaining surface such as CFF/PostScript fonts.
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
 out of scope, and the complete upstream example set still generates end to end.

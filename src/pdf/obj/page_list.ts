@@ -14,7 +14,7 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/obj/page_list.dart
  *
- * PORT GAP: a flat page tree. Upstream is also flat in practice, but the PDF
+ * UPSTREAM PARITY: a flat page tree. Upstream is also flat in practice, but the PDF
  * spec allows intermediate `/Pages` nodes for large documents; neither builds
  * them.
  */

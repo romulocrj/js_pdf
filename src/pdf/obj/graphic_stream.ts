@@ -66,6 +66,7 @@ export class PdfGraphicStream extends PdfObject<PdfDict> {
    */
   readonly graphicStates = new Map<string, PdfDict>();
   readonly patterns = new Map<string, PdfDict>();
+  readonly shadings = new Map<string, PdfDict>();
 
   /** Register a font under the name the content stream used. First one wins. */
   addFont(name: string, font: PdfResource): void {
@@ -92,6 +93,12 @@ export class PdfGraphicStream extends PdfObject<PdfDict> {
     }
   }
 
+  addShading(name: string, shading: PdfDict): void {
+    if (!this.shadings.has(name)) {
+      this.shadings.set(name, shading);
+    }
+  }
+
   /**
    * The `/Resources` value, or null when this stream referred to nothing.
    *
@@ -115,6 +122,10 @@ export class PdfGraphicStream extends PdfObject<PdfDict> {
 
     if (this.patterns.size > 0) {
       resources.set('/Pattern', new PdfDict(this.patterns));
+    }
+
+    if (this.shadings.size > 0) {
+      resources.set('/Shading', new PdfDict(this.shadings));
     }
 
     return resources.isEmpty ? null : resources;

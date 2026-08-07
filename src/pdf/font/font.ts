@@ -19,11 +19,25 @@ import type { PdfDict } from '../format/dict.ts';
 import type { PdfObjectRegistry } from '../obj/object.ts';
 import type { PdfFontMetrics } from './font_metrics.ts';
 
+/** One PNG-backed glyph from an OpenType CBLC/CBDT strike. */
+export interface PdfFontBitmap {
+  readonly data: Uint8Array;
+  readonly width: number;
+  readonly height: number;
+  readonly metrics: PdfFontMetrics;
+}
+
 /** Common contract for the standard Type1 fonts and for embedded TrueType. */
 export interface PdfFont {
   readonly fontName: string;
   readonly ascent: number;
   readonly descent: number;
+
+  /** Whether text is encoded as two-byte CIDs rather than single-byte codes. */
+  readonly isComposite?: boolean;
+
+  /** A colour bitmap for `codePoint`, when the font supplies one. */
+  getBitmap?(codePoint: number): PdfFontBitmap | null;
 
   stringMetrics(text: string, size: number, letterSpacing?: number): PdfFontMetrics;
 

@@ -42,7 +42,7 @@ export declare class PdfType1Font implements PdfFont {
     stringMetrics(text: string, size: number, letterSpacing?: number): PdfFontMetrics;
     encodeText(text: string): string;
     /**
-     * PORT GAP: no `/FirstChar`, `/LastChar`, `/Widths` or `/FontDescriptor`.
+     * SERIALIZATION CHOICE: no `/FirstChar`, `/LastChar`, `/Widths` or `/FontDescriptor`.
      * Upstream emits those for PDF 1.5 and up. They are optional for the 14
      * standard fonts, whose metrics every reader already has built in — which is
      * exactly the set this class covers.

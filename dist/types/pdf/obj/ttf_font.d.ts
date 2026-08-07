@@ -1,5 +1,6 @@
 import { PdfFontMetrics } from '../font/font_metrics.ts';
 import type { PdfFont } from '../font/font.ts';
+import type { PdfFontBitmap } from '../font/font.ts';
 import { TtfParser } from '../font/ttf_parser.ts';
 import { PdfDict } from '../format/dict.ts';
 import type { PdfObjectRegistry } from './object.ts';
@@ -13,6 +14,7 @@ export interface PdfTtfFontOptions {
 export declare class PdfTtfFont implements PdfFont {
     readonly font: TtfParser;
     readonly protect: boolean;
+    readonly isComposite = true;
     /**
      * Code points in CID order: `cmap[cid]` is the rune drawn by CID `cid`. CID 0
      * is `.notdef`, as `/Identity-H` requires, so index 0 holds rune 0.
@@ -26,6 +28,7 @@ export declare class PdfTtfFont implements PdfFont {
     get unitsPerEm(): number;
     /** Whether this font can draw `codePoint` at all. */
     isRuneSupported(codePoint: number): boolean;
+    getBitmap(codePoint: number): PdfFontBitmap | null;
     /** Metrics in em units, so the caller scales by the font size. */
     glyphMetrics(codePoint: number): PdfFontMetrics;
     stringMetrics(text: string, size: number, letterSpacing?: number): PdfFontMetrics;

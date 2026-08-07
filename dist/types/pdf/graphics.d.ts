@@ -4,6 +4,7 @@ import { PdfDict } from './format/dict.ts';
 import type { PdfSoftMask } from './soft_mask.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
+import type { PdfShading } from './obj/shading.ts';
 import type { PdfImage } from './obj/image.ts';
 import type { PdfAnnotationSpec, PdfFormFieldAnnotation } from './obj/annotation.ts';
 import type { PdfMatrix } from './matrix.ts';
@@ -19,13 +20,7 @@ export interface CanvasTextStyle {
     readonly font?: PdfFont;
     /** `Tc`, extra space per glyph. Omitted from the output when zero. */
     readonly letterSpacing?: number;
-    /**
-     * `Tw`, extra space per space character. Omitted when zero.
-     *
-     * PORT GAP: `Tw` applies to single-byte code 32 only, so a reader ignores it
-     * for the two-byte CIDs an embedded TrueType font emits. Word spacing has no
-     * effect on TTF text until the port measures and inserts the space itself.
-     */
+    /** Extra space per space character. Omitted when zero. */
     readonly wordSpacing?: number;
 }
 export interface CircleOptions {
@@ -80,6 +75,8 @@ export declare class PdfCanvas {
     private readonly stateDicts;
     private readonly patternNames;
     private readonly patternDicts;
+    private readonly shadingNames;
+    private readonly shadingDicts;
     private readonly imageNames;
     private readonly softMaskNames;
     private readonly pageAnnotations;
@@ -123,6 +120,8 @@ export declare class PdfCanvas {
     get graphicStates(): ReadonlyMap<string, PdfDict>;
     /** The `/Pattern` entries this page selected, by content-stream name. */
     get patterns(): ReadonlyMap<string, PdfDict>;
+    /** The direct `/Shading` entries this page selected, by stream name. */
+    get shadings(): ReadonlyMap<string, PdfDict>;
     /** The images this page drew with, mapped to page-local `/I…` names. */
     get images(): ReadonlyMap<PdfImage, string>;
     /** Clickable rectangles registered while this page was painted. */
@@ -156,6 +155,8 @@ export declare class PdfCanvas {
     private addPattern;
     setFillPattern(pattern: PdfShadingPattern): string;
     setStrokePattern(pattern: PdfShadingPattern): string;
+    /** Register and paint a shading directly with PDF's `sh` operator. */
+    drawShading(shading: PdfShading): string;
     /** Draw an image in PDF user space, applying its stored EXIF-style orientation. */
     drawImage(image: PdfImage, x: number, y: number, width?: number, height?: number): void;
     moveTo(x: number, y: number): void;

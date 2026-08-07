@@ -10,6 +10,7 @@ export interface PdfSoftMask {
     readonly fonts: ReadonlyMap<PdfFont, string>;
     readonly graphicStates: ReadonlyMap<string, PdfDict>;
     readonly patterns: ReadonlyMap<string, PdfDict>;
+    readonly shadings: ReadonlyMap<string, PdfDict>;
     readonly images: ReadonlyMap<PdfImage, string>;
 }
 /** Deferred until the owning PDF document can allocate the form XObject. */

@@ -16,6 +16,7 @@ export declare class PieFrame extends ChartFrame {
 export type PieLegendPosition = 'none' | 'auto' | 'inside' | 'outside';
 export interface PieDataSetOptions extends DatasetOptions {
     readonly value: number;
+    readonly legendWidget?: AnyWidget | null;
     readonly drawBorder?: boolean | null;
     readonly drawSurface?: boolean;
     readonly surfaceOpacity?: number;
@@ -43,6 +44,7 @@ export interface PieSliceLayout {
 /** One slice of a pie, with its own legend placement. */
 export declare class PieDataSet extends Dataset<PieSliceLayout> {
     readonly value: number;
+    readonly legendWidget: AnyWidget | null;
     readonly drawBorder: boolean;
     readonly drawSurface: boolean;
     readonly surfaceOpacity: number;
@@ -54,7 +56,7 @@ export declare class PieDataSet extends Dataset<PieSliceLayout> {
     readonly legendLineColor: Rgb;
     readonly legendOffset: number;
     readonly innerRadius: number;
-    constructor({ value, legend, color, borderColor, borderWidth, drawBorder, drawSurface, surfaceOpacity, offset, legendStyle, legendAlign, legendPosition, legendLineWidth, legendLineColor, legendOffset, innerRadius }: PieDataSetOptions);
+    constructor({ value, legend, legendWidget, color, borderColor, borderWidth, drawBorder, drawSurface, surfaceOpacity, offset, legendStyle, legendAlign, legendPosition, legendLineWidth, legendLineColor, legendOffset, innerRadius }: PieDataSetOptions);
     private isFullCircle;
     layout(context: RenderContext, frame: ChartFrame): PieSliceLayout;
     private appendSlice;

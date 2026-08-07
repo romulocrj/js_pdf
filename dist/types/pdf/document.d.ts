@@ -30,6 +30,8 @@ export interface SerializedPage {
     readonly graphicStates?: ReadonlyMap<string, PdfDict>;
     /** The direct shading-pattern dictionaries `content` selected. */
     readonly patterns?: ReadonlyMap<string, PdfDict>;
+    /** The direct shading dictionaries selected by an `sh` operator. */
+    readonly shadings?: ReadonlyMap<string, PdfDict>;
     /** The image resources `content` selected, by their page-local names. */
     readonly images?: ReadonlyMap<PdfImage, string>;
     /** Link and form annotations registered while the page was painted. */
@@ -113,7 +115,7 @@ export declare class PdfDocument {
      * wrote for that font — see `PdfCanvas.addFont`. A page that drew no text
      * passes nothing and gets no `/Resources` at all, as upstream does.
      */
-    addPage(format: PageSize, content: string | Uint8Array, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>, images?: ReadonlyMap<PdfImage, string>, annotations?: readonly PdfAnnotationSpec[]): PdfPage;
+    addPage(format: PageSize, content: string | Uint8Array, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>, shadings?: ReadonlyMap<string, PdfDict>, images?: ReadonlyMap<PdfImage, string>, annotations?: readonly PdfAnnotationSpec[]): PdfPage;
     addNavigation(outlines: readonly SerializedOutline[], pageMode: PdfPageMode, destinations?: readonly SerializedDestination[]): void;
     addPageLabels(labels: readonly SerializedPageLabel[]): void;
     save(): Uint8Array;

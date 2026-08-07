@@ -19,8 +19,10 @@
  * left here is the registry that hands out serial numbers and owns the object
  * list.
  *
- * PORT GAP: `PdfSettings` carries compression only. Upstream also threads
- * encryption, a verbose mode and a target PDF version through every object.
+ * SCOPE AND ARCHITECTURE: `PdfSettings` carries compression only. Encryption
+ * is explicitly outside this port's host-free runtime, verbose in-file
+ * diagnostics are replaced by a caller-installed sink, and the writer emits
+ * one fixed, broadly compatible PDF version rather than branching by version.
  */
 
 import type { PdfDataType } from './format/base.ts';
@@ -79,6 +81,9 @@ export interface SerializedPage {
 
   /** The direct shading-pattern dictionaries `content` selected. */
   readonly patterns?: ReadonlyMap<string, PdfDict>;
+
+  /** The direct shading dictionaries selected by an `sh` operator. */
+  readonly shadings?: ReadonlyMap<string, PdfDict>;
 
   /** The image resources `content` selected, by their page-local names. */
   readonly images?: ReadonlyMap<PdfImage, string>;
@@ -230,6 +235,7 @@ export class PdfDocument {
         ));
       }
       if (mask.patterns.size > 0) resources.set('/Pattern', new PdfDict(mask.patterns));
+      if (mask.shadings.size > 0) resources.set('/Shading', new PdfDict(mask.shadings));
       if (!resources.isEmpty) object.params.set('/Resources', resources);
       this.softMaskObjects.set(mask, object);
     }
@@ -267,6 +273,9 @@ export class PdfDocument {
     }
     if (appearance.patterns.size > 0) {
       resources.set('/Pattern', new PdfDict(appearance.patterns));
+    }
+    if (appearance.shadings.size > 0) {
+      resources.set('/Shading', new PdfDict(appearance.shadings));
     }
     if (!resources.isEmpty) object.params.set('/Resources', resources);
     return object;
@@ -311,6 +320,7 @@ export class PdfDocument {
     fonts: ReadonlyMap<PdfFont, string> = new Map(),
     graphicStates: ReadonlyMap<string, PdfDict> = new Map(),
     patterns: ReadonlyMap<string, PdfDict> = new Map(),
+    shadings: ReadonlyMap<string, PdfDict> = new Map(),
     images: ReadonlyMap<PdfImage, string> = new Map(),
     annotations: readonly PdfAnnotationSpec[] = []
   ): PdfPage {
@@ -335,6 +345,10 @@ export class PdfDocument {
 
     for (const [name, pattern] of patterns) {
       page.addPattern(name, pattern);
+    }
+
+    for (const [name, shading] of shadings) {
+      page.addShading(name, shading);
     }
 
     for (const [image, name] of images) {
@@ -449,6 +463,7 @@ export function serializePdf(
       page.fonts,
       page.graphicStates,
       page.patterns,
+      page.shadings,
       page.images,
       page.annotations
     );

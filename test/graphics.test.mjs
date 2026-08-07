@@ -15,6 +15,8 @@ import assert from 'node:assert/strict';
 
 import { PdfCanvas } from '../src/pdf/graphics.ts';
 import { PdfGraphicState } from '../src/pdf/graphic_state.ts';
+import { PdfBaseFunction } from '../src/pdf/obj/function.ts';
+import { PdfShading } from '../src/pdf/obj/shading.ts';
 import {
   composeMatrices,
   flipMatrix,
@@ -225,6 +227,24 @@ test('a graphic state reaches the page /Resources as an inline dictionary', () =
   assert.equal(dict.has('/ca'), true);
   assert.equal(dict.has('/CA'), false);
   assert.equal(dict.has('/BM'), true);
+});
+
+test('a direct shading is deduplicated and selected with the sh operator', () => {
+  const canvas = new PdfCanvas(842);
+  const shading = new PdfShading({
+    type: 'axial',
+    fn: PdfBaseFunction.colorsAndStops([[1, 0, 0], [0, 0, 1]]),
+    start: { x: 0, y: 0 },
+    end: { x: 100, y: 0 },
+    extendStart: true,
+    extendEnd: true
+  });
+
+  assert.equal(canvas.drawShading(shading), '/s1');
+  assert.equal(canvas.drawShading(shading), '/s1');
+  assert.equal(canvas.shadings.size, 1);
+  assert.match(canvas.shadings.get('/s1').toString(), /\/ShadingType 2/);
+  assert.equal(flat(canvas), '/s1 sh /s1 sh');
 });
 
 test('text spacing operators reset when later runs use defaults', () => {

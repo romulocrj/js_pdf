@@ -185,6 +185,7 @@ export abstract class SvgGradient extends SvgColor {
       fonts: maskCanvas.fonts,
       graphicStates: maskCanvas.graphicStates,
       patterns: maskCanvas.patterns,
+      shadings: maskCanvas.shadings,
       images: maskCanvas.images
     });
   }

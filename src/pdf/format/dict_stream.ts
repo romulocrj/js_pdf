@@ -20,7 +20,7 @@
  * deflate callback the caller supplied, the port calls its own compressor —
  * bare V8 has none to borrow. See `format/deflate.ts`.
  *
- * PORT GAP: no Ascii85. Upstream can wrap a binary stream in `/ASCII85Decode`
+ * SERIALIZATION CHOICE: no Ascii85. Upstream can wrap a binary stream in `/ASCII85Decode`
  * for hosts that need seven-bit output; the port always writes binary, which is
  * legal PDF and smaller. Encryption is out of scope per docs/ROADMAP.md.
  *

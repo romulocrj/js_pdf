@@ -4487,8 +4487,36 @@ const TtfTable = Object.freeze({
   glyf: "glyf",
   post: "post",
   os2: "OS/2",
-  cff: "CFF "
+  cff: "CFF ",
+  cblc: "CBLC",
+  cbdt: "CBDT"
 });
+
+class TtfBitmapInfo {
+  constructor(data, height, width, horizontalBearingX, horizontalBearingY, horizontalAdvance, ascent, descent) {
+    this.data = data;
+    this.height = height;
+    this.width = width;
+    this.horizontalBearingX = horizontalBearingX;
+    this.horizontalBearingY = horizontalBearingY;
+    this.horizontalAdvance = horizontalAdvance;
+    this.ascent = ascent;
+    this.descent = descent;
+  }
+  get metrics() {
+    const scale = 1 / this.height;
+    return new PdfFontMetrics({
+      bottom: this.horizontalBearingY * scale,
+      left: this.horizontalBearingX * scale,
+      top: (this.horizontalBearingY - this.height) * scale,
+      right: this.horizontalAdvance * scale,
+      ascent: this.ascent * scale,
+      descent: this.horizontalBearingY * scale,
+      advanceWidth: this.horizontalAdvance * scale,
+      leftBearing: this.horizontalBearingX * scale
+    });
+  }
+}
 
 const REQUIRED_TABLES = [ TtfTable.head, TtfTable.name, TtfTable.hmtx, TtfTable.hhea, TtfTable.cmap, TtfTable.maxp ];
 
@@ -4500,6 +4528,7 @@ class TtfParser {
     this.glyphOffsets = [];
     this.glyphSizes = [];
     this.glyphInfoMap = new Map;
+    this.bitmapInfoMap = new Map;
     this.bytes = bytes;
     this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const numTables = this.view.getUint16(4);
@@ -4517,6 +4546,9 @@ class TtfParser {
     if (this.tableOffsets.has(TtfTable.loca) && this.tableOffsets.has(TtfTable.glyf)) {
       this.parseIndexes();
       this.parseGlyphs();
+    }
+    if (this.tableOffsets.has(TtfTable.cblc) && this.tableOffsets.has(TtfTable.cbdt)) {
+      this.parseBitmaps();
     }
   }
   readTag(offset) {
@@ -4574,6 +4606,13 @@ class TtfParser {
   }
   get hasCff() {
     return this.tableOffsets.has(TtfTable.cff);
+  }
+  get isBitmap() {
+    return this.bitmapInfoMap.size > 0 && this.glyphOffsets.length === 0;
+  }
+  getBitmap(codePoint) {
+    const glyph = this.charToGlyphIndexMap.get(codePoint);
+    return glyph === undefined ? null : this.bitmapInfoMap.get(glyph) ?? null;
   }
   getNameID(nameID) {
     const basePosition = this.tableOffsets.get(TtfTable.name);
@@ -4855,6 +4894,46 @@ class TtfParser {
       data: this.bytes.subarray(start, offset),
       compounds: components
     };
+  }
+  parseBitmaps() {
+    const cblc = this.tableOffset(TtfTable.cblc);
+    const cbdt = this.tableOffset(TtfTable.cbdt);
+    const numberOfSizes = this.view.getUint32(cblc + 4);
+    let sizeOffset = cblc + 8;
+    for (let sizeIndex = 0; sizeIndex < numberOfSizes; sizeIndex++) {
+      const subtableArray = cblc + this.view.getUint32(sizeOffset);
+      const numberOfSubtables = this.view.getUint32(sizeOffset + 8);
+      const ascent = this.view.getInt8(sizeOffset + 12);
+      const descent = this.view.getInt8(sizeOffset + 13);
+      let arrayOffset = subtableArray;
+      for (let tableIndex = 0; tableIndex < numberOfSubtables; tableIndex++) {
+        const firstGlyph = this.view.getUint16(arrayOffset);
+        const lastGlyph = this.view.getUint16(arrayOffset + 2);
+        const subtable = subtableArray + this.view.getUint32(arrayOffset + 4);
+        const indexFormat = this.view.getUint16(subtable);
+        const imageFormat = this.view.getUint16(subtable + 2);
+        const imageData = cbdt + this.view.getUint32(subtable + 4);
+        if (indexFormat === 1 && imageFormat === 17) {
+          for (let glyph = firstGlyph; glyph <= lastGlyph; glyph++) {
+            const offsetIndex = glyph - firstGlyph;
+            const bitmap = imageData + this.view.getUint32(subtable + 8 + offsetIndex * 4);
+            const height = this.view.getUint8(bitmap);
+            const width = this.view.getUint8(bitmap + 1);
+            const bearingX = this.view.getInt8(bitmap + 2);
+            const bearingY = this.view.getInt8(bitmap + 3);
+            const advance = this.view.getUint8(bitmap + 4);
+            const dataLength = this.view.getUint32(bitmap + 5);
+            const dataStart = bitmap + 9;
+            const dataEnd = dataStart + dataLength;
+            if (height > 0 && width > 0 && dataEnd <= this.bytes.length) {
+              this.bitmapInfoMap.set(glyph, new TtfBitmapInfo(this.bytes.subarray(dataStart, dataEnd), height, width, bearingX, bearingY, advance, ascent, descent));
+            }
+          }
+        }
+        arrayOffset += 8;
+      }
+      sizeOffset += 48;
+    }
   }
 }
 
@@ -5829,6 +5908,7 @@ class PdfUnicodeCmap extends PdfObjectStream {
 
 class PdfTtfFont {
   constructor(bytes, {protect = false} = {}) {
+    this.isComposite = true;
     this.cmap = [ 0 ];
     this.cidByRune = new Map([ [ 0, 0 ] ]);
     this.font = new TtfParser(bytes);
@@ -5854,6 +5934,9 @@ class PdfTtfFont {
   }
   isRuneSupported(codePoint) {
     return this.font.charToGlyphIndexMap.has(codePoint);
+  }
+  getBitmap(codePoint) {
+    return this.font.getBitmap(codePoint);
   }
   glyphMetrics(codePoint) {
     const glyph = this.font.charToGlyphIndexMap.get(codePoint);
@@ -10653,2799 +10736,6 @@ class Directionality extends StatelessWidget {
   }
 }
 
-class InlineSpan {
-  constructor({style = null, baseline = 0, annotation = null} = {}) {
-    this.style = style;
-    this.baseline = assertFiniteNumber(Number(baseline), "baseline");
-    this.annotation = annotation;
-  }
-  toPlainText() {
-    let value = "";
-    this.visitChildren(span => {
-      if (span instanceof TextSpan && span.text !== null) value += span.text;
-      return true;
-    }, TextStyle.defaultStyle());
-    return value;
-  }
-}
-
-class TextSpan extends InlineSpan {
-  constructor({text = null, children = null, ...options} = {}) {
-    super(options);
-    this.text = text === null ? null : String(text);
-    this.children = children === null ? [] : [ ...children ];
-  }
-  copyWith(options = {}) {
-    return new TextSpan({
-      text: options.text ?? this.text,
-      children: options.children ?? this.children,
-      style: options.style ?? this.style,
-      baseline: options.baseline ?? this.baseline,
-      annotation: options.annotation ?? this.annotation
-    });
-  }
-  visitChildren(visitor, parentStyle, annotation = null) {
-    const style = parentStyle.merge(this.style);
-    const effectiveAnnotation = this.annotation ?? annotation;
-    if (this.text !== null && !visitor(this, style, effectiveAnnotation)) return false;
-    for (const child of this.children) {
-      if (!child.visitChildren(visitor, style, effectiveAnnotation)) return false;
-    }
-    return true;
-  }
-}
-
-class WidgetSpan extends InlineSpan {
-  constructor({child, ...options}) {
-    super(options);
-    this.child = child;
-  }
-  copyWith(options = {}) {
-    return new WidgetSpan({
-      child: this.child,
-      style: options.style ?? this.style,
-      baseline: options.baseline ?? this.baseline,
-      annotation: options.annotation ?? this.annotation
-    });
-  }
-  visitChildren(visitor, parentStyle, annotation = null) {
-    return visitor(this, parentStyle.merge(this.style), this.annotation ?? annotation);
-  }
-}
-
-function countSpaces(value) {
-  let count = 0;
-  for (const character of value) if (/\s/u.test(character)) count++;
-  return count;
-}
-
-function textWidth(style, value) {
-  return style.font.stringMetrics(value, style.fontSize, style.letterSpacing).advanceWidth + countSpaces(value) * style.wordSpacing;
-}
-
-function supportsRune(font, codePoint) {
-  const candidate = font;
-  return candidate.isRuneSupported?.(codePoint) ?? codePoint <= 255;
-}
-
-function decorationNames(style) {
-  const value = style.decoration ?? "none";
-  const values = Array.isArray(value) ? value : [ value ];
-  return values.filter(name => name !== "none");
-}
-
-function resolveStyle(context, style, baseline, scale, directFont = null) {
-  const fontSize = (style.fontSize ?? DEFAULT_FONT_SIZE) * scale;
-  const declaredFont = style.font;
-  const font = directFont ?? (declaredFont === null ? context.document.font : declaredFont.getFont(context));
-  return {
-    font,
-    fontSize,
-    color: style.color ?? [ 0, 0, 0 ],
-    lineAdvance: fontSize * (font.ascent - font.descent) * (style.height ?? DEFAULT_LINE_HEIGHT),
-    lineSpacing: (style.lineSpacing ?? 0) * scale,
-    letterSpacing: (style.letterSpacing ?? 0) * scale,
-    wordSpacing: (style.wordSpacing ?? 0) * scale,
-    baseline: baseline * scale,
-    background: style.background,
-    decorations: decorationNames(style),
-    decorationColor: style.decorationColor ?? style.color ?? [ 0, 0, 0 ],
-    decorationStyle: style.decorationStyle ?? "solid",
-    decorationThickness: style.decorationThickness ?? 1
-  };
-}
-
-function splitLongWord(value, maxWidth, style) {
-  const parts = [];
-  let current = "";
-  for (const character of value) {
-    const candidate = current + character;
-    if (current !== "" && textWidth(style, candidate) > maxWidth) {
-      parts.push(current);
-      current = character;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current !== "") parts.push(current);
-  return parts.length === 0 ? [ "" ] : parts;
-}
-
-function trimTrailingGaps(line) {
-  while (line.tokens[line.tokens.length - 1]?.kind === "gap") {
-    line.width -= line.tokens.pop()?.width ?? 0;
-  }
-}
-
-function positionLine(line, y, contentWidth, align, direction) {
-  let lineSpacing = line.emptyStyle.lineSpacing;
-  let ascent = line.emptyStyle.fontSize + Math.max(0, line.emptyStyle.baseline);
-  let descent = Math.max(0, line.emptyStyle.lineAdvance + lineSpacing - line.emptyStyle.fontSize - line.emptyStyle.baseline);
-  let minimumHeight = line.emptyStyle.lineAdvance + lineSpacing;
-  for (const token of line.tokens) {
-    lineSpacing = Math.max(lineSpacing, token.style.lineSpacing);
-    minimumHeight = Math.max(minimumHeight, token.style.lineAdvance + token.style.lineSpacing);
-    if (token.kind === "widget") {
-      ascent = Math.max(ascent, token.height + token.style.baseline);
-      descent = Math.max(descent, -token.style.baseline);
-    } else {
-      ascent = Math.max(ascent, token.style.fontSize + token.style.baseline);
-      descent = Math.max(descent, token.style.lineAdvance + token.style.lineSpacing - token.style.fontSize - token.style.baseline);
-    }
-  }
-  const height = Math.max(minimumHeight, ascent + descent);
-  const effectiveAlign = align === "start" ? direction === "rtl" ? "right" : "left" : align === "end" ? direction === "rtl" ? "left" : "right" : align;
-  let offset = 0;
-  if (effectiveAlign === "right") offset = contentWidth - line.width;
-  if (effectiveAlign === "center") offset = (contentWidth - line.width) / 2;
-  const gapCount = line.wrapped && effectiveAlign === "justify" ? line.tokens.filter(token => token.kind === "gap").length : 0;
-  const extraPerGap = gapCount === 0 ? 0 : Math.max(0, contentWidth - line.width) / gapCount;
-  const paintTokens = [];
-  for (const token of line.tokens) {
-    const previous = paintTokens[paintTokens.length - 1];
-    if (extraPerGap === 0 && token.kind !== "widget" && previous !== undefined && previous.kind !== "widget" && previous.style === token.style && previous.annotation === token.annotation) {
-      paintTokens[paintTokens.length - 1] = {
-        kind: "text",
-        text: previous.text + token.text,
-        width: previous.width + token.width,
-        style: token.style,
-        annotation: token.annotation
-      };
-    } else {
-      paintTokens.push(token);
-    }
-  }
-  let x = offset;
-  let accumulatedExtra = 0;
-  const runs = [];
-  for (const token of paintTokens) {
-    let runX = x + accumulatedExtra;
-    if (direction === "rtl") runX = contentWidth - runX - token.width;
-    const tokenBaseline = y + ascent - token.style.baseline;
-    const tokenY = token.kind === "widget" ? tokenBaseline - token.height : tokenBaseline - token.style.fontSize;
-    runs.push({
-      kind: token.kind,
-      text: token.kind === "widget" ? "" : token.text,
-      x: runX,
-      y: tokenY,
-      width: token.width,
-      height: token.kind === "widget" ? token.height : token.style.lineAdvance,
-      baseline: tokenBaseline,
-      style: token.style,
-      childBox: token.kind === "widget" ? token.childBox : null,
-      annotation: token.annotation
-    });
-    x += token.width;
-    if (token.kind === "gap") accumulatedExtra += extraPerGap;
-  }
-  const usedWidth = extraPerGap === 0 ? line.width : contentWidth;
-  return {
-    runs,
-    y,
-    width: usedWidth,
-    height,
-    lineSpacing,
-    wrapped: line.wrapped
-  };
-}
-
-function rebaseLines(lines, top) {
-  return lines.map(line => ({
-    ...line,
-    y: line.y - top,
-    runs: line.runs.map(run => ({
-      ...run,
-      y: run.y - top,
-      baseline: run.baseline - top
-    }))
-  }));
-}
-
-class RichText extends SpanningWidget {
-  constructor({text, textAlign = null, textDirection = null, softWrap = null, tightBounds = false, textScaleFactor = 1, maxLines = null, overflow = null, margin = 0}) {
-    super();
-    this.text = text;
-    this.textAlign = textAlign;
-    this.textDirection = textDirection;
-    this.softWrap = softWrap;
-    this.tightBounds = tightBounds;
-    this.textScaleFactor = assertFiniteNumber(Number(textScaleFactor), "textScaleFactor");
-    this.maxLines = maxLines;
-    this.overflow = overflow;
-    this.margin = normalizeInsets(margin);
-  }
-  initialSpanState() {
-    return {
-      lineIndex: 0
-    };
-  }
-  inputTokens(context, maxWidth) {
-    const result = [];
-    const scale = this.textScaleFactor;
-    const direction = this.textDirection ?? Directionality.of(context);
-    this.text.visitChildren((span, textStyle, annotation) => {
-      const baseStyle = resolveStyle(context, textStyle, span.baseline, scale);
-      if (span instanceof WidgetSpan) {
-        const childBox = span.child.layout(context, new BoxConstraints({
-          maxWidth,
-          maxHeight: Infinity
-        }));
-        result.push({
-          kind: "widget",
-          width: childBox.width,
-          height: childBox.height,
-          style: baseStyle,
-          childBox,
-          annotation
-        });
-        return true;
-      }
-      if (!(span instanceof TextSpan) || span.text === null) return true;
-      let group = "";
-      let groupFont = baseStyle.font;
-      const flush = () => {
-        if (group === "") return;
-        const style = groupFont === baseStyle.font ? baseStyle : {
-          ...baseStyle,
-          font: groupFont
-        };
-        for (const part of group.replace(/\r\n?/g, "\n").split(/(\n|[^\S\n]+|[^\s]+)/u)) {
-          if (part === "") continue;
-          if (part === "\n") result.push({
-            kind: "break",
-            style
-          }); else result.push({
-            kind: /^\s+$/u.test(part) ? "gap" : "text",
-            text: part,
-            width: textWidth(style, part),
-            style,
-            annotation
-          });
-        }
-        group = "";
-      };
-      const visualText = direction === "rtl" ? logicalToVisual(span.text) : span.text;
-      for (const character of visualText) {
-        const codePoint = character.codePointAt(0) ?? 0;
-        let font = baseStyle.font;
-        if (!supportsRune(font, codePoint)) {
-          for (const fallback of textStyle.fontFallback) {
-            const candidate = fallback.getFont(context);
-            if (supportsRune(candidate, codePoint)) {
-              font = candidate;
-              break;
-            }
-          }
-        }
-        if (font !== groupFont && group !== "") flush();
-        groupFont = font;
-        group += character;
-      }
-      flush();
-      return true;
-    }, context.theme.defaultTextStyle);
-    return result;
-  }
-  allLines(context, contentWidth, minContentWidth = 0) {
-    const align = this.textAlign ?? context.theme.textAlign ?? "left";
-    const softWrap = this.softWrap ?? context.theme.softWrap;
-    const maxLines = this.maxLines ?? context.theme.maxLines;
-    const tokens = this.inputTokens(context, contentWidth);
-    const fallbackStyle = resolveStyle(context, context.theme.defaultTextStyle, 0, this.textScaleFactor);
-    const raw = [];
-    let current = {
-      tokens: [],
-      width: 0,
-      wrapped: false,
-      emptyStyle: fallbackStyle
-    };
-    const pushLine = wrapped => {
-      trimTrailingGaps(current);
-      current.wrapped = wrapped;
-      raw.push(current);
-      current = {
-        tokens: [],
-        width: 0,
-        wrapped: false,
-        emptyStyle: current.emptyStyle
-      };
-    };
-    for (const token of tokens) {
-      current.emptyStyle = token.style;
-      if (token.kind === "break") {
-        pushLine(false);
-        continue;
-      }
-      if (token.kind === "gap" && current.tokens.length === 0) continue;
-      if (softWrap && current.tokens.length > 0 && current.width + token.width > contentWidth + 1e-5) {
-        pushLine(true);
-        if (token.kind === "gap") continue;
-      }
-      if (token.kind === "text" && softWrap && token.width > contentWidth + 1e-5) {
-        const pieces = splitLongWord(token.text, contentWidth, token.style);
-        for (let index = 0; index < pieces.length; index++) {
-          const piece = pieces[index] ?? "";
-          const part = {
-            ...token,
-            text: piece,
-            width: textWidth(token.style, piece)
-          };
-          if (current.tokens.length > 0) pushLine(true);
-          current.tokens.push(part);
-          current.width = part.width;
-          if (index < pieces.length - 1) pushLine(true);
-        }
-        continue;
-      }
-      current.tokens.push(token);
-      current.width += token.width;
-    }
-    if (current.tokens.length > 0 || raw.length === 0 || tokens[tokens.length - 1]?.kind === "break") pushLine(false);
-    const limited = maxLines === null ? raw : raw.slice(0, Math.max(1, maxLines));
-    const targetWidth = limited.some(line => line.wrapped || align === "justify") ? contentWidth : Math.max(0, minContentWidth, ...limited.map(line => line.width));
-    let y = 0;
-    const lines = [];
-    const textDirection = this.textDirection ?? Directionality.of(context);
-    for (const line of limited) {
-      const positioned = positionLine(line, y, targetWidth, align, textDirection);
-      lines.push(positioned);
-      y += positioned.height;
-    }
-    const last = lines[lines.length - 1];
-    if (last !== undefined && last.lineSpacing > 0) {
-      lines[lines.length - 1] = {
-        ...last,
-        height: Math.max(0, last.height - last.lineSpacing)
-      };
-    }
-    return lines;
-  }
-  fragment(context, constraints, lineIndex, spanning) {
-    const parent = BoxConstraints.from(constraints);
-    const contentWidth = Math.max(1, parent.maxWidth - this.margin.left - this.margin.right);
-    const minContentWidth = Math.max(0, parent.minWidth - this.margin.left - this.margin.right);
-    const all = this.allLines(context, contentWidth, minContentWidth);
-    const topMargin = lineIndex === 0 ? this.margin.top : 0;
-    const availableHeight = Math.max(0, parent.maxHeight - topMargin);
-    let end = lineIndex;
-    let height = 0;
-    while (end < all.length) {
-      const nextHeight = all[end]?.height ?? 0;
-      const finalBottom = end === all.length - 1 ? this.margin.bottom : 0;
-      if (spanning && height + nextHeight + finalBottom > availableHeight + 1e-5) break;
-      height += nextHeight;
-      end++;
-      if (!spanning && height > availableHeight + 1e-5) break;
-    }
-    if (!spanning) end = all.length;
-    const isFinal = end >= all.length;
-    const bottomMargin = isFinal ? this.margin.bottom : 0;
-    const lineTop = all[lineIndex]?.y ?? 0;
-    const selected = rebaseLines(all.slice(lineIndex, end), lineTop - topMargin);
-    const widest = Math.max(0, ...selected.map(line => line.width));
-    const naturalHeight = topMargin + selected.reduce((sum, line) => sum + line.height, 0) + bottomMargin;
-    const size = parent.constrain({
-      width: widest + this.margin.left + this.margin.right,
-      height: naturalHeight
-    });
-    const effectiveOverflow = this.overflow ?? context.theme.overflow;
-    return {
-      box: {
-        widget: this,
-        width: size.width,
-        height: size.height,
-        data: {
-          lines: selected,
-          contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
-          clip: effectiveOverflow === "clip" || naturalHeight > size.height + 1e-5,
-          textDirection: this.textDirection ?? Directionality.of(context)
-        }
-      },
-      nextState: {
-        lineIndex: end
-      },
-      hasMore: end < all.length
-    };
-  }
-  layout(context, constraints) {
-    return this.fragment(context, constraints, 0, false).box;
-  }
-  layoutSpan(context, constraints, state) {
-    return this.fragment(context, constraints, state.lineIndex, true);
-  }
-  paint(context, box) {
-    const {canvas} = context;
-    if (box.data.clip) {
-      canvas.saveContext();
-      canvas.drawRect(box.x, canvas.pageHeight - box.y - box.height, box.width, box.height);
-      canvas.clipPath();
-    }
-    for (const line of box.data.lines) {
-      for (const run of line.runs) {
-        const x = box.x + this.margin.left + run.x;
-        const y = box.y + run.y;
-        if (run.annotation !== null && run.width > 0 && run.height > 0) {
-          run.annotation.build(context, {
-            x,
-            y,
-            width: run.width,
-            height: run.height
-          });
-        }
-        if (run.style.background !== null && run.width > 0) {
-          run.style.background.paint(context, x, y, run.width, run.height, "all", box.data.textDirection);
-        }
-      }
-    }
-    for (const line of box.data.lines) {
-      for (const run of line.runs) {
-        const x = box.x + this.margin.left + run.x;
-        if (run.kind === "text") {
-          canvas.text(run.text, x, box.y + run.baseline, {
-            font: run.style.font,
-            fontSize: run.style.fontSize,
-            color: run.style.color,
-            letterSpacing: run.style.letterSpacing,
-            wordSpacing: run.style.wordSpacing
-          });
-        } else if (run.kind === "widget" && run.childBox !== null) {
-          run.childBox.widget.paint(context, {
-            ...run.childBox,
-            x,
-            y: box.y + run.y
-          });
-        }
-      }
-    }
-    for (const line of box.data.lines) {
-      for (const run of line.runs) {
-        if (run.style.decorations.length === 0 || run.width <= 0) continue;
-        const x = box.x + this.margin.left + run.x;
-        const width = Math.max(.25, run.style.fontSize * .05 * run.style.decorationThickness);
-        for (const decoration of run.style.decorations) {
-          const top = decoration === "underline" ? box.y + run.baseline + run.style.fontSize * .08 : decoration === "overline" ? box.y + run.baseline - run.style.fontSize : box.y + run.baseline - run.style.fontSize * .35;
-          canvas.line(x, top, x + run.width, top, run.style.decorationColor, width);
-          if (run.style.decorationStyle === "double") {
-            const gap = Math.max(width * 2, run.style.fontSize * .04);
-            canvas.line(x, top + gap, x + run.width, top + gap, run.style.decorationColor, width);
-          }
-        }
-      }
-    }
-    if (box.data.clip) canvas.restoreContext();
-  }
-}
-
-class Text extends RichText {
-  constructor(value, {style = undefined, fontSize = undefined, lineHeight = undefined, color = undefined, align = undefined, textAlign = undefined, textDirection = null, softWrap = undefined, tightBounds = false, textScaleFactor = 1, margin = 0, maxLines = undefined, overflow = undefined, font = undefined} = {}) {
-    const overrides = new TextStyle({
-      color: color === undefined ? null : normalizeColor(color),
-      font: font === undefined ? null : undefined,
-      fontSize: fontSize === undefined ? null : assertFiniteNumber(Number(fontSize), "fontSize"),
-      height: lineHeight === undefined ? null : assertFiniteNumber(Number(lineHeight), "lineHeight")
-    });
-    const merged = (style ?? new TextStyle).merge(overrides);
-    super({
-      text: new TextSpan({
-        text: String(value),
-        style: merged
-      }),
-      textAlign: textAlign ?? align ?? null,
-      textDirection,
-      softWrap: softWrap ?? null,
-      tightBounds,
-      textScaleFactor,
-      maxLines: maxLines ?? null,
-      overflow: overflow ?? null,
-      margin
-    });
-    this.value = String(value);
-    this.directFont = font ?? null;
-  }
-  inputTokens(context, maxWidth) {
-    if (this.directFont === null) return super.inputTokens(context, maxWidth);
-    const tokens = super.inputTokens(context, maxWidth);
-    return tokens.map(token => ({
-      ...token,
-      style: {
-        ...token.style,
-        font: this.directFont
-      }
-    }));
-  }
-}
-
-class Header extends StatelessWidget {
-  constructor({level = 1, text = null, child = null, decoration = null, margin = undefined, padding = undefined, textStyle = null, title = undefined, outlineColor = null, outlineStyle = "normal"} = {}) {
-    super();
-    if (!Number.isInteger(level) || level < 0 || level > 5) {
-      throw new RangeError("Header.level must be an integer from 0 through 5");
-    }
-    if (child === null && text === null) throw new Error("Header needs text or a child");
-    this.level = level;
-    this.text = text;
-    this.child = child;
-    this.decoration = decoration;
-    this.margin = margin;
-    this.padding = padding;
-    this.textStyle = textStyle;
-    this.title = title === undefined ? text : title;
-    this.outlineColor = outlineColor === null ? null : normalizeColor(outlineColor);
-    this.outlineStyle = outlineStyle;
-  }
-  build(context) {
-    const millimeter = PageUnit.mm;
-    let margin = this.margin;
-    let padding = this.padding;
-    let decoration = this.decoration;
-    let style = this.textStyle;
-    if (this.level === 0) {
-      margin ?? (margin = {
-        bottom: 5 * millimeter
-      });
-      padding ?? (padding = {
-        bottom: millimeter
-      });
-      decoration ?? (decoration = new BoxDecoration({
-        border: new Border({
-          bottom: new BorderSide
-        })
-      }));
-      style ?? (style = context.theme.header0);
-    } else if (this.level === 1) {
-      margin ?? (margin = {
-        top: 3 * millimeter,
-        bottom: 5 * millimeter
-      });
-      decoration ?? (decoration = new BoxDecoration({
-        border: new Border({
-          bottom: new BorderSide({
-            width: .2
-          })
-        })
-      }));
-      style ?? (style = context.theme.header1);
-    } else {
-      margin ?? (margin = {
-        top: 2 * millimeter,
-        bottom: 4 * millimeter
-      });
-      style ?? (style = [ context.theme.header0, context.theme.header1, context.theme.header2, context.theme.header3, context.theme.header4, context.theme.header5 ][this.level] ?? context.theme.header5);
-    }
-    return new Container({
-      alignment: "topLeft",
-      margin: margin ?? 0,
-      padding: padding ?? 0,
-      decoration,
-      child: this.child ?? new Text(this.text ?? "", {
-        style
-      })
-    });
-  }
-  paint(context, box) {
-    if (this.title !== null) {
-      context.document.registerOutline({
-        title: this.title,
-        level: this.level,
-        pageNumber: context.pageNumber,
-        y: context.pageFormat.height - box.y,
-        color: this.outlineColor,
-        style: this.outlineStyle
-      });
-    }
-    super.paint(context, box);
-  }
-}
-
-class Paragraph extends StatelessWidget {
-  constructor({text = "", textAlign = "justify", style = null, margin = {
-    bottom: 5 * PageUnit.mm
-  }, padding = 0} = {}) {
-    super();
-    this.text = text ?? "";
-    this.textAlign = textAlign;
-    this.style = style;
-    this.margin = margin;
-    this.padding = padding;
-  }
-  build(context) {
-    return new Container({
-      margin: this.margin,
-      padding: this.padding,
-      child: new Text(this.text, {
-        textAlign: this.textAlign,
-        style: this.style ?? context.theme.paragraphStyle,
-        overflow: "span"
-      })
-    });
-  }
-}
-
-class Bullet extends StatelessWidget {
-  constructor({text = null, textAlign = "left", style = null, margin = {
-    bottom: 2 * PageUnit.mm
-  }, padding = 0, bulletMargin = {
-    top: 1.5 * PageUnit.mm,
-    left: 5 * PageUnit.mm,
-    right: 2 * PageUnit.mm
-  }, bulletSize = 2 * PageUnit.mm, bulletShape = "circle", bulletColor = "#000000"} = {}) {
-    super();
-    this.text = text;
-    this.textAlign = textAlign;
-    this.style = style;
-    this.margin = margin;
-    this.padding = padding;
-    this.bulletMargin = bulletMargin;
-    this.bulletSize = Number(bulletSize);
-    this.bulletShape = bulletShape;
-    this.bulletColor = normalizeColor(bulletColor);
-  }
-  build(context) {
-    return new Container({
-      margin: this.margin,
-      padding: this.padding,
-      child: new Row({
-        crossAxisAlignment: "start",
-        children: [ new Container({
-          width: this.bulletSize,
-          height: this.bulletSize,
-          margin: this.bulletMargin,
-          decoration: new BoxDecoration({
-            color: this.bulletColor,
-            shape: this.bulletShape
-          })
-        }), new Expanded({
-          child: this.text === null ? new SizedBox : new Text(this.text, {
-            textAlign: this.textAlign,
-            style: context.theme.bulletStyle.merge(this.style)
-          })
-        }) ]
-      })
-    });
-  }
-}
-
-class TableOfContent extends StatelessWidget {
-  constructor({indent = 10, gap = 8, textStyle = null} = {}) {
-    super();
-    this.indent = Number(indent);
-    this.gap = Number(gap);
-    this.textStyle = textStyle;
-  }
-  build(context) {
-    context.document.requestOutlineRerender();
-    const rows = context.document.outlines.map(entry => new Link({
-      destination: entry.anchor,
-      child: new Padding({
-        padding: {
-          bottom: 2
-        },
-        child: new Row({
-          children: [ new SizedBox({
-            width: this.indent * entry.level
-          }), new Text(entry.title, {
-            style: this.textStyle ?? undefined
-          }), new SizedBox({
-            width: this.gap
-          }), new Expanded({
-            child: new Divider({
-              borderStyle: "dotted",
-              thickness: .2
-            })
-          }), new SizedBox({
-            width: this.gap
-          }), new Text(String(entry.page), {
-            style: this.textStyle ?? undefined
-          }) ]
-        })
-      })
-    }));
-    return new Column({
-      crossAxisAlignment: "start",
-      mainAxisSize: "min",
-      children: rows
-    });
-  }
-}
-
-class Watermark extends StatelessWidget {
-  constructor({child, fit = "contain", angle = 0}) {
-    super();
-    this.child = child;
-    this.fit = fit;
-    this.angle = Number(angle);
-  }
-  static text(text, {style = null, fit = "contain", angle = Math.PI / 4} = {}) {
-    return new Watermark({
-      fit,
-      angle,
-      child: new Text(text, {
-        style: style ?? new TextStyle({
-          color: "#eeeeee",
-          fontWeight: "bold"
-        })
-      })
-    });
-  }
-  build(_context) {
-    return new LayoutBuilder({
-      builder: (_context, constraints) => new SizedBox({
-        width: constraints.maxWidth,
-        height: constraints.maxHeight,
-        child: new FittedBox({
-          fit: this.fit,
-          child: new Transform({
-            rotateBox: this.angle,
-            child: this.child
-          })
-        })
-      })
-    });
-  }
-}
-
-class Footer extends StatelessWidget {
-  constructor({leading = null, title = null, trailing = null, margin = 0, padding = 0, decoration = null} = {}) {
-    super();
-    this.leading = leading;
-    this.title = title;
-    this.trailing = trailing;
-    this.margin = margin;
-    this.padding = padding;
-    this.decoration = decoration;
-  }
-  build(_context) {
-    return new Container({
-      margin: this.margin,
-      padding: this.padding,
-      decoration: this.decoration,
-      child: new Row({
-        mainAxisSize: "max",
-        mainAxisAlignment: "spaceBetween",
-        children: [ this.leading ?? new SizedBox, this.title ?? new SizedBox, this.trailing ?? new SizedBox ]
-      })
-    });
-  }
-}
-
-class Positioned extends Widget {
-  constructor({left = null, top = null, right = null, bottom = null, width = null, height = null, child}) {
-    super();
-    this.left = left === null ? null : Number(left);
-    this.top = top === null ? null : Number(top);
-    this.right = right === null ? null : Number(right);
-    this.bottom = bottom === null ? null : Number(bottom);
-    this.width = width === null ? null : Math.max(0, Number(width));
-    this.height = height === null ? null : Math.max(0, Number(height));
-    this.child = child;
-  }
-  static fill({left = 0, top = 0, right = 0, bottom = 0, child}) {
-    return new Positioned({
-      left,
-      top,
-      right,
-      bottom,
-      child
-    });
-  }
-  static directional({textDirection, start = null, top = null, end = null, bottom = null, width = null, height = null, child}) {
-    return new Positioned({
-      left: textDirection === "rtl" ? end : start,
-      right: textDirection === "rtl" ? start : end,
-      top,
-      bottom,
-      width,
-      height,
-      child
-    });
-  }
-  layout(context, constraints) {
-    const parent = BoxConstraints.from(constraints).tighten({
-      width: this.width,
-      height: this.height
-    });
-    const childBox = this.child.layout(context, parent);
-    return {
-      widget: this,
-      width: childBox.width,
-      height: childBox.height,
-      data: {
-        childBox
-      }
-    };
-  }
-  paint(context, box) {
-    const {childBox} = box.data;
-    childBox.widget.paint(context, {
-      ...childBox,
-      x: box.x,
-      y: box.y
-    });
-  }
-}
-
-class PositionedDirectional extends Positioned {
-  constructor({start = null, top = null, end = null, bottom = null, width = null, height = null, child, textDirection = "ltr"}) {
-    super({
-      left: textDirection === "rtl" ? end : start,
-      right: textDirection === "rtl" ? start : end,
-      top,
-      bottom,
-      width,
-      height,
-      child
-    });
-    this.start = start;
-    this.end = end;
-    this.textDirection = textDirection;
-  }
-  static fill({start = 0, top = 0, end = 0, bottom = 0, child, textDirection = "ltr"}) {
-    return new PositionedDirectional({
-      start,
-      top,
-      end,
-      bottom,
-      child,
-      textDirection
-    });
-  }
-}
-
-class Stack extends Widget {
-  constructor({alignment = Alignment.topLeft, fit = "loose", overflow = "clip", children = []} = {}) {
-    super();
-    this.alignment = resolveBasicAlignment(alignment);
-    if (![ "loose", "expand", "passthrough" ].includes(fit)) {
-      throw new TypeError(`Unknown StackFit: ${fit}`);
-    }
-    if (overflow !== "visible" && overflow !== "clip") {
-      throw new TypeError(`Unknown Stack overflow: ${overflow}`);
-    }
-    this.fit = fit;
-    this.overflow = overflow;
-    this.children = children;
-  }
-  layout(context, incoming) {
-    const constraints = BoxConstraints.from(incoming);
-    const measured = new Map;
-    let width = constraints.minWidth;
-    let height = constraints.minHeight;
-    let hasNonPositioned = false;
-    const nonPositionedConstraints = this.fit === "loose" ? constraints.loosen() : this.fit === "expand" ? BoxConstraints.tight(constraints.biggest) : constraints;
-    for (const child of this.children) {
-      if (child instanceof Positioned) continue;
-      hasNonPositioned = true;
-      const childBox = child.layout(context, nonPositionedConstraints);
-      measured.set(child, childBox);
-      width = Math.max(width, childBox.width);
-      height = Math.max(height, childBox.height);
-    }
-    const size = hasNonPositioned ? constraints.constrain({
-      width,
-      height
-    }) : constraints.constrain({
-      width: constraints.hasBoundedWidth ? constraints.maxWidth : 0,
-      height: constraints.hasBoundedHeight ? constraints.maxHeight : 0
-    });
-    const placed = [];
-    for (const child of this.children) {
-      if (!(child instanceof Positioned)) {
-        const childBox = measured.get(child);
-        const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
-        placed.push({
-          box: childBox,
-          dx: offset.dx,
-          dy: offset.dy
-        });
-        continue;
-      }
-      let positionedConstraints = new BoxConstraints;
-      const tightWidth = child.left !== null && child.right !== null ? Math.max(0, size.width - child.left - child.right) : child.width;
-      const tightHeight = child.top !== null && child.bottom !== null ? Math.max(0, size.height - child.top - child.bottom) : child.height;
-      positionedConstraints = positionedConstraints.tighten({
-        width: tightWidth,
-        height: tightHeight
-      });
-      const childBox = child.layout(context, positionedConstraints);
-      const aligned = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
-      const dx = child.left !== null ? child.left : child.right !== null ? size.width - child.right - childBox.width : aligned.dx;
-      const dy = child.top !== null ? child.top : child.bottom !== null ? size.height - child.bottom - childBox.height : aligned.dy;
-      placed.push({
-        box: childBox,
-        dx,
-        dy
-      });
-    }
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: {
-        children: placed
-      }
-    };
-  }
-  paint(context, box) {
-    if (this.overflow === "clip") {
-      context.canvas.saveContext();
-      context.canvas.drawRect(box.x, context.canvas.pageHeight - box.y - box.height, box.width, box.height);
-      context.canvas.clipPath();
-    }
-    for (const child of box.data.children) {
-      child.box.widget.paint(context, {
-        ...child.box,
-        x: box.x + child.dx,
-        y: box.y + child.dy
-      });
-    }
-    if (this.overflow === "clip") context.canvas.restoreContext();
-  }
-}
-
-const CHART_BLACK = "#000000";
-
-const CHART_WHITE = "#ffffff";
-
-const CHART_BLUE = "#2196f3";
-
-function drawWidget(context, widget, x, top, alignment = null, constraints = new BoxConstraints) {
-  const box = widget.layout(context, constraints);
-  const dx = alignment === null ? 0 : (1 + alignment.x) * box.width / 2;
-  const dy = alignment === null ? 0 : (1 - alignment.y) * box.height / 2;
-  widget.paint(context, {
-    ...box,
-    x: x - dx,
-    y: top - dy
-  });
-}
-
-class ChartFrame {
-  constructor(originX, originPdfY, originTop) {
-    this.originX = originX;
-    this.originPdfY = originPdfY;
-    this.originTop = originTop;
-  }
-  px(x) {
-    return this.originX + x;
-  }
-  py(y) {
-    return this.originPdfY + y;
-  }
-  top(y) {
-    return this.originTop - y;
-  }
-}
-
-function chartOf(context) {
-  const scope = context.chart;
-  if (scope === undefined || scope === null) {
-    throw new Error("This widget must be placed inside a Chart");
-  }
-  return scope;
-}
-
-class Dataset {
-  constructor({legend = null, color = null, borderColor = null, borderWidth = .5} = {}) {
-    this.legend = legend === null || legend === undefined ? null : String(legend);
-    this.color = color === null || color === undefined ? null : normalizeColor(color);
-    this.borderColor = borderColor === null || borderColor === undefined ? null : normalizeColor(borderColor);
-    this.borderWidth = Number(borderWidth);
-  }
-  paintBackground(_context, _frame, _data) {}
-  paint(_context, _frame, _data) {}
-  paintForeground(_context, _frame, _data) {}
-  legendShape(_context) {
-    return new Container({
-      decoration: new BoxDecoration({
-        color: this.color,
-        border: Border.all({
-          color: this.borderColor ?? CHART_BLACK,
-          width: this.borderWidth
-        })
-      })
-    });
-  }
-}
-
-class ChartGrid extends Widget {
-  gridSize(constraints) {
-    return BoxConstraints.from(constraints).biggest;
-  }
-}
-
-class Chart extends Widget {
-  static of(context) {
-    return chartOf(context);
-  }
-  constructor({grid, datasets, overlay = null, title = null, bottom = null, left = null, right = null}) {
-    super();
-    this.grid = grid;
-    this.datasets = [ ...datasets ];
-    this.overlay = overlay;
-    this.title = title;
-    this.bottom = bottom;
-    this.left = left;
-    this.right = right;
-  }
-  computeSize(constraints) {
-    const parent = BoxConstraints.from(constraints);
-    if (parent.isTight) return parent.smallest;
-    const aspectRatio = 1;
-    let width = parent.maxWidth;
-    let height = parent.maxHeight;
-    if (!Number.isFinite(width)) width = height * aspectRatio;
-    if (!Number.isFinite(height)) height = width * aspectRatio;
-    return parent.constrain({
-      width,
-      height
-    });
-  }
-  scope(context) {
-    const scoped = {
-      ...context,
-      chart: {
-        grid: this.grid,
-        datasets: this.datasets
-      }
-    };
-    return scoped;
-  }
-  build() {
-    const stack = new Stack({
-      overflow: "visible",
-      children: this.overlay === null ? [ this.grid ] : [ this.grid, this.overlay ]
-    });
-    const row = [];
-    if (this.left !== null) row.push(this.left);
-    row.push(new Expanded({
-      child: stack
-    }));
-    if (this.right !== null) row.push(this.right);
-    const column = [];
-    if (this.title !== null) column.push(this.title);
-    column.push(new Expanded({
-      child: new Row({
-        children: row
-      })
-    }));
-    if (this.bottom !== null) column.push(this.bottom);
-    return new Column({
-      children: column
-    });
-  }
-  layout(context, constraints) {
-    const size = this.computeSize(constraints);
-    const childBox = this.build().layout(this.scope(context), BoxConstraints.tight(size));
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: {
-        childBox
-      }
-    };
-  }
-  paint(context, box) {
-    const {childBox} = box.data;
-    childBox.widget.paint(this.scope(context), {
-      ...childBox,
-      x: box.x,
-      y: box.y
-    });
-  }
-}
-
-class CartesianFrame extends ChartFrame {
-  constructor(xAxis, yAxis, xLayout, yLayout, gridBox, originX = 0, originPdfY = 0, originTop = 0) {
-    super(originX, originPdfY, originTop);
-    this.xAxis = xAxis;
-    this.yAxis = yAxis;
-    this.xLayout = xLayout;
-    this.yLayout = yLayout;
-    this.gridBox = gridBox;
-  }
-  get xAxisOffset() {
-    return this.xLayout.axisPosition;
-  }
-  get yAxisOffset() {
-    return this.yLayout.axisPosition;
-  }
-  toChart(point) {
-    return {
-      x: this.xAxis.toChart(point.x, this.xLayout),
-      y: this.yAxis.toChart(point.y, this.yLayout)
-    };
-  }
-  withOrigin(originX, originPdfY, originTop) {
-    return new CartesianFrame(this.xAxis, this.yAxis, this.xLayout, this.yLayout, this.gridBox, originX, originPdfY, originTop);
-  }
-}
-
-class CartesianGrid extends ChartGrid {
-  constructor({xAxis, yAxis}) {
-    super();
-    this.xAxis = xAxis;
-    this.yAxis = yAxis;
-  }
-  layout(context, constraints) {
-    const datasets = chartOf(context).datasets;
-    const size = this.gridSize(constraints);
-    let x = {
-      axisPosition: 0,
-      crossAxisPosition: 0,
-      marginEnd: this.xAxis.marginEnd
-    };
-    let y = {
-      axisPosition: 0,
-      crossAxisPosition: 0,
-      marginEnd: this.yAxis.marginEnd
-    };
-    let xLayout = this.xAxis.layout(context, "horizontal", size, x);
-    let yLayout = this.yAxis.layout(context, "vertical", size, y);
-    let count = 5;
-    while (count-- > 0) {
-      x = {
-        axisPosition: Math.max(x.axisPosition, y.crossAxisPosition),
-        crossAxisPosition: y.axisPosition,
-        marginEnd: x.marginEnd
-      };
-      xLayout = this.xAxis.layout(context, "horizontal", size, x);
-      x = {
-        axisPosition: xLayout.axisPosition,
-        crossAxisPosition: xLayout.crossAxisPosition,
-        marginEnd: xLayout.marginEnd
-      };
-      y = {
-        axisPosition: Math.max(y.axisPosition, x.crossAxisPosition),
-        crossAxisPosition: x.axisPosition,
-        marginEnd: y.marginEnd
-      };
-      yLayout = this.yAxis.layout(context, "vertical", size, y);
-      y = {
-        axisPosition: yLayout.axisPosition,
-        crossAxisPosition: yLayout.crossAxisPosition,
-        marginEnd: yLayout.marginEnd
-      };
-      if (y.crossAxisPosition === x.axisPosition && x.crossAxisPosition === y.axisPosition) break;
-    }
-    const left = yLayout.axisPosition;
-    const bottom = xLayout.axisPosition;
-    const gridBox = {
-      left,
-      bottom,
-      width: size.width - left,
-      height: size.height - bottom
-    };
-    const frame = new CartesianFrame(this.xAxis, this.yAxis, xLayout, yLayout, gridBox);
-    const datasetData = datasets.map(dataset => dataset.layout(context, frame));
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: {
-        frame,
-        datasetData,
-        width: size.width,
-        height: size.height
-      }
-    };
-  }
-  paint(context, box) {
-    const datasets = chartOf(context).datasets;
-    const canvas = context.canvas;
-    const bottom = box.y + box.height;
-    const frame = box.data.frame.withOrigin(box.x, canvas.toPdfY(bottom), bottom);
-    this.clip(context, frame);
-    datasets.forEach((dataset, index) => dataset.paintBackground(context, frame, box.data.datasetData[index]));
-    canvas.restoreContext();
-    this.xAxis.paintBackground(context, frame, frame.xLayout);
-    this.yAxis.paintBackground(context, frame, frame.yLayout);
-    this.clip(context, frame);
-    datasets.forEach((dataset, index) => dataset.paint(context, frame, box.data.datasetData[index]));
-    canvas.restoreContext();
-    this.xAxis.paint(context, frame, frame.xLayout);
-    this.yAxis.paint(context, frame, frame.yLayout);
-    datasets.forEach((dataset, index) => dataset.paintForeground(context, frame, box.data.datasetData[index]));
-  }
-  clip(context, frame) {
-    const grid = frame.gridBox;
-    context.canvas.saveContext();
-    context.canvas.drawRect(frame.px(grid.left), frame.py(grid.bottom), grid.width, grid.height);
-    context.canvas.clipPath();
-  }
-}
-
-class PointChartValue {
-  constructor(x, y) {
-    this.x = assertFiniteNumber(Number(x), "x");
-    this.y = assertFiniteNumber(Number(y), "y");
-  }
-  get point() {
-    return {
-      x: this.x,
-      y: this.y
-    };
-  }
-}
-
-class PointDataSet extends Dataset {
-  constructor({data, pointSize = 3, drawPoints = true, shape = null, buildValue = null, valuePosition = "auto", color = CHART_BLUE, borderColor = null, borderWidth = 1.5, legend = null}) {
-    super({
-      legend,
-      color,
-      borderColor,
-      borderWidth
-    });
-    this.data = [ ...data ];
-    this.pointSize = Number(pointSize);
-    this.drawPoints = Boolean(drawPoints);
-    this.shape = shape;
-    this.buildValue = buildValue;
-    this.valuePosition = valuePosition;
-  }
-  get delta() {
-    return this.pointSize * .5;
-  }
-  layout(_context, _frame) {
-    return null;
-  }
-  automaticValuePosition(point, size, _previous, _next, box) {
-    if (point.x - size.width / 2 < box.left) return "right";
-    if (point.x + size.width / 2 > box.left + box.width) return "left";
-    if (point.y + size.height + this.delta > box.bottom + box.height) return "bottom";
-    return "top";
-  }
-  paintForeground(context, frame, _data) {
-    if (this.data.length === 0) return;
-    const canvas = context.canvas;
-    if (this.drawPoints) {
-      if (this.shape === null) {
-        for (const value of this.data) {
-          const p = frame.toChart(value.point);
-          canvas.drawEllipse(frame.px(p.x), frame.py(p.y), this.pointSize, this.pointSize);
-        }
-        canvas.setColor(this.color ?? CHART_BLUE);
-        canvas.fillPath();
-      } else {
-        for (const value of this.data) {
-          const p = frame.toChart(value.point);
-          drawWidget(context, new SizedBox({
-            width: this.pointSize * 2,
-            height: this.pointSize * 2,
-            child: this.shape(context)
-          }), frame.px(p.x), frame.top(p.y), Alignment.center);
-        }
-      }
-    }
-    if (this.buildValue === null) return;
-    const box = frame instanceof CartesianFrame ? frame.gridBox : {
-      left: 0,
-      bottom: 0,
-      width: 0,
-      height: 0
-    };
-    let previous = null;
-    let index = 1;
-    for (const value of this.data) {
-      const p = frame.toChart(value.point);
-      const measured = this.buildValue(context, value).layout(context, new BoxConstraints);
-      const size = {
-        width: measured.width,
-        height: measured.height
-      };
-      let position = this.valuePosition;
-      if (position === "auto") {
-        const next = index < this.data.length ? frame.toChart(this.data[index++].point) : null;
-        position = this.automaticValuePosition(p, size, previous, next, box);
-      }
-      let offset;
-      switch (position) {
-       case "left":
-        offset = {
-          x: p.x - size.width / 2 - this.pointSize - this.delta,
-          y: p.y
-        };
-        break;
-
-       case "top":
-        offset = {
-          x: p.x,
-          y: p.y + size.height / 2 + this.pointSize + this.delta
-        };
-        break;
-
-       case "right":
-        offset = {
-          x: p.x + size.width / 2 + this.pointSize + this.delta,
-          y: p.y
-        };
-        break;
-
-       case "bottom":
-        offset = {
-          x: p.x,
-          y: p.y - size.height / 2 - this.pointSize - this.delta
-        };
-        break;
-
-       default:
-        offset = p;
-        break;
-      }
-      drawWidget(context, this.buildValue(context, value), frame.px(offset.x), frame.top(offset.y), Alignment.center);
-      previous = p;
-    }
-  }
-  legendShape(context) {
-    return this.shape === null ? super.legendShape(context) : this.shape(context);
-  }
-}
-
-class BarDataSet extends PointDataSet {
-  constructor({data, legend = null, borderColor = null, borderWidth = 1.5, color = CHART_BLUE, drawBorder = null, drawSurface = true, surfaceOpacity = 1, width = 10, offset = 0, axis = "horizontal", pointColor = null, pointSize = 3, drawPoints = false, shape = null, buildValue = null, valuePosition = "auto"}) {
-    super({
-      data,
-      legend,
-      color: pointColor ?? color,
-      borderColor,
-      borderWidth,
-      pointSize,
-      drawPoints,
-      shape,
-      buildValue,
-      valuePosition
-    });
-    this.surfaceColor = normalizeColor(color);
-    const border = normalizeColor(borderColor ?? CHART_BLACK);
-    this.drawBorder = drawBorder ?? (borderColor !== null && borderColor !== undefined && (border[0] !== this.surfaceColor[0] || border[1] !== this.surfaceColor[1] || border[2] !== this.surfaceColor[2]));
-    if (!this.drawBorder && !drawSurface) {
-      throw new Error("BarDataSet must draw its surface or its border");
-    }
-    this.drawSurface = Boolean(drawSurface);
-    this.surfaceOpacity = Number(surfaceOpacity);
-    this.barWidth = Number(width);
-    this.offset = Number(offset);
-    this.axis = axis;
-  }
-  legendShape(context) {
-    if (this.shape !== null) return this.shape(context);
-    return new Container({
-      decoration: new BoxDecoration({
-        color: this.surfaceColor,
-        border: Border.all({
-          color: this.borderColor ?? CHART_BLACK,
-          width: this.borderWidth
-        })
-      })
-    });
-  }
-  drawBar(context, frame, value) {
-    const canvas = context.canvas;
-    const cartesian = frame instanceof CartesianFrame ? frame : null;
-    if (this.axis === "horizontal") {
-      const base = cartesian === null ? 0 : cartesian.xAxisOffset;
-      const p = frame.toChart(value.point);
-      const x = p.x + this.offset - this.barWidth / 2;
-      canvas.drawRect(frame.px(x), frame.py(base), this.barWidth, p.y - base);
-      return;
-    }
-    const base = cartesian === null ? 0 : cartesian.yAxisOffset;
-    const p = frame.toChart(value.point);
-    const y = p.y + this.offset - this.barWidth / 2;
-    canvas.drawRect(frame.px(base), frame.py(y), p.x - base, this.barWidth);
-  }
-  paint(context, frame, _data) {
-    if (this.data.length === 0) return;
-    const canvas = context.canvas;
-    if (this.drawSurface) {
-      for (const value of this.data) this.drawBar(context, frame, value);
-      if (this.surfaceOpacity !== 1) {
-        canvas.saveContext();
-        canvas.setGraphicState(new PdfGraphicState({
-          opacity: this.surfaceOpacity
-        }));
-      }
-      canvas.setFillColor(this.surfaceColor);
-      canvas.fillPath();
-      if (this.surfaceOpacity !== 1) canvas.restoreContext();
-    }
-    if (this.drawBorder) {
-      for (const value of this.data) this.drawBar(context, frame, value);
-      canvas.setStrokeColor(this.borderColor ?? this.surfaceColor);
-      canvas.setLineWidth(this.borderWidth);
-      canvas.strokePath();
-    }
-  }
-  automaticValuePosition(point, size, previous, next, box) {
-    const position = super.automaticValuePosition(point, size, previous, next, box);
-    if (position === "right" || position === "left") return "top";
-    return position;
-  }
-}
-
-const GREY = "#9e9e9e";
-
-class GridAxis {
-  constructor({format = null, buildLabel = null, textStyle = null, margin = null, marginStart = null, marginEnd = null, color = null, width = null, divisions = null, divisionsWidth = null, divisionsColor = null, divisionsDashed = null, ticks = null, axisTick = null, angle = 0} = {}) {
-    this.format = format ?? (value => String(value));
-    this.buildLabel = buildLabel;
-    this.textStyle = textStyle;
-    this.margin = margin === null ? null : Number(margin);
-    this.marginStart = marginStart ?? 0;
-    this.marginEnd = marginEnd ?? 0;
-    this.color = normalizeColor(color ?? CHART_BLACK);
-    this.width = width ?? 1;
-    this.divisions = divisions ?? false;
-    this.divisionsWidth = divisionsWidth ?? .5;
-    this.divisionsColor = normalizeColor(divisionsColor ?? GREY);
-    this.divisionsDashed = divisionsDashed ?? false;
-    this.ticks = ticks ?? false;
-    this.axisTick = axisTick;
-    this.angle = assertFiniteNumber(Number(angle), "angle");
-  }
-  transfer(input) {
-    return input;
-  }
-  label(value) {
-    const text = this.buildLabel === null ? new Text(this.format(value), this.textStyle === null ? {} : {
-      style: this.textStyle
-    }) : this.buildLabel(value);
-    if (this.angle === 0) return text;
-    return new Transform({
-      rotateBox: this.angle,
-      child: text
-    });
-  }
-  angleDirection() {
-    if (this.angle === 0) return 0;
-    if (this.angle % Math.PI > Math.PI / 2) return -1;
-    return 1;
-  }
-}
-
-class FixedAxis extends GridAxis {
-  constructor(values, options = {}) {
-    super(options);
-    this.values = values.map((value, index) => assertFiniteNumber(Number(value), `values[${index}]`));
-    if (!FixedAxis.isSortedAscending(this.values)) {
-      throw new RangeError("FixedAxis values must be sorted ascending");
-    }
-  }
-  static fromStrings(values, options = {}) {
-    const labels = values.map(value => String(value));
-    return new FixedAxis(labels.map((_, index) => index), {
-      ...options,
-      format: value => labels[Math.trunc(value)] ?? String(value)
-    });
-  }
-  static isSortedAscending(values) {
-    let previous = values[0] ?? 0;
-    for (const value of values) {
-      if (previous > value) return false;
-      previous = value;
-    }
-    return true;
-  }
-  layout(context, direction, size, incoming) {
-    let maxWidth = 0;
-    let maxHeight = 0;
-    let first = null;
-    let last = null;
-    for (const value of this.values) {
-      const measured = this.label(value).layout(context, new BoxConstraints);
-      last = {
-        width: measured.width,
-        height: measured.height
-      };
-      maxWidth = Math.max(maxWidth, last.width);
-      maxHeight = Math.max(maxHeight, last.height);
-      if (first === null) first = last;
-    }
-    const firstSize = first ?? {
-      width: 0,
-      height: 0
-    };
-    const lastSize = last ?? {
-      width: 0
-    };
-    const ad = this.angleDirection();
-    if (direction === "horizontal") {
-      const textMargin = this.margin ?? 2;
-      const minStart = ad === 0 ? firstSize.width / 2 : ad > 0 ? firstSize.width : 0;
-      const marginEnd = Math.max(incoming.marginEnd, ad === 0 ? lastSize.width / 2 : ad > 0 ? 0 : lastSize.width);
-      const crossAxisPosition = Math.max(incoming.crossAxisPosition, minStart);
-      const axisPosition = Math.max(incoming.axisPosition, maxHeight + textMargin);
-      return {
-        direction,
-        axisPosition,
-        crossAxisPosition,
-        marginEnd,
-        textMargin,
-        axisTick: this.axisTick ?? false,
-        boxWidth: size.width,
-        boxHeight: axisPosition
-      };
-    }
-    const textMargin = this.margin ?? 10;
-    const marginEnd = Math.max(incoming.marginEnd, ad === 0 ? lastSize.width / 2 : ad < 0 ? lastSize.width : 0);
-    const minStart = ad === 0 ? firstSize.height / 2 : ad > 0 ? firstSize.width : 0;
-    const crossAxisPosition = Math.max(incoming.crossAxisPosition, minStart);
-    const axisPosition = Math.max(incoming.axisPosition, maxWidth + textMargin);
-    return {
-      direction,
-      axisPosition,
-      crossAxisPosition,
-      marginEnd,
-      textMargin,
-      axisTick: this.axisTick ?? true,
-      boxWidth: axisPosition,
-      boxHeight: size.height
-    };
-  }
-  toChart(input, layout) {
-    const offset = this.transfer(this.values[0] ?? 0);
-    const total = this.transfer(this.values[this.values.length - 1] ?? 0) - offset;
-    const start = layout.crossAxisPosition + this.marginStart;
-    const extent = layout.direction === "horizontal" ? layout.boxWidth : layout.boxHeight;
-    if (total === 0) return start;
-    return start + (extent - start - layout.marginEnd) * (this.transfer(input) - offset) / total;
-  }
-  paintBackground(context, frame, layout) {
-    if (!this.divisions) return;
-    const canvas = context.canvas;
-    const grid = frame.gridBox;
-    const values = this.values.slice(this.marginStart > 0 ? 0 : 1);
-    if (layout.direction === "horizontal") {
-      for (const value of values) {
-        const p = this.toChart(value, layout);
-        canvas.drawLine(frame.px(p), frame.py(grid.bottom + grid.height), frame.px(p), frame.py(grid.bottom));
-      }
-    } else {
-      for (const value of values) {
-        const p = this.toChart(value, layout);
-        canvas.drawLine(frame.px(grid.left), frame.py(p), frame.px(grid.left + grid.width), frame.py(p));
-      }
-    }
-    if (this.divisionsDashed) canvas.setLineDashPattern([ 4, 2 ]);
-    canvas.setStrokeColor(this.divisionsColor);
-    canvas.setLineWidth(this.divisionsWidth);
-    canvas.setLineJoin("miter");
-    canvas.strokePath();
-    if (this.divisionsDashed) canvas.setLineDashPattern();
-  }
-  paint(context, frame, layout) {
-    if (layout.direction === "horizontal") {
-      this.drawXValues(context, frame, layout);
-    } else {
-      this.drawYValues(context, frame, layout);
-    }
-  }
-  drawXValues(context, frame, layout) {
-    const canvas = context.canvas;
-    const axis = layout.axisPosition;
-    canvas.moveTo(frame.px(layout.crossAxisPosition), frame.py(axis));
-    canvas.lineTo(frame.px(layout.boxWidth), frame.py(axis));
-    if (layout.axisTick && layout.textMargin > 0) {
-      canvas.moveTo(frame.px(layout.crossAxisPosition), frame.py(axis));
-      canvas.lineTo(frame.px(layout.crossAxisPosition), frame.py(axis - layout.textMargin));
-    }
-    if (this.ticks && layout.textMargin > 0) {
-      for (const value of this.values) {
-        const p = this.toChart(value, layout);
-        canvas.moveTo(frame.px(p), frame.py(axis));
-        canvas.lineTo(frame.px(p), frame.py(axis - layout.textMargin));
-      }
-    }
-    canvas.setStrokeColor(this.color);
-    canvas.setLineWidth(this.width);
-    canvas.setLineJoin("bevel");
-    canvas.strokePath();
-    const ad = this.angleDirection();
-    const alignment = ad === 0 ? Alignment.topCenter : ad > 0 ? Alignment.topRight : Alignment.topLeft;
-    for (const value of this.values) {
-      const p = this.toChart(value, layout);
-      drawWidget(context, this.label(value), frame.px(p), frame.top(axis - layout.textMargin), alignment);
-    }
-  }
-  drawYValues(context, frame, layout) {
-    const canvas = context.canvas;
-    const axis = layout.axisPosition;
-    canvas.moveTo(frame.px(axis), frame.py(layout.boxHeight));
-    canvas.lineTo(frame.px(axis), frame.py(layout.crossAxisPosition));
-    if (layout.axisTick && layout.textMargin > 0) {
-      canvas.moveTo(frame.px(axis), frame.py(layout.crossAxisPosition));
-      canvas.lineTo(frame.px(axis - layout.textMargin / 2), frame.py(layout.crossAxisPosition));
-    }
-    if (this.ticks && layout.textMargin > 0) {
-      for (const value of this.values) {
-        const p = this.toChart(value, layout);
-        canvas.moveTo(frame.px(axis), frame.py(p));
-        canvas.lineTo(frame.px(axis - layout.textMargin / 2), frame.py(p));
-      }
-    }
-    canvas.setStrokeColor(this.color);
-    canvas.setLineWidth(this.width);
-    canvas.setLineJoin("bevel");
-    canvas.strokePath();
-    const ad = this.angleDirection();
-    const alignment = ad === 0 ? Alignment.centerRight : ad > 0 ? Alignment.topRight : Alignment.bottomRight;
-    for (const value of this.values) {
-      const p = this.toChart(value, layout);
-      drawWidget(context, this.label(value), frame.px(axis - layout.textMargin), frame.top(p), alignment);
-    }
-  }
-}
-
-class RadialFrame extends ChartFrame {
-  constructor(width, height, originX = 0, originPdfY = 0, originTop = 0) {
-    super(originX, originPdfY, originTop);
-    this.width = width;
-    this.height = height;
-  }
-  toChart(point) {
-    const z = 3;
-    return {
-      x: z * point.y * Math.cos(point.x / 7 * Math.PI * 2) + this.width / 2,
-      y: z * point.y * Math.sin(point.x / 7 * Math.PI * 2) + this.height / 2
-    };
-  }
-  withOrigin(originX, originPdfY, originTop) {
-    return new RadialFrame(this.width, this.height, originX, originPdfY, originTop);
-  }
-}
-
-class RadialGrid extends ChartGrid {
-  layout(context, constraints) {
-    const datasets = chartOf(context).datasets;
-    const size = this.gridSize(constraints);
-    const frame = new RadialFrame(size.width, size.height);
-    const datasetData = datasets.map(dataset => dataset.layout(context, frame));
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: {
-        frame,
-        datasetData
-      }
-    };
-  }
-  paint(context, box) {
-    const datasets = chartOf(context).datasets;
-    const canvas = context.canvas;
-    const bottom = box.y + box.height;
-    const frame = box.data.frame.withOrigin(box.x, canvas.toPdfY(bottom), bottom);
-    this.clip(context, frame, box.width, box.height);
-    datasets.forEach((dataset, index) => dataset.paintBackground(context, frame, box.data.datasetData[index]));
-    canvas.restoreContext();
-    this.clip(context, frame, box.width, box.height);
-    datasets.forEach((dataset, index) => dataset.paint(context, frame, box.data.datasetData[index]));
-    canvas.restoreContext();
-    datasets.forEach((dataset, index) => dataset.paintForeground(context, frame, box.data.datasetData[index]));
-  }
-  clip(context, frame, width, height) {
-    context.canvas.saveContext();
-    context.canvas.drawRect(frame.px(0), frame.py(0), width, height);
-    context.canvas.clipPath();
-  }
-}
-
-function validateAlignment(value, name) {
-  if (![ "start", "end", "center", "spaceBetween", "spaceAround", "spaceEvenly" ].includes(value)) {
-    throw new TypeError(`Unknown ${name}: ${value}`);
-  }
-}
-
-function spaces(alignment, free, count) {
-  switch (alignment) {
-   case "end":
-    return [ free, 0 ];
-
-   case "center":
-    return [ free / 2, 0 ];
-
-   case "spaceBetween":
-    return [ 0, count > 1 ? free / (count - 1) : 0 ];
-
-   case "spaceAround":
-    {
-      const between = count > 0 ? free / count : 0;
-      return [ between / 2, between ];
-    }
-
-   case "spaceEvenly":
-    {
-      const between = free / (count + 1);
-      return [ between, between ];
-    }
-
-   default:
-    return [ 0, 0 ];
-  }
-}
-
-class Wrap extends SpanningWidget {
-  constructor({direction = "horizontal", alignment = "start", spacing = 0, runAlignment = "start", runSpacing = 0, crossAxisAlignment = "start", verticalDirection = "down", children = []} = {}) {
-    super();
-    if (direction !== "horizontal" && direction !== "vertical") {
-      throw new TypeError(`Unknown Wrap axis: ${direction}`);
-    }
-    validateAlignment(alignment, "WrapAlignment");
-    validateAlignment(runAlignment, "runAlignment");
-    if (![ "start", "end", "center" ].includes(crossAxisAlignment)) {
-      throw new TypeError(`Unknown WrapCrossAlignment: ${crossAxisAlignment}`);
-    }
-    if (verticalDirection !== "down" && verticalDirection !== "up") {
-      throw new TypeError(`Unknown verticalDirection: ${verticalDirection}`);
-    }
-    this.direction = direction;
-    this.alignment = alignment;
-    this.spacing = Math.max(0, Number(spacing));
-    this.runAlignment = runAlignment;
-    this.runSpacing = Math.max(0, Number(runSpacing));
-    this.crossAxisAlignment = crossAxisAlignment;
-    this.verticalDirection = verticalDirection;
-    this.children = children;
-  }
-  initialSpanState() {
-    return {
-      firstChild: 0
-    };
-  }
-  fragment(context, incoming, state) {
-    const constraints = BoxConstraints.from(incoming);
-    const horizontal = this.direction === "horizontal";
-    const maxMain = horizontal ? constraints.maxWidth : constraints.maxHeight;
-    const maxCross = horizontal ? constraints.maxHeight : constraints.maxWidth;
-    const childConstraints = horizontal ? new BoxConstraints({
-      maxWidth: maxMain
-    }) : new BoxConstraints({
-      maxHeight: maxMain
-    });
-    const runs = [];
-    let current = [];
-    let currentMain = 0;
-    let currentCross = 0;
-    const closeRun = () => {
-      if (current.length === 0) return;
-      runs.push({
-        children: current,
-        main: currentMain,
-        cross: currentCross
-      });
-      current = [];
-      currentMain = 0;
-      currentCross = 0;
-    };
-    for (let index = state.firstChild; index < this.children.length; index++) {
-      const box = this.children[index].layout(context, childConstraints);
-      const main = horizontal ? box.width : box.height;
-      const cross = horizontal ? box.height : box.width;
-      if (current.length > 0 && currentMain + this.spacing + main > maxMain) {
-        closeRun();
-      }
-      const nextCrossTotal = runs.reduce((sum, run) => sum + run.cross, 0) + this.runSpacing * runs.length + Math.max(currentCross, cross);
-      if (current.length === 0 && runs.length > 0 && nextCrossTotal > maxCross + 1e-6) {
-        break;
-      }
-      current.push({
-        index,
-        box,
-        main,
-        cross
-      });
-      currentMain += (current.length > 1 ? this.spacing : 0) + main;
-      currentCross = Math.max(currentCross, cross);
-    }
-    closeRun();
-    let usedCross = runs.reduce((sum, run) => sum + run.cross, 0) + this.runSpacing * Math.max(0, runs.length - 1);
-    while (runs.length > 0 && Number.isFinite(maxCross) && usedCross > maxCross + 1e-6) {
-      const removed = runs.pop();
-      usedCross -= removed.cross + (runs.length > 0 ? this.runSpacing : 0);
-    }
-    const maxRunMain = runs.reduce((value, run) => Math.max(value, run.main), 0);
-    const natural = horizontal ? {
-      width: maxRunMain,
-      height: usedCross
-    } : {
-      width: usedCross,
-      height: maxRunMain
-    };
-    const size = constraints.constrain(natural);
-    const containerMain = horizontal ? size.width : size.height;
-    const containerCross = horizontal ? size.height : size.width;
-    const [runLeading, runBetweenExtra] = spaces(this.runAlignment, Math.max(0, containerCross - usedCross), runs.length);
-    const reverseRuns = horizontal && this.verticalDirection === "up";
-    let crossCursor = reverseRuns ? containerCross - runLeading : runLeading;
-    const placed = [];
-    for (const run of runs) {
-      if (reverseRuns) crossCursor -= run.cross;
-      const [childLeading, childBetweenExtra] = spaces(this.alignment, Math.max(0, containerMain - run.main), run.children.length);
-      const reverseChildren = !horizontal && this.verticalDirection === "up";
-      let mainCursor = reverseChildren ? containerMain - childLeading : childLeading;
-      for (const child of run.children) {
-        if (reverseChildren) mainCursor -= child.main;
-        const freeCross = run.cross - child.cross;
-        const childCross = this.crossAxisAlignment === "end" ? freeCross : this.crossAxisAlignment === "center" ? freeCross / 2 : 0;
-        placed.push({
-          box: child.box,
-          dx: horizontal ? mainCursor : crossCursor + childCross,
-          dy: horizontal ? crossCursor + childCross : mainCursor
-        });
-        const advance = child.main + this.spacing + childBetweenExtra;
-        mainCursor += reverseChildren ? -advance : advance;
-      }
-      const runAdvance = run.cross + this.runSpacing + runBetweenExtra;
-      crossCursor += reverseRuns ? -runAdvance : runAdvance;
-    }
-    const lastChild = placed.length === 0 ? state.firstChild : Math.max(...runs.flatMap(run => run.children.map(child => child.index))) + 1;
-    const data = {
-      children: placed,
-      firstChild: state.firstChild,
-      lastChild,
-      runCount: runs.length
-    };
-    const nextState = {
-      firstChild: lastChild
-    };
-    return {
-      box: {
-        widget: this,
-        width: size.width,
-        height: size.height,
-        data
-      },
-      nextState,
-      hasMore: lastChild < this.children.length
-    };
-  }
-  layout(context, constraints) {
-    return this.fragment(context, constraints, this.initialSpanState()).box;
-  }
-  layoutSpan(context, constraints, state) {
-    return this.fragment(context, constraints, state);
-  }
-  paint(context, box) {
-    for (const child of box.data.children) {
-      child.box.widget.paint(context, {
-        ...child.box,
-        x: box.x + child.dx,
-        y: box.y + child.dy
-      });
-    }
-  }
-}
-
-function resolveLegendPosition(value) {
-  if (Array.isArray(value)) return {
-    x: Number(value[0]),
-    y: Number(value[1])
-  };
-  return resolveBasicAlignment(value);
-}
-
-class ChartLegend extends StatelessWidget {
-  constructor({textStyle = null, position = Alignment.topRight, direction = "vertical", decoration = null, padding = EdgeInsets.all(5)} = {}) {
-    super();
-    this.textStyle = textStyle;
-    this.position = resolveLegendPosition(position);
-    this.direction = direction;
-    this.decoration = normalizeBoxDecoration(decoration);
-    this.padding = normalizeInsets(padding);
-  }
-  buildLegend(context, dataset) {
-    const style = context.theme.defaultTextStyle.merge(this.textStyle);
-    return new Row({
-      mainAxisSize: "min",
-      children: [ new Container({
-        width: style.fontSize ?? undefined,
-        height: style.fontSize ?? undefined,
-        margin: EdgeInsets.only({
-          right: 5
-        }),
-        child: dataset.legendShape(context)
-      }), new Text(dataset.legend ?? "", this.textStyle === null ? {} : {
-        style: this.textStyle
-      }) ]
-    });
-  }
-  build(context) {
-    const datasets = chartOf(context).datasets;
-    const wrap = new Wrap({
-      direction: this.direction,
-      spacing: 10,
-      runSpacing: 10,
-      crossAxisAlignment: this.direction === "horizontal" ? "center" : "start",
-      children: datasets.filter(dataset => dataset.legend !== null).map(dataset => this.buildLegend(context, dataset))
-    });
-    return new Align({
-      alignment: this.position,
-      child: new Container({
-        decoration: this.decoration ?? new BoxDecoration({
-          color: CHART_WHITE
-        }),
-        padding: this.padding,
-        child: wrap
-      })
-    });
-  }
-}
-
-class LineDataSet extends PointDataSet {
-  constructor({data, legend = null, pointColor = null, pointSize = 3, color = CHART_BLUE, lineWidth = 2, drawLine = true, lineColor = null, drawPoints = true, shape = null, buildValue = null, valuePosition = "auto", drawSurface = false, surfaceOpacity = .2, surfaceColor = null, isCurved = false, smoothness = .35, borderColor = null, borderWidth = 1.5}) {
-    super({
-      data,
-      legend,
-      color: pointColor ?? color,
-      borderColor,
-      borderWidth,
-      pointSize,
-      drawPoints,
-      shape,
-      buildValue,
-      valuePosition
-    });
-    if (!drawLine && !drawPoints && !drawSurface) {
-      throw new Error("LineDataSet must draw its line, its points or its surface");
-    }
-    this.lineWidth = Number(lineWidth);
-    this.drawLine = Boolean(drawLine);
-    this.lineColor = lineColor === null ? null : normalizeColor(lineColor);
-    this.drawSurface = Boolean(drawSurface);
-    this.surfaceColor = surfaceColor === null ? null : normalizeColor(surfaceColor);
-    this.surfaceOpacity = Number(surfaceOpacity);
-    this.isCurved = Boolean(isCurved);
-    this.smoothness = Number(smoothness);
-  }
-  legendShape(context) {
-    if (this.shape !== null) return this.shape(context);
-    return new Container({
-      decoration: new BoxDecoration({
-        color: this.lineColor ?? this.color,
-        border: Border.all({
-          color: this.borderColor ?? CHART_BLACK,
-          width: this.borderWidth
-        })
-      })
-    });
-  }
-  drawPath(context, frame, moveTo) {
-    if (this.data.length < 2) return;
-    const canvas = context.canvas;
-    let t = {
-      x: 0,
-      y: 0
-    };
-    const first = frame.toChart(this.data[0].point);
-    if (moveTo) {
-      canvas.moveTo(frame.px(first.x), frame.py(first.y));
-    } else {
-      canvas.lineTo(frame.px(first.x), frame.py(first.y));
-    }
-    for (let index = 1; index < this.data.length; index++) {
-      const p = frame.toChart(this.data[index].point);
-      if (!this.isCurved) {
-        canvas.lineTo(frame.px(p.x), frame.py(p.y));
-        continue;
-      }
-      const pp = frame.toChart(this.data[index - 1].point);
-      const pn = frame.toChart(this.data[index + 1 < this.data.length ? index + 1 : index].point);
-      const c1 = {
-        x: pp.x + t.x,
-        y: pp.y + t.y
-      };
-      t = {
-        x: (pn.x - pp.x) / 2 * this.smoothness,
-        y: (pn.y - pp.y) / 2 * this.smoothness
-      };
-      const c2 = {
-        x: p.x - t.x,
-        y: p.y - t.y
-      };
-      canvas.curveTo(frame.px(c1.x), frame.py(c1.y), frame.px(c2.x), frame.py(c2.y), frame.px(p.x), frame.py(p.y));
-    }
-  }
-  drawArea(context, frame) {
-    if (this.data.length < 2) return;
-    const canvas = context.canvas;
-    const base = frame instanceof CartesianFrame ? frame.xAxisOffset : 0;
-    this.drawPath(context, frame, true);
-    const last = frame.toChart(this.data[this.data.length - 1].point);
-    canvas.lineTo(frame.px(last.x), frame.py(base));
-    const first = frame.toChart(this.data[0].point);
-    canvas.lineTo(frame.px(first.x), frame.py(base));
-  }
-  paintBackground(context, frame, _data) {
-    if (this.data.length === 0 || !this.drawSurface) return;
-    const canvas = context.canvas;
-    this.drawArea(context, frame);
-    if (this.surfaceOpacity !== 1) {
-      canvas.saveContext();
-      canvas.setGraphicState(new PdfGraphicState({
-        opacity: this.surfaceOpacity
-      }));
-    }
-    canvas.setFillColor(this.surfaceColor ?? this.color ?? CHART_BLUE);
-    canvas.fillPath();
-    if (this.surfaceOpacity !== 1) canvas.restoreContext();
-  }
-  paint(context, frame, _data) {
-    if (this.data.length === 0 || !this.drawLine) return;
-    const canvas = context.canvas;
-    this.drawPath(context, frame, true);
-    canvas.setStrokeColor(this.lineColor ?? this.color ?? CHART_BLUE);
-    canvas.setLineWidth(this.lineWidth);
-    canvas.setLineCap("round");
-    canvas.setLineJoin("round");
-    canvas.strokePath();
-  }
-}
-
-class PieFrame extends ChartFrame {
-  constructor(radius, angleStart, angleEnd, originX = 0, originPdfY = 0, originTop = 0) {
-    super(originX, originPdfY, originTop);
-    this.radius = radius;
-    this.angleStart = angleStart;
-    this.angleEnd = angleEnd;
-  }
-  toChart(point) {
-    return point;
-  }
-  withOrigin(originX, originPdfY, originTop) {
-    return new PieFrame(this.radius, this.angleStart, this.angleEnd, originX, originPdfY, originTop);
-  }
-}
-
-class PieDataSet extends Dataset {
-  constructor({value, legend = null, color, borderColor = CHART_WHITE, borderWidth = 1.5, drawBorder = null, drawSurface = true, surfaceOpacity = 1, offset = 0, legendStyle = null, legendAlign = null, legendPosition = "auto", legendLineWidth = 1, legendLineColor = null, legendOffset = 20, innerRadius = 0}) {
-    super({
-      legend,
-      color: color ?? CHART_BLUE,
-      borderColor,
-      borderWidth
-    });
-    if (innerRadius < 0) throw new RangeError("PieDataSet innerRadius must not be negative");
-    if (offset < 0) throw new RangeError("PieDataSet offset must not be negative");
-    this.value = Number(value);
-    const fill = this.color ?? normalizeColor(CHART_BLUE);
-    const border = this.borderColor;
-    this.drawBorder = drawBorder ?? (border !== null && (border[0] !== fill[0] || border[1] !== fill[1] || border[2] !== fill[2]));
-    if (!this.drawBorder && !drawSurface) {
-      throw new Error("PieDataSet must draw its surface or its border");
-    }
-    this.drawSurface = Boolean(drawSurface);
-    this.surfaceOpacity = Number(surfaceOpacity);
-    this.offset = Number(offset);
-    this.legendStyle = legendStyle;
-    this.legendAlign = legendAlign;
-    this.legendPosition = legendPosition;
-    this.legendLineWidth = Number(legendLineWidth);
-    this.legendLineColor = legendLineColor === null ? fill : normalizeColor(legendLineColor);
-    this.legendOffset = Number(legendOffset);
-    this.innerRadius = Number(innerRadius);
-  }
-  isFullCircle(frame) {
-    return frame.angleEnd - frame.angleStart >= Math.PI * 2;
-  }
-  layout(context, frame) {
-    if (!(frame instanceof PieFrame)) {
-      throw new Error("Use only PieDataSet with a PieGrid");
-    }
-    const fullCircle = this.isFullCircle(frame);
-    const offset = fullCircle ? 0 : this.offset;
-    const len = frame.radius + offset;
-    let w = len * 2;
-    let h = len * 2;
-    const position = this.legendPosition === "auto" ? frame.angleEnd - frame.angleStart > Math.PI / 6 ? "inside" : "outside" : this.legendPosition;
-    const bisect = fullCircle ? Math.PI / 4 : (frame.angleStart + frame.angleEnd) / 2;
-    const align = this.legendAlign ?? (position === "inside" ? "center" : bisect > Math.PI ? "right" : "left");
-    const legend = this.legend === null ? null : new RichText({
-      text: new TextSpan({
-        children: [ new TextSpan({
-          text: this.legend,
-          style: this.legendStyle ?? undefined
-        }) ],
-        style: new TextStyle({
-          color: position === "inside" ? isLightColor(this.color ?? CHART_BLUE) ? normalizeColor(CHART_WHITE) : normalizeColor(CHART_BLACK) : null
-        })
-      }),
-      textAlign: align
-    });
-    let legendBox = null;
-    let legendLeft = 0;
-    let legendBottom = 0;
-    let anchor = null;
-    let pivot = null;
-    let start = null;
-    if (legend !== null) {
-      legendBox = legend.layout(context, new BoxConstraints({
-        maxWidth: frame.radius,
-        maxHeight: frame.radius
-      }));
-      const ls = {
-        width: legendBox.width,
-        height: legendBox.height
-      };
-      if (position === "outside") {
-        const o = frame.radius + this.legendOffset;
-        const cx = Math.sin(bisect) * (offset + o);
-        const cy = Math.cos(bisect) * (offset + o);
-        start = {
-          x: Math.sin(bisect) * (offset + frame.radius + this.legendOffset * .1),
-          y: Math.cos(bisect) * (offset + frame.radius + this.legendOffset * .1)
-        };
-        pivot = {
-          x: cx,
-          y: cy
-        };
-        if (bisect > Math.PI) {
-          anchor = {
-            x: cx - this.legendOffset / 2 * .8,
-            y: cy
-          };
-          legendLeft = cx - this.legendOffset / 2 - ls.width;
-          legendBottom = cy - ls.height / 2;
-          w = Math.max(w, (-cx + this.legendOffset / 2 + ls.width) * 2);
-          h = Math.max(h, Math.abs(cy) * 2 + ls.height);
-        } else {
-          anchor = {
-            x: cx + this.legendOffset / 2 * .8,
-            y: cy
-          };
-          legendLeft = cx + this.legendOffset / 2;
-          legendBottom = cy - ls.height / 2;
-          w = Math.max(w, (cx + this.legendOffset / 2 + ls.width) * 2);
-          h = Math.max(h, Math.abs(cy) * 2 + ls.height);
-        }
-      } else if (position === "inside") {
-        let o;
-        let cx;
-        let cy;
-        if (this.innerRadius === 0) {
-          o = fullCircle ? 0 : frame.radius * 2 / 3;
-          cx = Math.sin(bisect) * (offset + o);
-          cy = Math.cos(bisect) * (offset + o);
-        } else {
-          o = (frame.radius + this.innerRadius) / 2;
-          if (fullCircle) {
-            cx = 0;
-            cy = o;
-          } else {
-            cx = Math.sin(bisect) * (offset + o);
-            cy = Math.cos(bisect) * (offset + o);
-          }
-        }
-        legendLeft = cx - ls.width / 2;
-        legendBottom = cy - ls.height / 2;
-      }
-    }
-    return {
-      legend,
-      legendBox,
-      legendLeft,
-      legendBottom,
-      anchor,
-      pivot,
-      start,
-      boxWidth: w,
-      boxHeight: h
-    };
-  }
-  appendSlice(context, frame) {
-    const canvas = context.canvas;
-    const bisect = (frame.angleStart + frame.angleEnd) / 2;
-    const cx = Math.sin(bisect) * this.offset;
-    const cy = Math.cos(bisect) * this.offset;
-    const sx = cx + Math.sin(frame.angleStart) * frame.radius;
-    const sy = cy + Math.cos(frame.angleStart) * frame.radius;
-    const ex = cx + Math.sin(frame.angleEnd) * frame.radius;
-    const ey = cy + Math.cos(frame.angleEnd) * frame.radius;
-    if (this.isFullCircle(frame)) {
-      canvas.drawEllipse(frame.px(0), frame.py(0), frame.radius, frame.radius);
-      return;
-    }
-    canvas.moveTo(frame.px(cx), frame.py(cy));
-    canvas.lineTo(frame.px(sx), frame.py(sy));
-    canvas.bezierArc(frame.px(sx), frame.py(sy), frame.radius, frame.radius, frame.px(ex), frame.py(ey), {
-      large: frame.angleEnd - frame.angleStart > Math.PI
-    });
-  }
-  appendDonut(context, frame) {
-    const canvas = context.canvas;
-    const bisect = (frame.angleStart + frame.angleEnd) / 2;
-    const cx = Math.sin(bisect) * this.offset;
-    const cy = Math.cos(bisect) * this.offset;
-    const stx = cx + Math.sin(frame.angleStart) * frame.radius;
-    const sty = cy + Math.cos(frame.angleStart) * frame.radius;
-    const etx = cx + Math.sin(frame.angleEnd) * frame.radius;
-    const ety = cy + Math.cos(frame.angleEnd) * frame.radius;
-    const sbx = cx + Math.sin(frame.angleStart) * this.innerRadius;
-    const sby = cy + Math.cos(frame.angleStart) * this.innerRadius;
-    const ebx = cx + Math.sin(frame.angleEnd) * this.innerRadius;
-    const eby = cy + Math.cos(frame.angleEnd) * this.innerRadius;
-    if (this.isFullCircle(frame)) {
-      canvas.drawEllipse(frame.px(0), frame.py(0), frame.radius, frame.radius);
-      canvas.drawEllipse(frame.px(0), frame.py(0), this.innerRadius, this.innerRadius, false);
-      return;
-    }
-    const large = frame.angleEnd - frame.angleStart > Math.PI;
-    canvas.moveTo(frame.px(stx), frame.py(sty));
-    canvas.bezierArc(frame.px(stx), frame.py(sty), frame.radius, frame.radius, frame.px(etx), frame.py(ety), {
-      large
-    });
-    canvas.lineTo(frame.px(ebx), frame.py(eby));
-    canvas.bezierArc(frame.px(ebx), frame.py(eby), this.innerRadius, this.innerRadius, frame.px(sbx), frame.py(sby), {
-      large,
-      sweep: true
-    });
-    canvas.lineTo(frame.px(stx), frame.py(sty));
-  }
-  appendShape(context, frame) {
-    if (this.innerRadius === 0) {
-      this.appendSlice(context, frame);
-    } else {
-      this.appendDonut(context, frame);
-    }
-  }
-  paintBackground(context, frame, _data) {
-    if (!(frame instanceof PieFrame) || !this.drawSurface) return;
-    const canvas = context.canvas;
-    this.appendShape(context, frame);
-    if (this.surfaceOpacity !== 1) {
-      canvas.saveContext();
-      canvas.setGraphicState(new PdfGraphicState({
-        opacity: this.surfaceOpacity
-      }));
-    }
-    canvas.setFillColor(this.color ?? CHART_BLUE);
-    canvas.fillPath();
-    if (this.surfaceOpacity !== 1) canvas.restoreContext();
-  }
-  paint(context, frame, _data) {
-    if (!(frame instanceof PieFrame) || !this.drawBorder) return;
-    const canvas = context.canvas;
-    this.appendShape(context, frame);
-    canvas.setLineWidth(this.borderWidth);
-    canvas.setLineJoin("round");
-    canvas.setStrokeColor(this.borderColor ?? this.color ?? CHART_BLUE);
-    canvas.strokePath({
-      close: true
-    });
-  }
-  paintLegend(context, frame, data) {
-    if (this.legendPosition === "none" || data.legend === null || data.legendBox === null) return;
-    const canvas = context.canvas;
-    if (data.anchor !== null && data.pivot !== null && data.start !== null) {
-      canvas.saveContext();
-      canvas.moveTo(frame.px(data.start.x), frame.py(data.start.y));
-      canvas.lineTo(frame.px(data.pivot.x), frame.py(data.pivot.y));
-      canvas.lineTo(frame.px(data.anchor.x), frame.py(data.anchor.y));
-      canvas.setLineWidth(this.legendLineWidth);
-      canvas.setLineCap("round");
-      canvas.setLineJoin("round");
-      canvas.setStrokeColor(this.legendLineColor);
-      canvas.strokePath();
-      canvas.restoreContext();
-    }
-    data.legend.paint(context, {
-      ...data.legendBox,
-      x: frame.px(data.legendLeft),
-      y: frame.top(data.legendBottom + data.legendBox.height)
-    });
-  }
-}
-
-class PieGrid extends ChartGrid {
-  constructor({startAngle = 0} = {}) {
-    super();
-    this.startAngle = Number(startAngle);
-  }
-  layout(context, constraints) {
-    const datasets = chartOf(context).datasets;
-    const size = this.gridSize(constraints);
-    let total = 0;
-    for (const dataset of datasets) {
-      if (!(dataset instanceof PieDataSet)) throw new Error("Use only PieDataSet with a PieGrid");
-      total += dataset.value;
-    }
-    const unit = total === 0 ? 0 : Math.PI / total * 2;
-    let angle = this.startAngle;
-    const angles = datasets.map(dataset => {
-      const start = angle;
-      angle += dataset.value * unit;
-      return {
-        start,
-        end: angle
-      };
-    });
-    let radius = Math.min(size.width / 2, size.height / 2);
-    let datasetData = [];
-    let reduce = false;
-    do {
-      reduce = false;
-      datasetData = [];
-      for (let index = 0; index < datasets.length; index++) {
-        const slice = angles[index];
-        const frame = new PieFrame(radius, slice.start, slice.end);
-        const data = datasets[index].layout(context, frame);
-        datasetData.push(data);
-        if (radius > 20 && (data.boxWidth > size.width || data.boxHeight > size.height)) {
-          radius -= 10;
-          reduce = true;
-          break;
-        }
-      }
-    } while (reduce);
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: {
-        radius,
-        angles,
-        datasetData
-      }
-    };
-  }
-  paint(context, box) {
-    const datasets = chartOf(context).datasets;
-    const canvas = context.canvas;
-    const centreTop = box.y + box.height / 2;
-    const originX = box.x + box.width / 2;
-    const originPdfY = canvas.toPdfY(centreTop);
-    const frames = box.data.angles.map(slice => new PieFrame(box.data.radius, slice.start, slice.end, originX, originPdfY, centreTop));
-    datasets.forEach((dataset, index) => dataset.paintBackground(context, frames[index], box.data.datasetData[index]));
-    datasets.forEach((dataset, index) => dataset.paint(context, frames[index], box.data.datasetData[index]));
-    datasets.forEach((dataset, index) => {
-      if (dataset instanceof PieDataSet) {
-        dataset.paintLegend(context, frames[index], box.data.datasetData[index]);
-      }
-    });
-  }
-}
-
-function legacyRef(xref, free = false) {
-  const offset = String(xref.offset).padStart(10, "0");
-  const gen = String(xref.gen).padStart(5, "0");
-  return `${offset} ${gen} ${free ? "f" : "n"} `;
-}
-
-class PdfXrefTable {
-  constructor() {
-    this.params = new PdfDict;
-    this.objects = [];
-  }
-  add(object) {
-    this.objects.push(object);
-  }
-  writeBlock(s, firstId, block) {
-    s.putString(`${firstId} ${block.length}\n`);
-    for (const row of block) {
-      s.putString(row);
-      s.putByte(10);
-    }
-  }
-  output(s) {
-    s.putString("%PDF-1.7\n%âãÏÓ\n");
-    const ordered = [ ...this.objects ].sort((a, b) => a.objser - b.objser);
-    const xrefList = [];
-    for (const object of ordered) {
-      const offset = object.output(s);
-      xrefList.push({
-        ser: object.objser,
-        gen: object.objgen,
-        offset
-      });
-    }
-    const xrefOffset = s.offset;
-    s.putString("xref\n");
-    let firstId = 0;
-    let lastId = 0;
-    let block = [ legacyRef({
-      gen: 65535,
-      offset: 0
-    }, true) ];
-    for (const xref of xrefList) {
-      if (xref.ser !== lastId + 1) {
-        this.writeBlock(s, firstId, block);
-        block = [];
-        firstId = xref.ser;
-      }
-      block.push(legacyRef(xref));
-      lastId = xref.ser;
-    }
-    this.writeBlock(s, firstId, block);
-    const trailer = new PdfDict;
-    trailer.set("/Size", new PdfNum(lastId + 1));
-    for (const [key, value] of this.params.values) {
-      trailer.set(key, value);
-    }
-    s.putString("trailer\n");
-    trailer.output(s);
-    s.putByte(10);
-    s.putString(`startxref\n${xrefOffset}\n%%EOF\n`);
-  }
-}
-
-class PdfCatalog extends PdfObject {
-  constructor(document, pageList, objser) {
-    super(document, new PdfDict([ [ "/Type", new PdfName("/Catalog") ] ]), objser);
-    this.names = null;
-    this.outline = null;
-    this.metadata = null;
-    this.pageLabels = null;
-    this.formFields = [];
-    this.formFonts = new Map;
-    this.showOutlines = false;
-    this.pageList = pageList;
-  }
-  prepare() {
-    this.params.set("/Pages", this.pageList.ref());
-    if (this.names !== null) this.params.set("/Names", this.names.ref());
-    if (this.outline !== null) this.params.set("/Outlines", this.outline.ref());
-    if (this.metadata !== null) this.params.set("/Metadata", this.metadata.ref());
-    if (this.pageLabels !== null && this.pageLabels.labels.size > 0) {
-      this.params.set("/PageLabels", this.pageLabels.ref());
-    }
-    if (this.formFields.length > 0) {
-      const form = new PdfDict([ [ "/Fields", PdfArray.fromObjects(this.formFields) ], [ "/NeedAppearances", new PdfBool(false) ] ]);
-      if (this.formFonts.size > 0) {
-        form.set("/DR", new PdfDict([ [ "/Font", PdfDict.fromObjectMap(this.formFonts) ] ]));
-      }
-      this.params.set("/AcroForm", form);
-    }
-    if (this.showOutlines) this.params.set("/PageMode", new PdfName("/UseOutlines"));
-  }
-}
-
-const LIBRARY_NAME = "https://github.com/romulocrj/js_pdf";
-
-class PdfInfo extends PdfObject {
-  constructor(document, metadata) {
-    super(document, new PdfDict);
-    const producer = metadata.producer == null ? LIBRARY_NAME : `${metadata.producer} (${LIBRARY_NAME})`;
-    const entries = [ [ "/Title", metadata.title ], [ "/Author", metadata.author ], [ "/Subject", metadata.subject ], [ "/Keywords", metadata.keywords ], [ "/Creator", metadata.creator ], [ "/Producer", producer ] ];
-    for (const [key, value] of entries) {
-      if (value) {
-        this.params.set(key, new PdfString(value));
-      }
-    }
-    this.params.set("/CreationDate", PdfString.fromDate(new Date));
-  }
-}
-
-class PdfGraphicStream extends PdfObject {
-  constructor() {
-    super(...arguments);
-    this.fonts = new Map;
-    this.xObjects = new Map;
-    this.graphicStates = new Map;
-    this.patterns = new Map;
-  }
-  addFont(name, font) {
-    if (!this.fonts.has(name)) {
-      this.fonts.set(name, font);
-    }
-  }
-  addXObject(name, xObject) {
-    if (!this.xObjects.has(name)) {
-      this.xObjects.set(name, xObject);
-    }
-  }
-  addGraphicState(name, state) {
-    if (!this.graphicStates.has(name)) {
-      this.graphicStates.set(name, state);
-    }
-  }
-  addPattern(name, pattern) {
-    if (!this.patterns.has(name)) {
-      this.patterns.set(name, pattern);
-    }
-  }
-  resources() {
-    const resources = new PdfDict;
-    if (this.fonts.size > 0) {
-      resources.set("/Font", PdfDict.fromObjectMap(this.fonts));
-    }
-    if (this.xObjects.size > 0) {
-      resources.set("/XObject", PdfDict.fromObjectMap(this.xObjects));
-    }
-    if (this.graphicStates.size > 0) {
-      resources.set("/ExtGState", new PdfDict(this.graphicStates));
-    }
-    if (this.patterns.size > 0) {
-      resources.set("/Pattern", new PdfDict(this.patterns));
-    }
-    return resources.isEmpty ? null : resources;
-  }
-  prepare() {
-    const resources = this.resources();
-    if (resources !== null) {
-      this.params.set("/Resources", resources);
-    }
-  }
-}
-
-class PdfPage extends PdfGraphicStream {
-  constructor(document, pageList, pageFormat) {
-    super(document, new PdfDict([ [ "/Type", new PdfName("/Page") ] ]));
-    this.contents = [];
-    this.annotations = [];
-    this.pageFormat = pageFormat;
-    this.pageList = pageList;
-    pageList.pages.push(this);
-  }
-  prepare() {
-    this.params.set("/Parent", this.pageList.ref());
-    this.params.set("/MediaBox", PdfArray.fromNum([ 0, 0, this.pageFormat.width, this.pageFormat.height ]));
-    super.prepare();
-    if (this.contents.length === 1) {
-      this.params.set("/Contents", this.contents[0].ref());
-    } else if (this.contents.length > 1) {
-      this.params.set("/Contents", PdfArray.fromObjects(this.contents));
-    }
-    if (this.annotations.length > 0) {
-      this.params.set("/Annots", PdfArray.fromObjects(this.annotations));
-    }
-  }
-}
-
-class PdfPageList extends PdfObject {
-  constructor(document, objser) {
-    super(document, new PdfDict([ [ "/Type", new PdfName("/Pages") ] ]), objser);
-    this.pages = [];
-  }
-  prepare() {
-    this.params.set("/Count", new PdfNum(this.pages.length));
-    this.params.set("/Kids", PdfArray.fromObjects(this.pages));
-  }
-}
-
-class PdfNull extends PdfDataType {
-  output(s) {
-    s.putString("null");
-  }
-}
-
-class PdfNames extends PdfObject {
-  constructor(document) {
-    super(document, new PdfDict);
-    this.destinations = [];
-  }
-  addDestination(name, page, {x = null, y = null, zoom = null} = {}) {
-    this.destinations.push({
-      name,
-      page,
-      x,
-      y,
-      zoom
-    });
-  }
-  prepare() {
-    const sorted = [ ...this.destinations ].sort((a, b) => a.name.localeCompare(b.name));
-    const values = new PdfArray;
-    for (const destination of sorted) {
-      values.add(new PdfString(destination.name));
-      values.add(new PdfDict([ [ "/D", new PdfArray([ destination.page.ref(), new PdfName("/XYZ"), destination.x === null ? new PdfNull : new PdfNum(destination.x), destination.y === null ? new PdfNull : new PdfNum(destination.y), destination.zoom === null ? new PdfNull : new PdfNum(destination.zoom) ]) ] ]));
-    }
-    const destinations = new PdfDict;
-    if (sorted.length > 0) {
-      destinations.set("/Names", values);
-      destinations.set("/Limits", new PdfArray([ new PdfString(sorted[0].name), new PdfString(sorted[sorted.length - 1].name) ]));
-    }
-    this.params.set("/Dests", destinations);
-  }
-}
-
-const STYLE_NUMBER = Object.freeze({
-  normal: 0,
-  italic: 1,
-  bold: 2,
-  italicBold: 3
-});
-
-class PdfOutline extends PdfObject {
-  constructor(document, {title = null, anchor = null, color = null, style = "normal"} = {}) {
-    super(document, new PdfDict);
-    this.children = [];
-    this.parent = null;
-    this.title = title;
-    this.anchor = anchor;
-    this.color = color;
-    this.style = style;
-  }
-  add(child) {
-    child.parent = this;
-    this.children.push(child);
-  }
-  descendantCount() {
-    return this.children.reduce((count, child) => count + 1 + child.descendantCount(), 0);
-  }
-  prepare() {
-    if (this.parent !== null) {
-      this.params.set("/Title", new PdfString(this.title ?? ""));
-      if (this.color !== null) this.params.set("/C", PdfArray.fromNum(this.color));
-      if (this.style !== "normal") this.params.set("/F", new PdfNum(STYLE_NUMBER[this.style]));
-      if (this.anchor !== null) this.params.set("/Dest", new PdfString(this.anchor));
-      this.params.set("/Parent", this.parent.ref());
-      const index = this.parent.children.indexOf(this);
-      if (index > 0) this.params.set("/Prev", this.parent.children[index - 1].ref());
-      if (index + 1 < this.parent.children.length) {
-        this.params.set("/Next", this.parent.children[index + 1].ref());
-      }
-      const descendants = this.descendantCount();
-      if (descendants > 0) this.params.set("/Count", new PdfNum(-descendants));
-    } else {
-      this.params.set("/Count", new PdfNum(this.children.length));
-    }
-    if (this.children.length > 0) {
-      this.params.set("/First", this.children[0].ref());
-      this.params.set("/Last", this.children[this.children.length - 1].ref());
-    }
-  }
-}
-
-class PdfAnnotation extends PdfObject {
-  constructor(document, page, annotation, defaultAppearanceName = null, appearances = null) {
-    super(document, new PdfDict([ [ "/Type", new PdfName("/Annot") ] ]));
-    this.page = page;
-    this.annotation = annotation;
-    this.defaultAppearanceName = defaultAppearanceName;
-    this.appearances = appearances;
-    page.annotations.push(this);
-  }
-  prepare() {
-    if (this.annotation.kind === "form") {
-      this.prepareForm(this.annotation);
-      return;
-    }
-    if (this.annotation.kind === "geometric") {
-      this.prepareGeometric(this.annotation);
-      return;
-    }
-    const {rect, destination, kind} = this.annotation;
-    this.params.set("/Subtype", new PdfName("/Link"));
-    this.params.set("/Rect", PdfArray.fromNum([ rect.x, rect.y, rect.x + rect.width, rect.y + rect.height ]));
-    this.params.set("/P", this.page.ref());
-    this.params.set("/Border", PdfArray.fromNum([ 0, 0, 0 ]));
-    this.params.set("/F", new PdfNum(4));
-    this.params.set("/A", new PdfDict([ [ "/S", new PdfName(kind === "url" ? "/URI" : "/GoTo") ], [ kind === "url" ? "/URI" : "/D", new PdfString(destination) ] ]));
-  }
-  prepareGeometric(annotation) {
-    const subtypes = {
-      square: "/Square",
-      circle: "/Circle",
-      polygon: "/Polygon",
-      polyline: "/PolyLine",
-      ink: "/Ink"
-    };
-    this.params.set("/Subtype", new PdfName(subtypes[annotation.shape]));
-    this.params.set("/Rect", PdfArray.fromNum([ annotation.rect.x, annotation.rect.y, annotation.rect.x + annotation.rect.width, annotation.rect.y + annotation.rect.height ]));
-    this.params.set("/P", this.page.ref());
-    this.params.set("/F", new PdfNum(4));
-    this.params.set("/BS", new PdfDict([ [ "/W", new PdfNum(annotation.borderWidth ?? 1) ], [ "/S", new PdfName("/S") ] ]));
-    if (annotation.color !== null && annotation.color !== undefined) {
-      this.params.set("/C", PdfArray.fromNum(annotation.color));
-    }
-    if (annotation.interiorColor !== null && annotation.interiorColor !== undefined) {
-      this.params.set("/IC", PdfArray.fromNum(annotation.interiorColor));
-    }
-    if (annotation.author) this.params.set("/T", new PdfString(annotation.author));
-    if (annotation.subject) this.params.set("/Subj", new PdfString(annotation.subject));
-    if (annotation.content) this.params.set("/Contents", new PdfString(annotation.content));
-    if (annotation.date) this.params.set("/M", new PdfString(annotation.date));
-    if (annotation.points !== undefined) {
-      this.params.set("/Vertices", PdfArray.fromNum(annotation.points.flatMap(point => [ point.x, point.y ])));
-    }
-    if (annotation.inkList !== undefined) {
-      this.params.set("/InkList", new PdfArray(annotation.inkList.map(points => PdfArray.fromNum(points.flatMap(point => [ point.x, point.y ])))));
-    }
-  }
-  prepareForm(field) {
-    const fieldNames = {
-      text: "/Tx",
-      choice: "/Ch",
-      checkbox: "/Btn",
-      button: "/Btn"
-    };
-    this.params.set("/Subtype", new PdfName("/Widget"));
-    this.params.set("/Rect", PdfArray.fromNum([ field.rect.x, field.rect.y, field.rect.x + field.rect.width, field.rect.y + field.rect.height ]));
-    this.params.set("/P", this.page.ref());
-    this.params.set("/F", new PdfNum(4));
-    this.params.set("/FT", new PdfName(fieldNames[field.fieldType]));
-    this.params.set("/T", new PdfString(field.name));
-    this.params.set("/Ff", new PdfNum(field.fieldFlags ?? 0));
-    if (field.alternateName) this.params.set("/TU", new PdfString(field.alternateName));
-    if (field.mappingName) this.params.set("/TM", new PdfString(field.mappingName));
-    if (field.maxLength !== null && field.maxLength !== undefined) {
-      this.params.set("/MaxLen", new PdfNum(field.maxLength));
-    }
-    if (field.textAlign !== null && field.textAlign !== undefined) {
-      this.params.set("/Q", new PdfNum([ "left", "center", "right" ].indexOf(field.textAlign)));
-    }
-    if (field.items !== undefined) {
-      this.params.set("/Opt", new PdfArray(field.items.map(item => new PdfString(item))));
-    }
-    const isButton = field.fieldType === "checkbox" || field.fieldType === "button";
-    if (field.value) {
-      this.params.set("/V", isButton ? new PdfName(field.value) : new PdfString(field.value));
-    }
-    if (field.defaultValue) {
-      this.params.set("/DV", isButton ? new PdfName(field.defaultValue) : new PdfString(field.defaultValue));
-    }
-    if (field.fieldType === "checkbox") {
-      this.params.set("/AS", new PdfName(field.value ?? "/Off"));
-    }
-    if (this.defaultAppearanceName !== null) {
-      const [r, g, b] = field.textColor ?? [ 0, 0, 0 ];
-      this.params.set("/DA", new PdfString(`${this.defaultAppearanceName} ${field.fontSize ?? 12} Tf ${r} ${g} ${b} rg`));
-    }
-    const appearance = new PdfDict;
-    if (field.borderColor !== null && field.borderColor !== undefined) {
-      appearance.set("/BC", PdfArray.fromNum(field.borderColor));
-    }
-    if (field.backgroundColor !== null && field.backgroundColor !== undefined) {
-      appearance.set("/BG", PdfArray.fromNum(field.backgroundColor));
-    }
-    if (!appearance.isEmpty) this.params.set("/MK", appearance);
-    const highlights = {
-      none: "/N",
-      invert: "/I",
-      outline: "/O",
-      push: "/P",
-      toggle: "/T"
-    };
-    if (field.highlighting !== null && field.highlighting !== undefined) {
-      this.params.set("/H", new PdfName(highlights[field.highlighting]));
-    }
-    if (this.appearances !== null) {
-      const appearances = new PdfDict;
-      if (this.appearances.normal !== undefined) {
-        appearances.set("/N", this.appearances.normal.ref());
-      } else if (this.appearances.normalStates !== undefined) {
-        const states = new PdfDict;
-        for (const [name, appearance] of this.appearances.normalStates) {
-          states.set(name, appearance.ref());
-        }
-        appearances.set("/N", states);
-      }
-      if (this.appearances.down !== undefined) appearances.set("/D", this.appearances.down.ref());
-      if (this.appearances.rollover !== undefined) {
-        appearances.set("/R", this.appearances.rollover.ref());
-      }
-      if (!appearances.isEmpty) this.params.set("/AP", appearances);
-    }
-  }
-}
-
-class PdfMetadata extends PdfObjectStream {
-  constructor(document, metadata) {
-    super(document, utf8Encode(metadata), false);
-    this.params.set("/Type", new PdfName("/Metadata"));
-    this.params.set("/Subtype", new PdfName("/XML"));
-  }
-}
-
 class PdfSoftMaskReference extends PdfDataType {
   constructor(mask) {
     super();
@@ -13454,223 +10744,6 @@ class PdfSoftMaskReference extends PdfDataType {
   output(_stream) {
     throw new Error("A PDF soft mask must be resolved by PdfDocument before output");
   }
-}
-
-class PdfDocument {
-  constructor(metadata, settings = DEFAULT_PDF_SETTINGS) {
-    this.serial = 0;
-    this.xref = new PdfXrefTable;
-    this.fontObjects = new Map;
-    this.imageObjects = new Map;
-    this.softMaskObjects = new Map;
-    this.formFontNames = new Map;
-    this.settings = settings;
-    const catalogSerial = this.genSerial();
-    this.pageList = new PdfPageList(this);
-    this.catalog = new PdfCatalog(this, this.pageList, catalogSerial);
-    this.info = new PdfInfo(this, metadata);
-    if (metadata.xmpMetadata) {
-      this.catalog.metadata = new PdfMetadata(this, metadata.xmpMetadata);
-    }
-  }
-  get objects() {
-    return this.xref.objects;
-  }
-  genSerial() {
-    return ++this.serial;
-  }
-  register(object) {
-    this.xref.add(object);
-  }
-  fontObject(font) {
-    const existing = this.fontObjects.get(font);
-    if (existing !== undefined) {
-      return existing;
-    }
-    const object = new PdfObject(this, font.resourceDict(this));
-    this.fontObjects.set(font, object);
-    return object;
-  }
-  imageObject(image) {
-    const existing = this.imageObjects.get(image);
-    if (existing !== undefined) return existing;
-    const mask = image.hasAlpha ? new PdfImageObject(this, image, "alpha") : null;
-    const object = new PdfImageObject(this, image, "rgb");
-    if (mask !== null) object.setSoftMask(mask);
-    this.imageObjects.set(image, object);
-    return object;
-  }
-  softMaskObject(mask) {
-    let object = this.softMaskObjects.get(mask);
-    if (object === undefined) {
-      object = new PdfXObject(this, "/Form", mask.content);
-      object.params.set("/FormType", new PdfNum(1));
-      object.params.set("/BBox", PdfArray.fromNum([ mask.boundingBox.x, mask.boundingBox.y, mask.boundingBox.x + mask.boundingBox.width, mask.boundingBox.y + mask.boundingBox.height ]));
-      object.params.set("/Group", new PdfDict([ [ "/S", new PdfName("/Transparency") ], [ "/CS", new PdfName("/DeviceRGB") ] ]));
-      const resources = new PdfDict;
-      if (mask.fonts.size > 0) {
-        const fonts = new Map;
-        for (const [font, name] of mask.fonts) fonts.set(name, this.fontObject(font));
-        resources.set("/Font", PdfDict.fromObjectMap(fonts));
-      }
-      if (mask.images.size > 0) {
-        const images = new Map;
-        for (const [image, name] of mask.images) images.set(name, this.imageObject(image));
-        resources.set("/XObject", PdfDict.fromObjectMap(images));
-      }
-      if (mask.graphicStates.size > 0) {
-        resources.set("/ExtGState", new PdfDict(Array.from(mask.graphicStates, ([name, state]) => [ name, this.resolveGraphicState(state) ])));
-      }
-      if (mask.patterns.size > 0) resources.set("/Pattern", new PdfDict(mask.patterns));
-      if (!resources.isEmpty) object.params.set("/Resources", resources);
-      this.softMaskObjects.set(mask, object);
-    }
-    return new PdfDict([ [ "/S", new PdfName("/Luminosity") ], [ "/G", object.ref() ] ]);
-  }
-  resolveGraphicState(state) {
-    const softMask = state.get("/SMask");
-    if (!(softMask instanceof PdfSoftMaskReference)) return state;
-    const resolved = new PdfDict(state.values);
-    resolved.set("/SMask", this.softMaskObject(softMask.mask));
-    return resolved;
-  }
-  formAppearanceObject(appearance) {
-    const object = new PdfXObject(this, "/Form", encodeLatin1(appearance.content));
-    object.params.set("/FormType", new PdfNum(1));
-    object.params.set("/BBox", PdfArray.fromNum([ 0, 0, appearance.width, appearance.height ]));
-    const resources = new PdfDict;
-    if (appearance.fonts.size > 0) {
-      const fonts = new Map;
-      for (const [font, name] of appearance.fonts) fonts.set(name, this.fontObject(font));
-      resources.set("/Font", PdfDict.fromObjectMap(fonts));
-    }
-    if (appearance.images.size > 0) {
-      const images = new Map;
-      for (const [image, name] of appearance.images) images.set(name, this.imageObject(image));
-      resources.set("/XObject", PdfDict.fromObjectMap(images));
-    }
-    if (appearance.graphicStates.size > 0) {
-      resources.set("/ExtGState", new PdfDict(appearance.graphicStates));
-    }
-    if (appearance.patterns.size > 0) {
-      resources.set("/Pattern", new PdfDict(appearance.patterns));
-    }
-    if (!resources.isEmpty) object.params.set("/Resources", resources);
-    return object;
-  }
-  resolveFormAppearances(appearances) {
-    if (appearances === undefined) return null;
-    const normalStates = appearances.normalStates === undefined ? undefined : new Map([ ...appearances.normalStates ].map(([name, appearance]) => [ name, this.formAppearanceObject(appearance) ]));
-    return {
-      normal: appearances.normal === undefined ? undefined : this.formAppearanceObject(appearances.normal),
-      normalStates,
-      down: appearances.down === undefined ? undefined : this.formAppearanceObject(appearances.down),
-      rollover: appearances.rollover === undefined ? undefined : this.formAppearanceObject(appearances.rollover)
-    };
-  }
-  addPage(format, content, fonts = new Map, graphicStates = new Map, patterns = new Map, images = new Map, annotations = []) {
-    const resources = [];
-    for (const [font, name] of fonts) {
-      resources.push([ name, this.fontObject(font) ]);
-    }
-    const stream = new PdfObjectStream(this, typeof content === "string" ? encodeLatin1(content) : content);
-    const page = new PdfPage(this, this.pageList, format);
-    for (const [name, object] of resources) {
-      page.addFont(name, object);
-    }
-    for (const [name, state] of graphicStates) {
-      page.addGraphicState(name, this.resolveGraphicState(state));
-    }
-    for (const [name, pattern] of patterns) {
-      page.addPattern(name, pattern);
-    }
-    for (const [image, name] of images) {
-      page.addXObject(name, this.imageObject(image));
-    }
-    for (const annotation of annotations) {
-      let appearanceName = null;
-      if (annotation.kind === "form") {
-        const font = annotation.font;
-        if (font !== undefined) {
-          appearanceName = this.formFontNames.get(font) ?? null;
-          if (appearanceName === null) {
-            appearanceName = `/FForm${this.formFontNames.size + 1}`;
-            this.formFontNames.set(font, appearanceName);
-            this.catalog.formFonts.set(appearanceName, this.fontObject(font));
-          }
-        }
-      }
-      const appearances = annotation.kind === "form" ? this.resolveFormAppearances(annotation.appearances) : null;
-      const object = new PdfAnnotation(this, page, annotation, appearanceName, appearances);
-      if (annotation.kind === "form") this.catalog.formFields.push(object);
-    }
-    page.contents.push(stream);
-    return page;
-  }
-  addNavigation(outlines, pageMode, destinations = []) {
-    const names = outlines.length > 0 || destinations.length > 0 ? new PdfNames(this) : null;
-    for (const entry of destinations) {
-      const page = this.pageList.pages[entry.page - 1];
-      if (page !== undefined) {
-        names?.addDestination(entry.name, page, {
-          x: entry.x ?? undefined,
-          y: entry.y ?? undefined,
-          zoom: entry.zoom ?? undefined
-        });
-      }
-    }
-    if (outlines.length > 0) {
-      const root = new PdfOutline(this);
-      const levels = [ root ];
-      for (const entry of outlines) {
-        const page = this.pageList.pages[entry.page - 1];
-        if (page === undefined) continue;
-        names?.addDestination(entry.anchor, page, {
-          y: entry.y
-        });
-        const node = new PdfOutline(this, {
-          title: entry.title,
-          anchor: entry.anchor,
-          color: entry.color ?? null,
-          style: entry.style ?? "normal"
-        });
-        const parentIndex = Math.min(entry.level, levels.length - 1);
-        const parent = levels[parentIndex] ?? root;
-        parent.add(node);
-        levels.length = parentIndex + 1;
-        levels.push(node);
-      }
-      this.catalog.outline = root;
-    }
-    if (names !== null) this.catalog.names = names;
-    this.catalog.showOutlines = pageMode === "outlines";
-  }
-  addPageLabels(labels) {
-    if (labels.length === 0) return;
-    const pageLabels = new PdfPageLabels(this);
-    for (const {pageIndex, label} of labels) pageLabels.labels.set(pageIndex, label);
-    this.catalog.pageLabels = pageLabels;
-  }
-  save() {
-    for (const object of this.objects) {
-      object.prepare();
-    }
-    this.xref.params.set("/Root", this.catalog.ref());
-    this.xref.params.set("/Info", this.info.ref());
-    const stream = new PdfStream;
-    this.xref.output(stream);
-    return stream.output();
-  }
-}
-
-function serializePdf(pages, metadata, outlines = [], pageMode = "none", destinations = [], pageLabels = [], settings = DEFAULT_PDF_SETTINGS) {
-  const document = new PdfDocument(metadata, settings);
-  for (const page of pages) {
-    document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns, page.images, page.annotations);
-  }
-  document.addNavigation(outlines, pageMode, destinations);
-  document.addPageLabels(pageLabels);
-  return document.save();
 }
 
 const LINE_CAP_OPERAND = Object.freeze({
@@ -13691,6 +10764,23 @@ function operands(values) {
   return values.map(formatNumber).join(" ");
 }
 
+function compositeTextOperand(font, text, wordSpacing, fontSize) {
+  const parts = [];
+  let run = "";
+  const adjustment = formatNumber(-wordSpacing * 1e3 / fontSize);
+  for (const character of String(text)) {
+    run += character;
+    if (character === " ") {
+      parts.push(font.encodeText(run), adjustment);
+      run = "";
+    }
+  }
+  if (run !== "" || parts.length === 0) {
+    parts.push(font.encodeText(run));
+  }
+  return `[${parts.join(" ")}]`;
+}
+
 class PdfCanvas {
   constructor(pageHeight) {
     this.content = new PdfStream;
@@ -13700,6 +10790,8 @@ class PdfCanvas {
     this.stateDicts = new Map;
     this.patternNames = new Map;
     this.patternDicts = new Map;
+    this.shadingNames = new Map;
+    this.shadingDicts = new Map;
     this.imageNames = new Map;
     this.softMaskNames = new Map;
     this.pageAnnotations = [];
@@ -13743,6 +10835,9 @@ class PdfCanvas {
   }
   get patterns() {
     return this.patternDicts;
+  }
+  get shadings() {
+    return this.shadingDicts;
   }
   get images() {
     return this.imageNames;
@@ -13890,6 +10985,18 @@ class PdfCanvas {
   setStrokePattern(pattern) {
     const name = this.addPattern(pattern);
     this.push(`/Pattern CS ${name} SCN`);
+    return name;
+  }
+  drawShading(shading) {
+    const dict = shading.output();
+    const key = dict.toString();
+    let name = this.shadingNames.get(key);
+    if (name === undefined) {
+      name = `/s${this.shadingDicts.size + 1}`;
+      this.shadingNames.set(key, name);
+      this.shadingDicts.set(name, dict);
+    }
+    this.push(`${name} sh`);
     return name;
   }
   drawImage(image, x, y, width = image.width, height) {
@@ -14133,8 +11240,9 @@ class PdfCanvas {
     const font = style.font ?? defaultPdfFont;
     const letterSpacing = style.letterSpacing ?? 0;
     const wordSpacing = style.wordSpacing ?? 0;
+    const operatorWordSpacing = font.isComposite === true ? 0 : wordSpacing;
     const spacingOperators = [];
-    if (letterSpacing === 0 && wordSpacing === 0 && this.textSpacingDirty) {
+    if (letterSpacing === 0 && operatorWordSpacing === 0 && this.textSpacingDirty) {
       spacingOperators.push("0", "Tc", "0", "Tw");
       this.currentLetterSpacing = 0;
       this.currentWordSpacing = 0;
@@ -14144,15 +11252,17 @@ class PdfCanvas {
         spacingOperators.push(formatNumber(letterSpacing), "Tc");
         this.currentLetterSpacing = letterSpacing;
       }
-      if (wordSpacing !== this.currentWordSpacing) {
-        spacingOperators.push(formatNumber(wordSpacing), "Tw");
-        this.currentWordSpacing = wordSpacing;
+      if (operatorWordSpacing !== this.currentWordSpacing) {
+        spacingOperators.push(formatNumber(operatorWordSpacing), "Tw");
+        this.currentWordSpacing = operatorWordSpacing;
       }
-      if (letterSpacing !== 0 || wordSpacing !== 0) {
+      if (letterSpacing !== 0 || operatorWordSpacing !== 0) {
         this.textSpacingDirty = true;
       }
     }
-    const command = [ "BT", this.addFont(font), formatNumber(fontSize), "Tf", colorOperator(style.color), ...spacingOperators, "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", font.encodeText(text), "Tj", "ET" ].join(" ");
+    const usesTextArray = font.isComposite === true && wordSpacing !== 0;
+    const textOperand = usesTextArray ? compositeTextOperand(font, text, wordSpacing, fontSize) : font.encodeText(text);
+    const command = [ "BT", this.addFont(font), formatNumber(fontSize), "Tf", colorOperator(style.color), ...spacingOperators, "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", textOperand, usesTextArray ? "TJ" : "Tj", "ET" ].join(" ");
     this.push(command);
   }
   drawString(font, fontSize, text, x, y, renderingMode = 0) {
@@ -14196,1322 +11306,6 @@ class PdfCanvas {
   }
   takeOutputBytes() {
     return this.content.take(10);
-  }
-}
-
-class PageTheme {
-  constructor({pageFormat = PageFormat.A4, buildBackground = null, buildForeground = null, theme = null, orientation = "natural", margin = null, clip = false} = {}) {
-    this.pageFormat = {
-      ...pageFormat,
-      width: Number(pageFormat.width),
-      height: Number(pageFormat.height)
-    };
-    this.orientation = orientation;
-    this.buildBackground = buildBackground;
-    this.buildForeground = buildForeground;
-    this.theme = theme;
-    this.clip = clip;
-    this.declaredMargin = margin == null ? null : normalizeInsets(margin);
-  }
-  get mustRotate() {
-    return this.orientation === "landscape" && this.pageFormat.height > this.pageFormat.width || this.orientation === "portrait" && this.pageFormat.width > this.pageFormat.height;
-  }
-  get resolvedFormat() {
-    return this.mustRotate ? {
-      width: this.pageFormat.height,
-      height: this.pageFormat.width
-    } : this.pageFormat;
-  }
-  get margin() {
-    const fromFormat = formatMargin(this.pageFormat);
-    const declared = this.declaredMargin ?? (fromFormat === null ? normalizeInsets(DEFAULT_MARGIN) : fromFormat);
-    return this.mustRotate ? {
-      left: declared.bottom,
-      top: declared.left,
-      right: declared.top,
-      bottom: declared.right
-    } : declared;
-  }
-  copyWith(options = {}) {
-    return new PageTheme({
-      pageFormat: options.pageFormat ?? this.pageFormat,
-      buildBackground: options.buildBackground ?? this.buildBackground,
-      buildForeground: options.buildForeground ?? this.buildForeground,
-      theme: options.theme ?? this.theme,
-      orientation: options.orientation ?? this.orientation,
-      margin: options.margin ?? this.declaredMargin,
-      clip: options.clip ?? this.clip
-    });
-  }
-}
-
-class NewPage extends Widget {
-  constructor({freeSpace = null} = {}) {
-    super();
-    if (freeSpace === null) {
-      this.freeSpace = null;
-      return;
-    }
-    const resolved = Number(freeSpace);
-    if (!Number.isFinite(resolved) || resolved < 0) {
-      throw new RangeError("NewPage.freeSpace must be a finite non-negative number");
-    }
-    this.freeSpace = resolved;
-  }
-  newPageNeeded(availableSpace) {
-    return this.freeSpace === null || availableSpace < this.freeSpace;
-  }
-  layout(_context, _constraints) {
-    return {
-      widget: this,
-      width: 0,
-      height: 0,
-      data: null
-    };
-  }
-  paint(_context, _box) {}
-}
-
-class MultiPage {
-  constructor({pageTheme = undefined, format = undefined, pageFormat = undefined, margin = undefined, orientation = undefined, gap = 0, theme = undefined, build, header = null, footer = null, background = null, maxPages = 50}) {
-    this.renderedPages = [];
-    if (typeof build !== "function") throw new TypeError("MultiPage.build must be a function");
-    const base = pageTheme ?? new PageTheme({
-      pageFormat: PageFormat.A4
-    });
-    this.pageTheme = base.copyWith({
-      pageFormat: pageFormat ?? format,
-      margin,
-      orientation,
-      theme
-    });
-    this.theme = this.pageTheme.theme;
-    this.gap = Number(gap);
-    this.build = build;
-    this.header = header;
-    this.footer = footer;
-    this.background = background;
-    this.maxPages = Math.trunc(Number(maxPages));
-    if (!Number.isFinite(this.maxPages) || this.maxPages <= 0) {
-      throw new RangeError("MultiPage.maxPages must be a positive finite integer");
-    }
-  }
-  get format() {
-    return this.pageTheme.resolvedFormat;
-  }
-  get margin() {
-    return this.pageTheme.margin;
-  }
-  render(documentContext) {
-    const pages = [];
-    const startPage = () => {
-      if (pages.length >= this.maxPages) {
-        throw new RangeError(`MultiPage exceeded its ${this.maxPages} page limit`);
-      }
-      const canvas = new PdfCanvas(this.format.height);
-      if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
-      const pageNumber = documentContext.pageOffset + pages.length + 1;
-      const context = {
-        ...documentContext,
-        canvas,
-        pageFormat: this.format,
-        pageNumber,
-        pageLabel: documentContext.document.pageLabel(pageNumber - 1),
-        pagesCount: documentContext.pagesCount || pageNumber,
-        theme: this.theme ?? documentContext.document.theme
-      };
-      this.paintLayer(this.pageTheme.buildBackground, context);
-      const maxWidth = this.format.width - this.margin.left - this.margin.right;
-      let top = this.margin.top;
-      let bottom = this.format.height - this.margin.bottom;
-      if (this.header) {
-        const headerWidget = this.header(context);
-        const headerBox = headerWidget.layout(context, new BoxConstraints({
-          maxWidth
-        }));
-        top += headerBox.height + this.gap;
-      }
-      if (this.footer) {
-        const footerWidget = this.footer(context);
-        const footerBox = footerWidget.layout(context, new BoxConstraints({
-          maxWidth
-        }));
-        bottom -= footerBox.height + this.gap;
-      }
-      const state = {
-        canvas,
-        context,
-        maxWidth,
-        top,
-        bottom,
-        cursor: top
-      };
-      pages.push(state);
-      return state;
-    };
-    let page = startPage();
-    const children = this.build(page.context);
-    if (!Array.isArray(children)) throw new TypeError("MultiPage.build must return an array of widgets");
-    for (const child of children) {
-      if (child instanceof NewPage) {
-        if (child.newPageNeeded(page.bottom - page.cursor)) page = startPage();
-        continue;
-      }
-      if (child instanceof SpanningWidget && child.canSpan) {
-        let state = child.initialSpanState();
-        const natural = child.layout(page.context, new BoxConstraints({
-          maxWidth: page.maxWidth,
-          maxHeight: Infinity
-        }));
-        const initialAvailable = page.bottom - page.cursor;
-        if (natural.height <= initialAvailable + .001) {
-          child.paint(page.context, {
-            ...natural,
-            x: this.margin.left,
-            y: page.cursor
-          });
-          page.cursor += natural.height + this.gap;
-          continue;
-        }
-        const fullAvailable = page.bottom - page.top;
-        if (child instanceof Flex && natural.height <= fullAvailable + .001 && page.cursor > page.top + .001) {
-          page = startPage();
-          const moved = child.layout(page.context, new BoxConstraints({
-            maxWidth: page.maxWidth,
-            maxHeight: Infinity
-          }));
-          child.paint(page.context, {
-            ...moved,
-            x: this.margin.left,
-            y: page.cursor
-          });
-          page.cursor += moved.height + this.gap;
-          continue;
-        }
-        while (true) {
-          const available = page.bottom - page.cursor;
-          const fragment = child.layoutSpan(page.context, new BoxConstraints({
-            maxWidth: page.maxWidth,
-            maxHeight: available
-          }), state);
-          const box = fragment.box;
-          if (box.height > available + .001) {
-            throw new RangeError("A spanning widget returned a fragment taller than its constraint");
-          }
-          if (box.height <= .001 && fragment.hasMore) {
-            if (page.cursor > page.top + .001) {
-              page = startPage();
-              continue;
-            }
-            throw new RangeError("A spanning row exceeds a full MultiPage content area");
-          }
-          if (box.height > 0) {
-            child.paint(page.context, {
-              ...box,
-              x: this.margin.left,
-              y: page.cursor
-            });
-          }
-          if (!fragment.hasMore) {
-            page.cursor += box.height + this.gap;
-            break;
-          }
-          state = fragment.nextState;
-          page = startPage();
-        }
-        continue;
-      }
-      let box = child.layout(page.context, new BoxConstraints({
-        maxWidth: page.maxWidth,
-        maxHeight: Infinity
-      }));
-      if (page.cursor + box.height > page.bottom + .001) {
-        if (box.height > page.bottom - page.top + .001) {
-          throw new RangeError(`Widget height ${box.height.toFixed(2)} exceeds a full MultiPage content area`);
-        }
-        page = startPage();
-        box = child.layout(page.context, new BoxConstraints({
-          maxWidth: page.maxWidth,
-          maxHeight: Infinity
-        }));
-      }
-      child.paint(page.context, {
-        ...box,
-        x: this.margin.left,
-        y: page.cursor
-      });
-      page.cursor += box.height + this.gap;
-    }
-    this.renderedPages = pages;
-    return this.summaries(pages);
-  }
-  postProcess(documentContext) {
-    const pages = this.renderedPages;
-    try {
-      for (const state of pages) {
-        const context = {
-          ...state.context,
-          ...documentContext,
-          pagesCount: documentContext.pagesCount
-        };
-        if (this.header) {
-          const headerWidget = this.header(context);
-          const headerBox = headerWidget.layout(context, new BoxConstraints({
-            maxWidth: state.maxWidth
-          }));
-          headerWidget.paint(context, {
-            ...headerBox,
-            x: this.margin.left,
-            y: this.margin.top
-          });
-        }
-        if (this.footer) {
-          const footerWidget = this.footer(context);
-          const footerBox = footerWidget.layout(context, new BoxConstraints({
-            maxWidth: state.maxWidth
-          }));
-          footerWidget.paint(context, {
-            ...footerBox,
-            x: this.margin.left,
-            y: this.format.height - this.margin.bottom - footerBox.height
-          });
-        }
-        this.paintLayer(this.pageTheme.buildForeground, context);
-      }
-      return this.serialize(pages);
-    } finally {
-      this.renderedPages = [];
-    }
-  }
-  serialize(pages) {
-    return pages.map(({canvas}) => ({
-      format: this.format,
-      content: canvas.takeOutputBytes(),
-      fonts: canvas.fonts,
-      graphicStates: canvas.graphicStates,
-      patterns: canvas.patterns,
-      images: canvas.images,
-      annotations: canvas.annotations
-    }));
-  }
-  summaries(pages) {
-    return pages.map(({canvas}) => ({
-      format: this.format,
-      content: new Uint8Array(0),
-      fonts: canvas.fonts,
-      graphicStates: canvas.graphicStates,
-      patterns: canvas.patterns,
-      images: canvas.images,
-      annotations: canvas.annotations
-    }));
-  }
-  paintLayer(build, context) {
-    if (build === null) return;
-    const widget = build(context);
-    const box = widget.layout(context, new BoxConstraints({
-      maxWidth: this.format.width,
-      maxHeight: this.format.height
-    }));
-    widget.paint(context, {
-      ...box,
-      x: 0,
-      y: 0
-    });
-  }
-}
-
-class Page {
-  constructor({pageTheme = undefined, pageFormat = undefined, format = undefined, margin = undefined, theme = undefined, orientation = undefined, build, background = null}) {
-    if (typeof build !== "function") throw new TypeError("Page.build must be a function");
-    const base = pageTheme ?? new PageTheme;
-    this.pageTheme = base.copyWith({
-      pageFormat: pageFormat ?? format,
-      margin,
-      theme,
-      orientation
-    });
-    this.build = build;
-    this.background = background;
-  }
-  get format() {
-    return this.pageTheme.resolvedFormat;
-  }
-  render(documentContext) {
-    const format = this.pageTheme.resolvedFormat;
-    const margin = this.pageTheme.margin;
-    const canvas = new PdfCanvas(format.height);
-    if (this.background) canvas.fillRect(0, 0, format.width, format.height, this.background);
-    const context = {
-      ...documentContext,
-      canvas,
-      pageFormat: format,
-      pageNumber: documentContext.pageOffset + 1,
-      pageLabel: documentContext.document.pageLabel(documentContext.pageOffset),
-      pagesCount: documentContext.pagesCount || documentContext.pageOffset + 1,
-      theme: this.pageTheme.theme ?? documentContext.document.theme
-    };
-    const maxWidth = format.width - margin.left - margin.right;
-    const maxHeight = format.height - margin.top - margin.bottom;
-    this.paintLayer(this.pageTheme.buildBackground, context, format);
-    const widget = this.build(context);
-    const box = widget.layout(context, new BoxConstraints({
-      maxWidth,
-      maxHeight
-    }));
-    if (box.height > maxHeight + .001) {
-      throw new RangeError(`Page content height ${box.height.toFixed(2)} exceeds available height ${maxHeight.toFixed(2)}`);
-    }
-    widget.paint(context, {
-      ...box,
-      x: margin.left,
-      y: margin.top
-    });
-    this.paintLayer(this.pageTheme.buildForeground, context, format);
-    return [ {
-      format,
-      content: canvas.takeOutputBytes(),
-      fonts: canvas.fonts,
-      graphicStates: canvas.graphicStates,
-      patterns: canvas.patterns,
-      images: canvas.images,
-      annotations: canvas.annotations
-    } ];
-  }
-  paintLayer(build, context, format) {
-    if (build === null) {
-      return;
-    }
-    const widget = build(context);
-    const box = widget.layout(context, new BoxConstraints({
-      maxWidth: format.width,
-      maxHeight: format.height
-    }));
-    widget.paint(context, {
-      ...box,
-      x: 0,
-      y: 0
-    });
-  }
-}
-
-class IconData {
-  constructor(codePoint, {matchTextDirection = false} = {}) {
-    const value = Number(codePoint);
-    if (!Number.isInteger(value) || value < 0 || value > 1114111 || value >= 55296 && value <= 57343) {
-      throw new RangeError("IconData.codePoint must be a valid Unicode scalar value");
-    }
-    this.codePoint = value;
-    this.matchTextDirection = Boolean(matchTextDirection);
-  }
-}
-
-class IconThemeData {
-  constructor({color = null, opacity = null, size = null, font = null} = {}) {
-    this.color = color === null ? null : normalizeColor(color);
-    this.opacity = opacity === null ? null : assertFiniteNumber(Number(opacity), "icon opacity");
-    this.size = size === null ? null : assertFiniteNumber(Number(size), "icon size");
-    this.font = font;
-    if (this.opacity !== null && (this.opacity < 0 || this.opacity > 1)) {
-      throw new RangeError("icon opacity must be between 0 and 1");
-    }
-    if (this.size !== null && this.size < 0) {
-      throw new RangeError("icon size cannot be negative");
-    }
-  }
-  static fallback(font = null) {
-    return new IconThemeData({
-      color: "#000000",
-      opacity: 1,
-      size: 24,
-      font
-    });
-  }
-  copyWith(options = {}) {
-    return new IconThemeData({
-      color: options.color ?? this.color,
-      opacity: options.opacity ?? this.opacity,
-      size: options.size ?? this.size,
-      font: options.font ?? this.font
-    });
-  }
-}
-
-class Icon extends StatelessWidget {
-  constructor(icon, {size = null, color = null, textDirection = null, font = null} = {}) {
-    super();
-    if (!(icon instanceof IconData)) throw new TypeError("Icon expects an IconData value");
-    this.icon = icon;
-    this.size = size === null ? null : assertFiniteNumber(Number(size), "icon size");
-    this.color = color === null ? null : normalizeColor(color);
-    this.textDirection = textDirection;
-    this.font = font;
-    if (this.size !== null && this.size < 0) throw new RangeError("icon size cannot be negative");
-    if (textDirection !== null && textDirection !== "ltr" && textDirection !== "rtl") {
-      throw new TypeError(`Unknown text direction: ${String(textDirection)}`);
-    }
-  }
-  build(context) {
-    const theme = context.theme.iconTheme;
-    const size = this.size ?? theme.size ?? 24;
-    const color = this.color ?? theme.color ?? [ 0, 0, 0 ];
-    const opacity = theme.opacity ?? 1;
-    const font = this.font ?? theme.font;
-    if (font === null) {
-      throw new Error("Icon requires Icon.font or ThemeData.withFont({ icons })");
-    }
-    const direction = this.textDirection ?? "ltr";
-    let widget = new RichText({
-      textDirection: direction,
-      text: new TextSpan({
-        text: String.fromCodePoint(this.icon.codePoint),
-        style: new TextStyle({
-          inherit: false,
-          color,
-          fontNormal: font,
-          fontSize: size,
-          fontWeight: "normal",
-          fontStyle: "normal",
-          letterSpacing: 0,
-          wordSpacing: 0,
-          lineSpacing: 0,
-          height: 1,
-          decoration: "none"
-        })
-      })
-    });
-    if (this.icon.matchTextDirection && direction === "rtl") {
-      widget = new Transform({
-        transform: [ -1, 0, 0, 1, 0, 0 ],
-        alignment: "center",
-        child: widget
-      });
-    }
-    if (opacity < 1) widget = new Opacity({
-      opacity,
-      child: widget
-    });
-    return widget;
-  }
-}
-
-class ThemeData {
-  constructor(fields) {
-    this.defaultTextStyle = fields.defaultTextStyle;
-    this.paragraphStyle = fields.paragraphStyle;
-    this.header0 = fields.header0;
-    this.header1 = fields.header1;
-    this.header2 = fields.header2;
-    this.header3 = fields.header3;
-    this.header4 = fields.header4;
-    this.header5 = fields.header5;
-    this.bulletStyle = fields.bulletStyle;
-    this.tableHeader = fields.tableHeader;
-    this.tableCell = fields.tableCell;
-    this.softWrap = fields.softWrap;
-    this.overflow = fields.overflow;
-    this.textAlign = fields.textAlign;
-    this.maxLines = fields.maxLines;
-    this.iconTheme = fields.iconTheme;
-  }
-  static withFont({base = null, bold = null, italic = null, boldItalic = null, icons = null, fontFallback = null} = {}) {
-    const defaultStyle = TextStyle.defaultStyle().copyWith({
-      font: base,
-      fontNormal: base,
-      fontBold: bold,
-      fontItalic: italic,
-      fontBoldItalic: boldItalic,
-      fontFallback
-    });
-    const fontSize = defaultStyle.fontSize ?? 12;
-    return new ThemeData({
-      defaultTextStyle: defaultStyle,
-      paragraphStyle: defaultStyle.copyWith({
-        lineSpacing: 5
-      }),
-      bulletStyle: defaultStyle.copyWith({
-        lineSpacing: 5
-      }),
-      header0: defaultStyle.copyWith({
-        fontSize: fontSize * 2
-      }),
-      header1: defaultStyle.copyWith({
-        fontSize: fontSize * 1.5
-      }),
-      header2: defaultStyle.copyWith({
-        fontSize: fontSize * 1.4
-      }),
-      header3: defaultStyle.copyWith({
-        fontSize: fontSize * 1.3
-      }),
-      header4: defaultStyle.copyWith({
-        fontSize: fontSize * 1.2
-      }),
-      header5: defaultStyle.copyWith({
-        fontSize: fontSize * 1.1
-      }),
-      tableHeader: defaultStyle.copyWith({
-        fontSize: fontSize * .8,
-        fontWeight: "bold"
-      }),
-      tableCell: defaultStyle.copyWith({
-        fontSize: fontSize * .8
-      }),
-      softWrap: true,
-      overflow: "visible",
-      textAlign: null,
-      maxLines: null,
-      iconTheme: IconThemeData.fallback(icons)
-    });
-  }
-  static base() {
-    return ThemeData.withFont();
-  }
-  static create(options = {}) {
-    return ThemeData.base().copyWith(options);
-  }
-  copyWith(options = {}) {
-    return new ThemeData({
-      defaultTextStyle: this.defaultTextStyle.merge(options.defaultTextStyle),
-      paragraphStyle: this.paragraphStyle.merge(options.paragraphStyle),
-      bulletStyle: this.bulletStyle.merge(options.bulletStyle),
-      header0: this.header0.merge(options.header0),
-      header1: this.header1.merge(options.header1),
-      header2: this.header2.merge(options.header2),
-      header3: this.header3.merge(options.header3),
-      header4: this.header4.merge(options.header4),
-      header5: this.header5.merge(options.header5),
-      tableHeader: this.tableHeader.merge(options.tableHeader),
-      tableCell: this.tableCell.merge(options.tableCell),
-      softWrap: options.softWrap ?? this.softWrap,
-      overflow: options.overflow ?? this.overflow,
-      textAlign: options.textAlign ?? this.textAlign,
-      maxLines: options.maxLines ?? this.maxLines,
-      iconTheme: options.iconTheme ?? this.iconTheme
-    });
-  }
-}
-
-class InheritedTheme extends Widget {
-  constructor(child) {
-    super();
-    this.child = child;
-  }
-  scope(context) {
-    return {
-      ...context,
-      theme: this.themeFor(context)
-    };
-  }
-  layout(context, constraints) {
-    const childBox = this.child.layout(this.scope(context), constraints);
-    return {
-      widget: this,
-      width: childBox.width,
-      height: childBox.height,
-      data: {
-        childBox
-      }
-    };
-  }
-  paint(context, box) {
-    const {childBox} = box.data;
-    childBox.widget.paint(this.scope(context), {
-      ...childBox,
-      x: box.x,
-      y: box.y
-    });
-  }
-}
-
-class Theme extends InheritedTheme {
-  constructor({data, child}) {
-    super(child);
-    this.data = data;
-  }
-  static of(context) {
-    return context.theme;
-  }
-  themeFor() {
-    return this.data;
-  }
-}
-
-class DefaultTextStyle extends InheritedTheme {
-  constructor({style, child, textAlign = null, softWrap = true, overflow = null, maxLines = null}) {
-    super(child);
-    this.style = style;
-    this.textAlign = textAlign;
-    this.softWrap = softWrap;
-    this.overflow = overflow;
-    this.maxLines = maxLines;
-  }
-  themeFor(context) {
-    return context.theme.copyWith({
-      defaultTextStyle: this.style,
-      textAlign: this.textAlign,
-      softWrap: this.softWrap,
-      overflow: this.overflow ?? undefined,
-      maxLines: this.maxLines
-    });
-  }
-}
-
-class Document {
-  constructor({title = null, author = null, subject = null, creator = null, producer = null, keywords = null, xmpMetadata = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none", compress = true} = {}) {
-    this.sections = [];
-    this.outlineEntries = [];
-    this.destinationEntries = [];
-    this.pageLabelEntries = new Map;
-    this.outlineReplay = false;
-    this.outlineCursor = 0;
-    this.outlineRerenderRequested = false;
-    this.fonts = new Map;
-    this.fallbackFont = Font.helvetica();
-    this.metadata = {
-      title,
-      author,
-      subject,
-      creator,
-      producer,
-      keywords,
-      xmpMetadata
-    };
-    this.settings = {
-      compress
-    };
-    for (const {pageIndex, label} of pageLabels) this.setPageLabel(pageIndex, label);
-    this.theme = theme ?? (font === undefined ? ThemeData.base() : ThemeData.withFont({
-      base: Font.fromPdfFont(font)
-    }));
-    this.pageMode = pageMode;
-  }
-  resolveFont(declaration) {
-    const existing = this.fonts.get(declaration);
-    if (existing !== undefined) {
-      return existing;
-    }
-    const font = declaration.build();
-    this.fonts.set(declaration, font);
-    return font;
-  }
-  get font() {
-    return this.resolveFont(this.theme.defaultTextStyle.font ?? this.fallbackFont);
-  }
-  addPage(page) {
-    if (!(page instanceof Page) && !(page instanceof MultiPage)) {
-      throw new TypeError("Document.addPage expects Page or MultiPage");
-    }
-    this.sections.push(page);
-    return this;
-  }
-  setPageLabel(pageIndex, label) {
-    if (!Number.isInteger(pageIndex) || pageIndex < 0) {
-      throw new RangeError("Page label index must be a non-negative integer");
-    }
-    if (!(label instanceof PdfPageLabel)) {
-      throw new TypeError("Document.setPageLabel expects a PdfPageLabel");
-    }
-    this.pageLabelEntries.set(pageIndex, label);
-    return this;
-  }
-  pageLabel(pageIndex) {
-    const keys = [ ...this.pageLabelEntries.keys() ].sort((a, b) => a - b);
-    let current = PdfPageLabel.arabic();
-    let start = 0;
-    for (const key of keys) {
-      if (pageIndex < key) break;
-      current = this.pageLabelEntries.get(key) ?? current;
-      start = key;
-    }
-    return current.asString(pageIndex - start);
-  }
-  get outlines() {
-    return this.outlineEntries;
-  }
-  requestOutlineRerender() {
-    this.outlineRerenderRequested = true;
-  }
-  registerOutline({title, level, pageNumber, y, anchor = null, color = null, style = "normal"}) {
-    const page = pageNumber;
-    if (this.outlineReplay) {
-      const existing = this.outlineEntries[this.outlineCursor];
-      if (existing !== undefined) {
-        existing.page = page;
-        existing.y = y;
-      } else {
-        this.outlineEntries.push({
-          title,
-          level,
-          anchor: anchor ?? `outline-${this.outlineCursor + 1}`,
-          page,
-          y,
-          color,
-          style
-        });
-      }
-      this.outlineCursor++;
-      return;
-    }
-    this.outlineEntries.push({
-      title,
-      level,
-      anchor: anchor ?? `outline-${this.outlineEntries.length + 1}`,
-      page,
-      y,
-      color,
-      style
-    });
-  }
-  registerDestination({name, pageNumber, x = null, y = null, zoom = null}) {
-    this.destinationEntries.push({
-      name,
-      page: pageNumber,
-      x,
-      y,
-      zoom
-    });
-  }
-  renderSections(replay, expectedPagesCount = 0) {
-    this.outlineReplay = replay;
-    this.outlineCursor = 0;
-    this.destinationEntries.length = 0;
-    const pages = [];
-    const rendered = [];
-    for (const section of this.sections) {
-      const pageOffset = pages.length;
-      const sectionPages = section.render({
-        document: this,
-        pageOffset,
-        pagesCount: expectedPagesCount
-      });
-      rendered.push({
-        section,
-        pageOffset,
-        pages: sectionPages
-      });
-      pages.push(...sectionPages);
-    }
-    const pagesCount = pages.length;
-    const processed = [];
-    for (const entry of rendered) {
-      processed.push(...entry.section.postProcess?.({
-        document: this,
-        pageOffset: entry.pageOffset,
-        pagesCount
-      }) ?? entry.pages);
-    }
-    return processed;
-  }
-  save() {
-    this.outlineEntries.length = 0;
-    this.outlineRerenderRequested = false;
-    let pages = this.renderSections(false);
-    if (this.outlineRerenderRequested) {
-      pages = this.renderSections(true, pages.length);
-    }
-    if (pages.length === 0) {
-      throw new Error("Document must contain at least one page");
-    }
-    const outlines = this.outlineEntries.map(entry => ({
-      ...entry
-    }));
-    const destinations = this.destinationEntries.map(entry => ({
-      ...entry
-    }));
-    const pageLabels = [ ...this.pageLabelEntries ].sort(([a], [b]) => a - b).map(([pageIndex, label]) => ({
-      pageIndex,
-      label
-    }));
-    return serializePdf(pages, this.metadata, outlines, this.pageMode, destinations, pageLabels, this.settings);
-  }
-}
-
-function finiteNonNegative(value, name) {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new RangeError(`${name} must be a finite non-negative number`);
-  }
-  return value;
-}
-
-class GridView extends SpanningWidget {
-  constructor({direction = "vertical", padding = 0, crossAxisCount, mainAxisSpacing = 0, crossAxisSpacing = 0, childAspectRatio = Infinity, children = []}) {
-    super();
-    if (direction !== "horizontal" && direction !== "vertical") {
-      throw new TypeError(`Unknown GridView axis: ${direction}`);
-    }
-    this.direction = direction;
-    this.padding = normalizeInsets(padding);
-    this.crossAxisCount = Math.trunc(Number(crossAxisCount));
-    if (!Number.isFinite(this.crossAxisCount) || this.crossAxisCount <= 0) {
-      throw new RangeError("GridView.crossAxisCount must be a positive integer");
-    }
-    this.mainAxisSpacing = finiteNonNegative(Number(mainAxisSpacing), "mainAxisSpacing");
-    this.crossAxisSpacing = finiteNonNegative(Number(crossAxisSpacing), "crossAxisSpacing");
-    this.childAspectRatio = Number(childAspectRatio);
-    if (!(this.childAspectRatio > 0)) {
-      throw new RangeError("GridView.childAspectRatio must be positive");
-    }
-    this.children = children;
-  }
-  initialSpanState() {
-    return {
-      firstChild: 0,
-      childCrossAxis: null,
-      childMainAxis: null
-    };
-  }
-  fragment(context, incoming, state) {
-    const parent = BoxConstraints.from(incoming);
-    if (state.firstChild >= this.children.length) {
-      const size = parent.constrain({
-        width: 0,
-        height: 0
-      });
-      const data = {
-        children: [],
-        firstChild: state.firstChild,
-        lastChild: state.firstChild,
-        childCrossAxis: state.childCrossAxis ?? 0,
-        childMainAxis: state.childMainAxis ?? 0
-      };
-      return {
-        box: {
-          widget: this,
-          width: size.width,
-          height: size.height,
-          data
-        },
-        nextState: state,
-        hasMore: false
-      };
-    }
-    const inner = parent.deflate(this.padding);
-    const vertical = this.direction === "vertical";
-    const maxMain = vertical ? inner.maxHeight : inner.maxWidth;
-    const maxCross = vertical ? inner.maxWidth : inner.maxHeight;
-    if (!Number.isFinite(maxCross)) {
-      throw new RangeError("GridView requires a bounded cross axis");
-    }
-    const childCrossAxis = state.childCrossAxis ?? Math.max(0, (maxCross - this.crossAxisSpacing * (this.crossAxisCount - 1)) / this.crossAxisCount);
-    const remaining = this.children.length - state.firstChild;
-    const neededRuns = Math.ceil(remaining / this.crossAxisCount);
-    let childMainAxis = state.childMainAxis;
-    if (childMainAxis === null) {
-      if (Number.isFinite(this.childAspectRatio)) {
-        childMainAxis = childCrossAxis * this.childAspectRatio;
-      } else {
-        if (!Number.isFinite(maxMain)) {
-          throw new RangeError("GridView needs a bounded main axis or childAspectRatio");
-        }
-        childMainAxis = Math.max(0, (maxMain - this.mainAxisSpacing * (neededRuns - 1)) / neededRuns);
-      }
-    }
-    const runCapacity = Number.isFinite(maxMain) ? Math.max(0, Math.floor((maxMain + this.mainAxisSpacing + 1e-6) / (childMainAxis + this.mainAxisSpacing))) : neededRuns;
-    const childCapacity = runCapacity * this.crossAxisCount;
-    const count = Math.min(remaining, childCapacity);
-    const runCount = count === 0 ? 0 : Math.ceil(count / this.crossAxisCount);
-    const children = [];
-    for (let local = 0; local < count; local++) {
-      const index = state.firstChild + local;
-      const run = Math.floor(local / this.crossAxisCount);
-      const cross = local % this.crossAxisCount;
-      const childConstraints = vertical ? BoxConstraints.tight({
-        width: childCrossAxis,
-        height: childMainAxis
-      }) : BoxConstraints.tight({
-        width: childMainAxis,
-        height: childCrossAxis
-      });
-      const childBox = this.children[index].layout(context, childConstraints);
-      children.push({
-        box: childBox,
-        dx: this.padding.left + (vertical ? cross * (childCrossAxis + this.crossAxisSpacing) : run * (childMainAxis + this.mainAxisSpacing)),
-        dy: this.padding.top + (vertical ? run * (childMainAxis + this.mainAxisSpacing) : cross * (childCrossAxis + this.crossAxisSpacing))
-      });
-    }
-    const totalMain = runCount === 0 ? 0 : runCount * childMainAxis + (runCount - 1) * this.mainAxisSpacing;
-    const totalCross = this.crossAxisCount * childCrossAxis + (this.crossAxisCount - 1) * this.crossAxisSpacing;
-    const natural = vertical ? {
-      width: totalCross + this.padding.left + this.padding.right,
-      height: totalMain + this.padding.top + this.padding.bottom
-    } : {
-      width: totalMain + this.padding.left + this.padding.right,
-      height: totalCross + this.padding.top + this.padding.bottom
-    };
-    const size = parent.constrain(natural);
-    const lastChild = state.firstChild + count;
-    const data = {
-      children,
-      firstChild: state.firstChild,
-      lastChild,
-      childCrossAxis,
-      childMainAxis
-    };
-    const nextState = {
-      firstChild: lastChild,
-      childCrossAxis,
-      childMainAxis
-    };
-    return {
-      box: {
-        widget: this,
-        width: size.width,
-        height: size.height,
-        data
-      },
-      nextState,
-      hasMore: lastChild < this.children.length
-    };
-  }
-  layout(context, constraints) {
-    return this.fragment(context, constraints, this.initialSpanState()).box;
-  }
-  layoutSpan(context, constraints, state) {
-    return this.fragment(context, constraints, state);
-  }
-  paint(context, box) {
-    for (const child of box.data.children) {
-      child.box.widget.paint(context, {
-        ...child.box,
-        x: box.x + child.dx,
-        y: box.y + child.dy
-      });
-    }
-  }
-}
-
-const GRID_COLOR = "#c3e8f3";
-
-class GridPaper extends Widget {
-  constructor({color = GRID_COLOR, horizontalColor = color, verticalColor = color, interval = 100, horizontalInterval = interval, verticalInterval = interval, divisions = 5, horizontalDivisions = divisions, verticalDivisions = divisions, subdivisions = 2, horizontalSubdivisions = subdivisions, verticalSubdivisions = subdivisions, margin = 0, horizontalOffset = 0, verticalOffset = 0, border = new Border, scale = 1, opacity = .5, child = null} = {}) {
-    super();
-    for (const value of [ horizontalDivisions, verticalDivisions, horizontalSubdivisions, verticalSubdivisions ]) {
-      if (!Number.isInteger(value) || value <= 0) throw new RangeError("GridPaper divisions must be positive integers");
-    }
-    const resolvedHorizontalOffset = Number(horizontalOffset);
-    const resolvedVerticalOffset = Number(verticalOffset);
-    if (!Number.isInteger(resolvedHorizontalOffset) || !Number.isInteger(resolvedVerticalOffset)) {
-      throw new RangeError("GridPaper offsets must be finite integers");
-    }
-    const resolvedScale = Number(scale);
-    if (!Number.isFinite(resolvedScale) || resolvedScale < 0) {
-      throw new RangeError("GridPaper scale must be a finite non-negative number");
-    }
-    const resolvedOpacity = Number(opacity);
-    if (!Number.isFinite(resolvedOpacity) || resolvedOpacity < 0 || resolvedOpacity > 1) {
-      throw new RangeError("GridPaper opacity must be between zero and one");
-    }
-    this.horizontalColor = horizontalColor;
-    this.verticalColor = verticalColor;
-    this.horizontalInterval = Number(horizontalInterval);
-    this.verticalInterval = Number(verticalInterval);
-    this.horizontalDivisions = horizontalDivisions;
-    this.verticalDivisions = verticalDivisions;
-    this.horizontalSubdivisions = horizontalSubdivisions;
-    this.verticalSubdivisions = verticalSubdivisions;
-    this.margin = normalizeInsets(margin);
-    this.horizontalOffset = resolvedHorizontalOffset;
-    this.verticalOffset = resolvedVerticalOffset;
-    this.border = border;
-    this.scale = resolvedScale;
-    this.opacity = resolvedOpacity;
-    this.child = child;
-  }
-  static millimeter({color = GRID_COLOR, child = null} = {}) {
-    return new GridPaper({
-      color,
-      interval: 5 * PageUnit.cm,
-      divisions: 5,
-      subdivisions: 10,
-      child
-    });
-  }
-  static seyes({margin = {
-    top: 20 * PageUnit.mm,
-    bottom: 10 * PageUnit.mm,
-    left: 36 * PageUnit.mm
-  }, child = null} = {}) {
-    return new GridPaper({
-      color: "#c8c8de",
-      horizontalInterval: 8 * PageUnit.mm,
-      verticalInterval: 8 * PageUnit.mm,
-      horizontalDivisions: 1,
-      verticalDivisions: 4,
-      subdivisions: 1,
-      margin,
-      verticalOffset: 1,
-      border: new Border({
-        left: new BorderSide({
-          color: "#f6bbcf"
-        })
-      }),
-      opacity: 1,
-      child
-    });
-  }
-  static collegeRuled({margin = {
-    top: PageUnit.inch,
-    bottom: .6 * PageUnit.inch,
-    left: 1.25 * PageUnit.inch
-  }, child = null} = {}) {
-    return new GridPaper({
-      horizontalInterval: Infinity,
-      verticalInterval: 9 / 32 * PageUnit.inch,
-      divisions: 1,
-      subdivisions: 1,
-      margin,
-      verticalOffset: 1,
-      border: new Border({
-        left: new BorderSide({
-          color: "#ff0000"
-        })
-      }),
-      opacity: 1,
-      child
-    });
-  }
-  static quad({color = GRID_COLOR, child = null} = {}) {
-    return new GridPaper({
-      color,
-      interval: PageUnit.inch,
-      divisions: 4,
-      subdivisions: 1,
-      child
-    });
-  }
-  static engineering({color = GRID_COLOR, child = null} = {}) {
-    return new GridPaper({
-      color,
-      interval: PageUnit.inch,
-      divisions: 5,
-      subdivisions: 2,
-      child
-    });
-  }
-  layout(context, constraints) {
-    const parent = BoxConstraints.from(constraints);
-    const size = {
-      width: parent.hasBoundedWidth ? parent.maxWidth : parent.minWidth,
-      height: parent.hasBoundedHeight ? parent.maxHeight : parent.minHeight
-    };
-    const childBox = this.child?.layout(context, new BoxConstraints({
-      maxWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
-      maxHeight: Math.max(0, size.height - this.margin.top - this.margin.bottom)
-    })) ?? null;
-    return {
-      widget: this,
-      width: size.width,
-      height: size.height,
-      data: {
-        childBox
-      }
-    };
-  }
-  paint(context, box) {
-    const childBox = box.data.childBox;
-    childBox?.widget.paint(context, {
-      ...childBox,
-      x: box.x + this.margin.left,
-      y: box.y + this.margin.top
-    });
-    const canvas = context.canvas;
-    canvas.saveContext();
-    canvas.setGraphicState(new PdfGraphicState({
-      opacity: this.opacity
-    }));
-    const widths = [ this.scale, this.scale / 2, this.scale / 4 ];
-    const draw = (interval, divisions, subdivisions, offset, color, vertical) => {
-      if (!Number.isFinite(interval)) return;
-      const step = interval / (divisions * subdivisions);
-      if (!(step > 0)) return;
-      canvas.setStrokeColor(color);
-      let n = offset;
-      const start = vertical ? box.x + this.margin.left : box.y + this.margin.top;
-      const end = vertical ? box.x + box.width - this.margin.right : box.y + box.height - this.margin.bottom;
-      for (let position = start; position <= end + .001; position += step) {
-        canvas.setLineWidth(n % (subdivisions * divisions) === 0 ? widths[0] : n % subdivisions === 0 ? widths[1] : widths[2]);
-        if (vertical) canvas.drawLine(position, canvas.toPdfY(box.y), position, canvas.toPdfY(box.y + box.height)); else canvas.drawLine(box.x, canvas.toPdfY(position), box.x + box.width, canvas.toPdfY(position));
-        canvas.strokePath();
-        n++;
-      }
-    };
-    draw(this.horizontalInterval, this.horizontalDivisions, this.horizontalSubdivisions, this.horizontalOffset, this.horizontalColor, true);
-    draw(this.verticalInterval, this.verticalDivisions, this.verticalSubdivisions, this.verticalOffset, this.verticalColor, false);
-    this.border.paint(context, box.x, box.y, box.width, box.height);
-    canvas.restoreContext();
-  }
-}
-
-class Partition extends SpanningWidget {
-  constructor({child, width = null, flex = 1}) {
-    super();
-    this.child = child;
-    this.width = width === null ? null : Math.max(0, Number(width));
-    this.flex = this.width === null ? Math.max(0, Number(flex)) : 0;
-  }
-  initialSpanState() {
-    return {
-      done: false,
-      childState: this.child instanceof SpanningWidget ? this.child.initialSpanState() : null
-    };
-  }
-  layout(context, constraints) {
-    const childBox = this.child.layout(context, constraints);
-    return {
-      widget: this,
-      width: childBox.width,
-      height: childBox.height,
-      data: {
-        childBox
-      }
-    };
-  }
-  layoutSpan(context, constraints, state) {
-    if (state.done) {
-      const size = BoxConstraints.from(constraints).constrain({
-        width: 0,
-        height: 0
-      });
-      return {
-        box: {
-          widget: this,
-          width: size.width,
-          height: 0,
-          data: {
-            childBox: null
-          }
-        },
-        nextState: state,
-        hasMore: false
-      };
-    }
-    if (this.child instanceof SpanningWidget) {
-      const fragment = this.child.layoutSpan(context, constraints, state.childState);
-      return {
-        box: {
-          widget: this,
-          width: fragment.box.width,
-          height: fragment.box.height,
-          data: {
-            childBox: fragment.box
-          }
-        },
-        nextState: {
-          done: !fragment.hasMore,
-          childState: fragment.nextState
-        },
-        hasMore: fragment.hasMore
-      };
-    }
-    const childBox = this.child.layout(context, constraints);
-    return {
-      box: {
-        widget: this,
-        width: childBox.width,
-        height: childBox.height,
-        data: {
-          childBox
-        }
-      },
-      nextState: {
-        done: true,
-        childState: null
-      },
-      hasMore: false
-    };
-  }
-  paint(context, box) {
-    const {childBox} = box.data;
-    childBox?.widget.paint(context, {
-      ...childBox,
-      x: box.x,
-      y: box.y
-    });
-  }
-}
-
-class Partitions extends SpanningWidget {
-  constructor({children, mainAxisSize = "max"}) {
-    super();
-    if (mainAxisSize !== "min" && mainAxisSize !== "max") {
-      throw new TypeError(`Unknown MainAxisSize: ${mainAxisSize}`);
-    }
-    this.children = children;
-    this.mainAxisSize = mainAxisSize;
-  }
-  initialSpanState() {
-    return {
-      children: this.children.map(child => child.initialSpanState())
-    };
-  }
-  widths(constraints) {
-    const fixed = this.children.reduce((sum, child) => sum + (child.width ?? 0), 0);
-    const flex = this.children.reduce((sum, child) => sum + child.flex, 0);
-    if (flex > 0 && !constraints.hasBoundedWidth) {
-      throw new RangeError("Flexible Partition children require a bounded width");
-    }
-    const available = Math.max(0, (constraints.hasBoundedWidth ? constraints.maxWidth : fixed) - fixed);
-    return this.children.map(child => child.width ?? (flex === 0 ? 0 : available * child.flex / flex));
-  }
-  fragment(context, incoming, state) {
-    const constraints = BoxConstraints.from(incoming);
-    const widths = this.widths(constraints);
-    const children = [];
-    const nextStates = [];
-    let x = 0;
-    let height = 0;
-    let hasMore = false;
-    for (let index = 0; index < this.children.length; index++) {
-      const child = this.children[index];
-      const width = widths[index];
-      const fragment = child.layoutSpan(context, new BoxConstraints({
-        minWidth: width,
-        maxWidth: width,
-        maxHeight: constraints.maxHeight
-      }), state.children[index] ?? child.initialSpanState());
-      children.push({
-        box: fragment.box,
-        dx: x
-      });
-      nextStates.push(fragment.nextState);
-      x += width;
-      height = Math.max(height, fragment.box.height);
-      hasMore || (hasMore = fragment.hasMore);
-    }
-    const naturalWidth = this.mainAxisSize === "max" && constraints.hasBoundedWidth ? constraints.maxWidth : x;
-    const size = constraints.constrain({
-      width: naturalWidth,
-      height
-    });
-    return {
-      box: {
-        widget: this,
-        width: size.width,
-        height: size.height,
-        data: {
-          children
-        }
-      },
-      nextState: {
-        children: nextStates
-      },
-      hasMore
-    };
-  }
-  layout(context, constraints) {
-    return this.fragment(context, constraints, this.initialSpanState()).box;
-  }
-  layoutSpan(context, constraints, state) {
-    return this.fragment(context, constraints, state);
-  }
-  paint(context, box) {
-    for (const child of box.data.children) {
-      child.box.widget.paint(context, {
-        ...child.box,
-        x: box.x + child.dx,
-        y: box.y
-      });
-    }
   }
 }
 
@@ -16172,6 +11966,7 @@ class SvgGradient extends SvgColor {
       fonts: maskCanvas.fonts,
       graphicStates: maskCanvas.graphicStates,
       patterns: maskCanvas.patterns,
+      shadings: maskCanvas.shadings,
       images: maskCanvas.images
     });
   }
@@ -18682,6 +14477,4391 @@ class RawImage extends ImageProvider {
   }
 }
 
+class InlineSpan {
+  constructor({style = null, baseline = 0, annotation = null} = {}) {
+    this.style = style;
+    this.baseline = assertFiniteNumber(Number(baseline), "baseline");
+    this.annotation = annotation;
+  }
+  toPlainText() {
+    let value = "";
+    this.visitChildren(span => {
+      if (span instanceof TextSpan && span.text !== null) value += span.text;
+      return true;
+    }, TextStyle.defaultStyle());
+    return value;
+  }
+}
+
+class TextSpan extends InlineSpan {
+  constructor({text = null, children = null, ...options} = {}) {
+    super(options);
+    this.text = text === null ? null : String(text);
+    this.children = children === null ? [] : [ ...children ];
+  }
+  copyWith(options = {}) {
+    return new TextSpan({
+      text: options.text ?? this.text,
+      children: options.children ?? this.children,
+      style: options.style ?? this.style,
+      baseline: options.baseline ?? this.baseline,
+      annotation: options.annotation ?? this.annotation
+    });
+  }
+  visitChildren(visitor, parentStyle, annotation = null) {
+    const style = parentStyle.merge(this.style);
+    const effectiveAnnotation = this.annotation ?? annotation;
+    if (this.text !== null && !visitor(this, style, effectiveAnnotation)) return false;
+    for (const child of this.children) {
+      if (!child.visitChildren(visitor, style, effectiveAnnotation)) return false;
+    }
+    return true;
+  }
+}
+
+class WidgetSpan extends InlineSpan {
+  constructor({child, ...options}) {
+    super(options);
+    this.child = child;
+  }
+  copyWith(options = {}) {
+    return new WidgetSpan({
+      child: this.child,
+      style: options.style ?? this.style,
+      baseline: options.baseline ?? this.baseline,
+      annotation: options.annotation ?? this.annotation
+    });
+  }
+  visitChildren(visitor, parentStyle, annotation = null) {
+    return visitor(this, parentStyle.merge(this.style), this.annotation ?? annotation);
+  }
+}
+
+function countSpaces(value) {
+  let count = 0;
+  for (const character of value) if (/\s/u.test(character)) count++;
+  return count;
+}
+
+function textWidth(style, value) {
+  return style.font.stringMetrics(value, style.fontSize, style.letterSpacing).advanceWidth + countSpaces(value) * style.wordSpacing;
+}
+
+function supportsRune(font, codePoint) {
+  const candidate = font;
+  return candidate.isRuneSupported?.(codePoint) ?? codePoint <= 255;
+}
+
+const bitmapProviders = new WeakMap;
+
+function bitmapWidget(bitmap, fontSize) {
+  let provider = bitmapProviders.get(bitmap);
+  if (provider === undefined) {
+    provider = new MemoryImage(bitmap.data);
+    bitmapProviders.set(bitmap, provider);
+  }
+  return new Image(provider, {
+    width: fontSize * bitmap.width / bitmap.height,
+    height: fontSize
+  });
+}
+
+function decorationNames(style) {
+  const value = style.decoration ?? "none";
+  const values = Array.isArray(value) ? value : [ value ];
+  return values.filter(name => name !== "none");
+}
+
+function resolveStyle(context, style, baseline, scale, directFont = null) {
+  const fontSize = (style.fontSize ?? DEFAULT_FONT_SIZE) * scale;
+  const declaredFont = style.font;
+  const font = directFont ?? (declaredFont === null ? context.document.font : declaredFont.getFont(context));
+  return {
+    font,
+    fontSize,
+    color: style.color ?? [ 0, 0, 0 ],
+    lineAdvance: fontSize * (font.ascent - font.descent) * (style.height ?? DEFAULT_LINE_HEIGHT),
+    lineSpacing: (style.lineSpacing ?? 0) * scale,
+    letterSpacing: (style.letterSpacing ?? 0) * scale,
+    wordSpacing: (style.wordSpacing ?? 0) * scale,
+    baseline: baseline * scale,
+    background: style.background,
+    decorations: decorationNames(style),
+    decorationColor: style.decorationColor ?? style.color ?? [ 0, 0, 0 ],
+    decorationStyle: style.decorationStyle ?? "solid",
+    decorationThickness: style.decorationThickness ?? 1
+  };
+}
+
+function splitLongWord(value, maxWidth, style) {
+  const parts = [];
+  let current = "";
+  for (const character of value) {
+    const candidate = current + character;
+    if (current !== "" && textWidth(style, candidate) > maxWidth) {
+      parts.push(current);
+      current = character;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current !== "") parts.push(current);
+  return parts.length === 0 ? [ "" ] : parts;
+}
+
+function trimTrailingGaps(line) {
+  while (line.tokens[line.tokens.length - 1]?.kind === "gap") {
+    line.width -= line.tokens.pop()?.width ?? 0;
+  }
+}
+
+function positionLine(line, y, contentWidth, align, direction) {
+  let lineSpacing = line.emptyStyle.lineSpacing;
+  let ascent = line.emptyStyle.fontSize + Math.max(0, line.emptyStyle.baseline);
+  let descent = Math.max(0, line.emptyStyle.lineAdvance + lineSpacing - line.emptyStyle.fontSize - line.emptyStyle.baseline);
+  let minimumHeight = line.emptyStyle.lineAdvance + lineSpacing;
+  for (const token of line.tokens) {
+    lineSpacing = Math.max(lineSpacing, token.style.lineSpacing);
+    minimumHeight = Math.max(minimumHeight, token.style.lineAdvance + token.style.lineSpacing);
+    if (token.kind === "widget") {
+      ascent = Math.max(ascent, token.height + token.style.baseline);
+      descent = Math.max(descent, -token.style.baseline);
+    } else {
+      ascent = Math.max(ascent, token.style.fontSize + token.style.baseline);
+      descent = Math.max(descent, token.style.lineAdvance + token.style.lineSpacing - token.style.fontSize - token.style.baseline);
+    }
+  }
+  const height = Math.max(minimumHeight, ascent + descent);
+  const effectiveAlign = align === "start" ? direction === "rtl" ? "right" : "left" : align === "end" ? direction === "rtl" ? "left" : "right" : align;
+  let offset = 0;
+  if (effectiveAlign === "right") offset = contentWidth - line.width;
+  if (effectiveAlign === "center") offset = (contentWidth - line.width) / 2;
+  const gapCount = line.wrapped && effectiveAlign === "justify" ? line.tokens.filter(token => token.kind === "gap").length : 0;
+  const extraPerGap = gapCount === 0 ? 0 : Math.max(0, contentWidth - line.width) / gapCount;
+  const paintTokens = [];
+  for (const token of line.tokens) {
+    const previous = paintTokens[paintTokens.length - 1];
+    if (extraPerGap === 0 && token.kind !== "widget" && previous !== undefined && previous.kind !== "widget" && previous.style === token.style && previous.annotation === token.annotation) {
+      paintTokens[paintTokens.length - 1] = {
+        kind: "text",
+        text: previous.text + token.text,
+        width: previous.width + token.width,
+        style: token.style,
+        annotation: token.annotation
+      };
+    } else {
+      paintTokens.push(token);
+    }
+  }
+  let x = offset;
+  let accumulatedExtra = 0;
+  const runs = [];
+  for (const token of paintTokens) {
+    let runX = x + accumulatedExtra;
+    if (direction === "rtl") runX = contentWidth - runX - token.width;
+    const tokenBaseline = y + ascent - token.style.baseline;
+    const tokenY = token.kind === "widget" ? tokenBaseline - token.height : tokenBaseline - token.style.fontSize;
+    runs.push({
+      kind: token.kind,
+      text: token.kind === "widget" ? "" : token.text,
+      x: runX,
+      y: tokenY,
+      width: token.width,
+      height: token.kind === "widget" ? token.height : token.style.lineAdvance,
+      baseline: tokenBaseline,
+      style: token.style,
+      childBox: token.kind === "widget" ? token.childBox : null,
+      annotation: token.annotation
+    });
+    x += token.width;
+    if (token.kind === "gap") accumulatedExtra += extraPerGap;
+  }
+  const usedWidth = extraPerGap === 0 ? line.width : contentWidth;
+  return {
+    runs,
+    y,
+    width: usedWidth,
+    height,
+    lineSpacing,
+    wrapped: line.wrapped
+  };
+}
+
+function rebaseLines(lines, top) {
+  return lines.map(line => ({
+    ...line,
+    y: line.y - top,
+    runs: line.runs.map(run => ({
+      ...run,
+      y: run.y - top,
+      baseline: run.baseline - top
+    }))
+  }));
+}
+
+class RichText extends SpanningWidget {
+  constructor({text, textAlign = null, textDirection = null, softWrap = null, tightBounds = false, textScaleFactor = 1, maxLines = null, overflow = null, margin = 0}) {
+    super();
+    this.text = text;
+    this.textAlign = textAlign;
+    this.textDirection = textDirection;
+    this.softWrap = softWrap;
+    this.tightBounds = tightBounds;
+    this.textScaleFactor = assertFiniteNumber(Number(textScaleFactor), "textScaleFactor");
+    this.maxLines = maxLines;
+    this.overflow = overflow;
+    this.margin = normalizeInsets(margin);
+  }
+  initialSpanState() {
+    return {
+      lineIndex: 0
+    };
+  }
+  inputTokens(context, maxWidth) {
+    const result = [];
+    const scale = this.textScaleFactor;
+    const direction = this.textDirection ?? Directionality.of(context);
+    this.text.visitChildren((span, textStyle, annotation) => {
+      const baseStyle = resolveStyle(context, textStyle, span.baseline, scale);
+      if (span instanceof WidgetSpan) {
+        const childBox = span.child.layout(context, new BoxConstraints({
+          maxWidth,
+          maxHeight: Infinity
+        }));
+        result.push({
+          kind: "widget",
+          width: childBox.width,
+          height: childBox.height,
+          style: baseStyle,
+          childBox,
+          annotation
+        });
+        return true;
+      }
+      if (!(span instanceof TextSpan) || span.text === null) return true;
+      let group = "";
+      let groupFont = baseStyle.font;
+      const flush = () => {
+        if (group === "") return;
+        const style = groupFont === baseStyle.font ? baseStyle : {
+          ...baseStyle,
+          font: groupFont
+        };
+        for (const part of group.replace(/\r\n?/g, "\n").split(/(\n|[^\S\n]+|[^\s]+)/u)) {
+          if (part === "") continue;
+          if (part === "\n") result.push({
+            kind: "break",
+            style
+          }); else result.push({
+            kind: /^\s+$/u.test(part) ? "gap" : "text",
+            text: part,
+            width: textWidth(style, part),
+            style,
+            annotation
+          });
+        }
+        group = "";
+      };
+      const visualText = direction === "rtl" ? logicalToVisual(span.text) : span.text;
+      for (const character of visualText) {
+        const codePoint = character.codePointAt(0) ?? 0;
+        let font = baseStyle.font;
+        let bitmap = null;
+        if (!supportsRune(font, codePoint)) {
+          for (const fallback of textStyle.fontFallback) {
+            const candidate = fallback.getFont(context);
+            if (supportsRune(candidate, codePoint)) {
+              font = candidate;
+              bitmap = candidate.getBitmap?.(codePoint) ?? null;
+              break;
+            }
+          }
+        }
+        if (bitmap !== null) {
+          flush();
+          const metrics = bitmap.metrics.scale(baseStyle.fontSize);
+          const widget = bitmapWidget(bitmap, baseStyle.fontSize);
+          const childBox = widget.layout(context, new BoxConstraints({
+            maxWidth,
+            maxHeight: Infinity
+          }));
+          result.push({
+            kind: "widget",
+            width: childBox.width,
+            height: childBox.height,
+            style: {
+              ...baseStyle,
+              font,
+              baseline: baseStyle.baseline + metrics.ascent + metrics.descent - metrics.height
+            },
+            childBox,
+            annotation
+          });
+          groupFont = baseStyle.font;
+          continue;
+        }
+        if (font !== groupFont && group !== "") flush();
+        groupFont = font;
+        group += character;
+      }
+      flush();
+      return true;
+    }, context.theme.defaultTextStyle);
+    return result;
+  }
+  allLines(context, contentWidth, minContentWidth = 0) {
+    const align = this.textAlign ?? context.theme.textAlign ?? "left";
+    const softWrap = this.softWrap ?? context.theme.softWrap;
+    const maxLines = this.maxLines ?? context.theme.maxLines;
+    const tokens = this.inputTokens(context, contentWidth);
+    const fallbackStyle = resolveStyle(context, context.theme.defaultTextStyle, 0, this.textScaleFactor);
+    const raw = [];
+    let current = {
+      tokens: [],
+      width: 0,
+      wrapped: false,
+      emptyStyle: fallbackStyle
+    };
+    const pushLine = wrapped => {
+      trimTrailingGaps(current);
+      current.wrapped = wrapped;
+      raw.push(current);
+      current = {
+        tokens: [],
+        width: 0,
+        wrapped: false,
+        emptyStyle: current.emptyStyle
+      };
+    };
+    for (const token of tokens) {
+      current.emptyStyle = token.style;
+      if (token.kind === "break") {
+        pushLine(false);
+        continue;
+      }
+      if (token.kind === "gap" && current.tokens.length === 0) continue;
+      if (softWrap && current.tokens.length > 0 && current.width + token.width > contentWidth + 1e-5) {
+        pushLine(true);
+        if (token.kind === "gap") continue;
+      }
+      if (token.kind === "text" && softWrap && token.width > contentWidth + 1e-5) {
+        const pieces = splitLongWord(token.text, contentWidth, token.style);
+        for (let index = 0; index < pieces.length; index++) {
+          const piece = pieces[index] ?? "";
+          const part = {
+            ...token,
+            text: piece,
+            width: textWidth(token.style, piece)
+          };
+          if (current.tokens.length > 0) pushLine(true);
+          current.tokens.push(part);
+          current.width = part.width;
+          if (index < pieces.length - 1) pushLine(true);
+        }
+        continue;
+      }
+      current.tokens.push(token);
+      current.width += token.width;
+    }
+    if (current.tokens.length > 0 || raw.length === 0 || tokens[tokens.length - 1]?.kind === "break") pushLine(false);
+    const limited = maxLines === null ? raw : raw.slice(0, Math.max(1, maxLines));
+    const targetWidth = limited.some(line => line.wrapped || align === "justify") ? contentWidth : Math.max(0, minContentWidth, ...limited.map(line => line.width));
+    let y = 0;
+    const lines = [];
+    const textDirection = this.textDirection ?? Directionality.of(context);
+    for (const line of limited) {
+      const positioned = positionLine(line, y, targetWidth, align, textDirection);
+      lines.push(positioned);
+      y += positioned.height;
+    }
+    const last = lines[lines.length - 1];
+    if (last !== undefined && last.lineSpacing > 0) {
+      lines[lines.length - 1] = {
+        ...last,
+        height: Math.max(0, last.height - last.lineSpacing)
+      };
+    }
+    return lines;
+  }
+  fragment(context, constraints, lineIndex, spanning) {
+    const parent = BoxConstraints.from(constraints);
+    const contentWidth = Math.max(1, parent.maxWidth - this.margin.left - this.margin.right);
+    const minContentWidth = Math.max(0, parent.minWidth - this.margin.left - this.margin.right);
+    const all = this.allLines(context, contentWidth, minContentWidth);
+    const topMargin = lineIndex === 0 ? this.margin.top : 0;
+    const availableHeight = Math.max(0, parent.maxHeight - topMargin);
+    let end = lineIndex;
+    let height = 0;
+    while (end < all.length) {
+      const nextHeight = all[end]?.height ?? 0;
+      const finalBottom = end === all.length - 1 ? this.margin.bottom : 0;
+      if (spanning && height + nextHeight + finalBottom > availableHeight + 1e-5) break;
+      height += nextHeight;
+      end++;
+      if (!spanning && height > availableHeight + 1e-5) break;
+    }
+    if (!spanning) end = all.length;
+    const isFinal = end >= all.length;
+    const bottomMargin = isFinal ? this.margin.bottom : 0;
+    const lineTop = all[lineIndex]?.y ?? 0;
+    const selected = rebaseLines(all.slice(lineIndex, end), lineTop - topMargin);
+    const widest = Math.max(0, ...selected.map(line => line.width));
+    const naturalHeight = topMargin + selected.reduce((sum, line) => sum + line.height, 0) + bottomMargin;
+    const size = parent.constrain({
+      width: widest + this.margin.left + this.margin.right,
+      height: naturalHeight
+    });
+    const effectiveOverflow = this.overflow ?? context.theme.overflow;
+    return {
+      box: {
+        widget: this,
+        width: size.width,
+        height: size.height,
+        data: {
+          lines: selected,
+          contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
+          clip: effectiveOverflow === "clip" || naturalHeight > size.height + 1e-5,
+          textDirection: this.textDirection ?? Directionality.of(context)
+        }
+      },
+      nextState: {
+        lineIndex: end
+      },
+      hasMore: end < all.length
+    };
+  }
+  layout(context, constraints) {
+    return this.fragment(context, constraints, 0, false).box;
+  }
+  layoutSpan(context, constraints, state) {
+    return this.fragment(context, constraints, state.lineIndex, true);
+  }
+  paint(context, box) {
+    const {canvas} = context;
+    if (box.data.clip) {
+      canvas.saveContext();
+      canvas.drawRect(box.x, canvas.pageHeight - box.y - box.height, box.width, box.height);
+      canvas.clipPath();
+    }
+    for (const line of box.data.lines) {
+      for (const run of line.runs) {
+        const x = box.x + this.margin.left + run.x;
+        const y = box.y + run.y;
+        if (run.annotation !== null && run.width > 0 && run.height > 0) {
+          run.annotation.build(context, {
+            x,
+            y,
+            width: run.width,
+            height: run.height
+          });
+        }
+        if (run.style.background !== null && run.width > 0) {
+          run.style.background.paint(context, x, y, run.width, run.height, "all", box.data.textDirection);
+        }
+      }
+    }
+    for (const line of box.data.lines) {
+      for (const run of line.runs) {
+        const x = box.x + this.margin.left + run.x;
+        if (run.kind === "text") {
+          canvas.text(run.text, x, box.y + run.baseline, {
+            font: run.style.font,
+            fontSize: run.style.fontSize,
+            color: run.style.color,
+            letterSpacing: run.style.letterSpacing,
+            wordSpacing: run.style.wordSpacing
+          });
+        } else if (run.kind === "widget" && run.childBox !== null) {
+          run.childBox.widget.paint(context, {
+            ...run.childBox,
+            x,
+            y: box.y + run.y
+          });
+        }
+      }
+    }
+    for (const line of box.data.lines) {
+      for (const run of line.runs) {
+        if (run.style.decorations.length === 0 || run.width <= 0) continue;
+        const x = box.x + this.margin.left + run.x;
+        const width = Math.max(.25, run.style.fontSize * .05 * run.style.decorationThickness);
+        for (const decoration of run.style.decorations) {
+          const top = decoration === "underline" ? box.y + run.baseline + run.style.fontSize * .08 : decoration === "overline" ? box.y + run.baseline - run.style.fontSize : box.y + run.baseline - run.style.fontSize * .35;
+          canvas.line(x, top, x + run.width, top, run.style.decorationColor, width);
+          if (run.style.decorationStyle === "double") {
+            const gap = Math.max(width * 2, run.style.fontSize * .04);
+            canvas.line(x, top + gap, x + run.width, top + gap, run.style.decorationColor, width);
+          }
+        }
+      }
+    }
+    if (box.data.clip) canvas.restoreContext();
+  }
+}
+
+class Text extends RichText {
+  constructor(value, {style = undefined, fontSize = undefined, lineHeight = undefined, color = undefined, align = undefined, textAlign = undefined, textDirection = null, softWrap = undefined, tightBounds = false, textScaleFactor = 1, margin = 0, maxLines = undefined, overflow = undefined, font = undefined} = {}) {
+    const overrides = new TextStyle({
+      color: color === undefined ? null : normalizeColor(color),
+      font: font === undefined ? null : undefined,
+      fontSize: fontSize === undefined ? null : assertFiniteNumber(Number(fontSize), "fontSize"),
+      height: lineHeight === undefined ? null : assertFiniteNumber(Number(lineHeight), "lineHeight")
+    });
+    const merged = (style ?? new TextStyle).merge(overrides);
+    super({
+      text: new TextSpan({
+        text: String(value),
+        style: merged
+      }),
+      textAlign: textAlign ?? align ?? null,
+      textDirection,
+      softWrap: softWrap ?? null,
+      tightBounds,
+      textScaleFactor,
+      maxLines: maxLines ?? null,
+      overflow: overflow ?? null,
+      margin
+    });
+    this.value = String(value);
+    this.directFont = font ?? null;
+  }
+  inputTokens(context, maxWidth) {
+    if (this.directFont === null) return super.inputTokens(context, maxWidth);
+    const tokens = super.inputTokens(context, maxWidth);
+    return tokens.map(token => ({
+      ...token,
+      style: {
+        ...token.style,
+        font: this.directFont
+      }
+    }));
+  }
+}
+
+class Header extends StatelessWidget {
+  constructor({level = 1, text = null, child = null, decoration = null, margin = undefined, padding = undefined, textStyle = null, title = undefined, outlineColor = null, outlineStyle = "normal"} = {}) {
+    super();
+    if (!Number.isInteger(level) || level < 0 || level > 5) {
+      throw new RangeError("Header.level must be an integer from 0 through 5");
+    }
+    if (child === null && text === null) throw new Error("Header needs text or a child");
+    this.level = level;
+    this.text = text;
+    this.child = child;
+    this.decoration = decoration;
+    this.margin = margin;
+    this.padding = padding;
+    this.textStyle = textStyle;
+    this.title = title === undefined ? text : title;
+    this.outlineColor = outlineColor === null ? null : normalizeColor(outlineColor);
+    this.outlineStyle = outlineStyle;
+  }
+  build(context) {
+    const millimeter = PageUnit.mm;
+    let margin = this.margin;
+    let padding = this.padding;
+    let decoration = this.decoration;
+    let style = this.textStyle;
+    if (this.level === 0) {
+      margin ?? (margin = {
+        bottom: 5 * millimeter
+      });
+      padding ?? (padding = {
+        bottom: millimeter
+      });
+      decoration ?? (decoration = new BoxDecoration({
+        border: new Border({
+          bottom: new BorderSide
+        })
+      }));
+      style ?? (style = context.theme.header0);
+    } else if (this.level === 1) {
+      margin ?? (margin = {
+        top: 3 * millimeter,
+        bottom: 5 * millimeter
+      });
+      decoration ?? (decoration = new BoxDecoration({
+        border: new Border({
+          bottom: new BorderSide({
+            width: .2
+          })
+        })
+      }));
+      style ?? (style = context.theme.header1);
+    } else {
+      margin ?? (margin = {
+        top: 2 * millimeter,
+        bottom: 4 * millimeter
+      });
+      style ?? (style = [ context.theme.header0, context.theme.header1, context.theme.header2, context.theme.header3, context.theme.header4, context.theme.header5 ][this.level] ?? context.theme.header5);
+    }
+    return new Container({
+      alignment: "topLeft",
+      margin: margin ?? 0,
+      padding: padding ?? 0,
+      decoration,
+      child: this.child ?? new Text(this.text ?? "", {
+        style
+      })
+    });
+  }
+  paint(context, box) {
+    if (this.title !== null) {
+      context.document.registerOutline({
+        title: this.title,
+        level: this.level,
+        pageNumber: context.pageNumber,
+        y: context.pageFormat.height - box.y,
+        color: this.outlineColor,
+        style: this.outlineStyle
+      });
+    }
+    super.paint(context, box);
+  }
+}
+
+class Paragraph extends StatelessWidget {
+  constructor({text = "", textAlign = "justify", style = null, margin = {
+    bottom: 5 * PageUnit.mm
+  }, padding = 0} = {}) {
+    super();
+    this.text = text ?? "";
+    this.textAlign = textAlign;
+    this.style = style;
+    this.margin = margin;
+    this.padding = padding;
+  }
+  build(context) {
+    return new Container({
+      margin: this.margin,
+      padding: this.padding,
+      child: new Text(this.text, {
+        textAlign: this.textAlign,
+        style: this.style ?? context.theme.paragraphStyle,
+        overflow: "span"
+      })
+    });
+  }
+}
+
+class Bullet extends StatelessWidget {
+  constructor({text = null, textAlign = "left", style = null, margin = {
+    bottom: 2 * PageUnit.mm
+  }, padding = 0, bulletMargin = {
+    top: 1.5 * PageUnit.mm,
+    left: 5 * PageUnit.mm,
+    right: 2 * PageUnit.mm
+  }, bulletSize = 2 * PageUnit.mm, bulletShape = "circle", bulletColor = "#000000"} = {}) {
+    super();
+    this.text = text;
+    this.textAlign = textAlign;
+    this.style = style;
+    this.margin = margin;
+    this.padding = padding;
+    this.bulletMargin = bulletMargin;
+    this.bulletSize = Number(bulletSize);
+    this.bulletShape = bulletShape;
+    this.bulletColor = normalizeColor(bulletColor);
+  }
+  build(context) {
+    return new Container({
+      margin: this.margin,
+      padding: this.padding,
+      child: new Row({
+        crossAxisAlignment: "start",
+        children: [ new Container({
+          width: this.bulletSize,
+          height: this.bulletSize,
+          margin: this.bulletMargin,
+          decoration: new BoxDecoration({
+            color: this.bulletColor,
+            shape: this.bulletShape
+          })
+        }), new Expanded({
+          child: this.text === null ? new SizedBox : new Text(this.text, {
+            textAlign: this.textAlign,
+            style: context.theme.bulletStyle.merge(this.style)
+          })
+        }) ]
+      })
+    });
+  }
+}
+
+class TableOfContent extends StatelessWidget {
+  constructor({indent = 10, gap = 8, textStyle = null} = {}) {
+    super();
+    this.indent = Number(indent);
+    this.gap = Number(gap);
+    this.textStyle = textStyle;
+  }
+  build(context) {
+    context.document.requestOutlineRerender();
+    const rows = context.document.outlines.map(entry => new Link({
+      destination: entry.anchor,
+      child: new Padding({
+        padding: {
+          bottom: 2
+        },
+        child: new Row({
+          children: [ new SizedBox({
+            width: this.indent * entry.level
+          }), new Text(entry.title, {
+            style: this.textStyle ?? undefined
+          }), new SizedBox({
+            width: this.gap
+          }), new Expanded({
+            child: new Divider({
+              borderStyle: "dotted",
+              thickness: .2
+            })
+          }), new SizedBox({
+            width: this.gap
+          }), new Text(String(entry.page), {
+            style: this.textStyle ?? undefined
+          }) ]
+        })
+      })
+    }));
+    return new Column({
+      crossAxisAlignment: "start",
+      mainAxisSize: "min",
+      children: rows
+    });
+  }
+}
+
+class Watermark extends StatelessWidget {
+  constructor({child, fit = "contain", angle = 0}) {
+    super();
+    this.child = child;
+    this.fit = fit;
+    this.angle = Number(angle);
+  }
+  static text(text, {style = null, fit = "contain", angle = Math.PI / 4} = {}) {
+    return new Watermark({
+      fit,
+      angle,
+      child: new Text(text, {
+        style: style ?? new TextStyle({
+          color: "#eeeeee",
+          fontWeight: "bold"
+        })
+      })
+    });
+  }
+  build(_context) {
+    return new LayoutBuilder({
+      builder: (_context, constraints) => new SizedBox({
+        width: constraints.maxWidth,
+        height: constraints.maxHeight,
+        child: new FittedBox({
+          fit: this.fit,
+          child: new Transform({
+            rotateBox: this.angle,
+            child: this.child
+          })
+        })
+      })
+    });
+  }
+}
+
+class Footer extends StatelessWidget {
+  constructor({leading = null, title = null, trailing = null, margin = 0, padding = 0, decoration = null} = {}) {
+    super();
+    this.leading = leading;
+    this.title = title;
+    this.trailing = trailing;
+    this.margin = margin;
+    this.padding = padding;
+    this.decoration = decoration;
+  }
+  build(_context) {
+    return new Container({
+      margin: this.margin,
+      padding: this.padding,
+      decoration: this.decoration,
+      child: new Row({
+        mainAxisSize: "max",
+        mainAxisAlignment: "spaceBetween",
+        children: [ this.leading ?? new SizedBox, this.title ?? new SizedBox, this.trailing ?? new SizedBox ]
+      })
+    });
+  }
+}
+
+class Positioned extends Widget {
+  constructor({left = null, top = null, right = null, bottom = null, width = null, height = null, child}) {
+    super();
+    this.left = left === null ? null : Number(left);
+    this.top = top === null ? null : Number(top);
+    this.right = right === null ? null : Number(right);
+    this.bottom = bottom === null ? null : Number(bottom);
+    this.width = width === null ? null : Math.max(0, Number(width));
+    this.height = height === null ? null : Math.max(0, Number(height));
+    this.child = child;
+  }
+  static fill({left = 0, top = 0, right = 0, bottom = 0, child}) {
+    return new Positioned({
+      left,
+      top,
+      right,
+      bottom,
+      child
+    });
+  }
+  static directional({textDirection, start = null, top = null, end = null, bottom = null, width = null, height = null, child}) {
+    return new Positioned({
+      left: textDirection === "rtl" ? end : start,
+      right: textDirection === "rtl" ? start : end,
+      top,
+      bottom,
+      width,
+      height,
+      child
+    });
+  }
+  layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints).tighten({
+      width: this.width,
+      height: this.height
+    });
+    const childBox = this.child.layout(context, parent);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class PositionedDirectional extends Positioned {
+  constructor({start = null, top = null, end = null, bottom = null, width = null, height = null, child, textDirection = "ltr"}) {
+    super({
+      left: textDirection === "rtl" ? end : start,
+      right: textDirection === "rtl" ? start : end,
+      top,
+      bottom,
+      width,
+      height,
+      child
+    });
+    this.start = start;
+    this.end = end;
+    this.textDirection = textDirection;
+  }
+  static fill({start = 0, top = 0, end = 0, bottom = 0, child, textDirection = "ltr"}) {
+    return new PositionedDirectional({
+      start,
+      top,
+      end,
+      bottom,
+      child,
+      textDirection
+    });
+  }
+}
+
+class Stack extends Widget {
+  constructor({alignment = Alignment.topLeft, fit = "loose", overflow = "clip", children = []} = {}) {
+    super();
+    this.alignment = resolveBasicAlignment(alignment);
+    if (![ "loose", "expand", "passthrough" ].includes(fit)) {
+      throw new TypeError(`Unknown StackFit: ${fit}`);
+    }
+    if (overflow !== "visible" && overflow !== "clip") {
+      throw new TypeError(`Unknown Stack overflow: ${overflow}`);
+    }
+    this.fit = fit;
+    this.overflow = overflow;
+    this.children = children;
+  }
+  layout(context, incoming) {
+    const constraints = BoxConstraints.from(incoming);
+    const measured = new Map;
+    let width = constraints.minWidth;
+    let height = constraints.minHeight;
+    let hasNonPositioned = false;
+    const nonPositionedConstraints = this.fit === "loose" ? constraints.loosen() : this.fit === "expand" ? BoxConstraints.tight(constraints.biggest) : constraints;
+    for (const child of this.children) {
+      if (child instanceof Positioned) continue;
+      hasNonPositioned = true;
+      const childBox = child.layout(context, nonPositionedConstraints);
+      measured.set(child, childBox);
+      width = Math.max(width, childBox.width);
+      height = Math.max(height, childBox.height);
+    }
+    const size = hasNonPositioned ? constraints.constrain({
+      width,
+      height
+    }) : constraints.constrain({
+      width: constraints.hasBoundedWidth ? constraints.maxWidth : 0,
+      height: constraints.hasBoundedHeight ? constraints.maxHeight : 0
+    });
+    const placed = [];
+    for (const child of this.children) {
+      if (!(child instanceof Positioned)) {
+        const childBox = measured.get(child);
+        const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+        placed.push({
+          box: childBox,
+          dx: offset.dx,
+          dy: offset.dy
+        });
+        continue;
+      }
+      let positionedConstraints = new BoxConstraints;
+      const tightWidth = child.left !== null && child.right !== null ? Math.max(0, size.width - child.left - child.right) : child.width;
+      const tightHeight = child.top !== null && child.bottom !== null ? Math.max(0, size.height - child.top - child.bottom) : child.height;
+      positionedConstraints = positionedConstraints.tighten({
+        width: tightWidth,
+        height: tightHeight
+      });
+      const childBox = child.layout(context, positionedConstraints);
+      const aligned = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+      const dx = child.left !== null ? child.left : child.right !== null ? size.width - child.right - childBox.width : aligned.dx;
+      const dy = child.top !== null ? child.top : child.bottom !== null ? size.height - child.bottom - childBox.height : aligned.dy;
+      placed.push({
+        box: childBox,
+        dx,
+        dy
+      });
+    }
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        children: placed
+      }
+    };
+  }
+  paint(context, box) {
+    if (this.overflow === "clip") {
+      context.canvas.saveContext();
+      context.canvas.drawRect(box.x, context.canvas.pageHeight - box.y - box.height, box.width, box.height);
+      context.canvas.clipPath();
+    }
+    for (const child of box.data.children) {
+      child.box.widget.paint(context, {
+        ...child.box,
+        x: box.x + child.dx,
+        y: box.y + child.dy
+      });
+    }
+    if (this.overflow === "clip") context.canvas.restoreContext();
+  }
+}
+
+const CHART_BLACK = "#000000";
+
+const CHART_WHITE = "#ffffff";
+
+const CHART_BLUE = "#2196f3";
+
+function drawWidget(context, widget, x, top, alignment = null, constraints = new BoxConstraints) {
+  const box = widget.layout(context, constraints);
+  const dx = alignment === null ? 0 : (1 + alignment.x) * box.width / 2;
+  const dy = alignment === null ? 0 : (1 - alignment.y) * box.height / 2;
+  widget.paint(context, {
+    ...box,
+    x: x - dx,
+    y: top - dy
+  });
+}
+
+class ChartFrame {
+  constructor(originX, originPdfY, originTop) {
+    this.originX = originX;
+    this.originPdfY = originPdfY;
+    this.originTop = originTop;
+  }
+  px(x) {
+    return this.originX + x;
+  }
+  py(y) {
+    return this.originPdfY + y;
+  }
+  top(y) {
+    return this.originTop - y;
+  }
+}
+
+function chartOf(context) {
+  const scope = context.chart;
+  if (scope === undefined || scope === null) {
+    throw new Error("This widget must be placed inside a Chart");
+  }
+  return scope;
+}
+
+class Dataset {
+  constructor({legend = null, color = null, borderColor = null, borderWidth = .5} = {}) {
+    this.legend = legend === null || legend === undefined ? null : String(legend);
+    this.color = color === null || color === undefined ? null : normalizeColor(color);
+    this.borderColor = borderColor === null || borderColor === undefined ? null : normalizeColor(borderColor);
+    this.borderWidth = Number(borderWidth);
+  }
+  paintBackground(_context, _frame, _data) {}
+  paint(_context, _frame, _data) {}
+  paintForeground(_context, _frame, _data) {}
+  legendShape(_context) {
+    return new Container({
+      decoration: new BoxDecoration({
+        color: this.color,
+        border: Border.all({
+          color: this.borderColor ?? CHART_BLACK,
+          width: this.borderWidth
+        })
+      })
+    });
+  }
+}
+
+class ChartGrid extends Widget {
+  gridSize(constraints) {
+    return BoxConstraints.from(constraints).biggest;
+  }
+}
+
+class Chart extends Widget {
+  static of(context) {
+    return chartOf(context);
+  }
+  constructor({grid, datasets, overlay = null, title = null, bottom = null, left = null, right = null}) {
+    super();
+    this.grid = grid;
+    this.datasets = [ ...datasets ];
+    this.overlay = overlay;
+    this.title = title;
+    this.bottom = bottom;
+    this.left = left;
+    this.right = right;
+  }
+  computeSize(constraints) {
+    const parent = BoxConstraints.from(constraints);
+    if (parent.isTight) return parent.smallest;
+    const aspectRatio = 1;
+    let width = parent.maxWidth;
+    let height = parent.maxHeight;
+    if (!Number.isFinite(width)) width = height * aspectRatio;
+    if (!Number.isFinite(height)) height = width * aspectRatio;
+    return parent.constrain({
+      width,
+      height
+    });
+  }
+  scope(context) {
+    const scoped = {
+      ...context,
+      chart: {
+        grid: this.grid,
+        datasets: this.datasets
+      }
+    };
+    return scoped;
+  }
+  build() {
+    const stack = new Stack({
+      overflow: "visible",
+      children: this.overlay === null ? [ this.grid ] : [ this.grid, this.overlay ]
+    });
+    const row = [];
+    if (this.left !== null) row.push(this.left);
+    row.push(new Expanded({
+      child: stack
+    }));
+    if (this.right !== null) row.push(this.right);
+    const column = [];
+    if (this.title !== null) column.push(this.title);
+    column.push(new Expanded({
+      child: new Row({
+        children: row
+      })
+    }));
+    if (this.bottom !== null) column.push(this.bottom);
+    return new Column({
+      children: column
+    });
+  }
+  layout(context, constraints) {
+    const size = this.computeSize(constraints);
+    const childBox = this.build().layout(this.scope(context), BoxConstraints.tight(size));
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox.widget.paint(this.scope(context), {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class CartesianFrame extends ChartFrame {
+  constructor(xAxis, yAxis, xLayout, yLayout, gridBox, originX = 0, originPdfY = 0, originTop = 0) {
+    super(originX, originPdfY, originTop);
+    this.xAxis = xAxis;
+    this.yAxis = yAxis;
+    this.xLayout = xLayout;
+    this.yLayout = yLayout;
+    this.gridBox = gridBox;
+  }
+  get xAxisOffset() {
+    return this.xLayout.axisPosition;
+  }
+  get yAxisOffset() {
+    return this.yLayout.axisPosition;
+  }
+  toChart(point) {
+    return {
+      x: this.xAxis.toChart(point.x, this.xLayout),
+      y: this.yAxis.toChart(point.y, this.yLayout)
+    };
+  }
+  withOrigin(originX, originPdfY, originTop) {
+    return new CartesianFrame(this.xAxis, this.yAxis, this.xLayout, this.yLayout, this.gridBox, originX, originPdfY, originTop);
+  }
+}
+
+class CartesianGrid extends ChartGrid {
+  constructor({xAxis, yAxis}) {
+    super();
+    this.xAxis = xAxis;
+    this.yAxis = yAxis;
+  }
+  layout(context, constraints) {
+    const datasets = chartOf(context).datasets;
+    const size = this.gridSize(constraints);
+    let x = {
+      axisPosition: 0,
+      crossAxisPosition: 0,
+      marginEnd: this.xAxis.marginEnd
+    };
+    let y = {
+      axisPosition: 0,
+      crossAxisPosition: 0,
+      marginEnd: this.yAxis.marginEnd
+    };
+    let xLayout = this.xAxis.layout(context, "horizontal", size, x);
+    let yLayout = this.yAxis.layout(context, "vertical", size, y);
+    let count = 5;
+    while (count-- > 0) {
+      x = {
+        axisPosition: Math.max(x.axisPosition, y.crossAxisPosition),
+        crossAxisPosition: y.axisPosition,
+        marginEnd: x.marginEnd
+      };
+      xLayout = this.xAxis.layout(context, "horizontal", size, x);
+      x = {
+        axisPosition: xLayout.axisPosition,
+        crossAxisPosition: xLayout.crossAxisPosition,
+        marginEnd: xLayout.marginEnd
+      };
+      y = {
+        axisPosition: Math.max(y.axisPosition, x.crossAxisPosition),
+        crossAxisPosition: x.axisPosition,
+        marginEnd: y.marginEnd
+      };
+      yLayout = this.yAxis.layout(context, "vertical", size, y);
+      y = {
+        axisPosition: yLayout.axisPosition,
+        crossAxisPosition: yLayout.crossAxisPosition,
+        marginEnd: yLayout.marginEnd
+      };
+      if (y.crossAxisPosition === x.axisPosition && x.crossAxisPosition === y.axisPosition) break;
+    }
+    const left = yLayout.axisPosition;
+    const bottom = xLayout.axisPosition;
+    const gridBox = {
+      left,
+      bottom,
+      width: size.width - left,
+      height: size.height - bottom
+    };
+    const frame = new CartesianFrame(this.xAxis, this.yAxis, xLayout, yLayout, gridBox);
+    const datasetData = datasets.map(dataset => dataset.layout(context, frame));
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        frame,
+        datasetData,
+        width: size.width,
+        height: size.height
+      }
+    };
+  }
+  paint(context, box) {
+    const datasets = chartOf(context).datasets;
+    const canvas = context.canvas;
+    const bottom = box.y + box.height;
+    const frame = box.data.frame.withOrigin(box.x, canvas.toPdfY(bottom), bottom);
+    this.clip(context, frame);
+    datasets.forEach((dataset, index) => dataset.paintBackground(context, frame, box.data.datasetData[index]));
+    canvas.restoreContext();
+    this.xAxis.paintBackground(context, frame, frame.xLayout);
+    this.yAxis.paintBackground(context, frame, frame.yLayout);
+    this.clip(context, frame);
+    datasets.forEach((dataset, index) => dataset.paint(context, frame, box.data.datasetData[index]));
+    canvas.restoreContext();
+    this.xAxis.paint(context, frame, frame.xLayout);
+    this.yAxis.paint(context, frame, frame.yLayout);
+    datasets.forEach((dataset, index) => dataset.paintForeground(context, frame, box.data.datasetData[index]));
+  }
+  clip(context, frame) {
+    const grid = frame.gridBox;
+    context.canvas.saveContext();
+    context.canvas.drawRect(frame.px(grid.left), frame.py(grid.bottom), grid.width, grid.height);
+    context.canvas.clipPath();
+  }
+}
+
+class PointChartValue {
+  constructor(x, y) {
+    this.x = assertFiniteNumber(Number(x), "x");
+    this.y = assertFiniteNumber(Number(y), "y");
+  }
+  get point() {
+    return {
+      x: this.x,
+      y: this.y
+    };
+  }
+}
+
+class PointDataSet extends Dataset {
+  constructor({data, pointSize = 3, drawPoints = true, shape = null, buildValue = null, valuePosition = "auto", color = CHART_BLUE, borderColor = null, borderWidth = 1.5, legend = null}) {
+    super({
+      legend,
+      color,
+      borderColor,
+      borderWidth
+    });
+    this.data = [ ...data ];
+    this.pointSize = Number(pointSize);
+    this.drawPoints = Boolean(drawPoints);
+    this.shape = shape;
+    this.buildValue = buildValue;
+    this.valuePosition = valuePosition;
+  }
+  get delta() {
+    return this.pointSize * .5;
+  }
+  layout(_context, _frame) {
+    return null;
+  }
+  automaticValuePosition(point, size, _previous, _next, box) {
+    if (point.x - size.width / 2 < box.left) return "right";
+    if (point.x + size.width / 2 > box.left + box.width) return "left";
+    if (point.y + size.height + this.delta > box.bottom + box.height) return "bottom";
+    return "top";
+  }
+  paintForeground(context, frame, _data) {
+    if (this.data.length === 0) return;
+    const canvas = context.canvas;
+    if (this.drawPoints) {
+      if (this.shape === null) {
+        for (const value of this.data) {
+          const p = frame.toChart(value.point);
+          canvas.drawEllipse(frame.px(p.x), frame.py(p.y), this.pointSize, this.pointSize);
+        }
+        canvas.setColor(this.color ?? CHART_BLUE);
+        canvas.fillPath();
+      } else {
+        for (const value of this.data) {
+          const p = frame.toChart(value.point);
+          drawWidget(context, new SizedBox({
+            width: this.pointSize * 2,
+            height: this.pointSize * 2,
+            child: this.shape(context)
+          }), frame.px(p.x), frame.top(p.y), Alignment.center);
+        }
+      }
+    }
+    if (this.buildValue === null) return;
+    const box = frame instanceof CartesianFrame ? frame.gridBox : {
+      left: 0,
+      bottom: 0,
+      width: 0,
+      height: 0
+    };
+    let previous = null;
+    let index = 1;
+    for (const value of this.data) {
+      const p = frame.toChart(value.point);
+      const measured = this.buildValue(context, value).layout(context, new BoxConstraints);
+      const size = {
+        width: measured.width,
+        height: measured.height
+      };
+      let position = this.valuePosition;
+      if (position === "auto") {
+        const next = index < this.data.length ? frame.toChart(this.data[index++].point) : null;
+        position = this.automaticValuePosition(p, size, previous, next, box);
+      }
+      let offset;
+      switch (position) {
+       case "left":
+        offset = {
+          x: p.x - size.width / 2 - this.pointSize - this.delta,
+          y: p.y
+        };
+        break;
+
+       case "top":
+        offset = {
+          x: p.x,
+          y: p.y + size.height / 2 + this.pointSize + this.delta
+        };
+        break;
+
+       case "right":
+        offset = {
+          x: p.x + size.width / 2 + this.pointSize + this.delta,
+          y: p.y
+        };
+        break;
+
+       case "bottom":
+        offset = {
+          x: p.x,
+          y: p.y - size.height / 2 - this.pointSize - this.delta
+        };
+        break;
+
+       default:
+        offset = p;
+        break;
+      }
+      drawWidget(context, this.buildValue(context, value), frame.px(offset.x), frame.top(offset.y), Alignment.center);
+      previous = p;
+    }
+  }
+  legendShape(context) {
+    return this.shape === null ? super.legendShape(context) : this.shape(context);
+  }
+}
+
+class BarDataSet extends PointDataSet {
+  constructor({data, legend = null, borderColor = null, borderWidth = 1.5, color = CHART_BLUE, drawBorder = null, drawSurface = true, surfaceOpacity = 1, width = 10, offset = 0, axis = "horizontal", pointColor = null, pointSize = 3, drawPoints = false, shape = null, buildValue = null, valuePosition = "auto"}) {
+    super({
+      data,
+      legend,
+      color: pointColor ?? color,
+      borderColor,
+      borderWidth,
+      pointSize,
+      drawPoints,
+      shape,
+      buildValue,
+      valuePosition
+    });
+    this.surfaceColor = normalizeColor(color);
+    const border = normalizeColor(borderColor ?? CHART_BLACK);
+    this.drawBorder = drawBorder ?? (borderColor !== null && borderColor !== undefined && (border[0] !== this.surfaceColor[0] || border[1] !== this.surfaceColor[1] || border[2] !== this.surfaceColor[2]));
+    if (!this.drawBorder && !drawSurface) {
+      throw new Error("BarDataSet must draw its surface or its border");
+    }
+    this.drawSurface = Boolean(drawSurface);
+    this.surfaceOpacity = Number(surfaceOpacity);
+    this.barWidth = Number(width);
+    this.offset = Number(offset);
+    this.axis = axis;
+  }
+  legendShape(context) {
+    if (this.shape !== null) return this.shape(context);
+    return new Container({
+      decoration: new BoxDecoration({
+        color: this.surfaceColor,
+        border: Border.all({
+          color: this.borderColor ?? CHART_BLACK,
+          width: this.borderWidth
+        })
+      })
+    });
+  }
+  drawBar(context, frame, value) {
+    const canvas = context.canvas;
+    const cartesian = frame instanceof CartesianFrame ? frame : null;
+    if (this.axis === "horizontal") {
+      const base = cartesian === null ? 0 : cartesian.xAxisOffset;
+      const p = frame.toChart(value.point);
+      const x = p.x + this.offset - this.barWidth / 2;
+      canvas.drawRect(frame.px(x), frame.py(base), this.barWidth, p.y - base);
+      return;
+    }
+    const base = cartesian === null ? 0 : cartesian.yAxisOffset;
+    const p = frame.toChart(value.point);
+    const y = p.y + this.offset - this.barWidth / 2;
+    canvas.drawRect(frame.px(base), frame.py(y), p.x - base, this.barWidth);
+  }
+  paint(context, frame, _data) {
+    if (this.data.length === 0) return;
+    const canvas = context.canvas;
+    if (this.drawSurface) {
+      for (const value of this.data) this.drawBar(context, frame, value);
+      if (this.surfaceOpacity !== 1) {
+        canvas.saveContext();
+        canvas.setGraphicState(new PdfGraphicState({
+          opacity: this.surfaceOpacity
+        }));
+      }
+      canvas.setFillColor(this.surfaceColor);
+      canvas.fillPath();
+      if (this.surfaceOpacity !== 1) canvas.restoreContext();
+    }
+    if (this.drawBorder) {
+      for (const value of this.data) this.drawBar(context, frame, value);
+      canvas.setStrokeColor(this.borderColor ?? this.surfaceColor);
+      canvas.setLineWidth(this.borderWidth);
+      canvas.strokePath();
+    }
+  }
+  automaticValuePosition(point, size, previous, next, box) {
+    const position = super.automaticValuePosition(point, size, previous, next, box);
+    if (position === "right" || position === "left") return "top";
+    return position;
+  }
+}
+
+const GREY = "#9e9e9e";
+
+class GridAxis {
+  constructor({format = null, buildLabel = null, textStyle = null, margin = null, marginStart = null, marginEnd = null, color = null, width = null, divisions = null, divisionsWidth = null, divisionsColor = null, divisionsDashed = null, ticks = null, axisTick = null, angle = 0} = {}) {
+    this.format = format ?? (value => String(value));
+    this.buildLabel = buildLabel;
+    this.textStyle = textStyle;
+    this.margin = margin === null ? null : Number(margin);
+    this.marginStart = marginStart ?? 0;
+    this.marginEnd = marginEnd ?? 0;
+    this.color = normalizeColor(color ?? CHART_BLACK);
+    this.width = width ?? 1;
+    this.divisions = divisions ?? false;
+    this.divisionsWidth = divisionsWidth ?? .5;
+    this.divisionsColor = normalizeColor(divisionsColor ?? GREY);
+    this.divisionsDashed = divisionsDashed ?? false;
+    this.ticks = ticks ?? false;
+    this.axisTick = axisTick;
+    this.angle = assertFiniteNumber(Number(angle), "angle");
+  }
+  transfer(input) {
+    return input;
+  }
+  label(value) {
+    const text = this.buildLabel === null ? new Text(this.format(value), this.textStyle === null ? {} : {
+      style: this.textStyle
+    }) : this.buildLabel(value);
+    if (this.angle === 0) return text;
+    return new Transform({
+      rotateBox: this.angle,
+      child: text
+    });
+  }
+  angleDirection() {
+    if (this.angle === 0) return 0;
+    if (this.angle % Math.PI > Math.PI / 2) return -1;
+    return 1;
+  }
+}
+
+class FixedAxis extends GridAxis {
+  constructor(values, options = {}) {
+    super(options);
+    this.values = values.map((value, index) => assertFiniteNumber(Number(value), `values[${index}]`));
+    if (!FixedAxis.isSortedAscending(this.values)) {
+      throw new RangeError("FixedAxis values must be sorted ascending");
+    }
+  }
+  static fromStrings(values, options = {}) {
+    const labels = values.map(value => String(value));
+    return new FixedAxis(labels.map((_, index) => index), {
+      ...options,
+      format: value => labels[Math.trunc(value)] ?? String(value)
+    });
+  }
+  static isSortedAscending(values) {
+    let previous = values[0] ?? 0;
+    for (const value of values) {
+      if (previous > value) return false;
+      previous = value;
+    }
+    return true;
+  }
+  layout(context, direction, size, incoming) {
+    let maxWidth = 0;
+    let maxHeight = 0;
+    let first = null;
+    let last = null;
+    for (const value of this.values) {
+      const measured = this.label(value).layout(context, new BoxConstraints);
+      last = {
+        width: measured.width,
+        height: measured.height
+      };
+      maxWidth = Math.max(maxWidth, last.width);
+      maxHeight = Math.max(maxHeight, last.height);
+      if (first === null) first = last;
+    }
+    const firstSize = first ?? {
+      width: 0,
+      height: 0
+    };
+    const lastSize = last ?? {
+      width: 0
+    };
+    const ad = this.angleDirection();
+    if (direction === "horizontal") {
+      const textMargin = this.margin ?? 2;
+      const minStart = ad === 0 ? firstSize.width / 2 : ad > 0 ? firstSize.width : 0;
+      const marginEnd = Math.max(incoming.marginEnd, ad === 0 ? lastSize.width / 2 : ad > 0 ? 0 : lastSize.width);
+      const crossAxisPosition = Math.max(incoming.crossAxisPosition, minStart);
+      const axisPosition = Math.max(incoming.axisPosition, maxHeight + textMargin);
+      return {
+        direction,
+        axisPosition,
+        crossAxisPosition,
+        marginEnd,
+        textMargin,
+        axisTick: this.axisTick ?? false,
+        boxWidth: size.width,
+        boxHeight: axisPosition
+      };
+    }
+    const textMargin = this.margin ?? 10;
+    const marginEnd = Math.max(incoming.marginEnd, ad === 0 ? lastSize.width / 2 : ad < 0 ? lastSize.width : 0);
+    const minStart = ad === 0 ? firstSize.height / 2 : ad > 0 ? firstSize.width : 0;
+    const crossAxisPosition = Math.max(incoming.crossAxisPosition, minStart);
+    const axisPosition = Math.max(incoming.axisPosition, maxWidth + textMargin);
+    return {
+      direction,
+      axisPosition,
+      crossAxisPosition,
+      marginEnd,
+      textMargin,
+      axisTick: this.axisTick ?? true,
+      boxWidth: axisPosition,
+      boxHeight: size.height
+    };
+  }
+  toChart(input, layout) {
+    const offset = this.transfer(this.values[0] ?? 0);
+    const total = this.transfer(this.values[this.values.length - 1] ?? 0) - offset;
+    const start = layout.crossAxisPosition + this.marginStart;
+    const extent = layout.direction === "horizontal" ? layout.boxWidth : layout.boxHeight;
+    if (total === 0) return start;
+    return start + (extent - start - layout.marginEnd) * (this.transfer(input) - offset) / total;
+  }
+  paintBackground(context, frame, layout) {
+    if (!this.divisions) return;
+    const canvas = context.canvas;
+    const grid = frame.gridBox;
+    const values = this.values.slice(this.marginStart > 0 ? 0 : 1);
+    if (layout.direction === "horizontal") {
+      for (const value of values) {
+        const p = this.toChart(value, layout);
+        canvas.drawLine(frame.px(p), frame.py(grid.bottom + grid.height), frame.px(p), frame.py(grid.bottom));
+      }
+    } else {
+      for (const value of values) {
+        const p = this.toChart(value, layout);
+        canvas.drawLine(frame.px(grid.left), frame.py(p), frame.px(grid.left + grid.width), frame.py(p));
+      }
+    }
+    if (this.divisionsDashed) canvas.setLineDashPattern([ 4, 2 ]);
+    canvas.setStrokeColor(this.divisionsColor);
+    canvas.setLineWidth(this.divisionsWidth);
+    canvas.setLineJoin("miter");
+    canvas.strokePath();
+    if (this.divisionsDashed) canvas.setLineDashPattern();
+  }
+  paint(context, frame, layout) {
+    if (layout.direction === "horizontal") {
+      this.drawXValues(context, frame, layout);
+    } else {
+      this.drawYValues(context, frame, layout);
+    }
+  }
+  drawXValues(context, frame, layout) {
+    const canvas = context.canvas;
+    const axis = layout.axisPosition;
+    canvas.moveTo(frame.px(layout.crossAxisPosition), frame.py(axis));
+    canvas.lineTo(frame.px(layout.boxWidth), frame.py(axis));
+    if (layout.axisTick && layout.textMargin > 0) {
+      canvas.moveTo(frame.px(layout.crossAxisPosition), frame.py(axis));
+      canvas.lineTo(frame.px(layout.crossAxisPosition), frame.py(axis - layout.textMargin));
+    }
+    if (this.ticks && layout.textMargin > 0) {
+      for (const value of this.values) {
+        const p = this.toChart(value, layout);
+        canvas.moveTo(frame.px(p), frame.py(axis));
+        canvas.lineTo(frame.px(p), frame.py(axis - layout.textMargin));
+      }
+    }
+    canvas.setStrokeColor(this.color);
+    canvas.setLineWidth(this.width);
+    canvas.setLineJoin("bevel");
+    canvas.strokePath();
+    const ad = this.angleDirection();
+    const alignment = ad === 0 ? Alignment.topCenter : ad > 0 ? Alignment.topRight : Alignment.topLeft;
+    for (const value of this.values) {
+      const p = this.toChart(value, layout);
+      drawWidget(context, this.label(value), frame.px(p), frame.top(axis - layout.textMargin), alignment);
+    }
+  }
+  drawYValues(context, frame, layout) {
+    const canvas = context.canvas;
+    const axis = layout.axisPosition;
+    canvas.moveTo(frame.px(axis), frame.py(layout.boxHeight));
+    canvas.lineTo(frame.px(axis), frame.py(layout.crossAxisPosition));
+    if (layout.axisTick && layout.textMargin > 0) {
+      canvas.moveTo(frame.px(axis), frame.py(layout.crossAxisPosition));
+      canvas.lineTo(frame.px(axis - layout.textMargin / 2), frame.py(layout.crossAxisPosition));
+    }
+    if (this.ticks && layout.textMargin > 0) {
+      for (const value of this.values) {
+        const p = this.toChart(value, layout);
+        canvas.moveTo(frame.px(axis), frame.py(p));
+        canvas.lineTo(frame.px(axis - layout.textMargin / 2), frame.py(p));
+      }
+    }
+    canvas.setStrokeColor(this.color);
+    canvas.setLineWidth(this.width);
+    canvas.setLineJoin("bevel");
+    canvas.strokePath();
+    const ad = this.angleDirection();
+    const alignment = ad === 0 ? Alignment.centerRight : ad > 0 ? Alignment.topRight : Alignment.bottomRight;
+    for (const value of this.values) {
+      const p = this.toChart(value, layout);
+      drawWidget(context, this.label(value), frame.px(axis - layout.textMargin), frame.top(p), alignment);
+    }
+  }
+}
+
+class RadialFrame extends ChartFrame {
+  constructor(width, height, originX = 0, originPdfY = 0, originTop = 0) {
+    super(originX, originPdfY, originTop);
+    this.width = width;
+    this.height = height;
+  }
+  toChart(point) {
+    const z = 3;
+    return {
+      x: z * point.y * Math.cos(point.x / 7 * Math.PI * 2) + this.width / 2,
+      y: z * point.y * Math.sin(point.x / 7 * Math.PI * 2) + this.height / 2
+    };
+  }
+  withOrigin(originX, originPdfY, originTop) {
+    return new RadialFrame(this.width, this.height, originX, originPdfY, originTop);
+  }
+}
+
+class RadialGrid extends ChartGrid {
+  layout(context, constraints) {
+    const datasets = chartOf(context).datasets;
+    const size = this.gridSize(constraints);
+    const frame = new RadialFrame(size.width, size.height);
+    const datasetData = datasets.map(dataset => dataset.layout(context, frame));
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        frame,
+        datasetData
+      }
+    };
+  }
+  paint(context, box) {
+    const datasets = chartOf(context).datasets;
+    const canvas = context.canvas;
+    const bottom = box.y + box.height;
+    const frame = box.data.frame.withOrigin(box.x, canvas.toPdfY(bottom), bottom);
+    this.clip(context, frame, box.width, box.height);
+    datasets.forEach((dataset, index) => dataset.paintBackground(context, frame, box.data.datasetData[index]));
+    canvas.restoreContext();
+    this.clip(context, frame, box.width, box.height);
+    datasets.forEach((dataset, index) => dataset.paint(context, frame, box.data.datasetData[index]));
+    canvas.restoreContext();
+    datasets.forEach((dataset, index) => dataset.paintForeground(context, frame, box.data.datasetData[index]));
+  }
+  clip(context, frame, width, height) {
+    context.canvas.saveContext();
+    context.canvas.drawRect(frame.px(0), frame.py(0), width, height);
+    context.canvas.clipPath();
+  }
+}
+
+function validateAlignment(value, name) {
+  if (![ "start", "end", "center", "spaceBetween", "spaceAround", "spaceEvenly" ].includes(value)) {
+    throw new TypeError(`Unknown ${name}: ${value}`);
+  }
+}
+
+function spaces(alignment, free, count) {
+  switch (alignment) {
+   case "end":
+    return [ free, 0 ];
+
+   case "center":
+    return [ free / 2, 0 ];
+
+   case "spaceBetween":
+    return [ 0, count > 1 ? free / (count - 1) : 0 ];
+
+   case "spaceAround":
+    {
+      const between = count > 0 ? free / count : 0;
+      return [ between / 2, between ];
+    }
+
+   case "spaceEvenly":
+    {
+      const between = free / (count + 1);
+      return [ between, between ];
+    }
+
+   default:
+    return [ 0, 0 ];
+  }
+}
+
+class Wrap extends SpanningWidget {
+  constructor({direction = "horizontal", alignment = "start", spacing = 0, runAlignment = "start", runSpacing = 0, crossAxisAlignment = "start", verticalDirection = "down", children = []} = {}) {
+    super();
+    if (direction !== "horizontal" && direction !== "vertical") {
+      throw new TypeError(`Unknown Wrap axis: ${direction}`);
+    }
+    validateAlignment(alignment, "WrapAlignment");
+    validateAlignment(runAlignment, "runAlignment");
+    if (![ "start", "end", "center" ].includes(crossAxisAlignment)) {
+      throw new TypeError(`Unknown WrapCrossAlignment: ${crossAxisAlignment}`);
+    }
+    if (verticalDirection !== "down" && verticalDirection !== "up") {
+      throw new TypeError(`Unknown verticalDirection: ${verticalDirection}`);
+    }
+    this.direction = direction;
+    this.alignment = alignment;
+    this.spacing = Math.max(0, Number(spacing));
+    this.runAlignment = runAlignment;
+    this.runSpacing = Math.max(0, Number(runSpacing));
+    this.crossAxisAlignment = crossAxisAlignment;
+    this.verticalDirection = verticalDirection;
+    this.children = children;
+  }
+  initialSpanState() {
+    return {
+      firstChild: 0
+    };
+  }
+  fragment(context, incoming, state) {
+    const constraints = BoxConstraints.from(incoming);
+    const horizontal = this.direction === "horizontal";
+    const maxMain = horizontal ? constraints.maxWidth : constraints.maxHeight;
+    const maxCross = horizontal ? constraints.maxHeight : constraints.maxWidth;
+    const childConstraints = horizontal ? new BoxConstraints({
+      maxWidth: maxMain
+    }) : new BoxConstraints({
+      maxHeight: maxMain
+    });
+    const runs = [];
+    let current = [];
+    let currentMain = 0;
+    let currentCross = 0;
+    const closeRun = () => {
+      if (current.length === 0) return;
+      runs.push({
+        children: current,
+        main: currentMain,
+        cross: currentCross
+      });
+      current = [];
+      currentMain = 0;
+      currentCross = 0;
+    };
+    for (let index = state.firstChild; index < this.children.length; index++) {
+      const box = this.children[index].layout(context, childConstraints);
+      const main = horizontal ? box.width : box.height;
+      const cross = horizontal ? box.height : box.width;
+      if (current.length > 0 && currentMain + this.spacing + main > maxMain) {
+        closeRun();
+      }
+      const nextCrossTotal = runs.reduce((sum, run) => sum + run.cross, 0) + this.runSpacing * runs.length + Math.max(currentCross, cross);
+      if (current.length === 0 && runs.length > 0 && nextCrossTotal > maxCross + 1e-6) {
+        break;
+      }
+      current.push({
+        index,
+        box,
+        main,
+        cross
+      });
+      currentMain += (current.length > 1 ? this.spacing : 0) + main;
+      currentCross = Math.max(currentCross, cross);
+    }
+    closeRun();
+    let usedCross = runs.reduce((sum, run) => sum + run.cross, 0) + this.runSpacing * Math.max(0, runs.length - 1);
+    while (runs.length > 0 && Number.isFinite(maxCross) && usedCross > maxCross + 1e-6) {
+      const removed = runs.pop();
+      usedCross -= removed.cross + (runs.length > 0 ? this.runSpacing : 0);
+    }
+    const maxRunMain = runs.reduce((value, run) => Math.max(value, run.main), 0);
+    const natural = horizontal ? {
+      width: maxRunMain,
+      height: usedCross
+    } : {
+      width: usedCross,
+      height: maxRunMain
+    };
+    const size = constraints.constrain(natural);
+    const containerMain = horizontal ? size.width : size.height;
+    const containerCross = horizontal ? size.height : size.width;
+    const [runLeading, runBetweenExtra] = spaces(this.runAlignment, Math.max(0, containerCross - usedCross), runs.length);
+    const reverseRuns = horizontal && this.verticalDirection === "up";
+    let crossCursor = reverseRuns ? containerCross - runLeading : runLeading;
+    const placed = [];
+    for (const run of runs) {
+      if (reverseRuns) crossCursor -= run.cross;
+      const [childLeading, childBetweenExtra] = spaces(this.alignment, Math.max(0, containerMain - run.main), run.children.length);
+      const reverseChildren = !horizontal && this.verticalDirection === "up";
+      let mainCursor = reverseChildren ? containerMain - childLeading : childLeading;
+      for (const child of run.children) {
+        if (reverseChildren) mainCursor -= child.main;
+        const freeCross = run.cross - child.cross;
+        const childCross = this.crossAxisAlignment === "end" ? freeCross : this.crossAxisAlignment === "center" ? freeCross / 2 : 0;
+        placed.push({
+          box: child.box,
+          dx: horizontal ? mainCursor : crossCursor + childCross,
+          dy: horizontal ? crossCursor + childCross : mainCursor
+        });
+        const advance = child.main + this.spacing + childBetweenExtra;
+        mainCursor += reverseChildren ? -advance : advance;
+      }
+      const runAdvance = run.cross + this.runSpacing + runBetweenExtra;
+      crossCursor += reverseRuns ? -runAdvance : runAdvance;
+    }
+    const lastChild = placed.length === 0 ? state.firstChild : Math.max(...runs.flatMap(run => run.children.map(child => child.index))) + 1;
+    const data = {
+      children: placed,
+      firstChild: state.firstChild,
+      lastChild,
+      runCount: runs.length
+    };
+    const nextState = {
+      firstChild: lastChild
+    };
+    return {
+      box: {
+        widget: this,
+        width: size.width,
+        height: size.height,
+        data
+      },
+      nextState,
+      hasMore: lastChild < this.children.length
+    };
+  }
+  layout(context, constraints) {
+    return this.fragment(context, constraints, this.initialSpanState()).box;
+  }
+  layoutSpan(context, constraints, state) {
+    return this.fragment(context, constraints, state);
+  }
+  paint(context, box) {
+    for (const child of box.data.children) {
+      child.box.widget.paint(context, {
+        ...child.box,
+        x: box.x + child.dx,
+        y: box.y + child.dy
+      });
+    }
+  }
+}
+
+function resolveLegendPosition(value) {
+  if (Array.isArray(value)) return {
+    x: Number(value[0]),
+    y: Number(value[1])
+  };
+  return resolveBasicAlignment(value);
+}
+
+class ChartLegend extends StatelessWidget {
+  constructor({textStyle = null, position = Alignment.topRight, direction = "vertical", decoration = null, padding = EdgeInsets.all(5)} = {}) {
+    super();
+    this.textStyle = textStyle;
+    this.position = resolveLegendPosition(position);
+    this.direction = direction;
+    this.decoration = normalizeBoxDecoration(decoration);
+    this.padding = normalizeInsets(padding);
+  }
+  buildLegend(context, dataset) {
+    const style = context.theme.defaultTextStyle.merge(this.textStyle);
+    return new Row({
+      mainAxisSize: "min",
+      children: [ new Container({
+        width: style.fontSize ?? undefined,
+        height: style.fontSize ?? undefined,
+        margin: EdgeInsets.only({
+          right: 5
+        }),
+        child: dataset.legendShape(context)
+      }), new Text(dataset.legend ?? "", this.textStyle === null ? {} : {
+        style: this.textStyle
+      }) ]
+    });
+  }
+  build(context) {
+    const datasets = chartOf(context).datasets;
+    const wrap = new Wrap({
+      direction: this.direction,
+      spacing: 10,
+      runSpacing: 10,
+      crossAxisAlignment: this.direction === "horizontal" ? "center" : "start",
+      children: datasets.filter(dataset => dataset.legend !== null).map(dataset => this.buildLegend(context, dataset))
+    });
+    return new Align({
+      alignment: this.position,
+      child: new Container({
+        decoration: this.decoration ?? new BoxDecoration({
+          color: CHART_WHITE
+        }),
+        padding: this.padding,
+        child: wrap
+      })
+    });
+  }
+}
+
+class LineDataSet extends PointDataSet {
+  constructor({data, legend = null, pointColor = null, pointSize = 3, color = CHART_BLUE, lineWidth = 2, drawLine = true, lineColor = null, drawPoints = true, shape = null, buildValue = null, valuePosition = "auto", drawSurface = false, surfaceOpacity = .2, surfaceColor = null, isCurved = false, smoothness = .35, borderColor = null, borderWidth = 1.5}) {
+    super({
+      data,
+      legend,
+      color: pointColor ?? color,
+      borderColor,
+      borderWidth,
+      pointSize,
+      drawPoints,
+      shape,
+      buildValue,
+      valuePosition
+    });
+    if (!drawLine && !drawPoints && !drawSurface) {
+      throw new Error("LineDataSet must draw its line, its points or its surface");
+    }
+    this.lineWidth = Number(lineWidth);
+    this.drawLine = Boolean(drawLine);
+    this.lineColor = lineColor === null ? null : normalizeColor(lineColor);
+    this.drawSurface = Boolean(drawSurface);
+    this.surfaceColor = surfaceColor === null ? null : normalizeColor(surfaceColor);
+    this.surfaceOpacity = Number(surfaceOpacity);
+    this.isCurved = Boolean(isCurved);
+    this.smoothness = Number(smoothness);
+  }
+  legendShape(context) {
+    if (this.shape !== null) return this.shape(context);
+    return new Container({
+      decoration: new BoxDecoration({
+        color: this.lineColor ?? this.color,
+        border: Border.all({
+          color: this.borderColor ?? CHART_BLACK,
+          width: this.borderWidth
+        })
+      })
+    });
+  }
+  drawPath(context, frame, moveTo) {
+    if (this.data.length < 2) return;
+    const canvas = context.canvas;
+    let t = {
+      x: 0,
+      y: 0
+    };
+    const first = frame.toChart(this.data[0].point);
+    if (moveTo) {
+      canvas.moveTo(frame.px(first.x), frame.py(first.y));
+    } else {
+      canvas.lineTo(frame.px(first.x), frame.py(first.y));
+    }
+    for (let index = 1; index < this.data.length; index++) {
+      const p = frame.toChart(this.data[index].point);
+      if (!this.isCurved) {
+        canvas.lineTo(frame.px(p.x), frame.py(p.y));
+        continue;
+      }
+      const pp = frame.toChart(this.data[index - 1].point);
+      const pn = frame.toChart(this.data[index + 1 < this.data.length ? index + 1 : index].point);
+      const c1 = {
+        x: pp.x + t.x,
+        y: pp.y + t.y
+      };
+      t = {
+        x: (pn.x - pp.x) / 2 * this.smoothness,
+        y: (pn.y - pp.y) / 2 * this.smoothness
+      };
+      const c2 = {
+        x: p.x - t.x,
+        y: p.y - t.y
+      };
+      canvas.curveTo(frame.px(c1.x), frame.py(c1.y), frame.px(c2.x), frame.py(c2.y), frame.px(p.x), frame.py(p.y));
+    }
+  }
+  drawArea(context, frame) {
+    if (this.data.length < 2) return;
+    const canvas = context.canvas;
+    const base = frame instanceof CartesianFrame ? frame.xAxisOffset : 0;
+    this.drawPath(context, frame, true);
+    const last = frame.toChart(this.data[this.data.length - 1].point);
+    canvas.lineTo(frame.px(last.x), frame.py(base));
+    const first = frame.toChart(this.data[0].point);
+    canvas.lineTo(frame.px(first.x), frame.py(base));
+  }
+  paintBackground(context, frame, _data) {
+    if (this.data.length === 0 || !this.drawSurface) return;
+    const canvas = context.canvas;
+    this.drawArea(context, frame);
+    if (this.surfaceOpacity !== 1) {
+      canvas.saveContext();
+      canvas.setGraphicState(new PdfGraphicState({
+        opacity: this.surfaceOpacity
+      }));
+    }
+    canvas.setFillColor(this.surfaceColor ?? this.color ?? CHART_BLUE);
+    canvas.fillPath();
+    if (this.surfaceOpacity !== 1) canvas.restoreContext();
+  }
+  paint(context, frame, _data) {
+    if (this.data.length === 0 || !this.drawLine) return;
+    const canvas = context.canvas;
+    this.drawPath(context, frame, true);
+    canvas.setStrokeColor(this.lineColor ?? this.color ?? CHART_BLUE);
+    canvas.setLineWidth(this.lineWidth);
+    canvas.setLineCap("round");
+    canvas.setLineJoin("round");
+    canvas.strokePath();
+  }
+}
+
+class PieFrame extends ChartFrame {
+  constructor(radius, angleStart, angleEnd, originX = 0, originPdfY = 0, originTop = 0) {
+    super(originX, originPdfY, originTop);
+    this.radius = radius;
+    this.angleStart = angleStart;
+    this.angleEnd = angleEnd;
+  }
+  toChart(point) {
+    return point;
+  }
+  withOrigin(originX, originPdfY, originTop) {
+    return new PieFrame(this.radius, this.angleStart, this.angleEnd, originX, originPdfY, originTop);
+  }
+}
+
+class PieDataSet extends Dataset {
+  constructor({value, legend = null, legendWidget = null, color, borderColor = CHART_WHITE, borderWidth = 1.5, drawBorder = null, drawSurface = true, surfaceOpacity = 1, offset = 0, legendStyle = null, legendAlign = null, legendPosition = "auto", legendLineWidth = 1, legendLineColor = null, legendOffset = 20, innerRadius = 0}) {
+    super({
+      legend,
+      color: color ?? CHART_BLUE,
+      borderColor,
+      borderWidth
+    });
+    if (innerRadius < 0) throw new RangeError("PieDataSet innerRadius must not be negative");
+    if (offset < 0) throw new RangeError("PieDataSet offset must not be negative");
+    this.value = Number(value);
+    this.legendWidget = legendWidget;
+    const fill = this.color ?? normalizeColor(CHART_BLUE);
+    const border = this.borderColor;
+    this.drawBorder = drawBorder ?? (border !== null && (border[0] !== fill[0] || border[1] !== fill[1] || border[2] !== fill[2]));
+    if (!this.drawBorder && !drawSurface) {
+      throw new Error("PieDataSet must draw its surface or its border");
+    }
+    this.drawSurface = Boolean(drawSurface);
+    this.surfaceOpacity = Number(surfaceOpacity);
+    this.offset = Number(offset);
+    this.legendStyle = legendStyle;
+    this.legendAlign = legendAlign;
+    this.legendPosition = legendPosition;
+    this.legendLineWidth = Number(legendLineWidth);
+    this.legendLineColor = legendLineColor === null ? fill : normalizeColor(legendLineColor);
+    this.legendOffset = Number(legendOffset);
+    this.innerRadius = Number(innerRadius);
+  }
+  isFullCircle(frame) {
+    return frame.angleEnd - frame.angleStart >= Math.PI * 2;
+  }
+  layout(context, frame) {
+    if (!(frame instanceof PieFrame)) {
+      throw new Error("Use only PieDataSet with a PieGrid");
+    }
+    const fullCircle = this.isFullCircle(frame);
+    const offset = fullCircle ? 0 : this.offset;
+    const len = frame.radius + offset;
+    let w = len * 2;
+    let h = len * 2;
+    const position = this.legendPosition === "auto" ? frame.angleEnd - frame.angleStart > Math.PI / 6 ? "inside" : "outside" : this.legendPosition;
+    const bisect = fullCircle ? Math.PI / 4 : (frame.angleStart + frame.angleEnd) / 2;
+    const align = this.legendAlign ?? (position === "inside" ? "center" : bisect > Math.PI ? "right" : "left");
+    const legend = this.legendWidget ?? (this.legend === null ? null : new RichText({
+      text: new TextSpan({
+        children: [ new TextSpan({
+          text: this.legend,
+          style: this.legendStyle ?? undefined
+        }) ],
+        style: new TextStyle({
+          color: position === "inside" ? isLightColor(this.color ?? CHART_BLUE) ? normalizeColor(CHART_WHITE) : normalizeColor(CHART_BLACK) : null
+        })
+      }),
+      textAlign: align
+    }));
+    let legendBox = null;
+    let legendLeft = 0;
+    let legendBottom = 0;
+    let anchor = null;
+    let pivot = null;
+    let start = null;
+    if (legend !== null) {
+      legendBox = legend.layout(context, new BoxConstraints({
+        maxWidth: frame.radius,
+        maxHeight: frame.radius
+      }));
+      const ls = {
+        width: legendBox.width,
+        height: legendBox.height
+      };
+      if (position === "outside") {
+        const o = frame.radius + this.legendOffset;
+        const cx = Math.sin(bisect) * (offset + o);
+        const cy = Math.cos(bisect) * (offset + o);
+        start = {
+          x: Math.sin(bisect) * (offset + frame.radius + this.legendOffset * .1),
+          y: Math.cos(bisect) * (offset + frame.radius + this.legendOffset * .1)
+        };
+        pivot = {
+          x: cx,
+          y: cy
+        };
+        if (bisect > Math.PI) {
+          anchor = {
+            x: cx - this.legendOffset / 2 * .8,
+            y: cy
+          };
+          legendLeft = cx - this.legendOffset / 2 - ls.width;
+          legendBottom = cy - ls.height / 2;
+          w = Math.max(w, (-cx + this.legendOffset / 2 + ls.width) * 2);
+          h = Math.max(h, Math.abs(cy) * 2 + ls.height);
+        } else {
+          anchor = {
+            x: cx + this.legendOffset / 2 * .8,
+            y: cy
+          };
+          legendLeft = cx + this.legendOffset / 2;
+          legendBottom = cy - ls.height / 2;
+          w = Math.max(w, (cx + this.legendOffset / 2 + ls.width) * 2);
+          h = Math.max(h, Math.abs(cy) * 2 + ls.height);
+        }
+      } else if (position === "inside") {
+        let o;
+        let cx;
+        let cy;
+        if (this.innerRadius === 0) {
+          o = fullCircle ? 0 : frame.radius * 2 / 3;
+          cx = Math.sin(bisect) * (offset + o);
+          cy = Math.cos(bisect) * (offset + o);
+        } else {
+          o = (frame.radius + this.innerRadius) / 2;
+          if (fullCircle) {
+            cx = 0;
+            cy = o;
+          } else {
+            cx = Math.sin(bisect) * (offset + o);
+            cy = Math.cos(bisect) * (offset + o);
+          }
+        }
+        legendLeft = cx - ls.width / 2;
+        legendBottom = cy - ls.height / 2;
+      }
+    }
+    return {
+      legend,
+      legendBox,
+      legendLeft,
+      legendBottom,
+      anchor,
+      pivot,
+      start,
+      boxWidth: w,
+      boxHeight: h
+    };
+  }
+  appendSlice(context, frame) {
+    const canvas = context.canvas;
+    const bisect = (frame.angleStart + frame.angleEnd) / 2;
+    const cx = Math.sin(bisect) * this.offset;
+    const cy = Math.cos(bisect) * this.offset;
+    const sx = cx + Math.sin(frame.angleStart) * frame.radius;
+    const sy = cy + Math.cos(frame.angleStart) * frame.radius;
+    const ex = cx + Math.sin(frame.angleEnd) * frame.radius;
+    const ey = cy + Math.cos(frame.angleEnd) * frame.radius;
+    if (this.isFullCircle(frame)) {
+      canvas.drawEllipse(frame.px(0), frame.py(0), frame.radius, frame.radius);
+      return;
+    }
+    canvas.moveTo(frame.px(cx), frame.py(cy));
+    canvas.lineTo(frame.px(sx), frame.py(sy));
+    canvas.bezierArc(frame.px(sx), frame.py(sy), frame.radius, frame.radius, frame.px(ex), frame.py(ey), {
+      large: frame.angleEnd - frame.angleStart > Math.PI
+    });
+  }
+  appendDonut(context, frame) {
+    const canvas = context.canvas;
+    const bisect = (frame.angleStart + frame.angleEnd) / 2;
+    const cx = Math.sin(bisect) * this.offset;
+    const cy = Math.cos(bisect) * this.offset;
+    const stx = cx + Math.sin(frame.angleStart) * frame.radius;
+    const sty = cy + Math.cos(frame.angleStart) * frame.radius;
+    const etx = cx + Math.sin(frame.angleEnd) * frame.radius;
+    const ety = cy + Math.cos(frame.angleEnd) * frame.radius;
+    const sbx = cx + Math.sin(frame.angleStart) * this.innerRadius;
+    const sby = cy + Math.cos(frame.angleStart) * this.innerRadius;
+    const ebx = cx + Math.sin(frame.angleEnd) * this.innerRadius;
+    const eby = cy + Math.cos(frame.angleEnd) * this.innerRadius;
+    if (this.isFullCircle(frame)) {
+      canvas.drawEllipse(frame.px(0), frame.py(0), frame.radius, frame.radius);
+      canvas.drawEllipse(frame.px(0), frame.py(0), this.innerRadius, this.innerRadius, false);
+      return;
+    }
+    const large = frame.angleEnd - frame.angleStart > Math.PI;
+    canvas.moveTo(frame.px(stx), frame.py(sty));
+    canvas.bezierArc(frame.px(stx), frame.py(sty), frame.radius, frame.radius, frame.px(etx), frame.py(ety), {
+      large
+    });
+    canvas.lineTo(frame.px(ebx), frame.py(eby));
+    canvas.bezierArc(frame.px(ebx), frame.py(eby), this.innerRadius, this.innerRadius, frame.px(sbx), frame.py(sby), {
+      large,
+      sweep: true
+    });
+    canvas.lineTo(frame.px(stx), frame.py(sty));
+  }
+  appendShape(context, frame) {
+    if (this.innerRadius === 0) {
+      this.appendSlice(context, frame);
+    } else {
+      this.appendDonut(context, frame);
+    }
+  }
+  paintBackground(context, frame, _data) {
+    if (!(frame instanceof PieFrame) || !this.drawSurface) return;
+    const canvas = context.canvas;
+    this.appendShape(context, frame);
+    if (this.surfaceOpacity !== 1) {
+      canvas.saveContext();
+      canvas.setGraphicState(new PdfGraphicState({
+        opacity: this.surfaceOpacity
+      }));
+    }
+    canvas.setFillColor(this.color ?? CHART_BLUE);
+    canvas.fillPath();
+    if (this.surfaceOpacity !== 1) canvas.restoreContext();
+  }
+  paint(context, frame, _data) {
+    if (!(frame instanceof PieFrame) || !this.drawBorder) return;
+    const canvas = context.canvas;
+    this.appendShape(context, frame);
+    canvas.setLineWidth(this.borderWidth);
+    canvas.setLineJoin("round");
+    canvas.setStrokeColor(this.borderColor ?? this.color ?? CHART_BLUE);
+    canvas.strokePath({
+      close: true
+    });
+  }
+  paintLegend(context, frame, data) {
+    if (this.legendPosition === "none" || data.legend === null || data.legendBox === null) return;
+    const canvas = context.canvas;
+    if (data.anchor !== null && data.pivot !== null && data.start !== null) {
+      canvas.saveContext();
+      canvas.moveTo(frame.px(data.start.x), frame.py(data.start.y));
+      canvas.lineTo(frame.px(data.pivot.x), frame.py(data.pivot.y));
+      canvas.lineTo(frame.px(data.anchor.x), frame.py(data.anchor.y));
+      canvas.setLineWidth(this.legendLineWidth);
+      canvas.setLineCap("round");
+      canvas.setLineJoin("round");
+      canvas.setStrokeColor(this.legendLineColor);
+      canvas.strokePath();
+      canvas.restoreContext();
+    }
+    data.legend.paint(context, {
+      ...data.legendBox,
+      x: frame.px(data.legendLeft),
+      y: frame.top(data.legendBottom + data.legendBox.height)
+    });
+  }
+}
+
+class PieGrid extends ChartGrid {
+  constructor({startAngle = 0} = {}) {
+    super();
+    this.startAngle = Number(startAngle);
+  }
+  layout(context, constraints) {
+    const datasets = chartOf(context).datasets;
+    const size = this.gridSize(constraints);
+    let total = 0;
+    for (const dataset of datasets) {
+      if (!(dataset instanceof PieDataSet)) throw new Error("Use only PieDataSet with a PieGrid");
+      total += dataset.value;
+    }
+    const unit = total === 0 ? 0 : Math.PI / total * 2;
+    let angle = this.startAngle;
+    const angles = datasets.map(dataset => {
+      const start = angle;
+      angle += dataset.value * unit;
+      return {
+        start,
+        end: angle
+      };
+    });
+    let radius = Math.min(size.width / 2, size.height / 2);
+    let datasetData = [];
+    let reduce = false;
+    do {
+      reduce = false;
+      datasetData = [];
+      for (let index = 0; index < datasets.length; index++) {
+        const slice = angles[index];
+        const frame = new PieFrame(radius, slice.start, slice.end);
+        const data = datasets[index].layout(context, frame);
+        datasetData.push(data);
+        if (radius > 20 && (data.boxWidth > size.width || data.boxHeight > size.height)) {
+          radius -= 10;
+          reduce = true;
+          break;
+        }
+      }
+    } while (reduce);
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        radius,
+        angles,
+        datasetData
+      }
+    };
+  }
+  paint(context, box) {
+    const datasets = chartOf(context).datasets;
+    const canvas = context.canvas;
+    const centreTop = box.y + box.height / 2;
+    const originX = box.x + box.width / 2;
+    const originPdfY = canvas.toPdfY(centreTop);
+    const frames = box.data.angles.map(slice => new PieFrame(box.data.radius, slice.start, slice.end, originX, originPdfY, centreTop));
+    datasets.forEach((dataset, index) => dataset.paintBackground(context, frames[index], box.data.datasetData[index]));
+    datasets.forEach((dataset, index) => dataset.paint(context, frames[index], box.data.datasetData[index]));
+    datasets.forEach((dataset, index) => {
+      if (dataset instanceof PieDataSet) {
+        dataset.paintLegend(context, frames[index], box.data.datasetData[index]);
+      }
+    });
+  }
+}
+
+function legacyRef(xref, free = false) {
+  const offset = String(xref.offset).padStart(10, "0");
+  const gen = String(xref.gen).padStart(5, "0");
+  return `${offset} ${gen} ${free ? "f" : "n"} `;
+}
+
+class PdfXrefTable {
+  constructor() {
+    this.params = new PdfDict;
+    this.objects = [];
+  }
+  add(object) {
+    this.objects.push(object);
+  }
+  writeBlock(s, firstId, block) {
+    s.putString(`${firstId} ${block.length}\n`);
+    for (const row of block) {
+      s.putString(row);
+      s.putByte(10);
+    }
+  }
+  output(s) {
+    s.putString("%PDF-1.7\n%âãÏÓ\n");
+    const ordered = [ ...this.objects ].sort((a, b) => a.objser - b.objser);
+    const xrefList = [];
+    for (const object of ordered) {
+      const offset = object.output(s);
+      xrefList.push({
+        ser: object.objser,
+        gen: object.objgen,
+        offset
+      });
+    }
+    const xrefOffset = s.offset;
+    s.putString("xref\n");
+    let firstId = 0;
+    let lastId = 0;
+    let block = [ legacyRef({
+      gen: 65535,
+      offset: 0
+    }, true) ];
+    for (const xref of xrefList) {
+      if (xref.ser !== lastId + 1) {
+        this.writeBlock(s, firstId, block);
+        block = [];
+        firstId = xref.ser;
+      }
+      block.push(legacyRef(xref));
+      lastId = xref.ser;
+    }
+    this.writeBlock(s, firstId, block);
+    const trailer = new PdfDict;
+    trailer.set("/Size", new PdfNum(lastId + 1));
+    for (const [key, value] of this.params.values) {
+      trailer.set(key, value);
+    }
+    s.putString("trailer\n");
+    trailer.output(s);
+    s.putByte(10);
+    s.putString(`startxref\n${xrefOffset}\n%%EOF\n`);
+  }
+}
+
+class PdfCatalog extends PdfObject {
+  constructor(document, pageList, objser) {
+    super(document, new PdfDict([ [ "/Type", new PdfName("/Catalog") ] ]), objser);
+    this.names = null;
+    this.outline = null;
+    this.metadata = null;
+    this.pageLabels = null;
+    this.formFields = [];
+    this.formFonts = new Map;
+    this.showOutlines = false;
+    this.pageList = pageList;
+  }
+  prepare() {
+    this.params.set("/Pages", this.pageList.ref());
+    if (this.names !== null) this.params.set("/Names", this.names.ref());
+    if (this.outline !== null) this.params.set("/Outlines", this.outline.ref());
+    if (this.metadata !== null) this.params.set("/Metadata", this.metadata.ref());
+    if (this.pageLabels !== null && this.pageLabels.labels.size > 0) {
+      this.params.set("/PageLabels", this.pageLabels.ref());
+    }
+    if (this.formFields.length > 0) {
+      const form = new PdfDict([ [ "/Fields", PdfArray.fromObjects(this.formFields) ], [ "/NeedAppearances", new PdfBool(false) ] ]);
+      if (this.formFonts.size > 0) {
+        form.set("/DR", new PdfDict([ [ "/Font", PdfDict.fromObjectMap(this.formFonts) ] ]));
+      }
+      this.params.set("/AcroForm", form);
+    }
+    if (this.showOutlines) this.params.set("/PageMode", new PdfName("/UseOutlines"));
+  }
+}
+
+const LIBRARY_NAME = "https://github.com/romulocrj/js_pdf";
+
+class PdfInfo extends PdfObject {
+  constructor(document, metadata) {
+    super(document, new PdfDict);
+    const producer = metadata.producer == null ? LIBRARY_NAME : `${metadata.producer} (${LIBRARY_NAME})`;
+    const entries = [ [ "/Title", metadata.title ], [ "/Author", metadata.author ], [ "/Subject", metadata.subject ], [ "/Keywords", metadata.keywords ], [ "/Creator", metadata.creator ], [ "/Producer", producer ] ];
+    for (const [key, value] of entries) {
+      if (value) {
+        this.params.set(key, new PdfString(value));
+      }
+    }
+    this.params.set("/CreationDate", PdfString.fromDate(new Date));
+  }
+}
+
+class PdfGraphicStream extends PdfObject {
+  constructor() {
+    super(...arguments);
+    this.fonts = new Map;
+    this.xObjects = new Map;
+    this.graphicStates = new Map;
+    this.patterns = new Map;
+    this.shadings = new Map;
+  }
+  addFont(name, font) {
+    if (!this.fonts.has(name)) {
+      this.fonts.set(name, font);
+    }
+  }
+  addXObject(name, xObject) {
+    if (!this.xObjects.has(name)) {
+      this.xObjects.set(name, xObject);
+    }
+  }
+  addGraphicState(name, state) {
+    if (!this.graphicStates.has(name)) {
+      this.graphicStates.set(name, state);
+    }
+  }
+  addPattern(name, pattern) {
+    if (!this.patterns.has(name)) {
+      this.patterns.set(name, pattern);
+    }
+  }
+  addShading(name, shading) {
+    if (!this.shadings.has(name)) {
+      this.shadings.set(name, shading);
+    }
+  }
+  resources() {
+    const resources = new PdfDict;
+    if (this.fonts.size > 0) {
+      resources.set("/Font", PdfDict.fromObjectMap(this.fonts));
+    }
+    if (this.xObjects.size > 0) {
+      resources.set("/XObject", PdfDict.fromObjectMap(this.xObjects));
+    }
+    if (this.graphicStates.size > 0) {
+      resources.set("/ExtGState", new PdfDict(this.graphicStates));
+    }
+    if (this.patterns.size > 0) {
+      resources.set("/Pattern", new PdfDict(this.patterns));
+    }
+    if (this.shadings.size > 0) {
+      resources.set("/Shading", new PdfDict(this.shadings));
+    }
+    return resources.isEmpty ? null : resources;
+  }
+  prepare() {
+    const resources = this.resources();
+    if (resources !== null) {
+      this.params.set("/Resources", resources);
+    }
+  }
+}
+
+class PdfPage extends PdfGraphicStream {
+  constructor(document, pageList, pageFormat) {
+    super(document, new PdfDict([ [ "/Type", new PdfName("/Page") ] ]));
+    this.contents = [];
+    this.annotations = [];
+    this.pageFormat = pageFormat;
+    this.pageList = pageList;
+    pageList.pages.push(this);
+  }
+  prepare() {
+    this.params.set("/Parent", this.pageList.ref());
+    this.params.set("/MediaBox", PdfArray.fromNum([ 0, 0, this.pageFormat.width, this.pageFormat.height ]));
+    super.prepare();
+    if (this.contents.length === 1) {
+      this.params.set("/Contents", this.contents[0].ref());
+    } else if (this.contents.length > 1) {
+      this.params.set("/Contents", PdfArray.fromObjects(this.contents));
+    }
+    if (this.annotations.length > 0) {
+      this.params.set("/Annots", PdfArray.fromObjects(this.annotations));
+    }
+  }
+}
+
+class PdfPageList extends PdfObject {
+  constructor(document, objser) {
+    super(document, new PdfDict([ [ "/Type", new PdfName("/Pages") ] ]), objser);
+    this.pages = [];
+  }
+  prepare() {
+    this.params.set("/Count", new PdfNum(this.pages.length));
+    this.params.set("/Kids", PdfArray.fromObjects(this.pages));
+  }
+}
+
+class PdfNull extends PdfDataType {
+  output(s) {
+    s.putString("null");
+  }
+}
+
+class PdfNames extends PdfObject {
+  constructor(document) {
+    super(document, new PdfDict);
+    this.destinations = [];
+  }
+  addDestination(name, page, {x = null, y = null, zoom = null} = {}) {
+    this.destinations.push({
+      name,
+      page,
+      x,
+      y,
+      zoom
+    });
+  }
+  prepare() {
+    const sorted = [ ...this.destinations ].sort((a, b) => a.name.localeCompare(b.name));
+    const values = new PdfArray;
+    for (const destination of sorted) {
+      values.add(new PdfString(destination.name));
+      values.add(new PdfDict([ [ "/D", new PdfArray([ destination.page.ref(), new PdfName("/XYZ"), destination.x === null ? new PdfNull : new PdfNum(destination.x), destination.y === null ? new PdfNull : new PdfNum(destination.y), destination.zoom === null ? new PdfNull : new PdfNum(destination.zoom) ]) ] ]));
+    }
+    const destinations = new PdfDict;
+    if (sorted.length > 0) {
+      destinations.set("/Names", values);
+      destinations.set("/Limits", new PdfArray([ new PdfString(sorted[0].name), new PdfString(sorted[sorted.length - 1].name) ]));
+    }
+    this.params.set("/Dests", destinations);
+  }
+}
+
+const STYLE_NUMBER = Object.freeze({
+  normal: 0,
+  italic: 1,
+  bold: 2,
+  italicBold: 3
+});
+
+class PdfOutline extends PdfObject {
+  constructor(document, {title = null, anchor = null, color = null, style = "normal"} = {}) {
+    super(document, new PdfDict);
+    this.children = [];
+    this.parent = null;
+    this.title = title;
+    this.anchor = anchor;
+    this.color = color;
+    this.style = style;
+  }
+  add(child) {
+    child.parent = this;
+    this.children.push(child);
+  }
+  descendantCount() {
+    return this.children.reduce((count, child) => count + 1 + child.descendantCount(), 0);
+  }
+  prepare() {
+    if (this.parent !== null) {
+      this.params.set("/Title", new PdfString(this.title ?? ""));
+      if (this.color !== null) this.params.set("/C", PdfArray.fromNum(this.color));
+      if (this.style !== "normal") this.params.set("/F", new PdfNum(STYLE_NUMBER[this.style]));
+      if (this.anchor !== null) this.params.set("/Dest", new PdfString(this.anchor));
+      this.params.set("/Parent", this.parent.ref());
+      const index = this.parent.children.indexOf(this);
+      if (index > 0) this.params.set("/Prev", this.parent.children[index - 1].ref());
+      if (index + 1 < this.parent.children.length) {
+        this.params.set("/Next", this.parent.children[index + 1].ref());
+      }
+      const descendants = this.descendantCount();
+      if (descendants > 0) this.params.set("/Count", new PdfNum(-descendants));
+    } else {
+      this.params.set("/Count", new PdfNum(this.children.length));
+    }
+    if (this.children.length > 0) {
+      this.params.set("/First", this.children[0].ref());
+      this.params.set("/Last", this.children[this.children.length - 1].ref());
+    }
+  }
+}
+
+class PdfAnnotation extends PdfObject {
+  constructor(document, page, annotation, defaultAppearanceName = null, appearances = null) {
+    super(document, new PdfDict([ [ "/Type", new PdfName("/Annot") ] ]));
+    this.page = page;
+    this.annotation = annotation;
+    this.defaultAppearanceName = defaultAppearanceName;
+    this.appearances = appearances;
+    page.annotations.push(this);
+  }
+  prepare() {
+    if (this.annotation.kind === "form") {
+      this.prepareForm(this.annotation);
+      return;
+    }
+    if (this.annotation.kind === "geometric") {
+      this.prepareGeometric(this.annotation);
+      return;
+    }
+    const {rect, destination, kind} = this.annotation;
+    this.params.set("/Subtype", new PdfName("/Link"));
+    this.params.set("/Rect", PdfArray.fromNum([ rect.x, rect.y, rect.x + rect.width, rect.y + rect.height ]));
+    this.params.set("/P", this.page.ref());
+    this.params.set("/Border", PdfArray.fromNum([ 0, 0, 0 ]));
+    this.params.set("/F", new PdfNum(4));
+    this.params.set("/A", new PdfDict([ [ "/S", new PdfName(kind === "url" ? "/URI" : "/GoTo") ], [ kind === "url" ? "/URI" : "/D", new PdfString(destination) ] ]));
+  }
+  prepareGeometric(annotation) {
+    const subtypes = {
+      square: "/Square",
+      circle: "/Circle",
+      polygon: "/Polygon",
+      polyline: "/PolyLine",
+      ink: "/Ink"
+    };
+    this.params.set("/Subtype", new PdfName(subtypes[annotation.shape]));
+    this.params.set("/Rect", PdfArray.fromNum([ annotation.rect.x, annotation.rect.y, annotation.rect.x + annotation.rect.width, annotation.rect.y + annotation.rect.height ]));
+    this.params.set("/P", this.page.ref());
+    this.params.set("/F", new PdfNum(4));
+    this.params.set("/BS", new PdfDict([ [ "/W", new PdfNum(annotation.borderWidth ?? 1) ], [ "/S", new PdfName("/S") ] ]));
+    if (annotation.color !== null && annotation.color !== undefined) {
+      this.params.set("/C", PdfArray.fromNum(annotation.color));
+    }
+    if (annotation.interiorColor !== null && annotation.interiorColor !== undefined) {
+      this.params.set("/IC", PdfArray.fromNum(annotation.interiorColor));
+    }
+    if (annotation.author) this.params.set("/T", new PdfString(annotation.author));
+    if (annotation.subject) this.params.set("/Subj", new PdfString(annotation.subject));
+    if (annotation.content) this.params.set("/Contents", new PdfString(annotation.content));
+    if (annotation.date) this.params.set("/M", new PdfString(annotation.date));
+    if (annotation.points !== undefined) {
+      this.params.set("/Vertices", PdfArray.fromNum(annotation.points.flatMap(point => [ point.x, point.y ])));
+    }
+    if (annotation.inkList !== undefined) {
+      this.params.set("/InkList", new PdfArray(annotation.inkList.map(points => PdfArray.fromNum(points.flatMap(point => [ point.x, point.y ])))));
+    }
+  }
+  prepareForm(field) {
+    const fieldNames = {
+      text: "/Tx",
+      choice: "/Ch",
+      checkbox: "/Btn",
+      button: "/Btn"
+    };
+    this.params.set("/Subtype", new PdfName("/Widget"));
+    this.params.set("/Rect", PdfArray.fromNum([ field.rect.x, field.rect.y, field.rect.x + field.rect.width, field.rect.y + field.rect.height ]));
+    this.params.set("/P", this.page.ref());
+    this.params.set("/F", new PdfNum(4));
+    this.params.set("/FT", new PdfName(fieldNames[field.fieldType]));
+    this.params.set("/T", new PdfString(field.name));
+    this.params.set("/Ff", new PdfNum(field.fieldFlags ?? 0));
+    if (field.alternateName) this.params.set("/TU", new PdfString(field.alternateName));
+    if (field.mappingName) this.params.set("/TM", new PdfString(field.mappingName));
+    if (field.maxLength !== null && field.maxLength !== undefined) {
+      this.params.set("/MaxLen", new PdfNum(field.maxLength));
+    }
+    if (field.textAlign !== null && field.textAlign !== undefined) {
+      this.params.set("/Q", new PdfNum([ "left", "center", "right" ].indexOf(field.textAlign)));
+    }
+    if (field.items !== undefined) {
+      this.params.set("/Opt", new PdfArray(field.items.map(item => new PdfString(item))));
+    }
+    const isButton = field.fieldType === "checkbox" || field.fieldType === "button";
+    if (field.value) {
+      this.params.set("/V", isButton ? new PdfName(field.value) : new PdfString(field.value));
+    }
+    if (field.defaultValue) {
+      this.params.set("/DV", isButton ? new PdfName(field.defaultValue) : new PdfString(field.defaultValue));
+    }
+    if (field.fieldType === "checkbox") {
+      this.params.set("/AS", new PdfName(field.value ?? "/Off"));
+    }
+    if (this.defaultAppearanceName !== null) {
+      const [r, g, b] = field.textColor ?? [ 0, 0, 0 ];
+      this.params.set("/DA", new PdfString(`${this.defaultAppearanceName} ${field.fontSize ?? 12} Tf ${r} ${g} ${b} rg`));
+    }
+    const appearance = new PdfDict;
+    if (field.borderColor !== null && field.borderColor !== undefined) {
+      appearance.set("/BC", PdfArray.fromNum(field.borderColor));
+    }
+    if (field.backgroundColor !== null && field.backgroundColor !== undefined) {
+      appearance.set("/BG", PdfArray.fromNum(field.backgroundColor));
+    }
+    if (!appearance.isEmpty) this.params.set("/MK", appearance);
+    const highlights = {
+      none: "/N",
+      invert: "/I",
+      outline: "/O",
+      push: "/P",
+      toggle: "/T"
+    };
+    if (field.highlighting !== null && field.highlighting !== undefined) {
+      this.params.set("/H", new PdfName(highlights[field.highlighting]));
+    }
+    if (this.appearances !== null) {
+      const appearances = new PdfDict;
+      if (this.appearances.normal !== undefined) {
+        appearances.set("/N", this.appearances.normal.ref());
+      } else if (this.appearances.normalStates !== undefined) {
+        const states = new PdfDict;
+        for (const [name, appearance] of this.appearances.normalStates) {
+          states.set(name, appearance.ref());
+        }
+        appearances.set("/N", states);
+      }
+      if (this.appearances.down !== undefined) appearances.set("/D", this.appearances.down.ref());
+      if (this.appearances.rollover !== undefined) {
+        appearances.set("/R", this.appearances.rollover.ref());
+      }
+      if (!appearances.isEmpty) this.params.set("/AP", appearances);
+    }
+  }
+}
+
+class PdfMetadata extends PdfObjectStream {
+  constructor(document, metadata) {
+    super(document, utf8Encode(metadata), false);
+    this.params.set("/Type", new PdfName("/Metadata"));
+    this.params.set("/Subtype", new PdfName("/XML"));
+  }
+}
+
+class PdfDocument {
+  constructor(metadata, settings = DEFAULT_PDF_SETTINGS) {
+    this.serial = 0;
+    this.xref = new PdfXrefTable;
+    this.fontObjects = new Map;
+    this.imageObjects = new Map;
+    this.softMaskObjects = new Map;
+    this.formFontNames = new Map;
+    this.settings = settings;
+    const catalogSerial = this.genSerial();
+    this.pageList = new PdfPageList(this);
+    this.catalog = new PdfCatalog(this, this.pageList, catalogSerial);
+    this.info = new PdfInfo(this, metadata);
+    if (metadata.xmpMetadata) {
+      this.catalog.metadata = new PdfMetadata(this, metadata.xmpMetadata);
+    }
+  }
+  get objects() {
+    return this.xref.objects;
+  }
+  genSerial() {
+    return ++this.serial;
+  }
+  register(object) {
+    this.xref.add(object);
+  }
+  fontObject(font) {
+    const existing = this.fontObjects.get(font);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const object = new PdfObject(this, font.resourceDict(this));
+    this.fontObjects.set(font, object);
+    return object;
+  }
+  imageObject(image) {
+    const existing = this.imageObjects.get(image);
+    if (existing !== undefined) return existing;
+    const mask = image.hasAlpha ? new PdfImageObject(this, image, "alpha") : null;
+    const object = new PdfImageObject(this, image, "rgb");
+    if (mask !== null) object.setSoftMask(mask);
+    this.imageObjects.set(image, object);
+    return object;
+  }
+  softMaskObject(mask) {
+    let object = this.softMaskObjects.get(mask);
+    if (object === undefined) {
+      object = new PdfXObject(this, "/Form", mask.content);
+      object.params.set("/FormType", new PdfNum(1));
+      object.params.set("/BBox", PdfArray.fromNum([ mask.boundingBox.x, mask.boundingBox.y, mask.boundingBox.x + mask.boundingBox.width, mask.boundingBox.y + mask.boundingBox.height ]));
+      object.params.set("/Group", new PdfDict([ [ "/S", new PdfName("/Transparency") ], [ "/CS", new PdfName("/DeviceRGB") ] ]));
+      const resources = new PdfDict;
+      if (mask.fonts.size > 0) {
+        const fonts = new Map;
+        for (const [font, name] of mask.fonts) fonts.set(name, this.fontObject(font));
+        resources.set("/Font", PdfDict.fromObjectMap(fonts));
+      }
+      if (mask.images.size > 0) {
+        const images = new Map;
+        for (const [image, name] of mask.images) images.set(name, this.imageObject(image));
+        resources.set("/XObject", PdfDict.fromObjectMap(images));
+      }
+      if (mask.graphicStates.size > 0) {
+        resources.set("/ExtGState", new PdfDict(Array.from(mask.graphicStates, ([name, state]) => [ name, this.resolveGraphicState(state) ])));
+      }
+      if (mask.patterns.size > 0) resources.set("/Pattern", new PdfDict(mask.patterns));
+      if (mask.shadings.size > 0) resources.set("/Shading", new PdfDict(mask.shadings));
+      if (!resources.isEmpty) object.params.set("/Resources", resources);
+      this.softMaskObjects.set(mask, object);
+    }
+    return new PdfDict([ [ "/S", new PdfName("/Luminosity") ], [ "/G", object.ref() ] ]);
+  }
+  resolveGraphicState(state) {
+    const softMask = state.get("/SMask");
+    if (!(softMask instanceof PdfSoftMaskReference)) return state;
+    const resolved = new PdfDict(state.values);
+    resolved.set("/SMask", this.softMaskObject(softMask.mask));
+    return resolved;
+  }
+  formAppearanceObject(appearance) {
+    const object = new PdfXObject(this, "/Form", encodeLatin1(appearance.content));
+    object.params.set("/FormType", new PdfNum(1));
+    object.params.set("/BBox", PdfArray.fromNum([ 0, 0, appearance.width, appearance.height ]));
+    const resources = new PdfDict;
+    if (appearance.fonts.size > 0) {
+      const fonts = new Map;
+      for (const [font, name] of appearance.fonts) fonts.set(name, this.fontObject(font));
+      resources.set("/Font", PdfDict.fromObjectMap(fonts));
+    }
+    if (appearance.images.size > 0) {
+      const images = new Map;
+      for (const [image, name] of appearance.images) images.set(name, this.imageObject(image));
+      resources.set("/XObject", PdfDict.fromObjectMap(images));
+    }
+    if (appearance.graphicStates.size > 0) {
+      resources.set("/ExtGState", new PdfDict(appearance.graphicStates));
+    }
+    if (appearance.patterns.size > 0) {
+      resources.set("/Pattern", new PdfDict(appearance.patterns));
+    }
+    if (appearance.shadings.size > 0) {
+      resources.set("/Shading", new PdfDict(appearance.shadings));
+    }
+    if (!resources.isEmpty) object.params.set("/Resources", resources);
+    return object;
+  }
+  resolveFormAppearances(appearances) {
+    if (appearances === undefined) return null;
+    const normalStates = appearances.normalStates === undefined ? undefined : new Map([ ...appearances.normalStates ].map(([name, appearance]) => [ name, this.formAppearanceObject(appearance) ]));
+    return {
+      normal: appearances.normal === undefined ? undefined : this.formAppearanceObject(appearances.normal),
+      normalStates,
+      down: appearances.down === undefined ? undefined : this.formAppearanceObject(appearances.down),
+      rollover: appearances.rollover === undefined ? undefined : this.formAppearanceObject(appearances.rollover)
+    };
+  }
+  addPage(format, content, fonts = new Map, graphicStates = new Map, patterns = new Map, shadings = new Map, images = new Map, annotations = []) {
+    const resources = [];
+    for (const [font, name] of fonts) {
+      resources.push([ name, this.fontObject(font) ]);
+    }
+    const stream = new PdfObjectStream(this, typeof content === "string" ? encodeLatin1(content) : content);
+    const page = new PdfPage(this, this.pageList, format);
+    for (const [name, object] of resources) {
+      page.addFont(name, object);
+    }
+    for (const [name, state] of graphicStates) {
+      page.addGraphicState(name, this.resolveGraphicState(state));
+    }
+    for (const [name, pattern] of patterns) {
+      page.addPattern(name, pattern);
+    }
+    for (const [name, shading] of shadings) {
+      page.addShading(name, shading);
+    }
+    for (const [image, name] of images) {
+      page.addXObject(name, this.imageObject(image));
+    }
+    for (const annotation of annotations) {
+      let appearanceName = null;
+      if (annotation.kind === "form") {
+        const font = annotation.font;
+        if (font !== undefined) {
+          appearanceName = this.formFontNames.get(font) ?? null;
+          if (appearanceName === null) {
+            appearanceName = `/FForm${this.formFontNames.size + 1}`;
+            this.formFontNames.set(font, appearanceName);
+            this.catalog.formFonts.set(appearanceName, this.fontObject(font));
+          }
+        }
+      }
+      const appearances = annotation.kind === "form" ? this.resolveFormAppearances(annotation.appearances) : null;
+      const object = new PdfAnnotation(this, page, annotation, appearanceName, appearances);
+      if (annotation.kind === "form") this.catalog.formFields.push(object);
+    }
+    page.contents.push(stream);
+    return page;
+  }
+  addNavigation(outlines, pageMode, destinations = []) {
+    const names = outlines.length > 0 || destinations.length > 0 ? new PdfNames(this) : null;
+    for (const entry of destinations) {
+      const page = this.pageList.pages[entry.page - 1];
+      if (page !== undefined) {
+        names?.addDestination(entry.name, page, {
+          x: entry.x ?? undefined,
+          y: entry.y ?? undefined,
+          zoom: entry.zoom ?? undefined
+        });
+      }
+    }
+    if (outlines.length > 0) {
+      const root = new PdfOutline(this);
+      const levels = [ root ];
+      for (const entry of outlines) {
+        const page = this.pageList.pages[entry.page - 1];
+        if (page === undefined) continue;
+        names?.addDestination(entry.anchor, page, {
+          y: entry.y
+        });
+        const node = new PdfOutline(this, {
+          title: entry.title,
+          anchor: entry.anchor,
+          color: entry.color ?? null,
+          style: entry.style ?? "normal"
+        });
+        const parentIndex = Math.min(entry.level, levels.length - 1);
+        const parent = levels[parentIndex] ?? root;
+        parent.add(node);
+        levels.length = parentIndex + 1;
+        levels.push(node);
+      }
+      this.catalog.outline = root;
+    }
+    if (names !== null) this.catalog.names = names;
+    this.catalog.showOutlines = pageMode === "outlines";
+  }
+  addPageLabels(labels) {
+    if (labels.length === 0) return;
+    const pageLabels = new PdfPageLabels(this);
+    for (const {pageIndex, label} of labels) pageLabels.labels.set(pageIndex, label);
+    this.catalog.pageLabels = pageLabels;
+  }
+  save() {
+    for (const object of this.objects) {
+      object.prepare();
+    }
+    this.xref.params.set("/Root", this.catalog.ref());
+    this.xref.params.set("/Info", this.info.ref());
+    const stream = new PdfStream;
+    this.xref.output(stream);
+    return stream.output();
+  }
+}
+
+function serializePdf(pages, metadata, outlines = [], pageMode = "none", destinations = [], pageLabels = [], settings = DEFAULT_PDF_SETTINGS) {
+  const document = new PdfDocument(metadata, settings);
+  for (const page of pages) {
+    document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns, page.shadings, page.images, page.annotations);
+  }
+  document.addNavigation(outlines, pageMode, destinations);
+  document.addPageLabels(pageLabels);
+  return document.save();
+}
+
+class PageTheme {
+  constructor({pageFormat = PageFormat.A4, buildBackground = null, buildForeground = null, theme = null, orientation = "natural", margin = null, clip = false} = {}) {
+    this.pageFormat = {
+      ...pageFormat,
+      width: Number(pageFormat.width),
+      height: Number(pageFormat.height)
+    };
+    this.orientation = orientation;
+    this.buildBackground = buildBackground;
+    this.buildForeground = buildForeground;
+    this.theme = theme;
+    this.clip = clip;
+    this.declaredMargin = margin == null ? null : normalizeInsets(margin);
+  }
+  get mustRotate() {
+    return this.orientation === "landscape" && this.pageFormat.height > this.pageFormat.width || this.orientation === "portrait" && this.pageFormat.width > this.pageFormat.height;
+  }
+  get resolvedFormat() {
+    return this.mustRotate ? {
+      width: this.pageFormat.height,
+      height: this.pageFormat.width
+    } : this.pageFormat;
+  }
+  get margin() {
+    const fromFormat = formatMargin(this.pageFormat);
+    const declared = this.declaredMargin ?? (fromFormat === null ? normalizeInsets(DEFAULT_MARGIN) : fromFormat);
+    return this.mustRotate ? {
+      left: declared.bottom,
+      top: declared.left,
+      right: declared.top,
+      bottom: declared.right
+    } : declared;
+  }
+  copyWith(options = {}) {
+    return new PageTheme({
+      pageFormat: options.pageFormat ?? this.pageFormat,
+      buildBackground: options.buildBackground ?? this.buildBackground,
+      buildForeground: options.buildForeground ?? this.buildForeground,
+      theme: options.theme ?? this.theme,
+      orientation: options.orientation ?? this.orientation,
+      margin: options.margin ?? this.declaredMargin,
+      clip: options.clip ?? this.clip
+    });
+  }
+}
+
+class NewPage extends Widget {
+  constructor({freeSpace = null} = {}) {
+    super();
+    if (freeSpace === null) {
+      this.freeSpace = null;
+      return;
+    }
+    const resolved = Number(freeSpace);
+    if (!Number.isFinite(resolved) || resolved < 0) {
+      throw new RangeError("NewPage.freeSpace must be a finite non-negative number");
+    }
+    this.freeSpace = resolved;
+  }
+  newPageNeeded(availableSpace) {
+    return this.freeSpace === null || availableSpace < this.freeSpace;
+  }
+  layout(_context, _constraints) {
+    return {
+      widget: this,
+      width: 0,
+      height: 0,
+      data: null
+    };
+  }
+  paint(_context, _box) {}
+}
+
+class MultiPage {
+  constructor({pageTheme = undefined, format = undefined, pageFormat = undefined, margin = undefined, orientation = undefined, gap = 0, theme = undefined, build, header = null, footer = null, background = null, maxPages = 50}) {
+    this.renderedPages = [];
+    if (typeof build !== "function") throw new TypeError("MultiPage.build must be a function");
+    const base = pageTheme ?? new PageTheme({
+      pageFormat: PageFormat.A4
+    });
+    this.pageTheme = base.copyWith({
+      pageFormat: pageFormat ?? format,
+      margin,
+      orientation,
+      theme
+    });
+    this.theme = this.pageTheme.theme;
+    this.gap = Number(gap);
+    this.build = build;
+    this.header = header;
+    this.footer = footer;
+    this.background = background;
+    this.maxPages = Math.trunc(Number(maxPages));
+    if (!Number.isFinite(this.maxPages) || this.maxPages <= 0) {
+      throw new RangeError("MultiPage.maxPages must be a positive finite integer");
+    }
+  }
+  get format() {
+    return this.pageTheme.resolvedFormat;
+  }
+  get margin() {
+    return this.pageTheme.margin;
+  }
+  render(documentContext) {
+    const pages = [];
+    const startPage = () => {
+      if (pages.length >= this.maxPages) {
+        throw new RangeError(`MultiPage exceeded its ${this.maxPages} page limit`);
+      }
+      const canvas = new PdfCanvas(this.format.height);
+      if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
+      const pageNumber = documentContext.pageOffset + pages.length + 1;
+      const context = {
+        ...documentContext,
+        canvas,
+        pageFormat: this.format,
+        pageNumber,
+        pageLabel: documentContext.document.pageLabel(pageNumber - 1),
+        pagesCount: documentContext.pagesCount || pageNumber,
+        theme: this.theme ?? documentContext.document.theme
+      };
+      this.paintLayer(this.pageTheme.buildBackground, context);
+      const maxWidth = this.format.width - this.margin.left - this.margin.right;
+      let top = this.margin.top;
+      let bottom = this.format.height - this.margin.bottom;
+      if (this.header) {
+        const headerWidget = this.header(context);
+        const headerBox = headerWidget.layout(context, new BoxConstraints({
+          maxWidth
+        }));
+        top += headerBox.height + this.gap;
+      }
+      if (this.footer) {
+        const footerWidget = this.footer(context);
+        const footerBox = footerWidget.layout(context, new BoxConstraints({
+          maxWidth
+        }));
+        bottom -= footerBox.height + this.gap;
+      }
+      const state = {
+        canvas,
+        context,
+        maxWidth,
+        top,
+        bottom,
+        cursor: top
+      };
+      pages.push(state);
+      return state;
+    };
+    let page = startPage();
+    const children = this.build(page.context);
+    if (!Array.isArray(children)) throw new TypeError("MultiPage.build must return an array of widgets");
+    for (const child of children) {
+      if (child instanceof NewPage) {
+        if (child.newPageNeeded(page.bottom - page.cursor)) page = startPage();
+        continue;
+      }
+      if (child instanceof SpanningWidget && child.canSpan) {
+        let state = child.initialSpanState();
+        const natural = child.layout(page.context, new BoxConstraints({
+          maxWidth: page.maxWidth,
+          maxHeight: Infinity
+        }));
+        const initialAvailable = page.bottom - page.cursor;
+        if (natural.height <= initialAvailable + .001) {
+          child.paint(page.context, {
+            ...natural,
+            x: this.margin.left,
+            y: page.cursor
+          });
+          page.cursor += natural.height + this.gap;
+          continue;
+        }
+        const fullAvailable = page.bottom - page.top;
+        if (child instanceof Flex && natural.height <= fullAvailable + .001 && page.cursor > page.top + .001) {
+          page = startPage();
+          const moved = child.layout(page.context, new BoxConstraints({
+            maxWidth: page.maxWidth,
+            maxHeight: Infinity
+          }));
+          child.paint(page.context, {
+            ...moved,
+            x: this.margin.left,
+            y: page.cursor
+          });
+          page.cursor += moved.height + this.gap;
+          continue;
+        }
+        while (true) {
+          const available = page.bottom - page.cursor;
+          const fragment = child.layoutSpan(page.context, new BoxConstraints({
+            maxWidth: page.maxWidth,
+            maxHeight: available
+          }), state);
+          const box = fragment.box;
+          if (box.height > available + .001) {
+            throw new RangeError("A spanning widget returned a fragment taller than its constraint");
+          }
+          if (box.height <= .001 && fragment.hasMore) {
+            if (page.cursor > page.top + .001) {
+              page = startPage();
+              continue;
+            }
+            throw new RangeError("A spanning row exceeds a full MultiPage content area");
+          }
+          if (box.height > 0) {
+            child.paint(page.context, {
+              ...box,
+              x: this.margin.left,
+              y: page.cursor
+            });
+          }
+          if (!fragment.hasMore) {
+            page.cursor += box.height + this.gap;
+            break;
+          }
+          state = fragment.nextState;
+          page = startPage();
+        }
+        continue;
+      }
+      let box = child.layout(page.context, new BoxConstraints({
+        maxWidth: page.maxWidth,
+        maxHeight: Infinity
+      }));
+      if (page.cursor + box.height > page.bottom + .001) {
+        if (box.height > page.bottom - page.top + .001) {
+          throw new RangeError(`Widget height ${box.height.toFixed(2)} exceeds a full MultiPage content area`);
+        }
+        page = startPage();
+        box = child.layout(page.context, new BoxConstraints({
+          maxWidth: page.maxWidth,
+          maxHeight: Infinity
+        }));
+      }
+      child.paint(page.context, {
+        ...box,
+        x: this.margin.left,
+        y: page.cursor
+      });
+      page.cursor += box.height + this.gap;
+    }
+    this.renderedPages = pages;
+    return this.summaries(pages);
+  }
+  postProcess(documentContext) {
+    const pages = this.renderedPages;
+    try {
+      for (const state of pages) {
+        const context = {
+          ...state.context,
+          ...documentContext,
+          pagesCount: documentContext.pagesCount
+        };
+        if (this.header) {
+          const headerWidget = this.header(context);
+          const headerBox = headerWidget.layout(context, new BoxConstraints({
+            maxWidth: state.maxWidth
+          }));
+          headerWidget.paint(context, {
+            ...headerBox,
+            x: this.margin.left,
+            y: this.margin.top
+          });
+        }
+        if (this.footer) {
+          const footerWidget = this.footer(context);
+          const footerBox = footerWidget.layout(context, new BoxConstraints({
+            maxWidth: state.maxWidth
+          }));
+          footerWidget.paint(context, {
+            ...footerBox,
+            x: this.margin.left,
+            y: this.format.height - this.margin.bottom - footerBox.height
+          });
+        }
+        this.paintLayer(this.pageTheme.buildForeground, context);
+      }
+      return this.serialize(pages);
+    } finally {
+      this.renderedPages = [];
+    }
+  }
+  serialize(pages) {
+    return pages.map(({canvas}) => ({
+      format: this.format,
+      content: canvas.takeOutputBytes(),
+      fonts: canvas.fonts,
+      graphicStates: canvas.graphicStates,
+      patterns: canvas.patterns,
+      shadings: canvas.shadings,
+      images: canvas.images,
+      annotations: canvas.annotations
+    }));
+  }
+  summaries(pages) {
+    return pages.map(({canvas}) => ({
+      format: this.format,
+      content: new Uint8Array(0),
+      fonts: canvas.fonts,
+      graphicStates: canvas.graphicStates,
+      patterns: canvas.patterns,
+      shadings: canvas.shadings,
+      images: canvas.images,
+      annotations: canvas.annotations
+    }));
+  }
+  paintLayer(build, context) {
+    if (build === null) return;
+    const widget = build(context);
+    const box = widget.layout(context, new BoxConstraints({
+      maxWidth: this.format.width,
+      maxHeight: this.format.height
+    }));
+    widget.paint(context, {
+      ...box,
+      x: 0,
+      y: 0
+    });
+  }
+}
+
+class Page {
+  constructor({pageTheme = undefined, pageFormat = undefined, format = undefined, margin = undefined, theme = undefined, orientation = undefined, build, background = null}) {
+    if (typeof build !== "function") throw new TypeError("Page.build must be a function");
+    const base = pageTheme ?? new PageTheme;
+    this.pageTheme = base.copyWith({
+      pageFormat: pageFormat ?? format,
+      margin,
+      theme,
+      orientation
+    });
+    this.build = build;
+    this.background = background;
+  }
+  get format() {
+    return this.pageTheme.resolvedFormat;
+  }
+  render(documentContext) {
+    const format = this.pageTheme.resolvedFormat;
+    const margin = this.pageTheme.margin;
+    const canvas = new PdfCanvas(format.height);
+    if (this.background) canvas.fillRect(0, 0, format.width, format.height, this.background);
+    const context = {
+      ...documentContext,
+      canvas,
+      pageFormat: format,
+      pageNumber: documentContext.pageOffset + 1,
+      pageLabel: documentContext.document.pageLabel(documentContext.pageOffset),
+      pagesCount: documentContext.pagesCount || documentContext.pageOffset + 1,
+      theme: this.pageTheme.theme ?? documentContext.document.theme
+    };
+    const maxWidth = format.width - margin.left - margin.right;
+    const maxHeight = format.height - margin.top - margin.bottom;
+    this.paintLayer(this.pageTheme.buildBackground, context, format);
+    const widget = this.build(context);
+    const box = widget.layout(context, new BoxConstraints({
+      maxWidth,
+      maxHeight
+    }));
+    if (box.height > maxHeight + .001) {
+      throw new RangeError(`Page content height ${box.height.toFixed(2)} exceeds available height ${maxHeight.toFixed(2)}`);
+    }
+    widget.paint(context, {
+      ...box,
+      x: margin.left,
+      y: margin.top
+    });
+    this.paintLayer(this.pageTheme.buildForeground, context, format);
+    return [ {
+      format,
+      content: canvas.takeOutputBytes(),
+      fonts: canvas.fonts,
+      graphicStates: canvas.graphicStates,
+      patterns: canvas.patterns,
+      shadings: canvas.shadings,
+      images: canvas.images,
+      annotations: canvas.annotations
+    } ];
+  }
+  paintLayer(build, context, format) {
+    if (build === null) {
+      return;
+    }
+    const widget = build(context);
+    const box = widget.layout(context, new BoxConstraints({
+      maxWidth: format.width,
+      maxHeight: format.height
+    }));
+    widget.paint(context, {
+      ...box,
+      x: 0,
+      y: 0
+    });
+  }
+}
+
+class IconData {
+  constructor(codePoint, {matchTextDirection = false} = {}) {
+    const value = Number(codePoint);
+    if (!Number.isInteger(value) || value < 0 || value > 1114111 || value >= 55296 && value <= 57343) {
+      throw new RangeError("IconData.codePoint must be a valid Unicode scalar value");
+    }
+    this.codePoint = value;
+    this.matchTextDirection = Boolean(matchTextDirection);
+  }
+}
+
+class IconThemeData {
+  constructor({color = null, opacity = null, size = null, font = null} = {}) {
+    this.color = color === null ? null : normalizeColor(color);
+    this.opacity = opacity === null ? null : assertFiniteNumber(Number(opacity), "icon opacity");
+    this.size = size === null ? null : assertFiniteNumber(Number(size), "icon size");
+    this.font = font;
+    if (this.opacity !== null && (this.opacity < 0 || this.opacity > 1)) {
+      throw new RangeError("icon opacity must be between 0 and 1");
+    }
+    if (this.size !== null && this.size < 0) {
+      throw new RangeError("icon size cannot be negative");
+    }
+  }
+  static fallback(font = null) {
+    return new IconThemeData({
+      color: "#000000",
+      opacity: 1,
+      size: 24,
+      font
+    });
+  }
+  copyWith(options = {}) {
+    return new IconThemeData({
+      color: options.color ?? this.color,
+      opacity: options.opacity ?? this.opacity,
+      size: options.size ?? this.size,
+      font: options.font ?? this.font
+    });
+  }
+}
+
+class Icon extends StatelessWidget {
+  constructor(icon, {size = null, color = null, textDirection = null, font = null} = {}) {
+    super();
+    if (!(icon instanceof IconData)) throw new TypeError("Icon expects an IconData value");
+    this.icon = icon;
+    this.size = size === null ? null : assertFiniteNumber(Number(size), "icon size");
+    this.color = color === null ? null : normalizeColor(color);
+    this.textDirection = textDirection;
+    this.font = font;
+    if (this.size !== null && this.size < 0) throw new RangeError("icon size cannot be negative");
+    if (textDirection !== null && textDirection !== "ltr" && textDirection !== "rtl") {
+      throw new TypeError(`Unknown text direction: ${String(textDirection)}`);
+    }
+  }
+  build(context) {
+    const theme = context.theme.iconTheme;
+    const size = this.size ?? theme.size ?? 24;
+    const color = this.color ?? theme.color ?? [ 0, 0, 0 ];
+    const opacity = theme.opacity ?? 1;
+    const font = this.font ?? theme.font;
+    if (font === null) {
+      throw new Error("Icon requires Icon.font or ThemeData.withFont({ icons })");
+    }
+    const direction = this.textDirection ?? "ltr";
+    let widget = new RichText({
+      textDirection: direction,
+      text: new TextSpan({
+        text: String.fromCodePoint(this.icon.codePoint),
+        style: new TextStyle({
+          inherit: false,
+          color,
+          fontNormal: font,
+          fontSize: size,
+          fontWeight: "normal",
+          fontStyle: "normal",
+          letterSpacing: 0,
+          wordSpacing: 0,
+          lineSpacing: 0,
+          height: 1,
+          decoration: "none"
+        })
+      })
+    });
+    if (this.icon.matchTextDirection && direction === "rtl") {
+      widget = new Transform({
+        transform: [ -1, 0, 0, 1, 0, 0 ],
+        alignment: "center",
+        child: widget
+      });
+    }
+    if (opacity < 1) widget = new Opacity({
+      opacity,
+      child: widget
+    });
+    return widget;
+  }
+}
+
+class ThemeData {
+  constructor(fields) {
+    this.defaultTextStyle = fields.defaultTextStyle;
+    this.paragraphStyle = fields.paragraphStyle;
+    this.header0 = fields.header0;
+    this.header1 = fields.header1;
+    this.header2 = fields.header2;
+    this.header3 = fields.header3;
+    this.header4 = fields.header4;
+    this.header5 = fields.header5;
+    this.bulletStyle = fields.bulletStyle;
+    this.tableHeader = fields.tableHeader;
+    this.tableCell = fields.tableCell;
+    this.softWrap = fields.softWrap;
+    this.overflow = fields.overflow;
+    this.textAlign = fields.textAlign;
+    this.maxLines = fields.maxLines;
+    this.iconTheme = fields.iconTheme;
+  }
+  static withFont({base = null, bold = null, italic = null, boldItalic = null, icons = null, fontFallback = null} = {}) {
+    const defaultStyle = TextStyle.defaultStyle().copyWith({
+      font: base,
+      fontNormal: base,
+      fontBold: bold,
+      fontItalic: italic,
+      fontBoldItalic: boldItalic,
+      fontFallback
+    });
+    const fontSize = defaultStyle.fontSize ?? 12;
+    return new ThemeData({
+      defaultTextStyle: defaultStyle,
+      paragraphStyle: defaultStyle.copyWith({
+        lineSpacing: 5
+      }),
+      bulletStyle: defaultStyle.copyWith({
+        lineSpacing: 5
+      }),
+      header0: defaultStyle.copyWith({
+        fontSize: fontSize * 2
+      }),
+      header1: defaultStyle.copyWith({
+        fontSize: fontSize * 1.5
+      }),
+      header2: defaultStyle.copyWith({
+        fontSize: fontSize * 1.4
+      }),
+      header3: defaultStyle.copyWith({
+        fontSize: fontSize * 1.3
+      }),
+      header4: defaultStyle.copyWith({
+        fontSize: fontSize * 1.2
+      }),
+      header5: defaultStyle.copyWith({
+        fontSize: fontSize * 1.1
+      }),
+      tableHeader: defaultStyle.copyWith({
+        fontSize: fontSize * .8,
+        fontWeight: "bold"
+      }),
+      tableCell: defaultStyle.copyWith({
+        fontSize: fontSize * .8
+      }),
+      softWrap: true,
+      overflow: "visible",
+      textAlign: null,
+      maxLines: null,
+      iconTheme: IconThemeData.fallback(icons)
+    });
+  }
+  static base() {
+    return ThemeData.withFont();
+  }
+  static create(options = {}) {
+    return ThemeData.base().copyWith(options);
+  }
+  copyWith(options = {}) {
+    return new ThemeData({
+      defaultTextStyle: this.defaultTextStyle.merge(options.defaultTextStyle),
+      paragraphStyle: this.paragraphStyle.merge(options.paragraphStyle),
+      bulletStyle: this.bulletStyle.merge(options.bulletStyle),
+      header0: this.header0.merge(options.header0),
+      header1: this.header1.merge(options.header1),
+      header2: this.header2.merge(options.header2),
+      header3: this.header3.merge(options.header3),
+      header4: this.header4.merge(options.header4),
+      header5: this.header5.merge(options.header5),
+      tableHeader: this.tableHeader.merge(options.tableHeader),
+      tableCell: this.tableCell.merge(options.tableCell),
+      softWrap: options.softWrap ?? this.softWrap,
+      overflow: options.overflow ?? this.overflow,
+      textAlign: options.textAlign ?? this.textAlign,
+      maxLines: options.maxLines ?? this.maxLines,
+      iconTheme: options.iconTheme ?? this.iconTheme
+    });
+  }
+}
+
+class InheritedTheme extends Widget {
+  constructor(child) {
+    super();
+    this.child = child;
+  }
+  scope(context) {
+    return {
+      ...context,
+      theme: this.themeFor(context)
+    };
+  }
+  layout(context, constraints) {
+    const childBox = this.child.layout(this.scope(context), constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox.widget.paint(this.scope(context), {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class Theme extends InheritedTheme {
+  constructor({data, child}) {
+    super(child);
+    this.data = data;
+  }
+  static of(context) {
+    return context.theme;
+  }
+  themeFor() {
+    return this.data;
+  }
+}
+
+class DefaultTextStyle extends InheritedTheme {
+  constructor({style, child, textAlign = null, softWrap = true, overflow = null, maxLines = null}) {
+    super(child);
+    this.style = style;
+    this.textAlign = textAlign;
+    this.softWrap = softWrap;
+    this.overflow = overflow;
+    this.maxLines = maxLines;
+  }
+  themeFor(context) {
+    return context.theme.copyWith({
+      defaultTextStyle: this.style,
+      textAlign: this.textAlign,
+      softWrap: this.softWrap,
+      overflow: this.overflow ?? undefined,
+      maxLines: this.maxLines
+    });
+  }
+}
+
+class Document {
+  constructor({title = null, author = null, subject = null, creator = null, producer = null, keywords = null, xmpMetadata = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none", compress = true} = {}) {
+    this.sections = [];
+    this.outlineEntries = [];
+    this.destinationEntries = [];
+    this.pageLabelEntries = new Map;
+    this.outlineReplay = false;
+    this.outlineCursor = 0;
+    this.outlineRerenderRequested = false;
+    this.fonts = new Map;
+    this.fallbackFont = Font.helvetica();
+    this.metadata = {
+      title,
+      author,
+      subject,
+      creator,
+      producer,
+      keywords,
+      xmpMetadata
+    };
+    this.settings = {
+      compress
+    };
+    for (const {pageIndex, label} of pageLabels) this.setPageLabel(pageIndex, label);
+    this.theme = theme ?? (font === undefined ? ThemeData.base() : ThemeData.withFont({
+      base: Font.fromPdfFont(font)
+    }));
+    this.pageMode = pageMode;
+  }
+  resolveFont(declaration) {
+    const existing = this.fonts.get(declaration);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const font = declaration.build();
+    this.fonts.set(declaration, font);
+    return font;
+  }
+  get font() {
+    return this.resolveFont(this.theme.defaultTextStyle.font ?? this.fallbackFont);
+  }
+  addPage(page) {
+    if (!(page instanceof Page) && !(page instanceof MultiPage)) {
+      throw new TypeError("Document.addPage expects Page or MultiPage");
+    }
+    this.sections.push(page);
+    return this;
+  }
+  setPageLabel(pageIndex, label) {
+    if (!Number.isInteger(pageIndex) || pageIndex < 0) {
+      throw new RangeError("Page label index must be a non-negative integer");
+    }
+    if (!(label instanceof PdfPageLabel)) {
+      throw new TypeError("Document.setPageLabel expects a PdfPageLabel");
+    }
+    this.pageLabelEntries.set(pageIndex, label);
+    return this;
+  }
+  pageLabel(pageIndex) {
+    const keys = [ ...this.pageLabelEntries.keys() ].sort((a, b) => a - b);
+    let current = PdfPageLabel.arabic();
+    let start = 0;
+    for (const key of keys) {
+      if (pageIndex < key) break;
+      current = this.pageLabelEntries.get(key) ?? current;
+      start = key;
+    }
+    return current.asString(pageIndex - start);
+  }
+  get outlines() {
+    return this.outlineEntries;
+  }
+  requestOutlineRerender() {
+    this.outlineRerenderRequested = true;
+  }
+  registerOutline({title, level, pageNumber, y, anchor = null, color = null, style = "normal"}) {
+    const page = pageNumber;
+    if (this.outlineReplay) {
+      const existing = this.outlineEntries[this.outlineCursor];
+      if (existing !== undefined) {
+        existing.page = page;
+        existing.y = y;
+      } else {
+        this.outlineEntries.push({
+          title,
+          level,
+          anchor: anchor ?? `outline-${this.outlineCursor + 1}`,
+          page,
+          y,
+          color,
+          style
+        });
+      }
+      this.outlineCursor++;
+      return;
+    }
+    this.outlineEntries.push({
+      title,
+      level,
+      anchor: anchor ?? `outline-${this.outlineEntries.length + 1}`,
+      page,
+      y,
+      color,
+      style
+    });
+  }
+  registerDestination({name, pageNumber, x = null, y = null, zoom = null}) {
+    this.destinationEntries.push({
+      name,
+      page: pageNumber,
+      x,
+      y,
+      zoom
+    });
+  }
+  renderSections(replay, expectedPagesCount = 0) {
+    this.outlineReplay = replay;
+    this.outlineCursor = 0;
+    this.destinationEntries.length = 0;
+    const pages = [];
+    const rendered = [];
+    for (const section of this.sections) {
+      const pageOffset = pages.length;
+      const sectionPages = section.render({
+        document: this,
+        pageOffset,
+        pagesCount: expectedPagesCount
+      });
+      rendered.push({
+        section,
+        pageOffset,
+        pages: sectionPages
+      });
+      pages.push(...sectionPages);
+    }
+    const pagesCount = pages.length;
+    const processed = [];
+    for (const entry of rendered) {
+      processed.push(...entry.section.postProcess?.({
+        document: this,
+        pageOffset: entry.pageOffset,
+        pagesCount
+      }) ?? entry.pages);
+    }
+    return processed;
+  }
+  save() {
+    this.outlineEntries.length = 0;
+    this.outlineRerenderRequested = false;
+    let pages = this.renderSections(false);
+    if (this.outlineRerenderRequested) {
+      pages = this.renderSections(true, pages.length);
+    }
+    if (pages.length === 0) {
+      throw new Error("Document must contain at least one page");
+    }
+    const outlines = this.outlineEntries.map(entry => ({
+      ...entry
+    }));
+    const destinations = this.destinationEntries.map(entry => ({
+      ...entry
+    }));
+    const pageLabels = [ ...this.pageLabelEntries ].sort(([a], [b]) => a - b).map(([pageIndex, label]) => ({
+      pageIndex,
+      label
+    }));
+    return serializePdf(pages, this.metadata, outlines, this.pageMode, destinations, pageLabels, this.settings);
+  }
+}
+
+function finiteNonNegative(value, name) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(`${name} must be a finite non-negative number`);
+  }
+  return value;
+}
+
+class GridView extends SpanningWidget {
+  constructor({direction = "vertical", padding = 0, crossAxisCount, mainAxisSpacing = 0, crossAxisSpacing = 0, childAspectRatio = Infinity, children = []}) {
+    super();
+    if (direction !== "horizontal" && direction !== "vertical") {
+      throw new TypeError(`Unknown GridView axis: ${direction}`);
+    }
+    this.direction = direction;
+    this.padding = normalizeInsets(padding);
+    this.crossAxisCount = Math.trunc(Number(crossAxisCount));
+    if (!Number.isFinite(this.crossAxisCount) || this.crossAxisCount <= 0) {
+      throw new RangeError("GridView.crossAxisCount must be a positive integer");
+    }
+    this.mainAxisSpacing = finiteNonNegative(Number(mainAxisSpacing), "mainAxisSpacing");
+    this.crossAxisSpacing = finiteNonNegative(Number(crossAxisSpacing), "crossAxisSpacing");
+    this.childAspectRatio = Number(childAspectRatio);
+    if (!(this.childAspectRatio > 0)) {
+      throw new RangeError("GridView.childAspectRatio must be positive");
+    }
+    this.children = children;
+  }
+  initialSpanState() {
+    return {
+      firstChild: 0,
+      childCrossAxis: null,
+      childMainAxis: null
+    };
+  }
+  fragment(context, incoming, state) {
+    const parent = BoxConstraints.from(incoming);
+    if (state.firstChild >= this.children.length) {
+      const size = parent.constrain({
+        width: 0,
+        height: 0
+      });
+      const data = {
+        children: [],
+        firstChild: state.firstChild,
+        lastChild: state.firstChild,
+        childCrossAxis: state.childCrossAxis ?? 0,
+        childMainAxis: state.childMainAxis ?? 0
+      };
+      return {
+        box: {
+          widget: this,
+          width: size.width,
+          height: size.height,
+          data
+        },
+        nextState: state,
+        hasMore: false
+      };
+    }
+    const inner = parent.deflate(this.padding);
+    const vertical = this.direction === "vertical";
+    const maxMain = vertical ? inner.maxHeight : inner.maxWidth;
+    const maxCross = vertical ? inner.maxWidth : inner.maxHeight;
+    if (!Number.isFinite(maxCross)) {
+      throw new RangeError("GridView requires a bounded cross axis");
+    }
+    const childCrossAxis = state.childCrossAxis ?? Math.max(0, (maxCross - this.crossAxisSpacing * (this.crossAxisCount - 1)) / this.crossAxisCount);
+    const remaining = this.children.length - state.firstChild;
+    const neededRuns = Math.ceil(remaining / this.crossAxisCount);
+    let childMainAxis = state.childMainAxis;
+    if (childMainAxis === null) {
+      if (Number.isFinite(this.childAspectRatio)) {
+        childMainAxis = childCrossAxis * this.childAspectRatio;
+      } else {
+        if (!Number.isFinite(maxMain)) {
+          throw new RangeError("GridView needs a bounded main axis or childAspectRatio");
+        }
+        childMainAxis = Math.max(0, (maxMain - this.mainAxisSpacing * (neededRuns - 1)) / neededRuns);
+      }
+    }
+    const runCapacity = Number.isFinite(maxMain) ? Math.max(0, Math.floor((maxMain + this.mainAxisSpacing + 1e-6) / (childMainAxis + this.mainAxisSpacing))) : neededRuns;
+    const childCapacity = runCapacity * this.crossAxisCount;
+    const count = Math.min(remaining, childCapacity);
+    const runCount = count === 0 ? 0 : Math.ceil(count / this.crossAxisCount);
+    const children = [];
+    for (let local = 0; local < count; local++) {
+      const index = state.firstChild + local;
+      const run = Math.floor(local / this.crossAxisCount);
+      const cross = local % this.crossAxisCount;
+      const childConstraints = vertical ? BoxConstraints.tight({
+        width: childCrossAxis,
+        height: childMainAxis
+      }) : BoxConstraints.tight({
+        width: childMainAxis,
+        height: childCrossAxis
+      });
+      const childBox = this.children[index].layout(context, childConstraints);
+      children.push({
+        box: childBox,
+        dx: this.padding.left + (vertical ? cross * (childCrossAxis + this.crossAxisSpacing) : run * (childMainAxis + this.mainAxisSpacing)),
+        dy: this.padding.top + (vertical ? run * (childMainAxis + this.mainAxisSpacing) : cross * (childCrossAxis + this.crossAxisSpacing))
+      });
+    }
+    const totalMain = runCount === 0 ? 0 : runCount * childMainAxis + (runCount - 1) * this.mainAxisSpacing;
+    const totalCross = this.crossAxisCount * childCrossAxis + (this.crossAxisCount - 1) * this.crossAxisSpacing;
+    const natural = vertical ? {
+      width: totalCross + this.padding.left + this.padding.right,
+      height: totalMain + this.padding.top + this.padding.bottom
+    } : {
+      width: totalMain + this.padding.left + this.padding.right,
+      height: totalCross + this.padding.top + this.padding.bottom
+    };
+    const size = parent.constrain(natural);
+    const lastChild = state.firstChild + count;
+    const data = {
+      children,
+      firstChild: state.firstChild,
+      lastChild,
+      childCrossAxis,
+      childMainAxis
+    };
+    const nextState = {
+      firstChild: lastChild,
+      childCrossAxis,
+      childMainAxis
+    };
+    return {
+      box: {
+        widget: this,
+        width: size.width,
+        height: size.height,
+        data
+      },
+      nextState,
+      hasMore: lastChild < this.children.length
+    };
+  }
+  layout(context, constraints) {
+    return this.fragment(context, constraints, this.initialSpanState()).box;
+  }
+  layoutSpan(context, constraints, state) {
+    return this.fragment(context, constraints, state);
+  }
+  paint(context, box) {
+    for (const child of box.data.children) {
+      child.box.widget.paint(context, {
+        ...child.box,
+        x: box.x + child.dx,
+        y: box.y + child.dy
+      });
+    }
+  }
+}
+
+const GRID_COLOR = "#c3e8f3";
+
+class GridPaper extends Widget {
+  constructor({color = GRID_COLOR, horizontalColor = color, verticalColor = color, interval = 100, horizontalInterval = interval, verticalInterval = interval, divisions = 5, horizontalDivisions = divisions, verticalDivisions = divisions, subdivisions = 2, horizontalSubdivisions = subdivisions, verticalSubdivisions = subdivisions, margin = 0, horizontalOffset = 0, verticalOffset = 0, border = new Border, scale = 1, opacity = .5, child = null} = {}) {
+    super();
+    for (const value of [ horizontalDivisions, verticalDivisions, horizontalSubdivisions, verticalSubdivisions ]) {
+      if (!Number.isInteger(value) || value <= 0) throw new RangeError("GridPaper divisions must be positive integers");
+    }
+    const resolvedHorizontalOffset = Number(horizontalOffset);
+    const resolvedVerticalOffset = Number(verticalOffset);
+    if (!Number.isInteger(resolvedHorizontalOffset) || !Number.isInteger(resolvedVerticalOffset)) {
+      throw new RangeError("GridPaper offsets must be finite integers");
+    }
+    const resolvedScale = Number(scale);
+    if (!Number.isFinite(resolvedScale) || resolvedScale < 0) {
+      throw new RangeError("GridPaper scale must be a finite non-negative number");
+    }
+    const resolvedOpacity = Number(opacity);
+    if (!Number.isFinite(resolvedOpacity) || resolvedOpacity < 0 || resolvedOpacity > 1) {
+      throw new RangeError("GridPaper opacity must be between zero and one");
+    }
+    this.horizontalColor = horizontalColor;
+    this.verticalColor = verticalColor;
+    this.horizontalInterval = Number(horizontalInterval);
+    this.verticalInterval = Number(verticalInterval);
+    this.horizontalDivisions = horizontalDivisions;
+    this.verticalDivisions = verticalDivisions;
+    this.horizontalSubdivisions = horizontalSubdivisions;
+    this.verticalSubdivisions = verticalSubdivisions;
+    this.margin = normalizeInsets(margin);
+    this.horizontalOffset = resolvedHorizontalOffset;
+    this.verticalOffset = resolvedVerticalOffset;
+    this.border = border;
+    this.scale = resolvedScale;
+    this.opacity = resolvedOpacity;
+    this.child = child;
+  }
+  static millimeter({color = GRID_COLOR, child = null} = {}) {
+    return new GridPaper({
+      color,
+      interval: 5 * PageUnit.cm,
+      divisions: 5,
+      subdivisions: 10,
+      child
+    });
+  }
+  static seyes({margin = {
+    top: 20 * PageUnit.mm,
+    bottom: 10 * PageUnit.mm,
+    left: 36 * PageUnit.mm
+  }, child = null} = {}) {
+    return new GridPaper({
+      color: "#c8c8de",
+      horizontalInterval: 8 * PageUnit.mm,
+      verticalInterval: 8 * PageUnit.mm,
+      horizontalDivisions: 1,
+      verticalDivisions: 4,
+      subdivisions: 1,
+      margin,
+      verticalOffset: 1,
+      border: new Border({
+        left: new BorderSide({
+          color: "#f6bbcf"
+        })
+      }),
+      opacity: 1,
+      child
+    });
+  }
+  static collegeRuled({margin = {
+    top: PageUnit.inch,
+    bottom: .6 * PageUnit.inch,
+    left: 1.25 * PageUnit.inch
+  }, child = null} = {}) {
+    return new GridPaper({
+      horizontalInterval: Infinity,
+      verticalInterval: 9 / 32 * PageUnit.inch,
+      divisions: 1,
+      subdivisions: 1,
+      margin,
+      verticalOffset: 1,
+      border: new Border({
+        left: new BorderSide({
+          color: "#ff0000"
+        })
+      }),
+      opacity: 1,
+      child
+    });
+  }
+  static quad({color = GRID_COLOR, child = null} = {}) {
+    return new GridPaper({
+      color,
+      interval: PageUnit.inch,
+      divisions: 4,
+      subdivisions: 1,
+      child
+    });
+  }
+  static engineering({color = GRID_COLOR, child = null} = {}) {
+    return new GridPaper({
+      color,
+      interval: PageUnit.inch,
+      divisions: 5,
+      subdivisions: 2,
+      child
+    });
+  }
+  layout(context, constraints) {
+    const parent = BoxConstraints.from(constraints);
+    const size = {
+      width: parent.hasBoundedWidth ? parent.maxWidth : parent.minWidth,
+      height: parent.hasBoundedHeight ? parent.maxHeight : parent.minHeight
+    };
+    const childBox = this.child?.layout(context, new BoxConstraints({
+      maxWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
+      maxHeight: Math.max(0, size.height - this.margin.top - this.margin.bottom)
+    })) ?? null;
+    return {
+      widget: this,
+      width: size.width,
+      height: size.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  paint(context, box) {
+    const childBox = box.data.childBox;
+    childBox?.widget.paint(context, {
+      ...childBox,
+      x: box.x + this.margin.left,
+      y: box.y + this.margin.top
+    });
+    const canvas = context.canvas;
+    canvas.saveContext();
+    canvas.setGraphicState(new PdfGraphicState({
+      opacity: this.opacity
+    }));
+    const widths = [ this.scale, this.scale / 2, this.scale / 4 ];
+    const draw = (interval, divisions, subdivisions, offset, color, vertical) => {
+      if (!Number.isFinite(interval)) return;
+      const step = interval / (divisions * subdivisions);
+      if (!(step > 0)) return;
+      canvas.setStrokeColor(color);
+      let n = offset;
+      const start = vertical ? box.x + this.margin.left : box.y + this.margin.top;
+      const end = vertical ? box.x + box.width - this.margin.right : box.y + box.height - this.margin.bottom;
+      for (let position = start; position <= end + .001; position += step) {
+        canvas.setLineWidth(n % (subdivisions * divisions) === 0 ? widths[0] : n % subdivisions === 0 ? widths[1] : widths[2]);
+        if (vertical) canvas.drawLine(position, canvas.toPdfY(box.y), position, canvas.toPdfY(box.y + box.height)); else canvas.drawLine(box.x, canvas.toPdfY(position), box.x + box.width, canvas.toPdfY(position));
+        canvas.strokePath();
+        n++;
+      }
+    };
+    draw(this.horizontalInterval, this.horizontalDivisions, this.horizontalSubdivisions, this.horizontalOffset, this.horizontalColor, true);
+    draw(this.verticalInterval, this.verticalDivisions, this.verticalSubdivisions, this.verticalOffset, this.verticalColor, false);
+    this.border.paint(context, box.x, box.y, box.width, box.height);
+    canvas.restoreContext();
+  }
+}
+
+class Partition extends SpanningWidget {
+  constructor({child, width = null, flex = 1}) {
+    super();
+    this.child = child;
+    this.width = width === null ? null : Math.max(0, Number(width));
+    this.flex = this.width === null ? Math.max(0, Number(flex)) : 0;
+  }
+  initialSpanState() {
+    return {
+      done: false,
+      childState: this.child instanceof SpanningWidget ? this.child.initialSpanState() : null
+    };
+  }
+  layout(context, constraints) {
+    const childBox = this.child.layout(context, constraints);
+    return {
+      widget: this,
+      width: childBox.width,
+      height: childBox.height,
+      data: {
+        childBox
+      }
+    };
+  }
+  layoutSpan(context, constraints, state) {
+    if (state.done) {
+      const size = BoxConstraints.from(constraints).constrain({
+        width: 0,
+        height: 0
+      });
+      return {
+        box: {
+          widget: this,
+          width: size.width,
+          height: 0,
+          data: {
+            childBox: null
+          }
+        },
+        nextState: state,
+        hasMore: false
+      };
+    }
+    if (this.child instanceof SpanningWidget) {
+      const fragment = this.child.layoutSpan(context, constraints, state.childState);
+      return {
+        box: {
+          widget: this,
+          width: fragment.box.width,
+          height: fragment.box.height,
+          data: {
+            childBox: fragment.box
+          }
+        },
+        nextState: {
+          done: !fragment.hasMore,
+          childState: fragment.nextState
+        },
+        hasMore: fragment.hasMore
+      };
+    }
+    const childBox = this.child.layout(context, constraints);
+    return {
+      box: {
+        widget: this,
+        width: childBox.width,
+        height: childBox.height,
+        data: {
+          childBox
+        }
+      },
+      nextState: {
+        done: true,
+        childState: null
+      },
+      hasMore: false
+    };
+  }
+  paint(context, box) {
+    const {childBox} = box.data;
+    childBox?.widget.paint(context, {
+      ...childBox,
+      x: box.x,
+      y: box.y
+    });
+  }
+}
+
+class Partitions extends SpanningWidget {
+  constructor({children, mainAxisSize = "max"}) {
+    super();
+    if (mainAxisSize !== "min" && mainAxisSize !== "max") {
+      throw new TypeError(`Unknown MainAxisSize: ${mainAxisSize}`);
+    }
+    this.children = children;
+    this.mainAxisSize = mainAxisSize;
+  }
+  initialSpanState() {
+    return {
+      children: this.children.map(child => child.initialSpanState())
+    };
+  }
+  widths(constraints) {
+    const fixed = this.children.reduce((sum, child) => sum + (child.width ?? 0), 0);
+    const flex = this.children.reduce((sum, child) => sum + child.flex, 0);
+    if (flex > 0 && !constraints.hasBoundedWidth) {
+      throw new RangeError("Flexible Partition children require a bounded width");
+    }
+    const available = Math.max(0, (constraints.hasBoundedWidth ? constraints.maxWidth : fixed) - fixed);
+    return this.children.map(child => child.width ?? (flex === 0 ? 0 : available * child.flex / flex));
+  }
+  fragment(context, incoming, state) {
+    const constraints = BoxConstraints.from(incoming);
+    const widths = this.widths(constraints);
+    const children = [];
+    const nextStates = [];
+    let x = 0;
+    let height = 0;
+    let hasMore = false;
+    for (let index = 0; index < this.children.length; index++) {
+      const child = this.children[index];
+      const width = widths[index];
+      const fragment = child.layoutSpan(context, new BoxConstraints({
+        minWidth: width,
+        maxWidth: width,
+        maxHeight: constraints.maxHeight
+      }), state.children[index] ?? child.initialSpanState());
+      children.push({
+        box: fragment.box,
+        dx: x
+      });
+      nextStates.push(fragment.nextState);
+      x += width;
+      height = Math.max(height, fragment.box.height);
+      hasMore || (hasMore = fragment.hasMore);
+    }
+    const naturalWidth = this.mainAxisSize === "max" && constraints.hasBoundedWidth ? constraints.maxWidth : x;
+    const size = constraints.constrain({
+      width: naturalWidth,
+      height
+    });
+    return {
+      box: {
+        widget: this,
+        width: size.width,
+        height: size.height,
+        data: {
+          children
+        }
+      },
+      nextState: {
+        children: nextStates
+      },
+      hasMore
+    };
+  }
+  layout(context, constraints) {
+    return this.fragment(context, constraints, this.initialSpanState()).box;
+  }
+  layoutSpan(context, constraints, state) {
+    return this.fragment(context, constraints, state);
+  }
+  paint(context, box) {
+    for (const child of box.data.children) {
+      child.box.widget.paint(context, {
+        ...child.box,
+        x: box.x + child.dx,
+        y: box.y
+      });
+    }
+  }
+}
+
 const DEFAULT_CIRCULAR_COLOR = "#3f51b5";
 
 const DEFAULT_LINEAR_COLOR = "#2196f3";
@@ -18911,6 +19091,7 @@ function appearanceFor(context, width, height, child) {
     fonts: canvas.fonts,
     graphicStates: canvas.graphicStates,
     patterns: canvas.patterns,
+    shadings: canvas.shadings,
     images: canvas.images
   };
 }
@@ -19367,6 +19548,7 @@ class SvgMaskedOperation extends SvgOperation {
       fonts: maskCanvas.fonts,
       graphicStates: maskCanvas.graphicStates,
       patterns: maskCanvas.patterns,
+      shadings: maskCanvas.shadings,
       images: maskCanvas.images
     });
     this.target.paint(canvas);
@@ -20998,4 +21180,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };
