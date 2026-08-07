@@ -5914,7 +5914,7 @@ class PdfTtfFont {
     this.font = new TtfParser(bytes);
     this.protect = protect;
     if (this.font.hasCff) {
-      throw new TypeError(`\`${this.font.fontName}\` has PostScript (CFF) outlines, which this port cannot subset`);
+      throw new TypeError(`CFF fonts are not supported: \`${this.font.fontName}\` uses PostScript outlines`);
     }
     if (!this.font.unicode) {
       throw new TypeError(`\`${this.font.fontName}\` is not a 0x00010000 TrueType font, which this port requires to embed`);

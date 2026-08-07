@@ -80,7 +80,7 @@ export class PdfTtfFont implements PdfFont {
 
     if (this.font.hasCff) {
       throw new TypeError(
-        `\`${this.font.fontName}\` has PostScript (CFF) outlines, which this port cannot subset`
+        `CFF fonts are not supported: \`${this.font.fontName}\` uses PostScript outlines`
       );
     }
 

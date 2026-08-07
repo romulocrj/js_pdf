@@ -147,13 +147,23 @@ test('the same declaration is embedded once per document, twice across documents
   assert.equal(toUnicodeMap(other).size, 2, 'only .notdef and `a`');
 });
 
-test('a font the port cannot subset is rejected at construction', () => {
-  // `OTTO` marks PostScript outlines. The port embeds only sfnt 0x00010000,
-  // which is what has the `glyf`/`loca` pair the subsetter rebuilds.
-  const notTrueType = new Uint8Array(asset('OpenSans-Regular.ttf'));
-  new DataView(notTrueType.buffer).setUint32(0, 0x4f54544f);
+test('a CFF font is rejected with an explicit unsupported-format error', () => {
+  const cff = new Uint8Array(asset('OpenSans-Regular.ttf'));
+  const view = new DataView(cff.buffer);
+  const tableCount = view.getUint16(4);
+  for (let index = 0; index < tableCount; index++) {
+    const tag = 12 + index * 16;
+    if (String.fromCharCode(...cff.subarray(tag, tag + 4)) === 'glyf') {
+      cff.set([0x43, 0x46, 0x46, 0x20], tag);
+      break;
+    }
+  }
+  view.setUint32(0, 0x4f54544f);
 
-  assert.throws(() => new PdfTtfFont(notTrueType), /TrueType/);
+  assert.throws(
+    () => new PdfTtfFont(cff),
+    { name: 'TypeError', message: /CFF fonts are not supported/ }
+  );
 });
 
 // ---------------------------------------------------------------------------
