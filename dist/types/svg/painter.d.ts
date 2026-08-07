@@ -1,4 +1,5 @@
 import type { PdfCanvas } from '../pdf/graphics.ts';
+import type { PdfFont } from '../pdf/font/font.ts';
 import type { PdfRect } from '../pdf/rect.ts';
 import { SvgBrush } from './brush.ts';
 import { SvgGroup } from './group.ts';
@@ -9,7 +10,10 @@ export declare class SvgPainter {
     readonly parser: SvgParser;
     readonly canvas: PdfCanvas;
     readonly boundingBox: PdfRect;
-    constructor(parser: SvgParser, canvas: PdfCanvas, boundingBox: PdfRect);
+    private readonly fontLookup;
+    private readonly fonts;
+    constructor(parser: SvgParser, canvas: PdfCanvas, boundingBox: PdfRect, fontLookup?: (family: string, style: string, weight: string) => PdfFont);
+    resolveFont(family: string, style: string, weight: string): PdfFont;
     brushFor(element: XmlElement, parent: SvgBrush): SvgBrush;
     operationFromXml(element: XmlElement, brush: SvgBrush): SvgOperation | null;
     rootOperation(): SvgGroup;

@@ -20,7 +20,7 @@ export type { DocumentMetadata } from './obj/info.ts';
 /** One physical page, with its content stream already rendered to operators. */
 export interface SerializedPage {
     readonly format: PageSize;
-    readonly content: string;
+    readonly content: Uint8Array;
     /**
      * The fonts `content` drew with, mapped to the `/F…` names it wrote for them.
      * `PdfCanvas` chose the names; this is what turns them into `/Resources`.
@@ -84,6 +84,7 @@ export declare class PdfDocument {
      */
     private readonly fontObjects;
     private readonly imageObjects;
+    private readonly softMaskObjects;
     private readonly formFontNames;
     readonly settings: PdfSettings;
     constructor(metadata: DocumentMetadata, settings?: PdfSettings);
@@ -99,6 +100,8 @@ export declare class PdfDocument {
      */
     fontObject(font: PdfFont): PdfObject<PdfDict>;
     imageObject(image: PdfImage): PdfImageObject;
+    private softMaskObject;
+    private resolveGraphicState;
     private formAppearanceObject;
     private resolveFormAppearances;
     /**
@@ -110,7 +113,7 @@ export declare class PdfDocument {
      * wrote for that font — see `PdfCanvas.addFont`. A page that drew no text
      * passes nothing and gets no `/Resources` at all, as upstream does.
      */
-    addPage(format: PageSize, content: string, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>, images?: ReadonlyMap<PdfImage, string>, annotations?: readonly PdfAnnotationSpec[]): PdfPage;
+    addPage(format: PageSize, content: string | Uint8Array, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>, images?: ReadonlyMap<PdfImage, string>, annotations?: readonly PdfAnnotationSpec[]): PdfPage;
     addNavigation(outlines: readonly SerializedOutline[], pageMode: PdfPageMode, destinations?: readonly SerializedDestination[]): void;
     addPageLabels(labels: readonly SerializedPageLabel[]): void;
     save(): Uint8Array;

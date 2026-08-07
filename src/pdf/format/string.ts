@@ -14,9 +14,8 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/format/string.dart
  *
- * PORT GAP: no UTF-16BE text. Upstream emits it for strings outside Latin-1;
- * the port has the literal `(...)` and hex `<...>` branches, which is what the
- * standard fonts and an `/Identity-H` composite font need respectively.
+ * Strings outside WinAnsi are emitted as UTF-16BE with a byte-order marker,
+ * matching the representation PDF readers expect for document-level text.
  */
 
 import { PdfDataType } from './base.ts';
@@ -86,6 +85,23 @@ export function pdfHexString(values: readonly number[], digits = 4): string {
   return `<${output}>`;
 }
 
+function fitsWinAnsi(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0)!;
+    if (codePoint > 0xff && CP1252[codePoint] === undefined) return false;
+  }
+  return true;
+}
+
+/** PDF text string encoded as UTF-16BE, including its required marker. */
+export function pdfUnicodeString(value: string): string {
+  let output = 'feff';
+  for (let index = 0; index < value.length; index++) {
+    output += value.charCodeAt(index).toString(16).padStart(4, '0');
+  }
+  return `<${output}>`;
+}
+
 /** A PDF string object. */
 export class PdfString extends PdfDataType {
   readonly value: string;
@@ -112,6 +128,6 @@ export class PdfString extends PdfDataType {
   }
 
   override output(s: PdfStream): void {
-    s.putString(pdfLiteral(this.value));
+    s.putString(fitsWinAnsi(this.value) ? pdfLiteral(this.value) : pdfUnicodeString(this.value));
   }
 }

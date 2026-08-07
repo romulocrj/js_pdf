@@ -143,7 +143,7 @@ export class Page implements Section {
 
     return [{
       format,
-      content: canvas.output(),
+      content: canvas.takeOutputBytes(),
       fonts: canvas.fonts,
       graphicStates: canvas.graphicStates,
       patterns: canvas.patterns,

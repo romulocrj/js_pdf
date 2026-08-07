@@ -63,6 +63,41 @@ test('all basic shape elements become paths', () => {
   assert.ok(output.filter(line => line === 'h').length >= 2);
 });
 
+test('text and tspan content emit font resources and text operators', () => {
+  const { output, canvas } = paint(`
+    <svg viewBox="0 0 100 30">
+      <text x="10" y="20" font-size="12">Hello<tspan dx="2"> SVG</tspan></text>
+    </svg>
+  `);
+  assert.ok(output.some(line => line.includes('(Hello) Tj')));
+  assert.ok(output.some(line => line.includes('(SVG) Tj')));
+  assert.equal(canvas.fonts.size, 1);
+});
+
+test('a base64 raster image becomes an SVG image operation', () => {
+  const jpeg = readFileSync(new URL('../examples/assets/profile.jpg', import.meta.url)).toString('base64');
+  const { output, canvas } = paint(`
+    <svg viewBox="0 0 20 20">
+      <image x="2" y="3" width="10" height="12" href="data:image/jpeg;base64,${jpeg}"/>
+    </svg>
+  `);
+  assert.ok(output.some(line => /\/I1 Do/.test(line)));
+  assert.equal(canvas.images.size, 1);
+});
+
+test('masked SVG content registers a deferred luminosity soft mask', () => {
+  const { canvas, output } = paint(`
+    <svg viewBox="0 0 10 10">
+      <mask id="m"><rect width="5" height="10" fill="white"/></mask>
+      <rect width="10" height="10" mask="url(#m)"/>
+    </svg>
+  `);
+
+  assert.ok(output.some(line => /^\/g\d+ gs$/.test(line)));
+  assert.equal(canvas.graphicStates.size, 1);
+  assert.equal(canvas.graphicStates.values().next().value.has('/SMask'), true);
+});
+
 test('nested groups inherit paint, scope transforms and skip hidden content', () => {
   const { output } = paint(`
     <svg viewBox="0 0 100 100">

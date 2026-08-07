@@ -27,11 +27,11 @@
  * fonts; that is a separate feature from the outline path phase 1 needs, and it
  * pulls in a whole second metrics shape.
  *
- * PORT GAP: no bidi coupling. Upstream's format 4 reader also maps each Arabic
- * codepoint's isolated form to the same glyph, guarded by a global option. That
- * belongs with `font/arabic.dart` and `bidi_utils.dart`, which are unported.
+ * Arabic isolated presentation forms are aliased to the basic glyph when a
+ * font omits the duplicate cmap entries, matching upstream's bidi coupling.
  */
 
+import { basicToIsolatedMappings } from './bidi_utils.ts';
 import { PdfFontMetrics } from './font_metrics.ts';
 
 /** `name` table name IDs, upstream's `TtfParserName` enum. */
@@ -277,6 +277,13 @@ export class TtfParser {
           // Formats 2, 8, 10, 13 and 14 are not understood. Skipping a subtable
           // is safe: another one in the same table normally covers the range.
           break;
+      }
+    }
+
+    for (const [basic, isolated] of basicToIsolatedMappings) {
+      const glyph = this.charToGlyphIndexMap.get(basic);
+      if (glyph !== undefined && !this.charToGlyphIndexMap.has(isolated)) {
+        this.charToGlyphIndexMap.set(isolated, glyph);
       }
     }
   }

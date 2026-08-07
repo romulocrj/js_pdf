@@ -16,6 +16,8 @@ export declare function pdfLiteral(value: string): string;
  * literal escaping rules above do not apply at all.
  */
 export declare function pdfHexString(values: readonly number[], digits?: number): string;
+/** PDF text string encoded as UTF-16BE, including its required marker. */
+export declare function pdfUnicodeString(value: string): string;
 /** A PDF string object. */
 export declare class PdfString extends PdfDataType {
     readonly value: string;

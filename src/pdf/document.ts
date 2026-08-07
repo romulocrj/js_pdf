@@ -19,9 +19,8 @@
  * left here is the registry that hands out serial numbers and owns the object
  * list.
  *
- * PORT GAP: no `PdfSettings`. Upstream threads compression, encryption, a
- * verbose mode and a target PDF version through every object. The port has one
- * output mode.
+ * PORT GAP: `PdfSettings` carries compression only. Upstream also threads
+ * encryption, a verbose mode and a target PDF version through every object.
  */
 
 import type { PdfDataType } from './format/base.ts';
@@ -30,6 +29,7 @@ import { DEFAULT_PDF_SETTINGS } from './format/object_base.ts';
 import { PdfDict } from './format/dict.ts';
 import { PdfArray } from './format/array.ts';
 import { PdfNum } from './format/num.ts';
+import { PdfName } from './format/name.ts';
 import { PdfStream, encodeLatin1 } from './format/stream.ts';
 import { PdfXrefTable } from './format/xref.ts';
 import type { PdfFont } from './font/font.ts';
@@ -58,13 +58,15 @@ import { PdfMetadata } from './obj/metadata.ts';
 import { PdfPageLabels } from './obj/page_label.ts';
 import type { PdfPageLabel } from './obj/page_label.ts';
 import { PdfXObject } from './obj/xobject.ts';
+import { PdfSoftMaskReference } from './soft_mask.ts';
+import type { PdfSoftMask } from './soft_mask.ts';
 
 export type { DocumentMetadata } from './obj/info.ts';
 
 /** One physical page, with its content stream already rendered to operators. */
 export interface SerializedPage {
   readonly format: PageSize;
-  readonly content: string;
+  readonly content: Uint8Array;
 
   /**
    * The fonts `content` drew with, mapped to the `/F…` names it wrote for them.
@@ -140,6 +142,7 @@ export class PdfDocument {
    */
   private readonly fontObjects = new Map<PdfFont, PdfObject<PdfDict>>();
   private readonly imageObjects = new Map<PdfImage, PdfImageObject>();
+  private readonly softMaskObjects = new Map<PdfSoftMask, PdfXObject>();
   private readonly formFontNames = new Map<PdfFont, string>();
 
   readonly settings: PdfSettings;
@@ -193,6 +196,55 @@ export class PdfDocument {
     if (mask !== null) object.setSoftMask(mask);
     this.imageObjects.set(image, object);
     return object;
+  }
+
+  private softMaskObject(mask: PdfSoftMask): PdfDict {
+    let object = this.softMaskObjects.get(mask);
+    if (object === undefined) {
+      object = new PdfXObject(this, '/Form', mask.content);
+      object.params.set('/FormType', new PdfNum(1));
+      object.params.set('/BBox', PdfArray.fromNum([
+        mask.boundingBox.x,
+        mask.boundingBox.y,
+        mask.boundingBox.x + mask.boundingBox.width,
+        mask.boundingBox.y + mask.boundingBox.height
+      ]));
+      object.params.set('/Group', new PdfDict([
+        ['/S', new PdfName('/Transparency')],
+        ['/CS', new PdfName('/DeviceRGB')]
+      ]));
+      const resources = new PdfDict();
+      if (mask.fonts.size > 0) {
+        const fonts = new Map<string, PdfObject<PdfDict>>();
+        for (const [font, name] of mask.fonts) fonts.set(name, this.fontObject(font));
+        resources.set('/Font', PdfDict.fromObjectMap(fonts));
+      }
+      if (mask.images.size > 0) {
+        const images = new Map<string, PdfImageObject>();
+        for (const [image, name] of mask.images) images.set(name, this.imageObject(image));
+        resources.set('/XObject', PdfDict.fromObjectMap(images));
+      }
+      if (mask.graphicStates.size > 0) {
+        resources.set('/ExtGState', new PdfDict(
+          Array.from(mask.graphicStates, ([name, state]) => [name, this.resolveGraphicState(state)])
+        ));
+      }
+      if (mask.patterns.size > 0) resources.set('/Pattern', new PdfDict(mask.patterns));
+      if (!resources.isEmpty) object.params.set('/Resources', resources);
+      this.softMaskObjects.set(mask, object);
+    }
+    return new PdfDict([
+      ['/S', new PdfName('/Luminosity')],
+      ['/G', object.ref()]
+    ]);
+  }
+
+  private resolveGraphicState(state: PdfDict): PdfDict {
+    const softMask = state.get('/SMask');
+    if (!(softMask instanceof PdfSoftMaskReference)) return state;
+    const resolved = new PdfDict(state.values);
+    resolved.set('/SMask', this.softMaskObject(softMask.mask));
+    return resolved;
   }
 
   private formAppearanceObject(appearance: PdfFormAppearance): PdfXObject {
@@ -255,7 +307,7 @@ export class PdfDocument {
    */
   addPage(
     format: PageSize,
-    content: string,
+    content: string | Uint8Array,
     fonts: ReadonlyMap<PdfFont, string> = new Map(),
     graphicStates: ReadonlyMap<string, PdfDict> = new Map(),
     patterns: ReadonlyMap<string, PdfDict> = new Map(),
@@ -267,7 +319,10 @@ export class PdfDocument {
       resources.push([name, this.fontObject(font)]);
     }
 
-    const stream = new PdfObjectStream(this, encodeLatin1(content));
+    const stream = new PdfObjectStream(
+      this,
+      typeof content === 'string' ? encodeLatin1(content) : content
+    );
     const page = new PdfPage(this, this.pageList, format);
 
     for (const [name, object] of resources) {
@@ -275,7 +330,7 @@ export class PdfDocument {
     }
 
     for (const [name, state] of graphicStates) {
-      page.addGraphicState(name, state);
+      page.addGraphicState(name, this.resolveGraphicState(state));
     }
 
     for (const [name, pattern] of patterns) {

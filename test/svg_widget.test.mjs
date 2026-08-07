@@ -132,3 +132,20 @@ test('SvgImage serializes real path operators into a PDF', () => {
   assert.match(source, /W n/);
   assert.match(source, / cm/);
 });
+
+test('SvgImage serializes masks as luminosity transparency groups', () => {
+  const bytes = Pdf.createPdf({}, api => new api.Page({
+    build: () => new api.SvgImage({
+      svg: `<svg viewBox="0 0 10 10">
+        <mask id="half"><rect width="5" height="10" fill="white"/></mask>
+        <rect width="10" height="10" fill="red" mask="url(#half)"/>
+      </svg>`,
+      width: 100
+    })
+  }));
+  const source = latin1(bytes);
+
+  assert.match(source, /\/SMask << \/S \/Luminosity \/G \d+ 0 R >>/);
+  assert.match(source, /\/Subtype \/Form/);
+  assert.match(source, /\/Group << \/S \/Transparency \/CS \/DeviceRGB >>/);
+});

@@ -110,7 +110,7 @@ export class BarcodePDF417 extends Barcode2D {
   }
 
   override convert(data: Uint8Array): Barcode2DMatrix {
-    const dataWords = this.highlevelEncode([...data]);
+    const dataWords = this.highlevelEncode(data);
 
     const dim = this.calcDimensions(
       dataWords.length,
@@ -216,7 +216,7 @@ export class BarcodePDF417 extends Barcode2D {
     return { columns: cols, rows };
   }
 
-  private encodeText(text: number[], submode: number, result: number[]): number {
+  private encodeText(text: Uint8Array, submode: number, result: number[]): number {
     let idx = 0;
     const tmp: number[] = [];
 
@@ -305,12 +305,12 @@ export class BarcodePDF417 extends Barcode2D {
     return submode;
   }
 
-  private consecutiveTextCount(msg: number[]): number {
+  private consecutiveTextCount(msg: Uint8Array): number {
     let result = 0;
 
     let i = 0;
     for (const ch of msg) {
-      const numericCount = consecutiveDigitCount(msg.slice(i));
+      const numericCount = consecutiveDigitCount(msg.subarray(i));
       if (numericCount >= minNumericCount || (numericCount === 0 && !isText(ch))) {
         break;
       }
@@ -321,14 +321,14 @@ export class BarcodePDF417 extends Barcode2D {
     return result;
   }
 
-  private consecutiveBinaryCount(msg: number[]): number {
+  private consecutiveBinaryCount(msg: Uint8Array): number {
     let result = 0;
 
     for (let i = 0; i < msg.length; i++) {
-      if (consecutiveDigitCount(msg.slice(i)) >= minNumericCount) {
+      if (consecutiveDigitCount(msg.subarray(i)) >= minNumericCount) {
         break;
       }
-      if (this.consecutiveTextCount(msg.slice(i)) > 5) {
+      if (this.consecutiveTextCount(msg.subarray(i)) > 5) {
         break;
       }
       result++;
@@ -336,19 +336,21 @@ export class BarcodePDF417 extends Barcode2D {
     return result;
   }
 
-  private highlevelEncode(data: number[]): number[] {
+  private highlevelEncode(source: Uint8Array): number[] {
     const words: number[] = [];
     let encodingMode = ENC_TEXT;
     let textSubMode = SUB_UPPER;
+    let offset = 0;
 
-    while (data.length > 0) {
+    while (offset < source.length) {
+      const data = source.subarray(offset);
       const numericCount = consecutiveDigitCount(data);
       if (numericCount >= minNumericCount || numericCount === data.length) {
         words.push(latchToNumeric);
         encodingMode = ENC_NUMERIC;
         textSubMode = SUB_UPPER;
-        words.push(...encodeNumeric(data.slice(0, numericCount)));
-        data = data.slice(numericCount);
+        words.push(...encodeNumeric(data.subarray(0, numericCount)));
+        offset += numericCount;
       } else {
         const textCount = this.consecutiveTextCount(data);
         if (textCount >= 5 || textCount === data.length) {
@@ -358,21 +360,21 @@ export class BarcodePDF417 extends Barcode2D {
             textSubMode = SUB_UPPER;
           }
           const txtData: number[] = [];
-          textSubMode = this.encodeText(data.slice(0, textCount), textSubMode, txtData);
+          textSubMode = this.encodeText(data.subarray(0, textCount), textSubMode, txtData);
           words.push(...txtData);
-          data = data.slice(textCount);
+          offset += textCount;
         } else {
           let binaryCount = this.consecutiveBinaryCount(data);
           if (binaryCount === 0) {
             binaryCount = 1;
           }
-          const bytes = data.slice(0, binaryCount);
+          const bytes = data.subarray(0, binaryCount);
           if (bytes.length !== 1 || encodingMode !== ENC_TEXT) {
             encodingMode = ENC_BINARY;
             textSubMode = SUB_UPPER;
           }
           words.push(...encodeBinary(bytes, encodingMode));
-          data = data.slice(binaryCount);
+          offset += binaryCount;
         }
       }
     }
@@ -512,7 +514,7 @@ function getCodeword(tableId: number, word: number): number {
   return (codewords[tableId] as readonly number[])[word] as number;
 }
 
-function consecutiveDigitCount(data: readonly number[]): number {
+function consecutiveDigitCount(data: Uint8Array): number {
   let cnt = 0;
   for (const r of data) {
     if (r < 0x30 || r > 0x39) {
@@ -523,7 +525,7 @@ function consecutiveDigitCount(data: readonly number[]): number {
   return cnt;
 }
 
-function encodeNumeric(digits: readonly number[]): number[] {
+function encodeNumeric(digits: Uint8Array): number[] {
   const result: number[] = [];
   const digitCount = digits.length;
   let chunkCount = Math.floor(digitCount / 44);
@@ -534,7 +536,7 @@ function encodeNumeric(digits: readonly number[]): number[] {
   for (let i = 0; i < chunkCount; i++) {
     const start = i * 44;
     const end = Math.min(start + 44, digitCount);
-    const chunk = digits.slice(start, end);
+    const chunk = digits.subarray(start, end);
 
     // The leading '1' preserves leading zeros through the base-900 conversion.
     let chunkNum = BigInt(`1${String.fromCharCode(...chunk)}`);
@@ -565,7 +567,7 @@ function isAlphaLower(ch: number): boolean {
   return ch === 0x20 || (ch >= 0x61 && ch <= 0x7a);
 }
 
-function encodeBinary(data: readonly number[], startmode: number): number[] {
+function encodeBinary(data: Uint8Array, startmode: number): number[] {
   const result: number[] = [];
   const count = data.length;
 

@@ -42,7 +42,8 @@ test('parseJpeg reads the real profile dimensions and baseline colour model', ()
     bitsPerComponent: 8,
     components: 3,
     colorSpace: 'rgb',
-    inverted: false
+    inverted: false,
+    orientation: 'topLeft'
   });
 });
 
@@ -77,7 +78,8 @@ test('parseJpeg accepts progressive JPEG metadata', () => {
     bitsPerComponent: 8,
     components: 3,
     colorSpace: 'rgb',
-    inverted: false
+    inverted: false,
+    orientation: 'topLeft'
   });
 });
 
@@ -88,8 +90,31 @@ test('parseJpeg accepts extended sequential JPEG metadata', () => {
     bitsPerComponent: 8,
     components: 3,
     colorSpace: 'rgb',
-    inverted: false
+    inverted: false,
+    orientation: 'topLeft'
   });
+});
+
+test('EXIF orientation is parsed and swaps the public dimensions', () => {
+  const exif = segment(0xe1, [
+    0x45, 0x78, 0x69, 0x66, 0, 0,
+    0x49, 0x49, 42, 0, 8, 0, 0, 0,
+    1, 0,
+    0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0,
+    0, 0, 0, 0
+  ]);
+  const bytes = jpeg(exif, sof(0xc0, 17, 9, 3));
+  assert.equal(Pdf.parseJpeg(bytes).orientation, 'rightTop');
+  const image = Pdf.PdfImage.fromJpeg(bytes);
+  assert.deepEqual([image.width, image.height], [9, 17]);
+});
+
+test('JPEG dpi decodes and resamples instead of embedding the full source', () => {
+  const provider = new Pdf.MemoryImage(PROFILE, { dpi: 72 });
+  const image = provider.resolve({ x: 10, y: 10 });
+  assert.deepEqual([image.sourceWidth, image.sourceHeight], [10, 10]);
+  assert.equal(image.jpeg, null);
+  assert.equal(image.channel('rgb').length, 300);
 });
 
 test('the phase example replaces only a real JPEG frame marker', () => {

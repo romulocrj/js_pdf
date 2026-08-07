@@ -153,6 +153,12 @@ class ByteBuffer {
     this.bytes[this.length++] = byte;
   }
 
+  append(bytes: Uint8Array): void {
+    this.ensure(bytes.length);
+    this.bytes.set(bytes, this.length);
+    this.length += bytes.length;
+  }
+
   /** Copy `length` bytes from `distance` back, one at a time. */
   repeat(distance: number, length: number): void {
     this.ensure(length);
@@ -310,7 +316,7 @@ export function inflateZlib(bytes: Uint8Array): Uint8Array {
     bytes[bytes.length - 1]!
   ) >>> 0;
   if (adler32(output.view()) !== expected) throw new RangeError('Invalid zlib checksum');
-  return output.view().slice();
+  return output.view();
 }
 
 function readU32(bytes: Uint8Array, offset: number): number {
@@ -346,23 +352,23 @@ function unfilter(
   offset: number,
   width: number,
   height: number,
-  bitsPerPixel: number
-): { readonly rows: Uint8Array[]; readonly offset: number } {
+  bitsPerPixel: number,
+  consume: (row: Uint8Array, y: number) => void
+): number {
   const rowBytes = Math.ceil(width * bitsPerPixel / 8);
   const bytesPerPixel = Math.max(1, Math.ceil(bitsPerPixel / 8));
-  const rows: Uint8Array[] = [];
+  let previous = new Uint8Array(rowBytes);
+  let row = new Uint8Array(rowBytes);
   let cursor = offset;
   for (let y = 0; y < height; y++) {
     const filter = data[cursor++];
     if (filter === undefined || filter > 4) throw new RangeError(`Invalid PNG filter ${String(filter)}`);
     if (cursor + rowBytes > data.length) throw new RangeError('Truncated PNG scanline');
-    const row = new Uint8Array(rowBytes);
-    const above = rows[y - 1];
     for (let index = 0; index < rowBytes; index++) {
       const raw = data[cursor++]!;
       const left = index >= bytesPerPixel ? row[index - bytesPerPixel]! : 0;
-      const upper = above?.[index] ?? 0;
-      const upperLeft = index >= bytesPerPixel ? (above?.[index - bytesPerPixel] ?? 0) : 0;
+      const upper = previous[index]!;
+      const upperLeft = index >= bytesPerPixel ? previous[index - bytesPerPixel]! : 0;
       let predictor = 0;
       if (filter === 1) predictor = left;
       else if (filter === 2) predictor = upper;
@@ -370,9 +376,12 @@ function unfilter(
       else if (filter === 4) predictor = paeth(left, upper, upperLeft);
       row[index] = (raw + predictor) & 255;
     }
-    rows.push(row);
+    consume(row, y);
+    const swap = previous;
+    previous = row;
+    row = swap;
   }
-  return { rows, offset: cursor };
+  return cursor;
 }
 
 function sample(row: Uint8Array, index: number, bitDepth: number): number {
@@ -477,7 +486,7 @@ export function decodePng(bytes: Uint8Array): DecodedPng {
   let interlace = 0;
   let palette: Uint8Array | null = null;
   let transparency: Uint8Array | null = null;
-  const idat: number[] = [];
+  const idat = new ByteBuffer();
   let sawHeader = false;
   let sawEnd = false;
   let offset = 8;
@@ -519,7 +528,7 @@ export function decodePng(bytes: Uint8Array): DecodedPng {
     } else if (type === 'tRNS') {
       transparency = data.slice();
     } else if (type === 'IDAT') {
-      for (const byte of data) idat.push(byte);
+      idat.append(data);
     } else if (type === 'IEND') {
       sawEnd = true;
       offset = dataEnd + 4;
@@ -532,7 +541,7 @@ export function decodePng(bytes: Uint8Array): DecodedPng {
   if (!sawHeader || !sawEnd || idat.length === 0) throw new RangeError('Incomplete PNG file');
   if (colorType === 3 && palette === null) throw new RangeError('Indexed PNG has no palette');
 
-  const inflated = inflateZlib(Uint8Array.from(idat));
+  const inflated = inflateZlib(idat.view());
   const channels = colorType === 0 ? 1 : colorType === 2 ? 3 : colorType === 3 ? 1 : colorType === 4 ? 2 : 4;
   const bitsPerPixel = channels * bitDepth;
   const pixels = new Uint8Array(width * height * 4);
@@ -541,14 +550,12 @@ export function decodePng(bytes: Uint8Array): DecodedPng {
   let hasAlpha = false;
 
   if (interlace === 0) {
-    const decoded = unfilter(inflated, cursor, width, height, bitsPerPixel);
-    cursor = decoded.offset;
-    for (let y = 0; y < height; y++) {
+    cursor = unfilter(inflated, cursor, width, height, bitsPerPixel, (row, y) => {
       hasAlpha = writePixels(
-        pixels, decoded.rows[y]!, width, y * width, 0, 1,
+        pixels, row, width, y * width, 0, 1,
         colorType, bitDepth, palette, transparency
       ) || hasAlpha;
-    }
+    });
   } else {
     const startsX = [0, 4, 0, 2, 0, 1, 0];
     const startsY = [0, 0, 4, 0, 2, 0, 1];
@@ -558,15 +565,13 @@ export function decodePng(bytes: Uint8Array): DecodedPng {
       const passWidth = passSize(width, startsX[pass]!, stepsX[pass]!);
       const passHeight = passSize(height, startsY[pass]!, stepsY[pass]!);
       if (passWidth === 0 || passHeight === 0) continue;
-      const decoded = unfilter(inflated, cursor, passWidth, passHeight, bitsPerPixel);
-      cursor = decoded.offset;
-      for (let row = 0; row < passHeight; row++) {
-        const targetY = startsY[pass]! + row * stepsY[pass]!;
+      cursor = unfilter(inflated, cursor, passWidth, passHeight, bitsPerPixel, (row, y) => {
+        const targetY = startsY[pass]! + y * stepsY[pass]!;
         hasAlpha = writePixels(
-          pixels, decoded.rows[row]!, passWidth, targetY * width,
+          pixels, row, passWidth, targetY * width,
           startsX[pass]!, stepsX[pass]!, colorType, bitDepth, palette, transparency
         ) || hasAlpha;
-      }
+      });
     }
   }
   if (cursor !== inflated.length) throw new RangeError('PNG scanline data has trailing bytes');

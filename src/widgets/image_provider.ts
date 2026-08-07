@@ -20,6 +20,9 @@
  */
 
 import { reportPdfDiagnostic } from '../pdf/diagnostics.ts';
+import { parseJpeg } from '../pdf/image/jpeg.ts';
+import type { JpegInfo } from '../pdf/image/jpeg.ts';
+import { decodeJpeg } from '../pdf/image/jpeg_decoder.ts';
 import { PdfImage } from '../pdf/obj/image.ts';
 import type { PdfImageOrientation } from '../pdf/obj/image.ts';
 import { PageUnit } from '../pdf/page_format.ts';
@@ -42,12 +45,12 @@ const LARGE_IMAGE_PIXELS = 4000000;
  * Silent unless the caller installed a handler; see `pdf/diagnostics.ts` for
  * why the library cannot simply write this somewhere itself.
  */
-function reportIfOversized(image: PdfImage): void {
-  const pixels = image.sourceWidth * image.sourceHeight;
+function reportIfOversized(width: number, height: number): void {
+  const pixels = width * height;
   if (pixels < LARGE_IMAGE_PIXELS) return;
 
   reportPdfDiagnostic(
-    `js_pdf (MemoryImage): decoded a ${image.sourceWidth}x${image.sourceHeight} image ` +
+    `js_pdf (MemoryImage): received a ${width}x${height} image ` +
     `(${Math.round(pixels / 1000000)} megapixels). Every source pixel is embedded ` +
     'at full resolution unless the provider is given a dpi, so pass ' +
     '{ dpi: 150 } to resample it down to what the page actually draws.'
@@ -62,30 +65,7 @@ function validateDpi(dpi: number | null): number | null {
 }
 
 function resizeDecodedImage(image: PdfImage, width: number): PdfImage {
-  const pixels = image.pixels;
-  if (pixels === null || width === image.sourceWidth) return image;
-
-  const height = Math.max(1, Math.round(image.sourceHeight * width / image.sourceWidth));
-  const resized = new Uint8Array(width * height * 4);
-  for (let y = 0; y < height; y++) {
-    const sourceY = Math.min(image.sourceHeight - 1, Math.floor(y * image.sourceHeight / height));
-    for (let x = 0; x < width; x++) {
-      const sourceX = Math.min(image.sourceWidth - 1, Math.floor(x * image.sourceWidth / width));
-      const source = (sourceY * image.sourceWidth + sourceX) * 4;
-      const destination = (y * width + x) * 4;
-      resized[destination] = pixels[source]!;
-      resized[destination + 1] = pixels[source + 1]!;
-      resized[destination + 2] = pixels[source + 2]!;
-      resized[destination + 3] = pixels[source + 3]!;
-    }
-  }
-  return new PdfImage({
-    pixels: resized,
-    width,
-    height,
-    orientation: image.orientation,
-    hasAlpha: image.hasAlpha
-  });
+  return image.resize(width);
 }
 
 export abstract class ImageProvider {
@@ -170,32 +150,67 @@ export interface MemoryImageOptions {
 
 export class MemoryImage extends ImageProvider {
   readonly bytes: Uint8Array;
-  private readonly image: PdfImage;
+  private readonly jpegInfo: JpegInfo | null;
 
   constructor(bytes: Uint8Array, {
-    orientation = 'topLeft',
+    orientation,
     dpi = null
   }: MemoryImageOptions = {}) {
-    let image: PdfImage;
-    if (bytes[0] === 0xff && bytes[1] === 0xd8) {
-      image = PdfImage.fromJpeg(bytes, orientation);
+    const stored = bytes.slice();
+    let width: number;
+    let height: number;
+    let jpegInfo: JpegInfo | null = null;
+    if (stored[0] === 0xff && stored[1] === 0xd8) {
+      jpegInfo = parseJpeg(stored);
+      width = jpegInfo.width;
+      height = jpegInfo.height;
     } else if (
-      bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71
+      stored.length >= 24 &&
+      stored[0] === 137 && stored[1] === 80 && stored[2] === 78 && stored[3] === 71 &&
+      stored[4] === 13 && stored[5] === 10 && stored[6] === 26 && stored[7] === 10 &&
+      stored[12] === 73 && stored[13] === 72 && stored[14] === 68 && stored[15] === 82
     ) {
-      image = PdfImage.fromPng(bytes, orientation);
+      width = (
+        stored[16]! * 0x1000000 + stored[17]! * 0x10000 +
+        stored[18]! * 0x100 + stored[19]!
+      ) >>> 0;
+      height = (
+        stored[20]! * 0x1000000 + stored[21]! * 0x10000 +
+        stored[22]! * 0x100 + stored[23]!
+      ) >>> 0;
+      if (width === 0 || height === 0) throw new RangeError('PNG dimensions must be positive');
     } else {
-      throw new TypeError(`Unable to determine image type from ${bytes.length} bytes`);
+      throw new TypeError(`Unable to determine image type from ${stored.length} bytes`);
     }
-    super(image.sourceWidth, image.sourceHeight, orientation, dpi);
-    this.bytes = bytes.slice();
-    this.image = image;
+    const resolvedOrientation = orientation ?? jpegInfo?.orientation ?? 'topLeft';
+    super(width, height, resolvedOrientation, dpi);
+    this.bytes = stored;
+    this.jpegInfo = jpegInfo;
     // Worth saying at construction rather than at save: this is where the
     // caller still has the option of handing over a smaller source.
-    if (dpi === null) reportIfOversized(image);
+    if (dpi === null) reportIfOversized(width, height);
   }
 
   protected override buildImage(width?: number): PdfImage {
-    return width === undefined ? this.image : resizeDecodedImage(this.image, width);
+    if (this.jpegInfo !== null) {
+      if (width === undefined) {
+        return new PdfImage({
+          jpeg: this.bytes,
+          info: this.jpegInfo,
+          orientation: this.orientation
+        });
+      }
+      const decoded = decodeJpeg(this.bytes, width);
+      return new PdfImage({
+        rgb: decoded.rgb,
+        alpha: null,
+        width: decoded.width,
+        height: decoded.height,
+        orientation: this.orientation
+      });
+    }
+    const image = PdfImage.fromPng(this.bytes, this.orientation);
+    return width === undefined ? image : resizeDecodedImage(image, width);
   }
 }
 
@@ -217,7 +232,7 @@ export class RawImage extends ImageProvider {
     orientation = 'topLeft',
     dpi = null
   }: RawImageOptions) {
-    const image = new PdfImage({ pixels: bytes, width, height, orientation, hasAlpha: true });
+    const image = new PdfImage({ pixels: bytes.slice(), width, height, orientation, hasAlpha: true });
     super(width, height, orientation, dpi);
     this.image = image;
   }

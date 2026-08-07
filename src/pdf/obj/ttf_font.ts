@@ -33,11 +33,11 @@
  *
  * PORT GAP: no `CFF `-flavoured OpenType — see `font/ttf_writer.ts`.
  *
- * PORT GAP: no Arabic or bidi coupling. Upstream zeroes the advance width of a
- * diacritic when its shaping options are on; `font/arabic.dart` and
- * `bidi_utils.dart` are unported.
+ * Arabic diacritics retain their outlines but have zero advance after shaping,
+ * matching upstream's bidi-enabled metrics.
  */
 
+import { isArabicDiacritic } from '../font/arabic.ts';
 import { PdfFontMetrics } from '../font/font_metrics.ts';
 import type { PdfFont } from '../font/font.ts';
 import { TtfParser } from '../font/ttf_parser.ts';
@@ -116,7 +116,18 @@ export class PdfTtfFont implements PdfFont {
     if (glyph === undefined) {
       return PdfFontMetrics.zero;
     }
-    return this.font.glyphInfoMap.get(glyph) ?? PdfFontMetrics.zero;
+    const metrics = this.font.glyphInfoMap.get(glyph) ?? PdfFontMetrics.zero;
+    if (!isArabicDiacritic(codePoint)) return metrics;
+    return new PdfFontMetrics({
+      left: metrics.left,
+      top: metrics.top,
+      right: metrics.right,
+      bottom: metrics.bottom,
+      ascent: metrics.ascent,
+      descent: metrics.descent,
+      advanceWidth: 0,
+      leftBearing: metrics.leftBearing
+    });
   }
 
   stringMetrics(text: string, size: number, letterSpacing = 0): PdfFontMetrics {

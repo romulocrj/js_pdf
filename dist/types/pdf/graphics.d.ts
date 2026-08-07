@@ -1,6 +1,7 @@
 import type { ColorInput } from './color.ts';
 import type { PdfFont } from './font/font.ts';
 import { PdfDict } from './format/dict.ts';
+import type { PdfSoftMask } from './soft_mask.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
 import type { PdfImage } from './obj/image.ts';
@@ -66,20 +67,21 @@ export interface BezierArcOptions {
 /**
  * Content-stream builder for one page.
  *
- * Like upstream `PdfGraphics`, operators are appended to a buffer and never
- * re-read. Unlike upstream, the buffer is a list of lines rather than a byte
- * stream, because the port assembles the whole content stream as a string
- * before any document exists.
+ * Like upstream `PdfGraphics`, operators are appended to a byte buffer and
+ * never re-read. Keeping bytes here avoids retaining one allocation per PDF
+ * operator and then duplicating the complete page during string joining.
  */
 export declare class PdfCanvas {
     readonly pageHeight: number;
-    private readonly commands;
+    private readonly content;
+    private commandCount;
     private readonly fontNames;
     private readonly stateNames;
     private readonly stateDicts;
     private readonly patternNames;
     private readonly patternDicts;
     private readonly imageNames;
+    private readonly softMaskNames;
     private readonly pageAnnotations;
     /**
      * The current transformation matrix, tracked so a widget can ask what space
@@ -147,6 +149,7 @@ export declare class PdfCanvas {
      * so a page that draws fifty half-transparent boxes writes one dictionary.
      */
     setGraphicState(state: PdfGraphicState): string | null;
+    setSoftMask(mask: PdfSoftMask): string;
     private addPattern;
     setFillPattern(pattern: PdfShadingPattern): string;
     setStrokePattern(pattern: PdfShadingPattern): string;
@@ -196,7 +199,13 @@ export declare class PdfCanvas {
     fillRect(x: number, top: number, width: number, height: number, color: ColorInput): void;
     strokeRect(x: number, top: number, width: number, height: number, color: ColorInput, lineWidth?: number): void;
     text(text: string, x: number, baselineFromTop: number, style: CanvasTextStyle): void;
+    /** Draw text at a PDF user-space baseline, for vector formats such as SVG. */
+    drawString(font: PdfFont, fontSize: number, text: string, x: number, y: number, renderingMode?: 0 | 1 | 2 | 7): void;
     line(x1: number, top1: number, x2: number, top2: number, color?: ColorInput, lineWidth?: number): void;
     circle(cx: number, topCenter: number, radius: number, { fill, stroke, lineWidth }?: CircleOptions): void;
     output(): string;
+    /** Content-stream bytes, including the final line break. */
+    outputBytes(): Uint8Array;
+    /** Finalize the content and release the canvas's growable backing buffer. */
+    takeOutputBytes(): Uint8Array;
 }

@@ -20,15 +20,15 @@
  * page continuation is an immutable line index. That keeps repeated layout and
  * MultiPage pagination deterministic.
  *
- * PORT GAP: Arabic shaping and the Unicode bidi algorithm depend on the still
- * unported `pdf/font/arabic.dart` and `pdf/font/bidi_utils.dart`. Explicit RTL
- * direction and start/end alignment are supported by mirroring laid-out runs.
+ * RTL spans are converted to visual runs and Arabic presentation forms before
+ * measurement, while immutable run placement still handles start/end layout.
  */
 
 import { assertFiniteNumber } from '../base/assert.ts';
 import { normalizeColor } from '../pdf/color.ts';
 import type { ColorInput, Rgb } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
+import { logicalToVisual } from '../pdf/font/bidi_utils.ts';
 import { defaultPdfFont } from '../pdf/font/type1_fonts.ts';
 import { BoxConstraints, normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
@@ -551,6 +551,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
   protected inputTokens(context: RenderContext, maxWidth: number): InputToken[] {
     const result: InputToken[] = [];
     const scale = this.textScaleFactor;
+    const direction = this.textDirection ?? Directionality.of(context);
     this.text.visitChildren((span, textStyle, annotation) => {
       const baseStyle = resolveStyle(context, textStyle, span.baseline, scale);
       if (span instanceof WidgetSpan) {
@@ -591,7 +592,8 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
         group = '';
       };
 
-      for (const character of span.text) {
+      const visualText = direction === 'rtl' ? logicalToVisual(span.text) : span.text;
+      for (const character of visualText) {
         const codePoint = character.codePointAt(0) ?? 0;
         let font = baseStyle.font;
         if (!supportsRune(font, codePoint)) {

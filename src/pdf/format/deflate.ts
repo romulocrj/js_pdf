@@ -591,13 +591,10 @@ function adler32(bytes: Uint8Array): number {
   return ((b << 16) | a) >>> 0;
 }
 
-/** Compress `data` to a raw RFC 1951 DEFLATE stream. */
-export function deflateRaw(data: Uint8Array): Uint8Array {
-  const writer = new BitWriter(Math.max(64, data.length >>> 1));
-
+function writeDeflate(writer: BitWriter, data: Uint8Array): void {
   if (data.length === 0) {
     writeStoredBlocks(writer, data, 0, 0, true);
-    return writer.finish();
+    return;
   }
 
   const head = new Int32Array(HASH_SIZE).fill(-1);
@@ -686,6 +683,12 @@ export function deflateRaw(data: Uint8Array): Uint8Array {
   }
 
   writeBlock(writer, tokens, data, blockStart, position, true);
+}
+
+/** Compress `data` to a raw RFC 1951 DEFLATE stream. */
+export function deflateRaw(data: Uint8Array): Uint8Array {
+  const writer = new BitWriter(Math.max(64, data.length >>> 1));
+  writeDeflate(writer, data);
   return writer.finish();
 }
 
@@ -694,20 +697,20 @@ export function deflateRaw(data: Uint8Array): Uint8Array {
  * expects.
  */
 export function deflateZlib(data: Uint8Array): Uint8Array {
-  const body = deflateRaw(data);
-  const output = new Uint8Array(body.length + 6);
+  const writer = new BitWriter(Math.max(64, (data.length >>> 1) + 6));
 
   // 0x78 0x9c: deflate with a 32 KiB window, default level. The pair is a
   // multiple of 31, which is the header's own check.
-  output[0] = 0x78;
-  output[1] = 0x9c;
-  output.set(body, 2);
+  writer.writeBytes(new Uint8Array([0x78, 0x9c]), 0, 2);
+  writeDeflate(writer, data);
+  writer.alignToByte();
 
   const checksum = adler32(data);
-  output[body.length + 2] = (checksum >>> 24) & 0xff;
-  output[body.length + 3] = (checksum >>> 16) & 0xff;
-  output[body.length + 4] = (checksum >>> 8) & 0xff;
-  output[body.length + 5] = checksum & 0xff;
-
-  return output;
+  const trailer = new Uint8Array(4);
+  trailer[0] = (checksum >>> 24) & 0xff;
+  trailer[1] = (checksum >>> 16) & 0xff;
+  trailer[2] = (checksum >>> 8) & 0xff;
+  trailer[3] = checksum & 0xff;
+  writer.writeBytes(trailer, 0, trailer.length);
+  return writer.finish();
 }

@@ -50,6 +50,8 @@ const ASYNC = [
   { token: 'Promise', label: 'Promise' }
 ];
 
+const BINARY_NUMBER_ARRAY = /\b(bytes|pixels|samples|idat|byteBuffer)\??:\s*(?:readonly\s+)?number\[\]/g;
+
 const REQUIRED_HEADER_LINES = [
   'Ported to JavaScript from https://github.com/DavBfr/dart_pdf',
   'Copyright (C) 2017, David PHAM-VAN <dev.nfet.net@gmail.com>',
@@ -102,6 +104,11 @@ for (const path of files) {
     if (body.includes(token)) {
       problems.push(`${name}: uses ${label}; src/ must stay synchronous`);
     }
+  }
+
+
+  for (const match of body.matchAll(BINARY_NUMBER_ARRAY)) {
+    problems.push(`${name}: binary field "${match[1]}" must use Uint8Array, not number[]`);
   }
 
   // Relative imports must carry the .ts extension so Node can run src/

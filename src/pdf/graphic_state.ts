@@ -27,8 +27,9 @@
  *   - `key` replaces Dart's structural `operator ==`. Two states with the same
  *     values must share one name, or a page that draws fifty half-transparent
  *     boxes writes fifty identical dictionaries.
- *   - No `/SMask` and no `/TR`. A soft mask needs a form XObject and a transfer
- *     function needs `obj/function.dart`; neither exists in the port yet.
+ *   - Luminosity `/SMask` states are installed separately by `PdfCanvas`
+ *     because their form XObjects cannot be allocated until the canvas joins a
+ *     document. `/TR` transfer functions are not implemented.
  */
 
 import { PdfDict } from './format/dict.ts';

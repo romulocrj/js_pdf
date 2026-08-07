@@ -18,8 +18,8 @@
  * layout data carries every fitted size and crop offset; the widget itself
  * stores no measurement and is safe to lay out again after a page break.
  *
- * PORT GAP: SVG text and embedded raster images are not painted yet. A custom
- * font lookup therefore joins this API when `svg/text.dart` is ported.
+ * SVG text resolves the standard generic families and accepts the same custom
+ * font lookup hook as upstream.
  */
 
 import { normalizeColor } from '../pdf/color.ts';
@@ -30,12 +30,18 @@ import { SvgParser } from '../svg/parser.ts';
 import { parseXml } from '../svg/xml.ts';
 import { Alignment, BoxConstraints, inscribe } from './geometry.ts';
 import type { Alignment as AlignmentValue } from './geometry.ts';
+import { Font } from './font.ts';
 import { Widget } from './widget.ts';
 import type { Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
 
 export type BoxFit = 'fill' | 'contain' | 'cover' | 'fitWidth' | 'fitHeight' | 'none' | 'scaleDown';
 export type AlignmentName = keyof typeof Alignment;
 export type AlignmentInput = AlignmentValue | AlignmentName;
+export type SvgCustomFontLookup = (
+  fontFamily: string,
+  fontStyle: string,
+  fontWeight: string
+) => Font | null;
 
 export interface SvgFittedSize {
   readonly width: number;
@@ -57,6 +63,7 @@ export interface SvgImageOptions {
   readonly width?: number | null;
   readonly height?: number | null;
   readonly colorFilter?: ColorInput | null;
+  readonly customFontLookup?: SvgCustomFontLookup | null;
 }
 
 interface FittedSizes {
@@ -147,6 +154,7 @@ export class SvgImage extends Widget<SvgImageLayoutData> {
   readonly height: number | null;
 
   private readonly parser: SvgParser;
+  private readonly customFontLookup: SvgCustomFontLookup | null;
 
   constructor({
     svg,
@@ -155,7 +163,8 @@ export class SvgImage extends Widget<SvgImageLayoutData> {
     clip = true,
     width = null,
     height = null,
-    colorFilter = null
+    colorFilter = null,
+    customFontLookup = null
   }: SvgImageOptions) {
     super();
     this.parser = SvgParser.fromXml({
@@ -167,6 +176,7 @@ export class SvgImage extends Widget<SvgImageLayoutData> {
     this.clip = Boolean(clip);
     this.width = width === null ? null : Number(width);
     this.height = height === null ? null : Number(height);
+    this.customFontLookup = customFontLookup;
   }
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<SvgImageLayoutData> {
@@ -243,7 +253,19 @@ export class SvgImage extends Widget<SvgImageLayoutData> {
     new SvgPainter(
       this.parser,
       context.canvas,
-      { x: 0, y: 0, width: context.pageFormat.width, height: context.pageFormat.height }
+      { x: 0, y: 0, width: context.pageFormat.width, height: context.pageFormat.height },
+      (family, style, weight) => {
+        const custom = this.customFontLookup?.(family, style, weight);
+        if (custom !== null && custom !== undefined) return custom.getFont(context);
+        const bold = weight !== 'normal' && weight !== 'lighter';
+        const italic = style !== 'normal';
+        const font = family === 'serif'
+          ? (italic ? (bold ? Font.timesBoldItalic() : Font.timesItalic()) : (bold ? Font.timesBold() : Font.times()))
+          : family === 'monospace'
+            ? (italic ? (bold ? Font.courierBoldOblique() : Font.courierOblique()) : (bold ? Font.courierBold() : Font.courier()))
+            : (italic ? (bold ? Font.helveticaBoldOblique() : Font.helveticaOblique()) : (bold ? Font.helveticaBold() : Font.helvetica()));
+        return font.getFont(context);
+      }
     ).paint();
     context.canvas.restoreContext();
   }

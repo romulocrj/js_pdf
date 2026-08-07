@@ -64,5 +64,7 @@ export declare class MultiPage implements Section {
     render(documentContext: DocumentContext): SerializedPage[];
     postProcess(documentContext: DocumentContext): SerializedPage[];
     private serialize;
+    /** Page-count placeholders which deliberately do not copy canvas content. */
+    private summaries;
     private paintLayer;
 }

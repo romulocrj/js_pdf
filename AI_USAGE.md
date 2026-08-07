@@ -394,7 +394,7 @@ For a complete module loader, asset host and output conversion, see
 
 ## Images and SVG
 
-Encoded PNG or baseline JPEG bytes use `MemoryImage`, then `Image`:
+Encoded PNG or baseline/progressive JPEG bytes use `MemoryImage`, then `Image`:
 
 ```js
 const provider = new pw.MemoryImage(imageBytes, { dpi: 150 });
@@ -431,9 +431,14 @@ SVG markup is supplied directly:
 new pw.SvgImage({
   svg: svgMarkup,
   width: 120,
-  fit: 'contain'
+  fit: 'contain',
+  customFontLookup: family => loadedFonts.get(family) ?? null
 });
 ```
+
+SVG text, `tspan`, embedded PNG/JPEG data URLs, clipping and luminosity masks
+are rendered without host I/O. Supply `customFontLookup` when the SVG names a
+font beyond the standard PDF families.
 
 The library does not fetch assets. Fonts, images and SVG strings must be passed
 into the generator by its caller.
@@ -455,9 +460,10 @@ features, while checking the TypeScript declarations for exact constructors:
 ### Stream compression
 
 Streams are deflated by default, which usually matters more than anything else
-about the file's size: images are embedded as raw samples, so a logo or a flat
-background collapses by one to two orders of magnitude. Nothing is needed to
-turn it on.
+about the file's size: decoded PNG/Raw images are embedded as compressed sample
+streams, while JPEG sources keep their existing `/DCTDecode` bytes. A logo or a
+flat background can collapse by one to two orders of magnitude. Nothing is
+needed to turn it on.
 
 ```js
 new pw.Document({ compress: false });   // trade file size back for speed
@@ -475,8 +481,8 @@ recompressed, and the XMP metadata packet is always left plain.
 - Coordinates and widget layout are top-left with the y-axis pointing down.
 - Reading or rasterizing existing PDFs is not supported.
 - Encryption, digital signatures and `Signature` are out of scope.
-- Full Unicode bidi reordering and Arabic shaping are not implemented.
-- SVG text and embedded SVG raster images are not implemented.
+- Varying alpha inside one SVG gradient and true repeated/reflecting gradient
+  ramps are not implemented.
 - An indivisible widget or table row taller than a complete page cannot paginate.
 
 ## Output handling

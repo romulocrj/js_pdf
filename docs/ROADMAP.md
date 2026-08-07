@@ -167,6 +167,16 @@ Contained SVG backgrounds keep their fitted size, `FullPage` positions them at
 the physical bottom, and `PdfLogo` keeps its intrinsic 24×27 ratio. The result
 matches the original page counts: document 6, invoice 2, resume 2 and server 1.
 
+**Upstream fidelity and bounded-memory follow-up — landed 2026-08-06.** The
+remaining high-impact omissions found by comparing the port with dart_pdf are
+now closed: non-WinAnsi PDF strings use UTF-16BE, JPEG EXIF orientation and
+DPI-aware decode/resampling work, Arabic shaping feeds a complete Unicode bidi
+pass, and SVG supports text, embedded PNG/JPEG data URLs and luminosity masks.
+The same audit removed per-byte and per-pixel plain arrays, stopped retaining
+duplicate page canvases and image channels, and writes graphics and compressed
+streams through geometric typed buffers. A 4096×3515 PNG now decodes and
+materializes under a 64 MB JavaScript heap in the retained regression test.
+
 **Mixed page orientations — landed 2026-08-05.** One document can hold pages in
 different orientations *and* different paper sizes. `orientation` is a per-section
 option on `Page` and `MultiPage` as well as on `PageTheme`, and every physical
@@ -184,10 +194,11 @@ inherited fill/stroke state; groups scope transforms and opacity; `<use>`
 resolves both `href` forms and symbols. Every SVG asset used by the examples
 now produces operators, although no public widget drives the painter until 2.7.
 
-**Phase 2.6 — SVG clipping — landed 2026-08-05.** Referenced clip paths emit
-`W n` or `W* n` in the target operation's saved graphics scope, including
-`objectBoundingBox` units and nesting. Soft masks remain explicitly coupled to
-phase 4's form XObjects and `/SMask`; upstream cannot create one without them.
+**Phase 2.6 — SVG clipping and masks — completed 2026-08-06.** Referenced clip
+paths emit `W n` or `W* n` in the target operation's saved graphics scope, including
+`objectBoundingBox` units and nesting. Masked operations now render their mask
+into a transparency-group form XObject and select it through a luminosity
+`/SMask` graphic state.
 
 **Phase 2.7 — SVG parser and widget — landed 2026-08-05.** Public `SvgImage`
 sizes from explicit or intrinsic dimensions, supports every `BoxFit`, aligns a
@@ -239,10 +250,10 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 
 ## Next step
 
-> **The implementation roadmap is complete through phase 5.7, plus stream
-> compression.** Remaining omissions are either explicitly out of scope or
-> narrower gaps recorded in [PORTING-STATUS.md](PORTING-STATUS.md); define a new
-> phase before expanding scope.
+> **The implementation roadmap and the high-impact upstream parity audit are
+> complete.** The next candidate is the decoration image painter recorded in
+> [PORTING-STATUS.md](PORTING-STATUS.md); define a new phase before expanding
+> that narrower surface.
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
 out of scope, and the complete upstream example set still generates end to end.
@@ -267,14 +278,13 @@ installed, on the host console.
 
 Compression also exposed a second cost that had been hiding behind the first.
 The PNG inflate accumulated into a `number[]`, which V8 stores eight bytes to
-the element: decoding one 4096x3515 source meant half a gigabyte of JS heap for
-57.6 MB of pixels, and under a constrained heap that fails outright rather than
-merely being wasteful — a 512 MiB ceiling aborted the run before compression or
-resampling could help. It accumulates into a doubling `Uint8Array` now, which
-moves the samples out of the JS heap and into a typed array's backing store.
-Decoding is about twice as fast as a side effect. `utf8Encode` had the same
-shape on a smaller scale and was straightened out with it, and the rule is
-written down as §3 of AGENTS.md so the next one is caught in review.
+the element: decoding one 4096×3515 source meant roughly half a gigabyte of JS
+heap for 57.6 MB of pixels. Every binary accumulator now uses a geometrically
+growing `Uint8Array`; PNG IDAT collection and row unfiltering reuse typed
+buffers; image objects retain RGB and alpha channels without a second RGBA
+copy; page canvases and compressed streams avoid full-size intermediate
+copies. The retained 4096×3515 regression completes under a 64 MB heap. The
+rule is written down as §3 of AGENTS.md so the next one is caught in review.
 
 That console is the one deliberate exception to §2 of AGENTS.md, and it is
 written so the rule stays true anyway: it is reached as `globalThis.console`,
@@ -857,18 +867,19 @@ Ninety-four SVG tests cover the individual operator streams and paint every
 asset in the examples corpus. The document-level half of `SvgParser` moved here
 from 2.7 because `<use>` needs `findById`; only the widget remains there.
 
-### 2.6 Clipping and masks ✅ *(clipping landed 2026-08-05)*
+### 2.6 Clipping and masks ✅ *(completed 2026-08-06)*
 
 - **Ports:** `pdf/lib/src/svg/clip_path.dart`, `mask_path.dart`
-- **Into:** `src/svg/clip_path.ts`
+- **Into:** `src/svg/clip_path.ts`, `src/svg/mask_path.ts`,
+  `src/pdf/soft_mask.ts`
 - `clipPath` via `W n`; `clipPathUnits`; nested clips.
 - **Test:** clip operators appear in the right `q`/`Q` scope.
 
 Landed with referenced paths, even-odd clipping, `userSpaceOnUse`,
 `objectBoundingBox`, missing-reference fallback and nested target scopes.
-Four operator-level tests bring the SVG suite to 98 tests. `mask_path.dart` is
-deferred intact to phase 4: its first executable line constructs a form XObject
-and its result is a `/SMask` graphic state, neither of which exists earlier.
+The follow-up completed masks as luminosity `/SMask` dictionaries backed by
+transparency-group form XObjects with their own font, image, pattern and
+graphic-state resources. Operator and serialized-PDF tests cover both halves.
 
 ### 2.7 Parser and widget ✅ *(landed 2026-08-05)*
 
@@ -906,9 +917,10 @@ colour filtering all work. Ten tests bring the SVG suite to 117 and render both
 `examples/svg-gradients-phase-2.8.mjs` is the retained visual/V8 proof.
 
 Two fidelity limits stay explicit in `src/svg/gradient.ts`. Different opacity
-at each stop requires the luminosity soft mask coupled to phase 4's form
-XObjects; uniform opacity works now. `repeat` and `reflect` currently extend the
-edge colours, as upstream's current shading output does; a true repeated ramp
+at each stop still needs a gradient-specific alpha ramp composed with the now
+available luminosity-mask primitive; uniform opacity works now. `repeat` and
+`reflect` currently extend the edge colours, as upstream's current shading
+output does; a true repeated ramp
 needs a tiling pattern. The port uses direct type-2/type-3 dictionaries instead
 of upstream's indirect sampled streams because pages are painted before a
 `PdfDocument` exists; the resulting RGB interpolation is equivalent and keeps
@@ -1100,9 +1112,9 @@ Six focused tests cover the public API, style inheritance, safe justification,
 backgrounds/decorations, inline widgets and continuation. The four example
 gates remove eight API occurrences, reducing the total 45 → 37.
 `examples/rich-text-phase-3.7.mjs` currently generates a 4,208-byte proof under
-both Node and bare V8. Arabic shaping and full bidi reordering remain coupled
-to the separate upstream font helpers; explicit RTL direction already resolves
-run placement and start/end alignment.
+both Node and bare V8. The fidelity follow-up ports Arabic contextual forms and
+ligatures and applies full UAX #9 reordering and mirroring before font fallback
+and measurement.
 
 The original single-run justification division-by-zero defect is recorded with
 its reproduction in [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md).
@@ -1181,7 +1193,8 @@ slot in wherever convenient relative to phase 5.
   decompression API is available). `pdf/lib/src/pdf/obj/image.dart`,
   `smask.dart`.
 - **4.2** JPEG ✅ *(landed 2026-08-05; progressive support corrected
-  2026-08-06)*: pass through as `/DCTDecode`, parse SOF for dimensions. This
+  2026-08-06)*: pass through as `/DCTDecode`, parse SOF for dimensions and TIFF
+  orientation, and decode synchronously when DPI resampling is requested. This
   is what `examples/assets/profile.jpg` exercises.
 - **4.3** `Image` widget and provider ✅ *(landed 2026-08-05)* —
   `widgets/image.dart`, `image_provider.dart`: `Image`, `ImageProvider`,
@@ -1191,8 +1204,8 @@ slot in wherever convenient relative to phase 5.
 Phase 4.1 implements stored, fixed-Huffman and dynamic-Huffman DEFLATE blocks,
 validates zlib and PNG checksums, reverses all five row filters and decodes every
 legal PNG colour/depth combination, palette and `tRNS` transparency, plus all
-seven Adam7 passes into RGBA. The PDF resource layer separates RGB bytes from
-alpha, emits the latter as a grayscale image `/SMask`, caches one indirect image
+seven Adam7 passes into separate RGB/alpha typed buffers. The PDF resource layer
+emits alpha as a grayscale image `/SMask`, caches one indirect image
 per identity and registers page-local `/I…` names. `PdfCanvas.drawImage` also
 ports all eight upstream orientations.
 
@@ -1204,8 +1217,10 @@ until the public provider/widget arrives in 4.3.
 
 Phase 4.2 scans the JPEG marker stream through SOS, accepts 8-bit SOF0 baseline,
 SOF1 extended sequential and SOF2 progressive frames, derives gray/RGB/CMYK
-colour space, honours Adobe direct-CMYK versus YCCK inversion and embeds the
-original bytes unchanged behind `/DCTDecode`. Seven tests exercise the real
+colour space, honours Adobe direct-CMYK versus YCCK inversion, reads all eight
+TIFF/EXIF orientations and embeds the original bytes unchanged behind
+`/DCTDecode` when no resampling is requested. A synchronous host-free decoder
+is used only for DPI-aware JPEG resizing. Tests exercise the real
 200×200 profile, explicit SOF1/SOF2 fixtures, gray and CMYK marker variants,
 malformed or unsupported input, byte-for-byte PDF pass-through and the
 segment-aware marker replacement used by the phase proof.
@@ -1218,8 +1233,8 @@ alignment crop geometry in pure layout data, and paint scopes clipping before
 drawing the resolved resource. A follow-up fixed contained images being painted
 outside their shrink-wrapped layout box, delegated vertical conversion to the
 canvas, and made DPI select a cached, proportionally resized raster for decoded
-PNG and Raw providers. Encoded JPEG and `ImageProxy` resources remain unchanged,
-because this runtime does not decode JPEG pixels. Eight focused tests cover API
+PNG, JPEG and Raw providers. `ImageProxy` resources remain unchanged because
+their pixels have already been resolved by the caller. Focused tests cover API
 exposure, all corrected geometry, DPI, orientation-aware dimensions,
 clipping/crop operators and resource reuse. `examples/image-phase-4.3.mjs` is a
 four-page host-free gallery of every `BoxFit`, every alignment, all providers,
@@ -1371,7 +1386,8 @@ examples did not exercise.
   port has one runtime target by construction.
 - **Encryption and digital signatures** — need real crypto primitives, which the
   runtime contract rules out.
-- **EXIF** — `pdf/exif.dart`, only relevant to image orientation.
+- **Full EXIF metadata** — image orientation is implemented; unrelated camera
+  metadata is not part of PDF generation.
 
 ---
 

@@ -53,6 +53,18 @@ test('MultiPage creates additional physical pages when widgets overflow', () => 
   assert.match(source, /\/Count [2-9]/);
 });
 
+test('MultiPage does not duplicate content bytes before post-processing', () => {
+  const document = new Pdf.Document();
+  const section = new Pdf.MultiPage({
+    build: () => [new Pdf.Text('serialized once')]
+  });
+  const summaries = section.render({ document, pageOffset: 0, pagesCount: 0 });
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0].content.length, 0);
+  const pages = section.postProcess({ document, pageOffset: 0, pagesCount: 1 });
+  assert.ok(pages[0].content.length > 0);
+});
+
 test('Text emits WinAnsi octal escapes for Portuguese accents', () => {
   const bytes = Pdf.createPdf({}, () => new Pdf.Page({
     build: () => new Pdf.Text('Relatório de execução')

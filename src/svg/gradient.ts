@@ -16,10 +16,11 @@
  *
  * SVG linear and radial paint resolved into PDF shading patterns.
  *
- * PORT GAP: varying stop opacity needs a luminosity soft mask and therefore
- * waits for phase 4 form XObjects. Uniform stop opacity is applied normally.
- * Repeat and reflect spread modes currently extend the edge colour, matching
- * upstream's effective output; true repeated shading needs a tiling pattern.
+ * PORT GAP: varying stop opacity still needs a gradient-specific alpha ramp
+ * composed with the luminosity-mask primitive. Uniform stop opacity is applied
+ * normally. Repeat and reflect spread modes currently extend the edge colour,
+ * matching upstream's effective output; true repeated shading needs a tiling
+ * pattern.
  */
 
 import type { Rgb } from '../pdf/color.ts';

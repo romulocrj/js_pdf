@@ -82,8 +82,16 @@ const BLOCK_COUNT: readonly (readonly number[])[] = [
 ];
 
 class BitWriter {
-  readonly bytes: number[] = [];
+  private readonly bytes: Uint8Array;
   length = 0;
+
+  constructor(capacity: number) {
+    this.bytes = new Uint8Array(capacity);
+  }
+
+  get byteLength(): number {
+    return (this.length + 7) >>> 3;
+  }
 
   append(value: number, count: number): void {
     if (count < 0 || count > 31 || value >>> count !== 0) {
@@ -96,9 +104,20 @@ class BitWriter {
 
   appendBit(value: boolean): void {
     const byteIndex = this.length >>> 3;
-    if (byteIndex === this.bytes.length) this.bytes.push(0);
-    if (value) this.bytes[byteIndex] = (this.bytes[byteIndex] as number) | (0x80 >>> (this.length & 7));
+    if (byteIndex >= this.bytes.length) throw new RangeError('QR bit buffer overflow');
+    if (value) this.bytes[byteIndex] = this.bytes[byteIndex]! | (0x80 >>> (this.length & 7));
     this.length++;
+  }
+
+  appendByte(value: number): void {
+    if ((this.length & 7) !== 0) throw new RangeError('QR byte append is not aligned');
+    if (this.byteLength >= this.bytes.length) throw new RangeError('QR byte buffer overflow');
+    this.bytes[this.byteLength] = value;
+    this.length += 8;
+  }
+
+  finish(): Uint8Array {
+    return this.bytes.subarray(0, this.byteLength);
   }
 }
 
@@ -181,7 +200,7 @@ function dataWordCount(version: number, correctionRow: number): number {
 }
 
 function frameData(data: Uint8Array, version: number, capacity: number): Uint8Array {
-  const bits = new BitWriter();
+  const bits = new BitWriter(capacity);
   bits.append(0b0100, 4);
   bits.append(data.length, version < 10 ? 8 : 16);
   for (const byte of data) bits.append(byte, 8);
@@ -193,11 +212,11 @@ function frameData(data: Uint8Array, version: number, capacity: number): Uint8Ar
   while ((bits.length & 7) !== 0) bits.appendBit(false);
 
   let toggle = false;
-  while (bits.bytes.length < capacity) {
-    bits.bytes.push(toggle ? 0x11 : 0xec);
+  while (bits.byteLength < capacity) {
+    bits.appendByte(toggle ? 0x11 : 0xec);
     toggle = !toggle;
   }
-  return Uint8Array.from(bits.bytes);
+  return bits.finish();
 }
 
 function addErrorCorrection(

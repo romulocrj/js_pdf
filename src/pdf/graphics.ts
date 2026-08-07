@@ -40,6 +40,9 @@ import type { ColorInput } from './color.ts';
 import type { PdfFont } from './font/font.ts';
 import { defaultPdfFont } from './font/type1_fonts.ts';
 import { PdfDict } from './format/dict.ts';
+import { PdfStream } from './format/stream.ts';
+import { PdfSoftMaskReference } from './soft_mask.ts';
+import type { PdfSoftMask } from './soft_mask.ts';
 import { formatNumber } from './format/num.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
@@ -141,20 +144,21 @@ export interface BezierArcOptions {
 /**
  * Content-stream builder for one page.
  *
- * Like upstream `PdfGraphics`, operators are appended to a buffer and never
- * re-read. Unlike upstream, the buffer is a list of lines rather than a byte
- * stream, because the port assembles the whole content stream as a string
- * before any document exists.
+ * Like upstream `PdfGraphics`, operators are appended to a byte buffer and
+ * never re-read. Keeping bytes here avoids retaining one allocation per PDF
+ * operator and then duplicating the complete page during string joining.
  */
 export class PdfCanvas {
   readonly pageHeight: number;
-  private readonly commands: string[] = [];
+  private readonly content = new PdfStream();
+  private commandCount = 0;
   private readonly fontNames = new Map<PdfFont, string>();
   private readonly stateNames = new Map<string, string>();
   private readonly stateDicts = new Map<string, PdfDict>();
   private readonly patternNames = new Map<string, string>();
   private readonly patternDicts = new Map<string, PdfDict>();
   private readonly imageNames = new Map<PdfImage, string>();
+  private readonly softMaskNames = new Map<PdfSoftMask, string>();
   private readonly pageAnnotations: PdfAnnotationSpec[] = [];
 
   /**
@@ -173,7 +177,11 @@ export class PdfCanvas {
   }
 
   push(command: string): void {
-    this.commands.push(command);
+    if (this.commandCount > 0) {
+      this.content.putByte(0x0a);
+    }
+    this.content.putString(command);
+    this.commandCount++;
   }
 
   /** Widget-space (top-left, y-down) to PDF user space. */
@@ -366,6 +374,21 @@ export class PdfCanvas {
     const name = `/g${this.stateDicts.size + 1}`;
     this.stateNames.set(state.key, name);
     this.stateDicts.set(name, state.output());
+    this.push(`${name} gs`);
+    return name;
+  }
+
+  setSoftMask(mask: PdfSoftMask): string {
+    const existing = this.softMaskNames.get(mask);
+    if (existing !== undefined) {
+      this.push(`${existing} gs`);
+      return existing;
+    }
+    const name = `/g${this.stateDicts.size + 1}`;
+    const state = new PdfDict();
+    state.set('/SMask', new PdfSoftMaskReference(mask));
+    this.softMaskNames.set(mask, name);
+    this.stateDicts.set(name, state);
     this.push(`${name} gs`);
     return name;
   }
@@ -777,6 +800,26 @@ export class PdfCanvas {
     this.push(command);
   }
 
+  /** Draw text at a PDF user-space baseline, for vector formats such as SVG. */
+  drawString(
+    font: PdfFont,
+    fontSize: number,
+    text: string,
+    x: number,
+    y: number,
+    renderingMode: 0 | 1 | 2 | 7 = 0
+  ): void {
+    const mode = renderingMode === 0 ? [] : [String(renderingMode), 'Tr'];
+    this.push([
+      'BT',
+      this.addFont(font), formatNumber(fontSize), 'Tf',
+      ...mode,
+      '1 0 0 -1', formatNumber(x), formatNumber(y), 'Tm',
+      font.encodeText(text), 'Tj',
+      'ET'
+    ].join(' '));
+  }
+
   line(x1: number, top1: number, x2: number, top2: number, color: ColorInput = '#000000', lineWidth = 1): void {
     const y1 = this.pageHeight - top1;
     const y2 = this.pageHeight - top2;
@@ -806,6 +849,26 @@ export class PdfCanvas {
   }
 
   output(): string {
-    return `${this.commands.join('\n')}\n`;
+    const bytes = this.content.view();
+    let result = '';
+    const chunkSize = 8192;
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      result += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+    }
+    return `${result}\n`;
+  }
+
+  /** Content-stream bytes, including the final line break. */
+  outputBytes(): Uint8Array {
+    const bytes = this.content.view();
+    const result = new Uint8Array(bytes.length + 1);
+    result.set(bytes);
+    result[bytes.length] = 0x0a;
+    return result;
+  }
+
+  /** Finalize the content and release the canvas's growable backing buffer. */
+  takeOutputBytes(): Uint8Array {
+    return this.content.take(0x0a);
   }
 }

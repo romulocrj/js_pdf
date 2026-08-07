@@ -63,6 +63,16 @@ test('PdfStream keeps high bytes intact', () => {
   assert.deepEqual(Array.from(stream.output()), [0x25, 0xe2, 0xe3, 0xcf, 0xd3]);
 });
 
+test('PdfStream can finalize and release its growable allocation', () => {
+  const stream = new PdfStream();
+  stream.putString('page');
+  assert.equal(latin1(stream.take(0x0a)), 'page\n');
+  assert.equal(stream.offset, 0);
+
+  stream.putString('next');
+  assert.equal(latin1(stream.output()), 'next');
+});
+
 test('PdfName hex-escapes delimiters and keeps the leading slash literal', () => {
   assert.equal(write(new PdfName('/Type')), '/Type');
   assert.equal(write(new PdfName('/A B')), '/A#20B');
@@ -86,6 +96,7 @@ test('PdfString, PdfBool, PdfNull and PdfIndirect serialize to PDF syntax', () =
   assert.equal(write(new PdfString('js_pdf')), '(js_pdf)');
   assert.equal(write(new PdfString('Relatório')), '(Relat\\363rio)');
   assert.equal(write(new PdfString('a(b)c\\d')), '(a\\(b\\)c\\\\d)');
+  assert.equal(write(new PdfString('東京 🚀')), '<feff67714eac0020d83dde80>');
   assert.equal(
     write(PdfString.fromDate(new Date('2026-08-06T19:23:45.987-03:00'))),
     '(D:20260806222345Z)'

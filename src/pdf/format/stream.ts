@@ -19,7 +19,7 @@
  * the file header, and PDF syntax is Latin-1 by construction everywhere else.
  */
 
-/** Initial capacity, and the slack added on every growth. */
+/** Initial capacity of the geometrically growing byte buffer. */
 const GROW = 65536;
 
 /**
@@ -41,7 +41,14 @@ export class PdfStream {
     if (this.buffer.length - this.length >= size) {
       return;
     }
-    const grown = new Uint8Array(this.length + size + GROW);
+
+    const required = this.length + size;
+    let capacity = this.buffer.length === 0 ? GROW : this.buffer.length;
+    while (capacity < required) {
+      capacity *= 2;
+    }
+
+    const grown = new Uint8Array(capacity);
     grown.set(this.buffer.subarray(0, this.length));
     this.buffer = grown;
   }
@@ -68,6 +75,21 @@ export class PdfStream {
   /** The bytes written, as a copy the caller owns. */
   output(): Uint8Array {
     return this.buffer.slice(0, this.length);
+  }
+
+  /** Copy the filled prefix and release the growable backing allocation. */
+  take(finalByte?: number): Uint8Array {
+    const result = new Uint8Array(this.length + (finalByte === undefined ? 0 : 1));
+    result.set(this.buffer.subarray(0, this.length));
+    if (finalByte !== undefined) result[this.length] = finalByte;
+    this.buffer = new Uint8Array(0);
+    this.length = 0;
+    return result;
+  }
+
+  /** Read-only view used internally while the stream remains alive. */
+  view(): Uint8Array {
+    return this.buffer.subarray(0, this.length);
   }
 }
 
