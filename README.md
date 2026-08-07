@@ -146,8 +146,15 @@ engine.DocumentSettings.AccessFlags = DocumentAccessFlags.EnableFileLoading;
 engine.DocumentSettings.SearchPath = modulesDirectory;
 
 dynamic result = engine.Evaluate(new DocumentInfo { Category = ModuleCategory.Standard }, @"
-    import { generateHelloWorld } from 'hello-world.mjs';
-    generateHelloWorld();
+      import * as pw from 'js_pdf';
+
+      const pdf = new pw.Document();
+
+      pdf.addPage(new pw.Page({
+        build: () => new pw.Text('Hello World!', { align: 'center' })
+      }));
+
+      const bytes = pdf.save();
 ");
 ```
 
