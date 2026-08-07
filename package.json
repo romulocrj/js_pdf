@@ -47,26 +47,28 @@
   },
   "files": [
     "dist",
-    "src",
     "LICENSE",
     "NOTICE",
     "README.md",
     "AI_USAGE.md"
   ],
   "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "build": "npm run compile && rollup --config rollup.config.mjs",
+    "build": "rm -rf dist && npm run compile && rollup --config rollup.config.mjs",
     "compile": "tsc -p tsconfig.json",
     "test": "node --test \"test/**/*.test.mjs\"",
     "check": "node tools/check-source.mjs && tsc -p tsconfig.json --noEmit",
     "example": "npm run build && node examples/run-example.mjs",
     "examples": "npm run build && node examples/run-upstream-examples.mjs",
     "phase-examples": "npm run build && node examples/run-phase-examples.mjs",
-    "example:production-pagination": "npm run build && node examples/run-production-pagination.mjs",
-    "verify": "npm run check && npm run build && npm test"
+    "verify": "npm run check && npm run build && npm test",
+    "prepublishOnly": "npm run verify"
   },
   "devDependencies": {
     "@rollup/plugin-terser": "^1.0.0",

@@ -372,7 +372,7 @@ was supposed to unlock.
 Completed implementation phases also keep a synchronous, host-free proof
 generator named `examples/*-phase-X.Y.mjs`. The module returns PDF bytes without
 performing I/O, so the same file can be imported by the local runner and by
-`test/v8/run.sh`; the latter writes its copy to `test/v8/out/` and proves the
+`test/v8/run.sh`.the latter writes its copy to `test/v8/out/` and proves the
 shipped bundle works under bare ClearScript V8.
 
 | Example | Upstream source | Unlocks at | What it proves |

@@ -44,6 +44,12 @@ pagination, SVG, raster images, tables, charts, barcodes, links, forms, page
 labels and metadata/XMP. All eight retained upstream examples generate end to
 end under Node.js and bare ClearScript V8.
 
+Version 0.1.6 is the first release candidate, and the first version published to
+npm. The port itself is finished; it is a candidate rather than a stable release
+because nothing outside the project has exercised it yet. The API is expected to
+hold, but is not frozen until 1.0.0.
+
+- [CHANGELOG.md](CHANGELOG.md) — what changed in each version
 - [docs/PORTING-STATUS.md](docs/PORTING-STATUS.md) — what has been ported so far, file by file
 - [docs/ROADMAP.md](docs/ROADMAP.md) — the next steps, in order
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the port is organized and where it diverges from dart_pdf

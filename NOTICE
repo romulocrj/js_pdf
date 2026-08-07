@@ -85,11 +85,13 @@ src/pdf/font/unicode_bidi.ts is derived from bidi-js 1.0.3:
 
 --------------------------------------------------------------------------
 
-Third-party fonts and visual resources used only by the examples are listed,
-with their licenses and provenance, in:
+Third-party fonts and visual resources are used only by the examples in the
+source repository. They are not part of this distribution: the published
+package contains no font files. They are listed, with their licenses and
+provenance, at:
 
-    examples/assets/THIRD-PARTY-NOTICES.md
+    https://github.com/romulocrj/js_pdf/blob/main/examples/assets/THIRD-PARTY-NOTICES.md
 
-The SIL Open Font License 1.1 covering the applicable example fonts is in:
+The SIL Open Font License 1.1 covering the applicable example fonts is at:
 
-    examples/assets/licenses/OFL-1.1.txt
+    https://github.com/romulocrj/js_pdf/blob/main/examples/assets/licenses/OFL-1.1.txt

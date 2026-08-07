@@ -26,7 +26,7 @@ When producing code, resolve uncertainty in this order:
 
 1. The installed TypeScript declarations under `dist/types/`.
 2. The public exports in `src/index.ts`.
-3. [PORTING-STATUS.md](docs/PORTING-STATUS.md) for implemented gaps.
+3. [PORTING-STATUS.md](https://github.com/romulocrj/js_pdf/blob/main/docs/PORTING-STATUS.md) for implemented gaps.
 4. Knowledge of `dart_pdf` for document structure and widget selection.
 
 Do not invent an API merely because it exists in Flutter, React, another PDF
@@ -89,47 +89,47 @@ isolate one feature family at a time.
 
 | Example | Kind | What it demonstrates |
 |---|---|---|
-| [hello-world.mjs](examples/hello-world.mjs) | Upstream | Minimal `Document`, `Page`, `Text` and synchronous `save()` |
-| [calendar.mjs](examples/calendar.mjs) | Upstream | Grid layout, TrueType fonts, SVG and themed text |
-| [certificate.mjs](examples/certificate.mjs) | Upstream | Stack/positioned layout, transformations, clipping, rich text and decorative SVG |
-| [document.mjs](examples/document.mjs) | Upstream | Long-form multipage document, headers, paragraphs, table of content, outlines and links |
-| [invoice.mjs](examples/invoice.mjs) | Upstream | Business invoice, repeated table headers, SVG, barcode, totals, header and footer |
-| [report.mjs](examples/report.mjs) | Upstream | Cartesian and pie charts, legends, tables and embedded fonts |
-| [resume.mjs](examples/resume.mjs) | Upstream | Images, icons, progress indicators, partitions, QR code and two-page layout |
-| [server.mjs](examples/server.mjs) | Upstream | Charts, SVG, feature cards, pricing table and external links |
-| [Browser.html](examples/Browser.html) | Project | Browser-only PDF generation, live preview, download and opening the result in a new tab |
-| [create-sales-report.mjs](examples/create-sales-report.mjs) | Project | Small data-driven report using `Document`, `MultiPage`, cards, vector drawing and rows |
-| [svg-gradients-phase-2.8.mjs](examples/svg-gradients-phase-2.8.mjs) | Focused | Linear/radial SVG gradients, per-stop alpha and reflected spread |
-| [table-phase-3.1.mjs](examples/table-phase-3.1.mjs) | Focused | Table tracks, borders, decoration and `TableHelper` |
-| [table-spanning-phase-3.2.mjs](examples/table-spanning-phase-3.2.mjs) | Focused | Multipage tables, continuation and repeated headers |
-| [basic-widgets-phase-3.3.mjs](examples/basic-widgets-phase-3.3.mjs) | Focused | Transforms, opacity, fitting, aspect ratio and custom painting |
-| [flex-layout-phase-3.4.mjs](examples/flex-layout-phase-3.4.mjs) | Focused | Row/column allocation, expanded/flexible children, constraints and overflow |
-| [decoration-phase-3.5.mjs](examples/decoration-phase-3.5.mjs) | Focused | Borders, radii, gradients, images, shadows and foreground/background decoration |
-| [layout-phase-3.6.mjs](examples/layout-phase-3.6.mjs) | Focused | Stack, positioned children, wrap, grid and partitions |
-| [rich-text-phase-3.7.mjs](examples/rich-text-phase-3.7.mjs) | Focused | Text spans, inline widgets, styles, justification and decorations |
-| [content-phase-3.8.mjs](examples/content-phase-3.8.mjs) | Focused | Headers, paragraphs, bullets, outlines and table of content |
-| [placeholders-phase-3.9.mjs](examples/placeholders-phase-3.9.mjs) | Focused | Placeholder, PDF/Flutter logos and deterministic lorem text |
-| [clipping-phase-3.10.mjs](examples/clipping-phase-3.10.mjs) | Focused | Rectangular, rounded and elliptical clipping |
-| [png-phase-4.1.mjs](examples/png-phase-4.1.mjs) | Focused | PNG decoding, transparency and image XObjects |
-| [jpeg-phase-4.2.mjs](examples/jpeg-phase-4.2.mjs) | Focused | Baseline JPEG pass-through and color models |
-| [image-phase-4.3.mjs](examples/image-phase-4.3.mjs) | Focused | Image providers, all `BoxFit` modes, alignment, DPI and orientation |
-| [charts-phase-5.1.mjs](examples/charts-phase-5.1.mjs) | Focused | Bar, line, point and pie charts with axes and legends |
-| [barcode-phase-5.2.mjs](examples/barcode-phase-5.2.mjs) | Focused | QR, PDF417 and one-dimensional barcodes |
-| [annotations-phase-5.3.mjs](examples/annotations-phase-5.3.mjs) | Focused | URL links, named destinations and transformed annotation rectangles |
-| [icons-phase-5.4.mjs](examples/icons-phase-5.4.mjs) | Focused | Material icon font, inherited icon theme and RTL mirroring |
-| [progress-phase-5.5.mjs](examples/progress-phase-5.5.mjs) | Focused | Circular and linear progress indicators |
-| [forms-phase-5.6.mjs](examples/forms-phase-5.6.mjs) | Focused | Text, choice, checkbox and button AcroForm fields plus metadata/page labels |
-| [widgets-phase-5.7.mjs](examples/widgets-phase-5.7.mjs) | Focused | Atomic pagination, lists, shapes, grid paper, context, watermarks/footers, outlines and geometric annotations |
-| [production-pagination.mjs](examples/production-pagination.mjs) | Project | Report proving a chart title and chart stay together with `Inseparable` |
+| [hello-world.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/hello-world.mjs) | Upstream | Minimal `Document`, `Page`, `Text` and synchronous `save()` |
+| [calendar.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/calendar.mjs) | Upstream | Grid layout, TrueType fonts, SVG and themed text |
+| [certificate.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/certificate.mjs) | Upstream | Stack/positioned layout, transformations, clipping, rich text and decorative SVG |
+| [document.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/document.mjs) | Upstream | Long-form multipage document, headers, paragraphs, table of content, outlines and links |
+| [invoice.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/invoice.mjs) | Upstream | Business invoice, repeated table headers, SVG, barcode, totals, header and footer |
+| [report.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/report.mjs) | Upstream | Cartesian and pie charts, legends, tables and embedded fonts |
+| [resume.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/resume.mjs) | Upstream | Images, icons, progress indicators, partitions, QR code and two-page layout |
+| [server.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/server.mjs) | Upstream | Charts, SVG, feature cards, pricing table and external links |
+| [Browser.html](https://github.com/romulocrj/js_pdf/blob/main/examples/Browser.html) | Project | Browser-only PDF generation, live preview, download and opening the result in a new tab |
+| [create-sales-report.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/create-sales-report.mjs) | Project | Small data-driven report using `Document`, `MultiPage`, cards, vector drawing and rows |
+| [svg-gradients-phase-2.8.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/svg-gradients-phase-2.8.mjs) | Focused | Linear/radial SVG gradients, per-stop alpha and reflected spread |
+| [table-phase-3.1.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/table-phase-3.1.mjs) | Focused | Table tracks, borders, decoration and `TableHelper` |
+| [table-spanning-phase-3.2.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/table-spanning-phase-3.2.mjs) | Focused | Multipage tables, continuation and repeated headers |
+| [basic-widgets-phase-3.3.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/basic-widgets-phase-3.3.mjs) | Focused | Transforms, opacity, fitting, aspect ratio and custom painting |
+| [flex-layout-phase-3.4.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/flex-layout-phase-3.4.mjs) | Focused | Row/column allocation, expanded/flexible children, constraints and overflow |
+| [decoration-phase-3.5.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/decoration-phase-3.5.mjs) | Focused | Borders, radii, gradients, images, shadows and foreground/background decoration |
+| [layout-phase-3.6.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/layout-phase-3.6.mjs) | Focused | Stack, positioned children, wrap, grid and partitions |
+| [rich-text-phase-3.7.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/rich-text-phase-3.7.mjs) | Focused | Text spans, inline widgets, styles, justification and decorations |
+| [content-phase-3.8.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/content-phase-3.8.mjs) | Focused | Headers, paragraphs, bullets, outlines and table of content |
+| [placeholders-phase-3.9.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/placeholders-phase-3.9.mjs) | Focused | Placeholder, PDF/Flutter logos and deterministic lorem text |
+| [clipping-phase-3.10.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/clipping-phase-3.10.mjs) | Focused | Rectangular, rounded and elliptical clipping |
+| [png-phase-4.1.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/png-phase-4.1.mjs) | Focused | PNG decoding, transparency and image XObjects |
+| [jpeg-phase-4.2.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/jpeg-phase-4.2.mjs) | Focused | Baseline JPEG pass-through and color models |
+| [image-phase-4.3.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/image-phase-4.3.mjs) | Focused | Image providers, all `BoxFit` modes, alignment, DPI and orientation |
+| [charts-phase-5.1.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/charts-phase-5.1.mjs) | Focused | Bar, line, point and pie charts with axes and legends |
+| [barcode-phase-5.2.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/barcode-phase-5.2.mjs) | Focused | QR, PDF417 and one-dimensional barcodes |
+| [annotations-phase-5.3.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/annotations-phase-5.3.mjs) | Focused | URL links, named destinations and transformed annotation rectangles |
+| [icons-phase-5.4.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/icons-phase-5.4.mjs) | Focused | Material icon font, inherited icon theme and RTL mirroring |
+| [progress-phase-5.5.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/progress-phase-5.5.mjs) | Focused | Circular and linear progress indicators |
+| [forms-phase-5.6.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/forms-phase-5.6.mjs) | Focused | Text, choice, checkbox and button AcroForm fields plus metadata/page labels |
+| [widgets-phase-5.7.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/widgets-phase-5.7.mjs) | Focused | Atomic pagination, lists, shapes, grid paper, context, watermarks/footers, outlines and geometric annotations |
+| [production-pagination.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/production-pagination.mjs) | Project | Report proving a chart title and chart stay together with `Inseparable` |
 
 Runners:
 
-- [run-example.mjs](examples/run-example.mjs) generates the project sales report.
-- [run-upstream-examples.mjs](examples/run-upstream-examples.mjs) generates all
+- [run-example.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/run-example.mjs) generates the project sales report.
+- [run-upstream-examples.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/run-upstream-examples.mjs) generates all
   eight retained upstream examples independently.
-- [run-phase-examples.mjs](examples/run-phase-examples.mjs) generates all
+- [run-phase-examples.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/run-phase-examples.mjs) generates all
   focused phase examples.
-- [run-production-pagination.mjs](examples/run-production-pagination.mjs)
+- [run-production-pagination.mjs](https://github.com/romulocrj/js_pdf/blob/main/examples/run-production-pagination.mjs)
   generates the production pagination proof with
   `npm run example:production-pagination`.
 
@@ -327,8 +327,7 @@ const pdfBytes = document.save();
 
 A .NET byte array is a host object, not a JavaScript typed array. Allocate the
 `Uint8Array` inside the V8 engine and copy the bytes through ClearScript's
-`ITypedArray<byte>` interface. This is the same mechanism used by
-[the repository V8 host](test/v8/cs/Program.cs):
+`ITypedArray<byte>` interface.
 
 ```csharp
 using System.IO;
@@ -388,9 +387,7 @@ export function generate() {
 }
 ```
 
-For a complete module loader, asset host and output conversion, see
-[Program.cs](test/v8/cs/Program.cs) and
-[bootstrap.mjs](test/v8/cs/bootstrap.mjs).
+
 
 ## Images and SVG
 
