@@ -1,7 +1,8 @@
 # AI code-generation guide
 
 This document is written for language models that generate JavaScript using
-`js_pdf`. The library is a JavaScript port of `dart_pdf` 3.13.0, so knowledge of
+`js_pdf`. The library is a JavaScript port of [dart_pdf](https://github.com/DavBfr/dart_pdf)
+by David PHAM-VAN (version 3.13.0), so knowledge of
 the original Dart package is useful for choosing widgets and composing a
 document. Use that knowledge as a design guide, then apply the JavaScript rules
 below.
@@ -32,7 +33,7 @@ it is always the scoped name.
 
 ## Primary instruction
 
-Generate code through the original `dart_pdf` document model:
+Generate code through the original [dart_pdf](https://github.com/DavBfr/dart_pdf)  document model:
 
 1. Import the library as the `pw` namespace.
 2. Construct a `pw.Document`.
@@ -54,10 +55,10 @@ When producing code, resolve uncertainty in this order:
    [`src/index.ts`](https://github.com/romulocrj/js_pdf/blob/main/src/index.ts).
    Sources are not part of the npm tarball, so read them in the repository.
 3. [PORTING-STATUS.md](https://github.com/romulocrj/js_pdf/blob/main/docs/PORTING-STATUS.md) for implemented gaps.
-4. Knowledge of `dart_pdf` for document structure and widget selection.
+4. Knowledge of [dart_pdf](https://github.com/DavBfr/dart_pdf) for document structure and widget selection.
 
 Do not invent an API merely because it exists in Flutter, React, another PDF
-library, or a newer version of `dart_pdf`.
+library, or a newer version of [dart_pdf](https://github.com/DavBfr/dart_pdf).
 
 ## Canonical JavaScript shape
 
@@ -111,7 +112,7 @@ export function generateReport(model) {
 ## Example catalog
 
 Use these files as executable references. The upstream ports preserve the
-composition style of the original `dart_pdf` examples; the phase examples
+composition style of the original [dart_pdf](https://github.com/DavBfr/dart_pdf) examples; the phase examples
 isolate one feature family at a time.
 
 | Example | Kind | What it demonstrates |
@@ -235,7 +236,7 @@ less than 200 points remain.
 
 ## Layout vocabulary
 
-Prefer the same composition strategy used by `dart_pdf`:
+Prefer the same composition strategy used by [dart_pdf](https://github.com/DavBfr/dart_pdf):
 
 - `Column` for vertical flow.
 - `Row` for horizontal flow.
@@ -469,7 +470,7 @@ into the generator by its caller.
 
 ## Other implemented document features
 
-Models may use their learned `dart_pdf` structure to compose these available
+Models may use their learned [dart_pdf](https://github.com/DavBfr/dart_pdf) structure to compose these available
 features, while checking the TypeScript declarations for exact constructors:
 
 - Charts: `Chart`, cartesian/radial/pie grids and bar/line/point/pie data sets.
