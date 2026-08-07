@@ -1,5 +1,5 @@
 <!--
-  @romulocrj/js_pdf browser example.
+  https://github.com/romulocrj/js_pdf browser example.
   Copyright (C) 2026, Romulo Campos
   Licensed under the Apache License, Version 2.0.
 -->
@@ -13,13 +13,13 @@
 <!--
   Module resolution.
   By default, this points to jsDelivr serving dist/ directly from GitHub.
-  To use a local copy, replace the URL with "./vendor/js_pdf.mjs"
-  (copy dist/js_pdf.mjs to vendor/) and serve the directory over HTTP.
+  To use a local copy, replace the URL with "./vendor/js_pdf.min.mjs"
+  (copy dist/js_pdf.min.mjs to vendor/) and serve the directory over HTTP.
 -->
 <script type="importmap">
 {
   "imports": {
-    "js_pdf": "https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs"
+    "@romulocrj/js_pdf": "https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs"
   }
 }
 </script>
@@ -333,7 +333,7 @@
 <body>
 
 <header>
-  <h1>romulocrj/<span>js_pdf</span></h1>
+  <a href="https://github.com/romulocrj/js_pdf"><h1>romulocrj/<span>js_pdf</span></h1></a>
   <p class="eyebrow">ES module · no dependencies · no server · synchronous document.save()</p>
 </header>
 
@@ -373,7 +373,7 @@
   <!-- ---------- viewer ---------- -->
   <section class="panel viewer is-empty" id="viewer">
     <div class="panel-head">
-      <span>Preview</span>
+      <span>Preview (click “Generate PDF” to refresh document)</span>
       <span id="status">waiting</span>
     </div>
 
@@ -397,7 +397,7 @@ let pw = null;
 let loadError = null;
 
 try {
-  pw = await import('js_pdf');
+  pw = await import('@romulocrj/js_pdf');
 } catch (error) {
   loadError = error;
 }
@@ -514,8 +514,19 @@ function buildDocument(model) {
       ]
     }),
 
-    footer: () => new pw.Text('Generated in the browser with romulocrj/js_pdf', {
-      fontSize: 8, color: '#94a3b8', align: 'center'
+    footer: () => new pw.RichText({
+      textAlign: 'center',
+      text: new pw.TextSpan({
+        style: new pw.TextStyle({ fontSize: 9, color: '#94a3b8' }),
+        children: [
+          new pw.TextSpan({ text: 'Generated in the browser with ' }),
+          new pw.TextSpan({
+            text: 'romulocrj/js_pdf',
+            style: new pw.TextStyle({ decoration: 'underline', color: '#94a3F8' }),
+            annotation: new pw.AnnotationUrl('https://github.com/romulocrj/js_pdf')
+          })
+        ]
+      })
     }),
 
     build: context => [

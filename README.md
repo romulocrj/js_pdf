@@ -118,14 +118,14 @@ const bytes = pdf.save();
 // bytes instanceof Uint8Array
 ```
 
-Browser, via importmap — no build step on the consumer side:
+Browser, via importmap (cdn or vendoring) — no build step on the consumer side (see [examples/Browser.html](examples/Browser.html)):
 
 ```html
 <script type="importmap">
-  { "imports": { "js_pdf": "/vendor/js_pdf.mjs" } }
+  { "imports": { "@romulocrj/js_pdf": "https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs" } }
 </script>
 <script type="module">
-  import * as pw from 'js_pdf';
+  import * as pw from '@romulocrj/js_pdf';
 
   const pdf = new pw.Document();
 
@@ -137,8 +137,9 @@ Browser, via importmap — no build step on the consumer side:
 </script>
 ```
 
-ClearScript, as a standard module. The module below is the example file itself,
-resolved from `SearchPath`:
+ClearScript, as a standard module. 
+Copy the `js_pdf.min.mjs` file from npm or CDN and place it in modules directory that is accessible to your host. 
+Then run the following code:
 
 ```csharp
 using var engine = new V8ScriptEngine();
@@ -146,7 +147,7 @@ engine.DocumentSettings.AccessFlags = DocumentAccessFlags.EnableFileLoading;
 engine.DocumentSettings.SearchPath = modulesDirectory;
 
 dynamic result = engine.Evaluate(new DocumentInfo { Category = ModuleCategory.Standard }, @"
-      import * as pw from 'js_pdf.mjs';
+      import * as pw from 'js_pdf.min.mjs';
 
       const pdf = new pw.Document();
 
