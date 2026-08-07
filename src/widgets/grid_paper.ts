@@ -103,6 +103,19 @@ export class GridPaper extends Widget<GridPaperLayoutData> {
     for (const value of [horizontalDivisions, verticalDivisions, horizontalSubdivisions, verticalSubdivisions]) {
       if (!Number.isInteger(value) || value <= 0) throw new RangeError('GridPaper divisions must be positive integers');
     }
+    const resolvedHorizontalOffset = Number(horizontalOffset);
+    const resolvedVerticalOffset = Number(verticalOffset);
+    if (!Number.isInteger(resolvedHorizontalOffset) || !Number.isInteger(resolvedVerticalOffset)) {
+      throw new RangeError('GridPaper offsets must be finite integers');
+    }
+    const resolvedScale = Number(scale);
+    if (!Number.isFinite(resolvedScale) || resolvedScale < 0) {
+      throw new RangeError('GridPaper scale must be a finite non-negative number');
+    }
+    const resolvedOpacity = Number(opacity);
+    if (!Number.isFinite(resolvedOpacity) || resolvedOpacity < 0 || resolvedOpacity > 1) {
+      throw new RangeError('GridPaper opacity must be between zero and one');
+    }
     this.horizontalColor = horizontalColor;
     this.verticalColor = verticalColor;
     this.horizontalInterval = Number(horizontalInterval);
@@ -112,11 +125,11 @@ export class GridPaper extends Widget<GridPaperLayoutData> {
     this.horizontalSubdivisions = horizontalSubdivisions;
     this.verticalSubdivisions = verticalSubdivisions;
     this.margin = normalizeInsets(margin);
-    this.horizontalOffset = Math.trunc(horizontalOffset);
-    this.verticalOffset = Math.trunc(verticalOffset);
+    this.horizontalOffset = resolvedHorizontalOffset;
+    this.verticalOffset = resolvedVerticalOffset;
     this.border = border;
-    this.scale = Number(scale);
-    this.opacity = Number(opacity);
+    this.scale = resolvedScale;
+    this.opacity = resolvedOpacity;
     this.child = child;
   }
 

@@ -1,5 +1,5 @@
 /*!
- * @license romulocrj/js_pdf v0.1.5
+ * @license romulocrj/js_pdf v0.1.6
  *
  * An independent JavaScript port of DavBfr/dart_pdf.
  *
@@ -4778,16 +4778,17 @@ class PdfDictStream extends PdfDict {
     this.compress = compress;
   }
   output(s) {
+    const params = new PdfDict(this.values);
     let data = this.data;
-    if (this.compress && !this.has("/Filter")) {
+    if (this.compress && !params.has("/Filter")) {
       const deflated = deflateZlib(data);
       if (deflated.length < data.length) {
-        this.set("/Filter", new PdfName("/FlateDecode"));
+        params.set("/Filter", new PdfName("/FlateDecode"));
         data = deflated;
       }
     }
-    this.set("/Length", new PdfNum(data.length));
-    super.output(s);
+    params.set("/Length", new PdfNum(data.length));
+    params.output(s);
     s.putString("\nstream\n");
     s.putBytes(data);
     if (data.length === 0 || data[data.length - 1] !== 10) {
@@ -8958,6 +8959,14 @@ function constrainedCanvas(constraints) {
   };
 }
 
+function validatedStrokeWidth(value) {
+  const width = Number(value);
+  if (!Number.isFinite(width) || width < 0) {
+    throw new RangeError("strokeWidth must be a finite non-negative number");
+  }
+  return width;
+}
+
 function paintPath(context, fillColor, strokeColor, strokeWidth) {
   if (fillColor !== null) context.canvas.setFillColor(fillColor);
   if (strokeColor !== null) context.canvas.setStrokeColor(strokeColor);
@@ -8970,10 +8979,7 @@ class PaintedShape extends Widget {
     super();
     this.fillColor = fillColor;
     this.strokeColor = strokeColor;
-    this.strokeWidth = Number(strokeWidth);
-    if (!Number.isFinite(this.strokeWidth) || this.strokeWidth < 0) {
-      throw new RangeError("strokeWidth must be a finite non-negative number");
-    }
+    this.strokeWidth = validatedStrokeWidth(strokeWidth);
   }
   layout(_context, constraints) {
     const size = constrainedCanvas(constraints);
@@ -9011,11 +9017,12 @@ class Polygon extends PaintedShape {
     this.close = Boolean(close);
   }
   paint(context, box) {
-    if (this.points.length < 3) return;
+    if (this.points.length < (this.close ? 3 : 2)) return;
     context.canvas.saveContext();
     const first = this.points[0];
     context.canvas.moveTo(box.x + first.x, context.canvas.toPdfY(box.y + first.y));
-    for (const point of this.points) {
+    for (let index = 1; index < this.points.length; index++) {
+      const point = this.points[index];
       context.canvas.lineTo(box.x + point.x, context.canvas.toPdfY(box.y + point.y));
     }
     if (this.close) context.canvas.closePath();
@@ -9029,7 +9036,7 @@ class InkList extends Widget {
     super();
     this.points = points;
     this.strokeColor = strokeColor;
-    this.strokeWidth = Number(strokeWidth);
+    this.strokeWidth = validatedStrokeWidth(strokeWidth);
   }
   layout(_context, constraints) {
     const size = constrainedCanvas(constraints);
@@ -9185,6 +9192,9 @@ class GeometricAnnotationBuilder extends AnnotationBuilder {
     this.color = color === null ? null : normalizeColor(color);
     this.interiorColor = interiorColor === null ? null : normalizeColor(interiorColor);
     this.borderWidth = Number(border?.width ?? 1);
+    if (!Number.isFinite(this.borderWidth) || this.borderWidth < 0) {
+      throw new RangeError("Annotation border width must be a finite non-negative number");
+    }
     this.author = author;
     this.date = date;
     this.subject = subject;
@@ -12940,7 +12950,15 @@ class PageTheme {
 class NewPage extends Widget {
   constructor({freeSpace = null} = {}) {
     super();
-    this.freeSpace = freeSpace === null ? null : Number(freeSpace);
+    if (freeSpace === null) {
+      this.freeSpace = null;
+      return;
+    }
+    const resolved = Number(freeSpace);
+    if (!Number.isFinite(resolved) || resolved < 0) {
+      throw new RangeError("NewPage.freeSpace must be a finite non-negative number");
+    }
+    this.freeSpace = resolved;
   }
   newPageNeeded(availableSpace) {
     return this.freeSpace === null || availableSpace < this.freeSpace;
@@ -13856,6 +13874,19 @@ class GridPaper extends Widget {
     for (const value of [ horizontalDivisions, verticalDivisions, horizontalSubdivisions, verticalSubdivisions ]) {
       if (!Number.isInteger(value) || value <= 0) throw new RangeError("GridPaper divisions must be positive integers");
     }
+    const resolvedHorizontalOffset = Number(horizontalOffset);
+    const resolvedVerticalOffset = Number(verticalOffset);
+    if (!Number.isInteger(resolvedHorizontalOffset) || !Number.isInteger(resolvedVerticalOffset)) {
+      throw new RangeError("GridPaper offsets must be finite integers");
+    }
+    const resolvedScale = Number(scale);
+    if (!Number.isFinite(resolvedScale) || resolvedScale < 0) {
+      throw new RangeError("GridPaper scale must be a finite non-negative number");
+    }
+    const resolvedOpacity = Number(opacity);
+    if (!Number.isFinite(resolvedOpacity) || resolvedOpacity < 0 || resolvedOpacity > 1) {
+      throw new RangeError("GridPaper opacity must be between zero and one");
+    }
     this.horizontalColor = horizontalColor;
     this.verticalColor = verticalColor;
     this.horizontalInterval = Number(horizontalInterval);
@@ -13865,11 +13896,11 @@ class GridPaper extends Widget {
     this.horizontalSubdivisions = horizontalSubdivisions;
     this.verticalSubdivisions = verticalSubdivisions;
     this.margin = normalizeInsets(margin);
-    this.horizontalOffset = Math.trunc(horizontalOffset);
-    this.verticalOffset = Math.trunc(verticalOffset);
+    this.horizontalOffset = resolvedHorizontalOffset;
+    this.verticalOffset = resolvedVerticalOffset;
     this.border = border;
-    this.scale = Number(scale);
-    this.opacity = Number(opacity);
+    this.scale = resolvedScale;
+    this.opacity = resolvedOpacity;
     this.child = child;
   }
   static millimeter({color = GRID_COLOR, child = null} = {}) {
@@ -16183,7 +16214,7 @@ const LARGE_IMAGE_PIXELS = 4e6;
 function reportIfOversized(image) {
   const pixels = image.sourceWidth * image.sourceHeight;
   if (pixels < LARGE_IMAGE_PIXELS) return;
-  reportPdfDiagnostic(`js_pdf: decoded a ${image.sourceWidth}x${image.sourceHeight} image ` + `(${Math.round(pixels / 1e6)} megapixels). Every source pixel is embedded ` + "at full resolution unless the provider is given a dpi, so pass " + "{ dpi: 150 } to resample it down to what the page actually draws.");
+  reportPdfDiagnostic(`js_pdf (MemoryImage): decoded a ${image.sourceWidth}x${image.sourceHeight} image ` + `(${Math.round(pixels / 1e6)} megapixels). Every source pixel is embedded ` + "at full resolution unless the provider is given a dpi, so pass " + "{ dpi: 150 } to resample it down to what the page actually draws.");
 }
 
 function validateDpi(dpi) {

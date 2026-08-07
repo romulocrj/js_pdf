@@ -150,6 +150,21 @@ test('PdfDictStream derives /Length and terminates the data with one newline', (
   assert.equal(write(empty), '<< /Length 0 >>\nstream\n\nendstream');
 });
 
+test('PdfDictStream compression is repeatable without mutating its dictionary', () => {
+  const value = new PdfDictStream(new Uint8Array(4096).fill(0x41), undefined, true);
+  const output = () => {
+    const stream = new PdfStream();
+    value.output(stream);
+    return stream.output();
+  };
+
+  const first = output();
+  assert.deepEqual(output(), first);
+  assert.match(Buffer.from(first).toString('latin1'), /\/Filter \/FlateDecode \/Length \d+/);
+  assert.equal(value.has('/Filter'), false);
+  assert.equal(value.has('/Length'), false);
+});
+
 test('PdfObjectBase wraps its value and reports the offset it started at', () => {
   const stream = new PdfStream();
   stream.putString('%PDF\n');

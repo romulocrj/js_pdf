@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Pdf from '../src/index.ts';
+import { replaceFrameMarker } from '../examples/jpeg-phase-4.2.mjs';
 
 const PROFILE = new Uint8Array(readFileSync(new URL('../examples/assets/profile.jpg', import.meta.url)));
 const PROGRESSIVE = new Uint8Array(Buffer.from(
@@ -68,6 +69,8 @@ test('parseJpeg recognizes grayscale and CMYK Adobe transforms', () => {
 });
 
 test('parseJpeg accepts progressive JPEG metadata', () => {
+  assert.equal(PROGRESSIVE[158], 0xff, 'fixture must carry a marker at the expected offset');
+  assert.equal(PROGRESSIVE[159], 0xc2, 'fixture must carry an SOF2 frame');
   assert.deepEqual(Pdf.parseJpeg(PROGRESSIVE), {
     width: 2,
     height: 2,
@@ -76,6 +79,29 @@ test('parseJpeg accepts progressive JPEG metadata', () => {
     colorSpace: 'rgb',
     inverted: false
   });
+});
+
+test('parseJpeg accepts extended sequential JPEG metadata', () => {
+  assert.deepEqual(Pdf.parseJpeg(jpeg(sof(0xc1, 19, 11, 3))), {
+    width: 19,
+    height: 11,
+    bitsPerComponent: 8,
+    components: 3,
+    colorSpace: 'rgb',
+    inverted: false
+  });
+});
+
+test('the phase example replaces only a real JPEG frame marker', () => {
+  const source = jpeg(
+    segment(0xe1, [0xff, 0xc0]),
+    sof(0xc0, 19, 11, 3)
+  );
+  const extended = replaceFrameMarker(source, 0xc0, 0xc1);
+
+  assert.equal(extended[7], 0xc0, 'marker-shaped APP payload must stay untouched');
+  assert.equal(extended[9], 0xc1, 'the actual SOF marker must change');
+  assert.equal(Pdf.parseJpeg(extended).width, 19);
 });
 
 test('parseJpeg rejects unsupported frames, truncated data and unsupported components', () => {

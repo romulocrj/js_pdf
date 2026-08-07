@@ -30,13 +30,28 @@ function base64Bytes(source) {
   return Uint8Array.from(output);
 }
 
-function replaceFrameMarker(bytes, from, to) {
+export function replaceFrameMarker(bytes, from, to) {
   const copy = bytes.slice();
-  for (let index = 2; index + 1 < copy.length; index++) {
-    if (copy[index] === 0xff && copy[index + 1] === from) {
-      copy[index + 1] = to;
+  let offset = 2;
+  while (offset < copy.length) {
+    if (copy[offset] !== 0xff) throw new RangeError(`Invalid JPEG marker at offset ${offset}`);
+    while (copy[offset] === 0xff) offset++;
+    const markerOffset = offset;
+    const marker = copy[offset++];
+    if (marker === undefined) throw new RangeError('Truncated JPEG marker');
+    if (marker === from) {
+      copy[markerOffset] = to;
       return copy;
     }
+    if (marker === 0xd9 || marker === 0xda) break;
+    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+    const high = copy[offset];
+    const low = copy[offset + 1];
+    if (high === undefined || low === undefined) throw new RangeError('Truncated JPEG segment');
+    const length = (high << 8) | low;
+    if (length < 2) throw new RangeError(`Invalid JPEG segment length ${length}`);
+    offset += length;
+    if (offset > copy.length) throw new RangeError('Truncated JPEG segment');
   }
   throw new RangeError(`JPEG frame marker 0x${from.toString(16)} was not found`);
 }

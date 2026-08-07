@@ -74,7 +74,7 @@ each one.
 | `format/object_base.dart` | 118 | `src/pdf/format/object_base.ts` | partial — `PdfObjectBase`, `ref()`, `prepare()`, `PdfSettings.compress`; no encrypt callback, no version selector |
 | `format/dict.dart` | 135 | `src/pdf/format/dict.ts` | partial — `PdfDict`, insertion-ordered; no `merge`, no type parameter |
 | `format/array.dart` | 126 | `src/pdf/format/array.ts` | partial — `PdfArray`, `fromNum`, `fromObjects`; no `uniq`, no `fromColor` |
-| `format/dict_stream.dart` | 98 | `src/pdf/format/dict_stream.ts` | partial — `PdfDictStream`, derived `/Length`, `/FlateDecode` kept only when smaller; no Ascii85, no encryption |
+| `format/dict_stream.dart` | 98 | `src/pdf/format/dict_stream.ts` | partial — repeatable `PdfDictStream` output with derived `/Length`, `/FlateDecode` kept only when smaller; no Ascii85, no encryption |
 | `format/name.dart` | 63 | `src/pdf/format/name.ts` | done — also escapes `)`, which upstream misses |
 | `format/indirect.dart` | 44 | `src/pdf/format/indirect.ts` | done — `PdfIndirect` |
 | `format/bool.dart`, `null_value.dart` | 78 | `src/pdf/format/bool.ts`, `null_value.ts` | done |
@@ -175,9 +175,9 @@ both the grammar and the shape factories landed in phase 2.5.
 | `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — full `Flex`/`Row`/`Column` allocation and vertical continuation, all main/cross alignments, `mainAxisSize`, vertical direction, `Expanded`, `Flexible`, proportional `Spacer`, eager/builder/separated `ListView`, plus `gap`/weighted-row extensions; no bidi direction or baseline alignment |
 | `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts`, `decoration.ts`, `box_border.ts` | partial — spanning `Container`, `DecoratedBox`, background/foreground `BoxDecoration`, per-side/dashed borders, axial/radial gradients and vector shadows; no decoration image painter yet |
 | `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground; **one document may mix orientations and paper sizes**, per section; no `clip` |
-| `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — global page totals, post-processed header/footer, `NewPage`, atomic page breaks, intrinsic-first spanning children, `maxPages` and per-section `orientation` |
+| `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — global page totals, post-processed header/footer, `NewPage` with validated remaining-space thresholds, atomic page breaks, intrinsic-first spanning children, `maxPages` and per-section `orientation` |
 | `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`, metadata/XMP, page labels, theme and per-document font cache; loading is out of scope |
-| `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts`, `src/widgets/svg.ts` | partial — `Circle`, `Rectangle`, `Polygon`, `InkList`, imperative `Vector`; public `SvgImage` with all `BoxFit` modes, alignment, clipping and colour filter; no SVG text or embedded raster content |
+| `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts`, `src/widgets/svg.ts` | partial — `Circle`, `Rectangle`, two-point open `Polygon`/polyline, `InkList`, validated stroke widths and imperative `Vector`; public `SvgImage` with all `BoxFit` modes, alignment, clipping and colour filter; no SVG text or embedded raster content |
 | `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | done — all upstream public classes, including tight `SizedBox`, `ConstrainedBox`, minimum-preserving `LimitedBox` and aligned `OverflowBox`; dividers paint the equivalent rule directly |
 | `widgets/table.dart`, `table_helper.dart` | 834 | `src/widgets/table.ts`, `table_helper.ts` | partial — fixed/flex/intrinsic/fraction tracks, alignment, decorations, borders, `TableHelper`, page spanning and repeatable headers; no bidi direction |
 | `widgets/theme.dart`, `font.dart` | 461 | `src/widgets/theme.ts`, `src/widgets/font.ts` | partial — `Font`, `ThemeData`, `Theme`, `DefaultTextStyle` and `iconTheme`; no `DefaultTextStyle.merge` |
@@ -186,13 +186,13 @@ both the grammar and the shape factories landed in phase 2.5.
 | `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | `src/widgets/stack.ts`, `wrap.ts`, `grid_view.ts`, `partitions.ts` | done — positioned overlays/clipping, multi-run wrap, fixed-track grid and parallel partitions; immutable continuation for wrap/grid/partitions |
 | `widgets/clip.dart` | 134 | `src/widgets/clip.ts` | done — rectangular, scaled rounded-rectangle and elliptical clip scopes over immutable child layout |
 | `widgets/chart/*.dart` | 1989 | `src/widgets/chart/*.ts` | partial — complete chart rendering through `Chart`, `CartesianGrid`, `PieGrid`, `RadialGrid`, `FixedAxis`, `ChartLegend`, `PointDataSet`, `BarDataSet`, `LineDataSet` and `PieDataSet`; the upstream `ChartValue` base and deprecated `LineChartValue` compatibility alias are omitted |
-| `widgets/annotations.dart`, `forms.dart` | 1244 | `src/widgets/annotations.ts`, `forms.ts` | partial — links, `Outline`, all five geometric annotation widgets, plus `ChoiceField`, `Checkbox`, `FlatButton` and `TextField`; `Signature` is intentionally out of scope with digital signatures |
+| `widgets/annotations.dart`, `forms.dart` | 1244 | `src/widgets/annotations.ts`, `forms.ts` | partial — links, `Outline`, all five geometric annotation widgets with validated border widths, plus `ChoiceField`, `Checkbox`, `FlatButton` and `TextField`; `Signature` is intentionally out of scope with digital signatures |
 | `widgets/barcode.dart` | 298 | `src/widgets/barcode.ts` | done — `Barcode`, `BarcodeWidget`; symbol operations are immutable layout data |
 | `widgets/content.dart` | 360 | `src/widgets/content.ts` | done — `Header`, `Paragraph`, `Bullet`, `Watermark`, `Footer`, clickable `TableOfContent`, named destinations and conditional two-pass TOC |
 | `widgets/placeholders.dart` | 187 | `src/widgets/placeholders.ts` | done — `Placeholder`, vector `PdfLogo`, SVG `FlutterLogo`, deterministic `LoremText` and stable `Lorem` widget |
 | `widgets/icon.dart` | 146 | `src/widgets/icon.ts` | done — `Icon`, `IconData`, `IconThemeData`, themed size/color/opacity and RTL mirroring over a caller-supplied font |
 | `widgets/progress.dart` | 202 | `src/widgets/progress.ts` | done — `CircularProgressIndicator`, `LinearProgressIndicator`, clamped values, defaults and custom colours/thickness |
-| `widgets/grid_paper.dart` | 338 | `src/widgets/grid_paper.ts` | done — configurable grid plus millimeter, Seyes, college-ruled, quad and engineering presets |
+| `widgets/grid_paper.dart` | 338 | `src/widgets/grid_paper.ts` | done — configurable grid with validated scale, opacity and offsets, plus millimeter, Seyes, college-ruled, quad and engineering presets |
 
 ---
 

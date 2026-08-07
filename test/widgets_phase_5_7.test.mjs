@@ -46,6 +46,16 @@ test('NewPage and Inseparable move an atomic block without splitting it', () => 
   assert.equal((pdf.match(/\(forced page\) Tj/g) ?? []).length, 1);
 });
 
+test('NewPage rejects thresholds that cannot describe remaining space', () => {
+  for (const freeSpace of [NaN, Infinity, -1]) {
+    assert.throws(
+      () => new Pdf.NewPage({ freeSpace }),
+      /freeSpace must be a finite non-negative number/
+    );
+  }
+  assert.equal(new Pdf.NewPage({ freeSpace: 0 }).newPageNeeded(0), false);
+});
+
 test('shape widgets emit ellipse, rectangle, polygon, ink and path operators', () => {
   const pdf = source(Pdf.createPdf({}, () => new Pdf.Page({
     margin: 0,
@@ -73,6 +83,35 @@ test('shape widgets emit ellipse, rectangle, polygon, ink and path operators', (
   assert.match(pdf, /1 1 0 rg/);
 });
 
+test('an open two-point polygon paints one line without repeating its first point', () => {
+  const pdf = source(Pdf.createPdf({ compress: false }, () => new Pdf.Page({
+    pageFormat: { width: 100, height: 100 },
+    margin: 0,
+    build: () => new Pdf.SizedBox({
+      width: 40,
+      height: 30,
+      child: new Pdf.Polygon({
+        points: [{ x: 0, y: 0 }, { x: 40, y: 30 }],
+        close: false,
+        strokeColor: '#000000'
+      })
+    })
+  })));
+
+  assert.match(pdf, /0 100 m\n40 70 l\n/);
+  assert.match(pdf, /\nS\n/);
+  assert.doesNotMatch(pdf, /0 100 m\n0 100 l/);
+});
+
+test('shape widgets reject invalid stroke widths', () => {
+  for (const strokeWidth of [NaN, Infinity, -1]) {
+    assert.throws(
+      () => new Pdf.InkList({ points: [], strokeWidth }),
+      /strokeWidth must be a finite non-negative number/
+    );
+  }
+});
+
 test('geometric annotation widgets serialize all native PDF subtypes', () => {
   const points = [{ x: 2, y: 18 }, { x: 10, y: 2 }, { x: 18, y: 18 }];
   const ink = [[{ x: 2, y: 18 }, { x: 10, y: 2 }, { x: 18, y: 18 }]];
@@ -92,6 +131,18 @@ test('geometric annotation widgets serialize all native PDF subtypes', () => {
   }
   assert.match(pdf, /\/Vertices \[/);
   assert.match(pdf, /\/InkList \[\[/);
+});
+
+test('geometric annotations reject invalid border widths', () => {
+  for (const width of [NaN, Infinity, -1]) {
+    assert.throws(
+      () => new Pdf.SquareAnnotation({
+        border: { width },
+        child: new Pdf.SizedBox({ width: 10, height: 10 })
+      }),
+      /border width must be a finite non-negative number/
+    );
+  }
 });
 
 test('ListView variants, inherited context, delayed paint and outline compose', () => {
@@ -137,4 +188,16 @@ test('GridPaper and Footer paint visible line work and footer slots', () => {
 
   assert.ok((pdf.match(/ m\n/g) ?? []).length >= 6);
   for (const text of ['left', 'middle', 'right']) assert.match(pdf, new RegExp(`\\(${text}\\) Tj`));
+});
+
+test('GridPaper validates line scale, opacity and integer offsets', () => {
+  for (const scale of [NaN, Infinity, -1]) {
+    assert.throws(() => new Pdf.GridPaper({ scale }), /scale must be a finite non-negative number/);
+  }
+  for (const opacity of [NaN, Infinity, -0.1, 1.1]) {
+    assert.throws(() => new Pdf.GridPaper({ opacity }), /opacity must be between zero and one/);
+  }
+  for (const horizontalOffset of [NaN, Infinity, 0.5]) {
+    assert.throws(() => new Pdf.GridPaper({ horizontalOffset }), /offsets must be finite integers/);
+  }
 });

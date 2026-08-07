@@ -61,21 +61,24 @@ export class PdfDictStream extends PdfDict {
   }
 
   override output(s: PdfStream): void {
-    // Data that names its own filter is already in the form the reader wants.
+    // Derived entries belong to this serialization only. Keeping them in a
+    // separate dictionary makes repeated output byte-identical without
+    // changing the caller-owned values or the original data.
+    const params = new PdfDict(this.values);
     let data = this.data;
-    if (this.compress && !this.has('/Filter')) {
+    if (this.compress && !params.has('/Filter')) {
       const deflated = deflateZlib(data);
       if (deflated.length < data.length) {
-        this.set('/Filter', new PdfName('/FlateDecode'));
+        params.set('/Filter', new PdfName('/FlateDecode'));
         data = deflated;
       }
     }
 
     // `/Length` is derived, so it is set at write time rather than by the
     // caller, and last — the key order is part of the output contract.
-    this.set('/Length', new PdfNum(data.length));
+    params.set('/Length', new PdfNum(data.length));
 
-    super.output(s);
+    params.output(s);
     s.putString('\nstream\n');
     s.putBytes(data);
     if (data.length === 0 || data[data.length - 1] !== 0x0a) {

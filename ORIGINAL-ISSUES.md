@@ -120,6 +120,18 @@ inverted and emits a `/Decode` entry that changes the colors of direct CMYK.
 examining segments until SOS/EOI. The Adobe transform is therefore honored in
 every valid position before the compressed data.
 
+## A two-point open polygon paints nothing (`shape.dart`)
+
+**How to reproduce:** create `Polygon` with two points and `close: false`, as
+`PolyLineAnnotation` does for its visible content. The original returns before
+painting whenever there are fewer than three points. With three or more points,
+its loop also emits a line back to the first point immediately after moving
+there, creating a redundant zero-length segment.
+
+**Correction in the port:** closed polygons still require three points, while
+open paths require two. Painting starts with the second point after `moveTo`, so
+a two-point polyline emits exactly one visible segment.
+
 ## Roman numeral 400 contains a comma (`page_label.dart`)
 
 **How to reproduce:** format page 400 with `PdfPageLabel.romanUpper`. The

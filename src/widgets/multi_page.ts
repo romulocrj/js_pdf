@@ -51,7 +51,15 @@ export class NewPage extends Widget<null> {
 
   constructor({ freeSpace = null }: NewPageOptions = {}) {
     super();
-    this.freeSpace = freeSpace === null ? null : Number(freeSpace);
+    if (freeSpace === null) {
+      this.freeSpace = null;
+      return;
+    }
+    const resolved = Number(freeSpace);
+    if (!Number.isFinite(resolved) || resolved < 0) {
+      throw new RangeError('NewPage.freeSpace must be a finite non-negative number');
+    }
+    this.freeSpace = resolved;
   }
 
   newPageNeeded(availableSpace: number): boolean {

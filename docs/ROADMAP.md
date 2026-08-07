@@ -151,7 +151,9 @@ surface now includes `Inseparable`, `NewPage`, `ListView`, `Watermark`,
 SVG path-data `Shape`, five geometric annotation widgets, `Outline`,
 `InheritedWidget` and `DelayedWidget`. Native square, circle, polygon,
 polyline and ink annotations serialize into each page's `/Annots` array.
-Six focused tests and `examples/widgets-phase-5.7.mjs` cover every added widget.
+Eleven focused tests and `examples/widgets-phase-5.7.mjs` cover every added
+widget, including valid two-point polylines and rejection of numeric values
+that would serialize invalid PDF operators or annotation widths.
 `Signature` remains intentionally out of scope with encryption and digital
 signatures.
 
@@ -251,8 +253,10 @@ in — advice the port cannot take, because bare V8 ships no compressor to pass.
 So `src/pdf/format/deflate.ts` is the port's own RFC 1951/1950 encoder, and
 `PdfDictStream` applies upstream's rules around it: a stream that already names
 a `/Filter` is written through untouched, and the deflated bytes are kept only
-when they came out smaller. It is on by default and turned off with
-`new Document({ compress: false })`.
+when they came out smaller. Derived `/Filter` and `/Length` entries are emitted
+from a temporary dictionary, so repeated serialization is byte-identical and
+does not leave the original bytes paired with a stale filter. Compression is on
+by default and turned off with `new Document({ compress: false })`.
 
 This matters most for images, which are embedded as raw samples: a flat-colour
 logo collapses by two orders of magnitude. `ImageProvider` still resamples only
@@ -1201,9 +1205,10 @@ until the public provider/widget arrives in 4.3.
 Phase 4.2 scans the JPEG marker stream through SOS, accepts 8-bit SOF0 baseline,
 SOF1 extended sequential and SOF2 progressive frames, derives gray/RGB/CMYK
 colour space, honours Adobe direct-CMYK versus YCCK inversion and embeds the
-original bytes unchanged behind `/DCTDecode`. Five tests exercise the real
-200×200 profile, a progressive image, gray and CMYK marker variants, malformed
-or unsupported input and byte-for-byte PDF pass-through.
+original bytes unchanged behind `/DCTDecode`. Seven tests exercise the real
+200×200 profile, explicit SOF1/SOF2 fixtures, gray and CMYK marker variants,
+malformed or unsupported input, byte-for-byte PDF pass-through and the
+segment-aware marker replacement used by the phase proof.
 `examples/jpeg-phase-4.2.mjs` renders separate SOF0, SOF1 and SOF2 cards from
 host-free bytes and runs under Node and bare V8.
 
@@ -1344,6 +1349,9 @@ examples did not exercise.
 - `SquareAnnotation`, `CircleAnnotation`, `PolygonAnnotation`,
   `PolyLineAnnotation`, `InkAnnotation` and `Outline` emit native PDF
   annotation/navigation objects while retaining visible widget content.
+- A review follow-up preserves valid two-point open polylines, removes their
+  redundant first segment and validates stroke widths, annotation borders,
+  grid scale/opacity/offsets and `NewPage.freeSpace` before PDF serialization.
 - `examples/widgets-phase-5.7.mjs` is the retained three-page visual proof and
   exercises every widget added by this phase. The English-only
   `examples/production-pagination.mjs` is the production regression proof for
