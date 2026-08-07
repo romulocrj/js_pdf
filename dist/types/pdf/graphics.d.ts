@@ -83,6 +83,8 @@ export declare class PdfCanvas {
     private readonly imageNames;
     private readonly softMaskNames;
     private readonly pageAnnotations;
+    private currentSoftMask;
+    private readonly softMaskStack;
     /**
      * The current transformation matrix, tracked so a widget can ask what space
      * it is drawing in. `q`/`Q` save and restore it, as they do in the reader.
@@ -150,6 +152,7 @@ export declare class PdfCanvas {
      */
     setGraphicState(state: PdfGraphicState): string | null;
     setSoftMask(mask: PdfSoftMask): string;
+    getSoftMask(): PdfSoftMask | null;
     private addPattern;
     setFillPattern(pattern: PdfShadingPattern): string;
     setStrokePattern(pattern: PdfShadingPattern): string;

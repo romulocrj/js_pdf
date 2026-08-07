@@ -34,11 +34,15 @@ test('path fill and stroke emit their complete paint state', () => {
   assert.deepEqual(output, [
     'q',
     'q',
+    'q',
     '1 0 0 rg',
     '1 2 m', '3 4 l', 'h', 'f',
+    'Q',
+    'q',
     '0 0 1 RG',
     '1 2 m', '3 4 l', 'h',
     '1 J', '2 j', '5 M', '[4 2] 1 d', '2 w', 'S',
+    'Q',
     'Q',
     'Q'
   ]);

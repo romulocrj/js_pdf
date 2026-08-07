@@ -89,4 +89,56 @@ export class PdfBaseFunction {
       ['/Encode', PdfArray.fromNum(encode)]
     ]);
   }
+
+  /**
+   * Repeat or reflect one unit-domain function across a finite parameter range.
+   * The range is bounded by the painted geometry, so malformed SVG input cannot
+   * allocate an unbounded stitching array.
+   */
+  static spread(
+    fn: PdfDict,
+    start: number,
+    end: number,
+    method: 'repeat' | 'reflect'
+  ): PdfDict {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      throw new RangeError('A spread function needs a finite increasing range');
+    }
+
+    const boundaries: number[] = [start];
+    for (let boundary = Math.floor(start) + 1; boundary < end; boundary++) {
+      if (boundaries.length >= 4096) {
+        throw new RangeError('SVG gradient spread exceeds 4096 visible periods');
+      }
+      boundaries.push(boundary);
+    }
+    boundaries.push(end);
+
+    const functions: PdfDict[] = [];
+    const encode: number[] = [];
+    for (let index = 1; index < boundaries.length; index++) {
+      const segmentStart = boundaries[index - 1]!;
+      const segmentEnd = boundaries[index]!;
+      const cycle = Math.floor((segmentStart + segmentEnd) / 2);
+      const phaseStart = segmentStart - cycle;
+      const phaseEnd = segmentEnd - cycle;
+      const reflected = method === 'reflect' && Math.abs(cycle % 2) === 1;
+      functions.push(fn);
+      encode.push(
+        reflected ? 1 - phaseStart : phaseStart,
+        reflected ? 1 - phaseEnd : phaseEnd
+      );
+    }
+
+    const scale = end - start;
+    return new PdfDict([
+      ['/FunctionType', new PdfNum(3)],
+      ['/Domain', PdfArray.fromNum([0, 1])],
+      ['/Functions', new PdfArray(functions)],
+      ['/Bounds', PdfArray.fromNum(
+        boundaries.slice(1, -1).map(value => (value - start) / scale)
+      )],
+      ['/Encode', PdfArray.fromNum(encode)]
+    ]);
+  }
 }

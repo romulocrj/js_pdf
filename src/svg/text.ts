@@ -116,8 +116,8 @@ export class SvgText extends SvgOperation {
     const fill = this.brush.fill!;
     const stroke = this.brush.stroke!;
     if (this.text.length > 0 && fill.isNotEmpty) {
-      fill.setFillColor(this, canvas);
       canvas.saveContext();
+      fill.setFillColor(this, canvas);
       if (this.brush.fillOpacity! < 1) {
         canvas.setGraphicState(new PdfGraphicState({ opacity: this.brush.fillOpacity }));
       }
@@ -125,10 +125,10 @@ export class SvgText extends SvgOperation {
       canvas.restoreContext();
     }
     if (this.text.length > 0 && stroke.isNotEmpty) {
+      canvas.saveContext();
       stroke.setStrokeColor(this, canvas);
       if (this.brush.strokeWidth !== null) canvas.setLineWidth(this.brush.strokeWidth.sizeValue);
       if (this.brush.strokeDashArray !== null) canvas.setLineDashPattern(this.brush.strokeDashArray);
-      canvas.saveContext();
       if (this.brush.strokeOpacity! < 1) {
         canvas.setGraphicState(new PdfGraphicState({ opacity: this.brush.strokeOpacity }));
       }

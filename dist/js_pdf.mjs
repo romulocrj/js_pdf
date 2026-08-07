@@ -8801,6 +8801,33 @@ class PdfBaseFunction {
     }
     return new PdfDict([ [ "/FunctionType", new PdfNum(3) ], [ "/Domain", PdfArray.fromNum([ 0, 1 ]) ], [ "/Functions", new PdfArray(functions) ], [ "/Bounds", PdfArray.fromNum(normalizedStops.slice(1, -1)) ], [ "/Encode", PdfArray.fromNum(encode) ] ]);
   }
+  static spread(fn, start, end, method) {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      throw new RangeError("A spread function needs a finite increasing range");
+    }
+    const boundaries = [ start ];
+    for (let boundary = Math.floor(start) + 1; boundary < end; boundary++) {
+      if (boundaries.length >= 4096) {
+        throw new RangeError("SVG gradient spread exceeds 4096 visible periods");
+      }
+      boundaries.push(boundary);
+    }
+    boundaries.push(end);
+    const functions = [];
+    const encode = [];
+    for (let index = 1; index < boundaries.length; index++) {
+      const segmentStart = boundaries[index - 1];
+      const segmentEnd = boundaries[index];
+      const cycle = Math.floor((segmentStart + segmentEnd) / 2);
+      const phaseStart = segmentStart - cycle;
+      const phaseEnd = segmentEnd - cycle;
+      const reflected = method === "reflect" && Math.abs(cycle % 2) === 1;
+      functions.push(fn);
+      encode.push(reflected ? 1 - phaseStart : phaseStart, reflected ? 1 - phaseEnd : phaseEnd);
+    }
+    const scale = end - start;
+    return new PdfDict([ [ "/FunctionType", new PdfNum(3) ], [ "/Domain", PdfArray.fromNum([ 0, 1 ]) ], [ "/Functions", new PdfArray(functions) ], [ "/Bounds", PdfArray.fromNum(boundaries.slice(1, -1).map(value => (value - start) / scale)) ], [ "/Encode", PdfArray.fromNum(encode) ] ]);
+  }
 }
 
 class PdfShadingPattern {
@@ -8852,6 +8879,59 @@ class PdfShading {
     }
     result.set("/Function", options.fn);
     return result;
+  }
+}
+
+class DecorationGraphic {}
+
+class DecorationImage extends DecorationGraphic {
+  constructor({image, fit = "cover", alignment = "center", dpi = null}) {
+    super();
+    applyBoxFit$1(fit, {
+      width: 1,
+      height: 1
+    }, {
+      width: 1,
+      height: 1
+    });
+    if (dpi !== null && (!Number.isFinite(dpi) || dpi <= 0)) {
+      throw new RangeError("Decoration image DPI must be positive");
+    }
+    this.image = image;
+    this.fit = fit;
+    this.alignment = resolveBasicAlignment(alignment);
+    this.dpi = dpi;
+  }
+  paint(context, box) {
+    if (box.width <= 0 || box.height <= 0) return;
+    const image = this.image.resolve({
+      x: box.width,
+      y: box.height
+    }, this.dpi);
+    const fitted = applyBoxFit$1(this.fit, {
+      width: image.width,
+      height: image.height
+    }, {
+      width: box.width,
+      height: box.height
+    });
+    if (fitted.source.width <= 0 || fitted.source.height <= 0) return;
+    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, image.width, image.height);
+    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, box.width, box.height);
+    const scaleX = fitted.destination.width / fitted.source.width;
+    const scaleY = fitted.destination.height / fitted.source.height;
+    const boxTop = context.canvas.pageHeight - box.y - box.height;
+    const destinationX = box.x + destinationOffset.dx;
+    const destinationTop = boxTop + destinationOffset.dy;
+    const fullWidth = image.width * scaleX;
+    const fullHeight = image.height * scaleY;
+    const fullX = destinationX - sourceOffset.dx * scaleX;
+    const fullTop = destinationTop - sourceOffset.dy * scaleY;
+    context.canvas.saveContext();
+    context.canvas.drawBox(box);
+    context.canvas.clipPath();
+    context.canvas.drawImage(image, fullX, context.canvas.toPdfY(fullTop + fullHeight), fullWidth, fullHeight);
+    context.canvas.restoreContext();
   }
 }
 
@@ -8980,12 +9060,13 @@ function paintShadow(context, shadow, x, y, width, height, shape, borderRadius) 
 }
 
 class BoxDecoration {
-  constructor({color = null, border = null, borderRadius = null, boxShadow = null, gradient = null, shape = "rectangle"} = {}) {
+  constructor({color = null, border = null, borderRadius = null, boxShadow = null, gradient = null, image = null, shape = "rectangle"} = {}) {
     this.color = color === null ? null : normalizeColor(color);
     this.border = normalizeBoxBorder(border);
     this.borderRadius = borderRadius === null ? null : borderRadius instanceof BorderRadiusGeometry ? borderRadius : BorderRadius.all(borderRadius);
     this.boxShadow = boxShadow === null ? [] : boxShadow.map(value => value instanceof BoxShadow ? value : new BoxShadow(value));
     this.gradient = gradient;
+    this.image = image;
     this.shape = shape;
     if (shape === "circle" && borderRadius !== null) {
       throw new Error("A circular BoxDecoration cannot have a border radius");
@@ -9017,6 +9098,15 @@ class BoxDecoration {
         appendShape(context, x, y, width, height, this.shape, resolvedRadius);
         context.canvas.clipPath();
         this.gradient.paint(context, box);
+        context.canvas.restoreContext();
+      }
+      if (this.image !== null) {
+        context.canvas.saveContext();
+        if (this.shape === "circle" || resolvedRadius !== null) {
+          appendShape(context, x, y, width, height, this.shape, resolvedRadius);
+          context.canvas.clipPath();
+        }
+        this.image.paint(context, box);
         context.canvas.restoreContext();
       }
     }
@@ -13613,6 +13703,8 @@ class PdfCanvas {
     this.imageNames = new Map;
     this.softMaskNames = new Map;
     this.pageAnnotations = [];
+    this.currentSoftMask = null;
+    this.softMaskStack = [];
     this.currentTransform = identityMatrix;
     this.transformStack = [];
     this.currentLetterSpacing = 0;
@@ -13717,10 +13809,12 @@ class PdfCanvas {
     this.push("q");
     this.transformStack.push(this.currentTransform);
     this.textSpacingStack.push([ this.currentLetterSpacing, this.currentWordSpacing ]);
+    this.softMaskStack.push(this.currentSoftMask);
   }
   restoreContext() {
     const restored = this.transformStack.pop();
     const spacing = this.textSpacingStack.pop();
+    const softMask = this.softMaskStack.pop();
     if (restored === undefined) {
       return;
     }
@@ -13730,6 +13824,7 @@ class PdfCanvas {
       this.currentLetterSpacing = spacing[0];
       this.currentWordSpacing = spacing[1];
     }
+    this.currentSoftMask = softMask ?? null;
   }
   save() {
     this.saveContext();
@@ -13760,6 +13855,7 @@ class PdfCanvas {
     return name;
   }
   setSoftMask(mask) {
+    this.currentSoftMask = mask;
     const existing = this.softMaskNames.get(mask);
     if (existing !== undefined) {
       this.push(`${existing} gs`);
@@ -13772,6 +13868,9 @@ class PdfCanvas {
     this.stateDicts.set(name, state);
     this.push(`${name} gs`);
     return name;
+  }
+  getSoftMask() {
+    return this.currentSoftMask;
   }
   addPattern(pattern) {
     const existing = this.patternNames.get(pattern.key);
@@ -16026,6 +16125,7 @@ class SvgGradient extends SvgColor {
     this.opacityList = opacityList;
     this.spreadMethod = spreadMethod ?? "pad";
     this.hasSpreadMethod = spreadMethod !== null;
+    this.hasVariableOpacity = opacityList.length > 1 && opacityList.some(value => value !== opacityList[0]);
   }
   get isEmpty() {
     return this.colors.length === 0;
@@ -16033,8 +16133,8 @@ class SvgGradient extends SvgColor {
   get isNotEmpty() {
     return !this.isEmpty;
   }
-  patternMatrix(operation, canvas) {
-    let matrix = canvas.getTransform();
+  localMatrix(operation) {
+    let matrix = identityMatrix;
     if (this.gradientUnits !== "userSpaceOnUse") {
       const box = operation.boundingBox();
       matrix = multiplyMatrix(matrix, translationMatrix(box.x, box.y));
@@ -16045,13 +16145,45 @@ class SvgGradient extends SvgColor {
     }
     return matrix;
   }
+  patternMatrix(operation, canvas) {
+    return multiplyMatrix(canvas.getTransform(), this.localMatrix(operation));
+  }
+  operationCorners(operation) {
+    const box = operation.boundingBox();
+    const inverse = invertMatrix(this.localMatrix(operation));
+    if (inverse === null) return [];
+    return [ transformPoint(inverse, box.x, box.y), transformPoint(inverse, box.x + box.width, box.y), transformPoint(inverse, box.x, box.y + box.height), transformPoint(inverse, box.x + box.width, box.y + box.height) ];
+  }
+  gradientFunction(colors, start, end) {
+    const fn = PdfBaseFunction.colorsAndStops(colors, this.stops);
+    return this.spreadMethod === "pad" ? fn : PdfBaseFunction.spread(fn, start, end, this.spreadMethod);
+  }
+  applyOpacityMask(operation, canvas) {
+    const maskCanvas = new PdfCanvas(canvas.pageHeight);
+    const colors = this.opacityList.map(value => [ value, value, value ]);
+    const existingMask = canvas.getSoftMask();
+    if (existingMask !== null) maskCanvas.setSoftMask(existingMask);
+    maskCanvas.drawBox(operation.boundingBox());
+    maskCanvas.setFillPattern(this.buildGradient(operation, maskCanvas, colors));
+    maskCanvas.fillPath();
+    canvas.setSoftMask({
+      content: maskCanvas.takeOutputBytes(),
+      boundingBox: operation.boundingBox(),
+      fonts: maskCanvas.fonts,
+      graphicStates: maskCanvas.graphicStates,
+      patterns: maskCanvas.patterns,
+      images: maskCanvas.images
+    });
+  }
   setFillColor(operation, canvas) {
     if (this.isNotEmpty) {
+      if (this.hasVariableOpacity) this.applyOpacityMask(operation, canvas);
       canvas.setFillPattern(this.buildGradient(operation, canvas));
     }
   }
   setStrokeColor(operation, canvas) {
     if (this.isNotEmpty) {
+      if (this.hasVariableOpacity) this.applyOpacityMask(operation, canvas);
       canvas.setStrokePattern(this.buildGradient(operation, canvas));
     }
   }
@@ -16101,21 +16233,44 @@ class SvgLinearGradient extends SvgGradient {
   mergeWith(other) {
     return new SvgLinearGradient(other.gradientUnits ?? this.gradientUnits, other.x1 ?? this.x1, other.y1 ?? this.y1, other.x2 ?? this.x2, other.y2 ?? this.y2, other.transform.isNotEmpty ? other.transform : this.transform, other.colors.length > 0 ? other.colors : this.colors, other.stops.length > 0 ? other.stops : this.stops, other.opacityList.length > 0 ? other.opacityList : this.opacityList, other.hasSpreadMethod ? other.spreadMethod : this.spreadMethod);
   }
-  buildGradient(operation, canvas) {
+  buildGradient(operation, canvas, colors = this.colors) {
+    const start = {
+      x: this.x1 ?? 0,
+      y: this.y1 ?? 0
+    };
+    const end = {
+      x: this.x2 ?? 1,
+      y: this.y2 ?? 0
+    };
+    let rangeStart = 0;
+    let rangeEnd = 1;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSquared = dx * dx + dy * dy;
+    if (this.spreadMethod !== "pad" && lengthSquared > 0) {
+      const parameters = this.operationCorners(operation).map(point => ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared);
+      if (parameters.length > 0) {
+        rangeStart = Math.min(...parameters);
+        rangeEnd = Math.max(...parameters);
+      }
+      if (rangeEnd <= rangeStart) rangeEnd = rangeStart + 1;
+    }
+    const shadingStart = this.spreadMethod === "pad" ? start : {
+      x: start.x + dx * rangeStart,
+      y: start.y + dy * rangeStart
+    };
+    const shadingEnd = this.spreadMethod === "pad" ? end : {
+      x: start.x + dx * rangeEnd,
+      y: start.y + dy * rangeEnd
+    };
     return new PdfShadingPattern({
       shading: new PdfShading({
         type: "axial",
-        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: {
-          x: this.x1 ?? 0,
-          y: this.y1 ?? 0
-        },
-        end: {
-          x: this.x2 ?? 1,
-          y: this.y2 ?? 0
-        },
-        extendStart: true,
-        extendEnd: true
+        fn: this.gradientFunction(colors, rangeStart, rangeEnd),
+        start: shadingStart,
+        end: shadingEnd,
+        extendStart: this.spreadMethod === "pad",
+        extendEnd: this.spreadMethod === "pad"
       }),
       matrix: this.patternMatrix(operation, canvas)
     });
@@ -16148,25 +16303,50 @@ class SvgRadialGradient extends SvgGradient {
   mergeWith(other) {
     return new SvgRadialGradient(other.gradientUnits ?? this.gradientUnits, other.r ?? this.r, other.cx ?? this.cx, other.cy ?? this.cy, other.fr ?? this.fr, other.fx ?? this.fx, other.fy ?? this.fy, other.transform.isNotEmpty ? other.transform : this.transform, other.colors.length > 0 ? other.colors : this.colors, other.stops.length > 0 ? other.stops : this.stops, other.opacityList.length > 0 ? other.opacityList : this.opacityList, other.hasSpreadMethod ? other.spreadMethod : this.spreadMethod);
   }
-  buildGradient(operation, canvas) {
+  buildGradient(operation, canvas, colors = this.colors) {
     const cx = this.cx ?? .5;
     const cy = this.cy ?? .5;
+    const fx = this.fx ?? cx;
+    const fy = this.fy ?? cy;
+    const radius0 = this.fr ?? 0;
+    const radius1 = this.r ?? .5;
+    const dcx = cx - fx;
+    const dcy = cy - fy;
+    const dr = radius1 - radius0;
+    let rangeStart = 0;
+    let rangeEnd = 1;
+    if (this.spreadMethod !== "pad" && dr > 0) {
+      rangeStart = Math.min(0, -radius0 / dr);
+      const corners = this.operationCorners(operation);
+      const covers = parameter => {
+        const centerX = fx + dcx * parameter;
+        const centerY = fy + dcy * parameter;
+        const radius = radius0 + dr * parameter;
+        return radius >= 0 && corners.every(point => Math.hypot(point.x - centerX, point.y - centerY) <= radius);
+      };
+      while (!covers(rangeEnd)) {
+        rangeEnd += 1;
+        if (rangeEnd - rangeStart > 4096) {
+          throw new RangeError("SVG radial gradient spread exceeds 4096 visible periods");
+        }
+      }
+    }
     return new PdfShadingPattern({
       shading: new PdfShading({
         type: "radial",
-        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
+        fn: this.gradientFunction(colors, rangeStart, rangeEnd),
         start: {
-          x: this.fx ?? cx,
-          y: this.fy ?? cy
+          x: fx + dcx * rangeStart,
+          y: fy + dcy * rangeStart
         },
         end: {
-          x: cx,
-          y: cy
+          x: fx + dcx * rangeEnd,
+          y: fy + dcy * rangeEnd
         },
-        radius0: this.fr ?? 0,
-        radius1: this.r ?? .5,
-        extendStart: true,
-        extendEnd: true
+        radius0: radius0 + dr * rangeStart,
+        radius1: radius0 + dr * rangeEnd,
+        extendStart: this.spreadMethod === "pad",
+        extendEnd: this.spreadMethod === "pad"
       }),
       matrix: this.patternMatrix(operation, canvas)
     });
@@ -17234,10 +17414,10 @@ class SvgPath extends SvgOperation {
   paintShape(canvas) {
     const fill = this.brush.fill;
     if (fill?.isNotEmpty === true) {
+      canvas.saveContext();
       fill.setFillColor(this, canvas);
       const opacity = (this.brush.fillOpacity ?? 1) * fill.opacity;
       if (opacity < 1) {
-        canvas.saveContext();
         canvas.setGraphicState(new PdfGraphicState({
           opacity
         }));
@@ -17246,12 +17426,11 @@ class SvgPath extends SvgOperation {
       canvas.fillPath({
         evenOdd: this.brush.fillEvenOdd ?? false
       });
-      if (opacity < 1) {
-        canvas.restoreContext();
-      }
+      canvas.restoreContext();
     }
     const stroke = this.brush.stroke;
     if (stroke?.isNotEmpty === true) {
+      canvas.saveContext();
       stroke.setStrokeColor(this, canvas);
       const opacity = (this.brush.strokeOpacity ?? 1) * stroke.opacity;
       if (opacity < 1) {
@@ -17266,6 +17445,7 @@ class SvgPath extends SvgOperation {
       canvas.setLineDashPattern(this.brush.strokeDashArray ?? [], this.brush.strokeDashOffset ?? 0);
       canvas.setLineWidth(this.brush.strokeWidth?.sizeValue ?? 1);
       canvas.strokePath();
+      canvas.restoreContext();
     }
   }
   drawShape(canvas) {
@@ -19601,8 +19781,8 @@ class SvgText extends SvgOperation {
     const fill = this.brush.fill;
     const stroke = this.brush.stroke;
     if (this.text.length > 0 && fill.isNotEmpty) {
-      fill.setFillColor(this, canvas);
       canvas.saveContext();
+      fill.setFillColor(this, canvas);
       if (this.brush.fillOpacity < 1) {
         canvas.setGraphicState(new PdfGraphicState({
           opacity: this.brush.fillOpacity
@@ -19612,10 +19792,10 @@ class SvgText extends SvgOperation {
       canvas.restoreContext();
     }
     if (this.text.length > 0 && stroke.isNotEmpty) {
+      canvas.saveContext();
       stroke.setStrokeColor(this, canvas);
       if (this.brush.strokeWidth !== null) canvas.setLineWidth(this.brush.strokeWidth.sizeValue);
       if (this.brush.strokeDashArray !== null) canvas.setLineDashPattern(this.brush.strokeDashArray);
-      canvas.saveContext();
       if (this.brush.strokeOpacity < 1) {
         canvas.setGraphicState(new PdfGraphicState({
           opacity: this.brush.strokeOpacity
@@ -20718,6 +20898,8 @@ const publicApi = Object.freeze({
   DecoratedBox,
   BoxDecoration,
   BoxShadow,
+  DecorationGraphic,
+  DecorationImage,
   Gradient,
   LinearGradient,
   RadialGradient,
@@ -20816,4 +20998,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };

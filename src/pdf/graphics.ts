@@ -160,6 +160,8 @@ export class PdfCanvas {
   private readonly imageNames = new Map<PdfImage, string>();
   private readonly softMaskNames = new Map<PdfSoftMask, string>();
   private readonly pageAnnotations: PdfAnnotationSpec[] = [];
+  private currentSoftMask: PdfSoftMask | null = null;
+  private readonly softMaskStack: Array<PdfSoftMask | null> = [];
 
   /**
    * The current transformation matrix, tracked so a widget can ask what space
@@ -321,12 +323,14 @@ export class PdfCanvas {
     this.push('q');
     this.transformStack.push(this.currentTransform);
     this.textSpacingStack.push([this.currentLetterSpacing, this.currentWordSpacing]);
+    this.softMaskStack.push(this.currentSoftMask);
   }
 
   /** `Q`, restoring the CTM this canvas last saved. A no-op if nothing was saved. */
   restoreContext(): void {
     const restored = this.transformStack.pop();
     const spacing = this.textSpacingStack.pop();
+    const softMask = this.softMaskStack.pop();
     if (restored === undefined) {
       return;
     }
@@ -336,6 +340,7 @@ export class PdfCanvas {
       this.currentLetterSpacing = spacing[0];
       this.currentWordSpacing = spacing[1];
     }
+    this.currentSoftMask = softMask ?? null;
   }
 
   save(): void {
@@ -379,6 +384,7 @@ export class PdfCanvas {
   }
 
   setSoftMask(mask: PdfSoftMask): string {
+    this.currentSoftMask = mask;
     const existing = this.softMaskNames.get(mask);
     if (existing !== undefined) {
       this.push(`${existing} gs`);
@@ -391,6 +397,10 @@ export class PdfCanvas {
     this.stateDicts.set(name, state);
     this.push(`${name} gs`);
     return name;
+  }
+
+  getSoftMask(): PdfSoftMask | null {
+    return this.currentSoftMask;
   }
 
   private addPattern(pattern: PdfShadingPattern): string {

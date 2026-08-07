@@ -158,8 +158,7 @@ heading and chart on the same page.
 
 - Reading existing PDFs, rasterizing PDFs, encryption and digital signatures
   are out of scope.
-- PDF/A output intents, decoration images, gradient-specific varying alpha and
-  repeated/reflecting SVG gradient ramps are not implemented.
+- PDF/A output intents are not implemented.
 - Library code performs no host I/O. Fonts, images and other external assets
   must be supplied by the caller as bytes or text.
 - An indivisible `MultiPage` child taller than one content area is rejected;

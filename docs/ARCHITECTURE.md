@@ -162,8 +162,8 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   the latter three paginate through immutable continuation cursors.
 - **`container.ts` / `decoration.ts` / `box_border.ts` /
   `border_radius.ts`** — `Container` and `DecoratedBox`, background/foreground
-  fills, PDF shading gradients, vector shadows, per-side rules and rounded
-  rectangle paths.
+  fills, fitted/clipped decoration images, PDF shading gradients, vector
+  shadows, per-side rules and rounded rectangle paths.
 - **`basic.ts`** — composition, fitting, transforms, opacity, builders,
   custom painting and basic sizing widgets.
 - **`shape.ts` / `image.ts` / `grid_paper.ts`** — geometric widgets,

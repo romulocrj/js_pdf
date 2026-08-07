@@ -964,21 +964,20 @@ export class SvgPath extends SvgOperation {
   protected paintShape(canvas: PdfCanvas): void {
     const fill = this.brush.fill;
     if (fill?.isNotEmpty === true) {
+      canvas.saveContext();
       fill.setFillColor(this, canvas);
       const opacity = (this.brush.fillOpacity ?? 1) * fill.opacity;
       if (opacity < 1) {
-        canvas.saveContext();
         canvas.setGraphicState(new PdfGraphicState({ opacity }));
       }
       drawShape(canvas, this.d);
       canvas.fillPath({ evenOdd: this.brush.fillEvenOdd ?? false });
-      if (opacity < 1) {
-        canvas.restoreContext();
-      }
+      canvas.restoreContext();
     }
 
     const stroke = this.brush.stroke;
     if (stroke?.isNotEmpty === true) {
+      canvas.saveContext();
       stroke.setStrokeColor(this, canvas);
       const opacity = (this.brush.strokeOpacity ?? 1) * stroke.opacity;
       if (opacity < 1) {
@@ -994,6 +993,7 @@ export class SvgPath extends SvgOperation {
       );
       canvas.setLineWidth(this.brush.strokeWidth?.sizeValue ?? 1);
       canvas.strokePath();
+      canvas.restoreContext();
     }
   }
 

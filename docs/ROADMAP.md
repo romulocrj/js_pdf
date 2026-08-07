@@ -251,9 +251,9 @@ to 94: `Font`, `TextStyle`, `ThemeData`, `PageTheme`, `Theme` and
 ## Next step
 
 > **The implementation roadmap and the high-impact upstream parity audit are
-> complete.** The next candidate is the decoration image painter recorded in
-> [PORTING-STATUS.md](PORTING-STATUS.md); define a new phase before expanding
-> that narrower surface.
+> complete.** The image-decoration and SVG-gradient follow-ups found by that
+> audit are also complete. Define and document a new phase before expanding a
+> narrower remaining surface.
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
 out of scope, and the complete upstream example set still generates end to end.
@@ -912,19 +912,18 @@ Landed with direct PDF shading-pattern dictionaries, axial and radial
 coordinates, type-2 interpolation for a two-colour ramp and type-3 stitching
 for longer stop lists. `gradientUnits`, `gradientTransform`, object bounding
 boxes, `href`/namespaced inheritance, fill, stroke, group inheritance and
-colour filtering all work. Ten tests bring the SVG suite to 117 and render both
+colour filtering all work. Four parity follow-ups add per-stop luminosity masks
+and bounded type-3 ramps for true `repeat`/`reflect` spread. Fifteen focused
+tests render both
 `invoice.svg` and `document.svg` through the complete serializer.
 `examples/svg-gradients-phase-2.8.mjs` is the retained visual/V8 proof.
 
-Two fidelity limits stay explicit in `src/svg/gradient.ts`. Different opacity
-at each stop still needs a gradient-specific alpha ramp composed with the now
-available luminosity-mask primitive; uniform opacity works now. `repeat` and
-`reflect` currently extend the edge colours, as upstream's current shading
-output does; a true repeated ramp
-needs a tiling pattern. The port uses direct type-2/type-3 dictionaries instead
-of upstream's indirect sampled streams because pages are painted before a
-`PdfDocument` exists; the resulting RGB interpolation is equivalent and keeps
-pattern resources page-local.
+The port uses direct type-2/type-3 dictionaries instead of upstream's indirect
+sampled streams because pages are painted before a `PdfDocument` exists; the
+resulting RGB interpolation is equivalent and keeps pattern resources
+page-local. Repeated ramps are expanded only over the operation bounds and are
+limited to 4096 visible periods, preventing malformed tiny periods from
+creating unbounded arrays or output.
 
 **Done when:** a real-world SVG logo and a chart exported from a drawing tool
 render correctly, including transforms, viewBox, groups and clipping.
@@ -1051,9 +1050,10 @@ The physical and direction-aware radius values accept circular and elliptical
 corners; a numeric shorthand keeps the JavaScript examples concise. Uniform,
 per-side, solid, dashed and dotted borders paint in widget coordinates.
 `BoxDecoration` scopes background/foreground order, colour, circle/rectangle
-shape, axial/radial PDF shading patterns and shadows, and both `Container` and
-table decorations use it. Nine tests cover values, operators, resources and
-paint order. The six example gates remove 16 missing-API occurrences, reducing
+shape, axial/radial PDF shading patterns, shadows and DPI-aware
+`DecorationImage` fitting/alignment/clipping, and both `Container` and table
+decorations use it. Ten tests cover values, operators, resources and paint
+order. The six example gates remove 16 missing-API occurrences, reducing
 the total 69 → 53. `examples/decoration-phase-3.5.mjs` is the retained
 visual/V8 proof.
 

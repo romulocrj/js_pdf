@@ -14,18 +14,23 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/svg/gradient.dart
  *
- * SVG linear and radial paint resolved into PDF shading patterns.
- *
- * PORT GAP: varying stop opacity still needs a gradient-specific alpha ramp
- * composed with the luminosity-mask primitive. Uniform stop opacity is applied
- * normally. Repeat and reflect spread modes currently extend the edge colour,
- * matching upstream's effective output; true repeated shading needs a tiling
- * pattern.
+ * SVG linear and radial paint resolved into PDF shading patterns. Stop alpha
+ * uses the same luminosity-mask composition as upstream. Repeat and reflect
+ * extend only across the finite painted bounds, keeping allocation independent
+ * of raster dimensions and explicitly limiting pathological period counts.
  */
 
 import type { Rgb } from '../pdf/color.ts';
-import type { PdfCanvas } from '../pdf/graphics.ts';
-import { multiplyMatrix, scaleMatrix, translationMatrix } from '../pdf/matrix.ts';
+import { PdfCanvas } from '../pdf/graphics.ts';
+import {
+  identityMatrix,
+  invertMatrix,
+  multiplyMatrix,
+  scaleMatrix,
+  transformPoint,
+  translationMatrix
+} from '../pdf/matrix.ts';
+import type { PdfMatrix } from '../pdf/matrix.ts';
 import { PdfBaseFunction } from '../pdf/obj/function.ts';
 import { PdfShadingPattern } from '../pdf/obj/pattern.ts';
 import { PdfShading } from '../pdf/obj/shading.ts';
@@ -87,6 +92,7 @@ export abstract class SvgGradient extends SvgColor {
   readonly opacityList: readonly number[];
   readonly spreadMethod: SvgSpreadMethod;
   protected readonly hasSpreadMethod: boolean;
+  private readonly hasVariableOpacity: boolean;
 
   constructor(
     gradientUnits: SvgGradientUnits | null,
@@ -107,6 +113,8 @@ export abstract class SvgGradient extends SvgColor {
     this.opacityList = opacityList;
     this.spreadMethod = spreadMethod ?? 'pad';
     this.hasSpreadMethod = spreadMethod !== null;
+    this.hasVariableOpacity = opacityList.length > 1
+      && opacityList.some(value => value !== opacityList[0]);
   }
 
   override get isEmpty(): boolean {
@@ -117,8 +125,8 @@ export abstract class SvgGradient extends SvgColor {
     return !this.isEmpty;
   }
 
-  protected patternMatrix(operation: SvgOperation, canvas: PdfCanvas) {
-    let matrix = canvas.getTransform();
+  protected localMatrix(operation: SvgOperation): PdfMatrix {
+    let matrix = identityMatrix;
     if (this.gradientUnits !== 'userSpaceOnUse') {
       const box = operation.boundingBox();
       matrix = multiplyMatrix(matrix, translationMatrix(box.x, box.y));
@@ -130,16 +138,67 @@ export abstract class SvgGradient extends SvgColor {
     return matrix;
   }
 
-  protected abstract buildGradient(operation: SvgOperation, canvas: PdfCanvas): PdfShadingPattern;
+  protected patternMatrix(operation: SvgOperation, canvas: PdfCanvas): PdfMatrix {
+    return multiplyMatrix(canvas.getTransform(), this.localMatrix(operation));
+  }
+
+  protected operationCorners(operation: SvgOperation): readonly { readonly x: number; readonly y: number }[] {
+    const box = operation.boundingBox();
+    const inverse = invertMatrix(this.localMatrix(operation));
+    if (inverse === null) return [];
+    return [
+      transformPoint(inverse, box.x, box.y),
+      transformPoint(inverse, box.x + box.width, box.y),
+      transformPoint(inverse, box.x, box.y + box.height),
+      transformPoint(inverse, box.x + box.width, box.y + box.height)
+    ];
+  }
+
+  protected gradientFunction(
+    colors: readonly Rgb[],
+    start: number,
+    end: number
+  ) {
+    const fn = PdfBaseFunction.colorsAndStops(colors, this.stops);
+    return this.spreadMethod === 'pad'
+      ? fn
+      : PdfBaseFunction.spread(fn, start, end, this.spreadMethod);
+  }
+
+  protected abstract buildGradient(
+    operation: SvgOperation,
+    canvas: PdfCanvas,
+    colors?: readonly Rgb[]
+  ): PdfShadingPattern;
+
+  private applyOpacityMask(operation: SvgOperation, canvas: PdfCanvas): void {
+    const maskCanvas = new PdfCanvas(canvas.pageHeight);
+    const colors = this.opacityList.map(value => [value, value, value] as Rgb);
+    const existingMask = canvas.getSoftMask();
+    if (existingMask !== null) maskCanvas.setSoftMask(existingMask);
+    maskCanvas.drawBox(operation.boundingBox());
+    maskCanvas.setFillPattern(this.buildGradient(operation, maskCanvas, colors));
+    maskCanvas.fillPath();
+    canvas.setSoftMask({
+      content: maskCanvas.takeOutputBytes(),
+      boundingBox: operation.boundingBox(),
+      fonts: maskCanvas.fonts,
+      graphicStates: maskCanvas.graphicStates,
+      patterns: maskCanvas.patterns,
+      images: maskCanvas.images
+    });
+  }
 
   override setFillColor(operation: SvgOperation, canvas: PdfCanvas): void {
     if (this.isNotEmpty) {
+      if (this.hasVariableOpacity) this.applyOpacityMask(operation, canvas);
       canvas.setFillPattern(this.buildGradient(operation, canvas));
     }
   }
 
   override setStrokeColor(operation: SvgOperation, canvas: PdfCanvas): void {
     if (this.isNotEmpty) {
+      if (this.hasVariableOpacity) this.applyOpacityMask(operation, canvas);
       canvas.setStrokePattern(this.buildGradient(operation, canvas));
     }
   }
@@ -239,15 +298,42 @@ export class SvgLinearGradient extends SvgGradient {
     );
   }
 
-  protected override buildGradient(operation: SvgOperation, canvas: PdfCanvas): PdfShadingPattern {
+  protected override buildGradient(
+    operation: SvgOperation,
+    canvas: PdfCanvas,
+    colors: readonly Rgb[] = this.colors
+  ): PdfShadingPattern {
+    const start = { x: this.x1 ?? 0, y: this.y1 ?? 0 };
+    const end = { x: this.x2 ?? 1, y: this.y2 ?? 0 };
+    let rangeStart = 0;
+    let rangeEnd = 1;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSquared = dx * dx + dy * dy;
+    if (this.spreadMethod !== 'pad' && lengthSquared > 0) {
+      const parameters = this.operationCorners(operation).map(point => (
+        ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared
+      ));
+      if (parameters.length > 0) {
+        rangeStart = Math.min(...parameters);
+        rangeEnd = Math.max(...parameters);
+      }
+      if (rangeEnd <= rangeStart) rangeEnd = rangeStart + 1;
+    }
+    const shadingStart = this.spreadMethod === 'pad'
+      ? start
+      : { x: start.x + dx * rangeStart, y: start.y + dy * rangeStart };
+    const shadingEnd = this.spreadMethod === 'pad'
+      ? end
+      : { x: start.x + dx * rangeEnd, y: start.y + dy * rangeEnd };
     return new PdfShadingPattern({
       shading: new PdfShading({
         type: 'axial',
-        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: { x: this.x1 ?? 0, y: this.y1 ?? 0 },
-        end: { x: this.x2 ?? 1, y: this.y2 ?? 0 },
-        extendStart: true,
-        extendEnd: true
+        fn: this.gradientFunction(colors, rangeStart, rangeEnd),
+        start: shadingStart,
+        end: shadingEnd,
+        extendStart: this.spreadMethod === 'pad',
+        extendEnd: this.spreadMethod === 'pad'
       }),
       matrix: this.patternMatrix(operation, canvas)
     });
@@ -337,19 +423,52 @@ export class SvgRadialGradient extends SvgGradient {
     );
   }
 
-  protected override buildGradient(operation: SvgOperation, canvas: PdfCanvas): PdfShadingPattern {
+  protected override buildGradient(
+    operation: SvgOperation,
+    canvas: PdfCanvas,
+    colors: readonly Rgb[] = this.colors
+  ): PdfShadingPattern {
     const cx = this.cx ?? 0.5;
     const cy = this.cy ?? 0.5;
+    const fx = this.fx ?? cx;
+    const fy = this.fy ?? cy;
+    const radius0 = this.fr ?? 0;
+    const radius1 = this.r ?? 0.5;
+    const dcx = cx - fx;
+    const dcy = cy - fy;
+    const dr = radius1 - radius0;
+    let rangeStart = 0;
+    let rangeEnd = 1;
+
+    if (this.spreadMethod !== 'pad' && dr > 0) {
+      rangeStart = Math.min(0, -radius0 / dr);
+      const corners = this.operationCorners(operation);
+      const covers = (parameter: number): boolean => {
+        const centerX = fx + dcx * parameter;
+        const centerY = fy + dcy * parameter;
+        const radius = radius0 + dr * parameter;
+        return radius >= 0 && corners.every(point => (
+          Math.hypot(point.x - centerX, point.y - centerY) <= radius
+        ));
+      };
+      while (!covers(rangeEnd)) {
+        rangeEnd += 1;
+        if (rangeEnd - rangeStart > 4096) {
+          throw new RangeError('SVG radial gradient spread exceeds 4096 visible periods');
+        }
+      }
+    }
+
     return new PdfShadingPattern({
       shading: new PdfShading({
         type: 'radial',
-        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: { x: this.fx ?? cx, y: this.fy ?? cy },
-        end: { x: cx, y: cy },
-        radius0: this.fr ?? 0,
-        radius1: this.r ?? 0.5,
-        extendStart: true,
-        extendEnd: true
+        fn: this.gradientFunction(colors, rangeStart, rangeEnd),
+        start: { x: fx + dcx * rangeStart, y: fy + dcy * rangeStart },
+        end: { x: fx + dcx * rangeEnd, y: fy + dcy * rangeEnd },
+        radius0: radius0 + dr * rangeStart,
+        radius1: radius0 + dr * rangeEnd,
+        extendStart: this.spreadMethod === 'pad',
+        extendEnd: this.spreadMethod === 'pad'
       }),
       matrix: this.patternMatrix(operation, canvas)
     });
