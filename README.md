@@ -1,5 +1,7 @@
 # PDF for pure JavaScript
 
+[live demo](https://romulocrj.github.io/js_pdf/examples/Browser.html)
+
 This is an independent JavaScript port of [dart_pdf](https://github.com/DavBfr/dart_pdf)
 by David PHAM-VAN.
 
@@ -118,7 +120,7 @@ const bytes = pdf.save();
 // bytes instanceof Uint8Array
 ```
 
-Browser, via importmap (cdn or vendoring) — no build step on the consumer side (see [examples/Browser.html](examples/Browser.html) or live demo at [here](https://romulocrj.github.io/js_pdf/examples/Browser.html)):
+Browser, via importmap (cdn or vendoring) — no build step on the consumer side (see [examples/Browser.html](examples/Browser.html) or [live demo](https://romulocrj.github.io/js_pdf/examples/Browser.html)):
 
 ```html
 <script type="importmap">
