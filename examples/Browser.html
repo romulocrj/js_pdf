@@ -168,7 +168,6 @@
   }
 
   section.group { margin-bottom: 40px; }
-  section.group:last-child { margin-bottom: 0; }
 
   .group-head { margin-bottom: 16px; }
 
@@ -548,15 +547,17 @@
   </p>
   <div class="toolbar">
     <nav>
-      <a href="#interactive">Interactive</a>
       <a href="#ported">Ported dart_pdf examples</a>
       <a href="#phases">Phase proofs &amp; regressions</a>
+      <a href="#interactive">Interactive</a>
     </nav>
     <button id="generate-all" type="button">Generate all</button>
   </div>
 </header>
 
 <main>
+<div id="gallery-root"></div>
+
 <section class="group" id="interactive">
   <div class="group-head">
     <h2>Interactive report builder</h2>
@@ -616,8 +617,6 @@
     </div>
   </article>
 </section>
-
-<div id="gallery-root"></div>
 </main>
 
 <footer>
