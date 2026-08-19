@@ -1,5 +1,5 @@
 <!--
-  https://github.com/romulocrj/js_pdf browser example.
+  https://github.com/romulocrj/js_pdf examples gallery.
   Copyright (C) 2026, Romulo Campos
   Licensed under the Apache License, Version 2.0.
 -->
@@ -8,14 +8,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>romulocrj/js_pdf — generate and display a PDF in the browser</title>
+<title>romulocrj/js_pdf — every example, generated live in the browser</title>
 
 <!--
-  Module resolution.
-  By default, this points to jsDelivr serving dist/ directly from GitHub.
-  To use a local copy, replace the URL with "./vendor/js_pdf.min.mjs"
-  (copy dist/js_pdf.min.mjs to vendor/) and serve the directory over HTTP.
+  Two module-resolution strategies live on this page:
+
+  - The gallery below imports the example modules directly by relative path
+    (./hello-world.mjs -> ../dist/js_pdf.mjs, etc.), the same files
+    npm run examples / phase-examples run under Node — it needs the exact
+    files in the repository, not a published copy, since the point is to
+    prove those files run. That only works when the directory is served
+    over HTTP from inside the repository — e.g. GitHub Pages, or
+    `npm run build && npx serve .` locally.
+
+  - The interactive builder further down is the original Browser.html demo
+    and resolves "@romulocrj/js_pdf" through the import map below, which by
+    default points to jsDelivr serving dist/ from the published package.
+    To use a local copy instead, replace the URL with
+    "./vendor/js_pdf.min.mjs" (copy dist/js_pdf.min.mjs to vendor/).
+
+  Either way, opening this file directly (file://) will not work: ES module
+  imports and fetch() are blocked under the file: scheme.
 -->
+
 <script type="importmap">
 {
   "imports": {
@@ -43,14 +58,6 @@
 
   * { box-sizing: border-box; }
 
-  /* Viewer state: exactly one child is visible at a time.
-     Do not use the [hidden] attribute here — .empty/.error use display:flex
-     and would override the browser's default rule. */
-  .viewer.is-empty > iframe,
-  .viewer.is-error > iframe,
-  .viewer.is-ready > .empty,
-  .viewer.is-ready > .error { display: none; }
-
   html, body { height: 100%; }
 
   body {
@@ -63,16 +70,23 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  a { color: var(--blue); }
+
   /* ---------- header ---------- */
 
   header {
     border-bottom: 1px solid var(--rule);
     background: var(--paper);
-    padding: 18px 24px;
+    padding: 22px 24px;
+  }
+
+  .header-row {
     display: flex;
     align-items: baseline;
     gap: 16px;
     flex-wrap: wrap;
+    max-width: 1180px;
+    margin: 0 auto;
   }
 
   h1 {
@@ -82,6 +96,7 @@
     letter-spacing: -0.01em;
   }
 
+  h1 a { color: inherit; text-decoration: none; }
   h1 span { color: var(--blue); }
 
   .eyebrow {
@@ -92,44 +107,252 @@
     color: var(--slate);
   }
 
-  /* ---------- layout ---------- */
-
-  main {
-    display: grid;
-    grid-template-columns: 380px minmax(0, 1fr);
-    gap: 24px;
-    padding: 24px;
-    align-items: start;
+  .intro {
+    max-width: 1180px;
+    margin: 12px auto 0;
+    color: var(--slate);
+    font-size: 13px;
+    max-width: 760px;
   }
 
-  @media (max-width: 900px) {
-    main { grid-template-columns: 1fr; }
+  .intro code {
+    font-family: var(--mono);
+    background: var(--canvas);
+    padding: 1px 5px;
+    border-radius: 3px;
   }
 
-  .panel {
-    background: var(--paper);
-    border: 1px solid var(--rule);
-    border-radius: 4px;
+  .toolbar {
+    max-width: 1180px;
+    margin: 16px auto 0;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
   }
 
-  .panel-head {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--rule);
+  .toolbar nav {
+    display: flex;
+    gap: 14px;
     font-family: var(--mono);
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.09em;
-    color: var(--slate);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    letter-spacing: 0.06em;
   }
 
-  .panel-body { padding: 16px; }
+  .toolbar nav a { text-decoration: none; }
+  .toolbar nav a:hover { text-decoration: underline; }
 
-  /* ---------- form ---------- */
+  button#generate-all {
+    font: inherit;
+    font-weight: 500;
+    font-size: 12px;
+    padding: 7px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid var(--blue);
+    background: var(--paper);
+    color: var(--blue);
+    margin-left: auto;
+  }
 
-  label {
+  button#generate-all:hover { background: var(--blue); color: #fff; }
+  button#generate-all:disabled { opacity: 0.5; cursor: not-allowed; background: var(--paper); color: var(--blue); }
+
+  /* ---------- layout ---------- */
+
+  main {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 24px 60px;
+  }
+
+  section.group { margin-bottom: 40px; }
+  section.group:last-child { margin-bottom: 0; }
+
+  .group-head { margin-bottom: 16px; }
+
+  .group-head h2 {
+    margin: 0 0 4px;
+    font-size: 17px;
+    font-weight: 600;
+    scroll-margin-top: 16px;
+  }
+
+  .group-head p { margin: 0; color: var(--slate); font-size: 13px; max-width: 640px; }
+
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+  }
+
+  /* ---------- card ---------- */
+
+  .card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-head {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .card-head h3 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .card-desc { margin: 0; font-size: 12px; color: var(--slate); }
+
+  .badge {
+    flex-shrink: 0;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    background: #eff6ff;
+    border: 1px solid #dbeafe;
+    border-radius: 3px;
+    padding: 3px 6px;
+    white-space: nowrap;
+  }
+
+  .status {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--slate);
+  }
+
+  .status[data-state="error"] { color: #b42318; }
+  .status[data-state="ready"] { color: var(--blue); }
+
+  .preview {
+    position: relative;
+    height: 230px;
+    background: var(--canvas);
+    display: flex;
+  }
+
+  .preview iframe {
+    flex: 1;
+    width: 100%;
+    border: none;
+    background: var(--canvas);
+  }
+
+  .preview .placeholder,
+  .preview .error {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 14px;
+    color: var(--slate);
+    font-size: 12px;
+  }
+
+  .preview .error { color: #b42318; }
+
+  .preview .error code {
+    display: block;
+    margin-top: 8px;
+    max-width: 100%;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink);
+    background: var(--paper);
+    padding: 6px;
+    border-radius: 3px;
+    white-space: pre-wrap;
+    text-align: left;
+    max-height: 90px;
+    overflow: auto;
+  }
+
+  dl.readout {
+    display: flex;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 10px;
+    margin: 0;
+  }
+
+  dl.readout div {
+    flex: 1;
+    padding: 6px 10px;
+    border-right: 1px solid var(--rule);
+  }
+
+  dl.readout div:last-child { border-right: none; }
+
+  dl.readout dt {
+    margin: 0;
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--slate);
+  }
+
+  dl.readout dd { margin: 1px 0 0; font-weight: 600; }
+
+  .card-actions {
+    display: flex;
+    gap: 6px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .card-actions button,
+  .card-actions a {
+    font: inherit;
+    font-size: 11px;
+    padding: 6px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    color: var(--ink);
+    text-decoration: none;
+    text-align: center;
+  }
+
+  .card-actions button:hover,
+  .card-actions a:hover { border-color: var(--blue); color: var(--blue); }
+
+  .card-actions a[aria-disabled="true"] { pointer-events: none; opacity: 0.4; }
+
+  .card-actions .source { margin-left: auto; }
+
+  /* ---------- interactive builder ---------- */
+
+  .interactive-body {
+    display: grid;
+    grid-template-columns: 340px minmax(0, 1fr);
+    gap: 20px;
+    padding: 16px;
+  }
+
+  @media (max-width: 860px) {
+    .interactive-body { grid-template-columns: 1fr; }
+  }
+
+  .controls label {
     display: block;
     font-size: 11px;
     font-weight: 500;
@@ -139,7 +362,7 @@
     margin-bottom: 5px;
   }
 
-  input {
+  .controls input {
     width: 100%;
     padding: 8px 10px;
     border: 1px solid var(--rule);
@@ -149,15 +372,15 @@
     background: var(--paper);
   }
 
-  input:focus-visible {
+  .controls input:focus-visible {
     outline: 2px solid var(--blue);
     outline-offset: 1px;
     border-color: var(--blue);
   }
 
-  input[type="number"] { font-family: var(--mono); text-align: right; }
+  .controls input[type="number"] { font-family: var(--mono); text-align: right; }
 
-  .field { margin-bottom: 14px; }
+  .controls .field { margin-bottom: 14px; }
 
   .items-head,
   .item-row {
@@ -194,15 +417,15 @@
 
   .remove:hover { border-color: var(--blue); color: var(--blue); }
 
-  .actions {
+  .controls .actions {
     display: flex;
     gap: 8px;
     margin-top: 16px;
     flex-wrap: wrap;
   }
 
-  button.primary,
-  button.ghost {
+  .controls button.primary,
+  .controls button.ghost {
     font: inherit;
     font-weight: 500;
     padding: 9px 16px;
@@ -211,25 +434,25 @@
     border: 1px solid transparent;
   }
 
-  button.primary {
+  .controls button.primary {
     background: var(--blue);
     color: #fff;
     flex: 1;
   }
 
-  button.primary:hover { background: var(--blue-deep); }
+  .controls button.primary:hover { background: var(--blue-deep); }
 
-  button.ghost {
+  .controls button.ghost {
     background: var(--paper);
     border-color: var(--rule);
     color: var(--ink);
   }
 
-  button.ghost:hover { border-color: var(--blue); color: var(--blue); }
+  .controls button.ghost:hover { border-color: var(--blue); color: var(--blue); }
 
-  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .controls button:disabled { opacity: 0.45; cursor: not-allowed; }
 
-  button:focus-visible {
+  .controls button:focus-visible {
     outline: 2px solid var(--blue);
     outline-offset: 2px;
   }
@@ -244,68 +467,48 @@
     cursor: pointer;
   }
 
-  /* ---------- viewer ---------- */
-
-  .viewer {
-    height: calc(100vh - 168px);
-    min-height: 520px;
+  .interactive-body .viewer {
+    height: 420px;
+    min-height: 320px;
     display: flex;
     flex-direction: column;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
   }
 
-  iframe {
+  .interactive-body .viewer iframe {
     flex: 1;
     width: 100%;
     border: none;
     background: var(--canvas);
   }
 
-  /* Readout strip: bytes, time, and file signature. */
-  .readout {
-    display: flex;
-    border-top: 1px solid var(--rule);
-    font-family: var(--mono);
-    font-size: 11px;
-  }
+  /* Viewer state: exactly one child is visible at a time. */
+  .viewer.is-empty > iframe,
+  .viewer.is-error > iframe,
+  .viewer.is-ready > .empty,
+  .viewer.is-ready > .error { display: none; }
 
-  .readout div {
-    padding: 9px 14px;
-    border-right: 1px solid var(--rule);
-  }
-
-  .readout dt {
-    margin: 0;
-    font-size: 9px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--slate);
-  }
-
-  .readout dd {
-    margin: 2px 0 0;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .readout.fresh dd { color: var(--blue); }
-
-  .empty, .error {
+  .interactive-body .empty,
+  .interactive-body .error {
     flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     text-align: center;
-    padding: 32px;
+    padding: 24px;
     color: var(--slate);
+    font-size: 13px;
   }
 
-  .error { color: #b42318; }
+  .interactive-body .error { color: #b42318; }
 
-  .error code {
+  .interactive-body .error code {
     display: block;
     margin-top: 10px;
-    max-width: 520px;
+    max-width: 100%;
     font-family: var(--mono);
     font-size: 12px;
     color: var(--ink);
@@ -316,95 +519,721 @@
     white-space: pre-wrap;
   }
 
-  .hint {
-    font-size: 12px;
-    color: var(--slate);
-    margin: 12px 0 0;
+  .interactive-body .readout {
+    display: flex;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11px;
   }
 
-  .hint code { font-family: var(--mono); }
+  .interactive-body .readout div {
+    padding: 9px 14px;
+    border-right: 1px solid var(--rule);
+  }
+
+  .interactive-body .readout dt {
+    margin: 0;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--slate);
+  }
+
+  .interactive-body .readout dd {
+    margin: 2px 0 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .interactive-body .readout.fresh dd { color: var(--blue); }
 
   @media (prefers-reduced-motion: no-preference) {
-    .readout.fresh dd { animation: tick 0.5s ease-out; }
+    .interactive-body .readout.fresh dd { animation: tick 0.5s ease-out; }
     @keyframes tick { from { opacity: 0.25; } to { opacity: 1; } }
+  }
+
+  footer {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 20px 24px 40px;
+    color: var(--slate);
+    font-size: 12px;
   }
 </style>
 </head>
 <body>
 
 <header>
-  <a href="https://github.com/romulocrj/js_pdf"><h1>romulocrj/<span>js_pdf</span></h1></a>
-  <p class="eyebrow">ES module · no dependencies · no server · synchronous document.save()</p>
+  <div class="header-row">
+    <h1><a href="https://github.com/romulocrj/js_pdf">romulocrj/<span>js_pdf</span></a></h1>
+    <p class="eyebrow">ES modules · no dependencies · no server · every example, generated client-side</p>
+  </div>
+  <p class="intro">
+    Every card below imports the matching file straight from
+    <code>examples/</code> and calls its exported <code>generate…()</code>
+    function — the same code <code>npm run examples</code> and
+    <code>npm run phase-examples</code> run under Node. Nothing is
+    duplicated for this page. The PDF bytes come back as a
+    <code>Uint8Array</code> and are shown with <code>URL.createObjectURL</code>;
+    nothing is uploaded anywhere.
+  </p>
+  <div class="toolbar">
+    <nav>
+      <a href="#interactive">Interactive</a>
+      <a href="#ported">Ported dart_pdf examples</a>
+      <a href="#phases">Phase proofs &amp; regressions</a>
+    </nav>
+    <button id="generate-all" type="button">Generate all</button>
+  </div>
 </header>
 
 <main>
-  <!-- ---------- controls ---------- -->
-  <section class="panel">
-    <div class="panel-head"><span>Report data</span></div>
-    <div class="panel-body">
-      <div class="field">
-        <label for="title">Title</label>
-        <input id="title" value="Sales Report">
-      </div>
-      <div class="field">
-        <label for="subtitle">Subtitle</label>
-        <input id="subtitle" value="Generated entirely in the browser">
-      </div>
+<section class="group" id="interactive">
+  <div class="group-head">
+    <h2>Interactive report builder</h2>
+    <p>The original Browser.html demo — edit the numbers and regenerate live. Everything below runs entirely client-side.</p>
+  </div>
 
-      <div class="items-head">
-        <span>Item</span><span>Qty</span><span>Price</span><span></span>
+  <article class="card">
+    <div class="card-head">
+      <div>
+        <h3>Sales report builder</h3>
+        <p class="card-desc">Edit title, subtitle and line items, then generate a themed multi-page PDF with metric cards, a bar chart and a totals table.</p>
       </div>
-      <div id="items"></div>
-      <button class="link-add" id="add" type="button">+ add item</button>
-
-      <div class="actions">
-        <button class="primary" id="generate" type="button">Generate PDF</button>
-        <button class="ghost" id="download" type="button" disabled>Download</button>
-        <button class="ghost" id="newtab" type="button" disabled>Open in new tab</button>
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+        <span class="badge">INTERACTIVE</span>
+        <span class="status" id="i-status" data-state="queued">waiting</span>
       </div>
-
-      <p class="hint">
-        The file is returned as a <code>Uint8Array</code> and displayed with
-        <code>URL.createObjectURL</code> — nothing is sent to a server.
-      </p>
-    </div>
-  </section>
-
-  <!-- ---------- viewer ---------- -->
-  <section class="panel viewer is-empty" id="viewer">
-    <div class="panel-head">
-      <span>Preview (click “Generate PDF” to refresh document)</span>
-      <span id="status">waiting</span>
     </div>
 
-    <div class="empty" id="placeholder">Click “Generate PDF” to build the document.</div>
-    <iframe id="frame" title="Generated PDF"></iframe>
+    <div class="interactive-body">
+      <div class="controls">
+        <div class="field">
+          <label for="i-title">Title</label>
+          <input id="i-title" value="Sales Report">
+        </div>
+        <div class="field">
+          <label for="i-subtitle">Subtitle</label>
+          <input id="i-subtitle" value="Generated entirely in the browser">
+        </div>
 
-    <dl class="readout" id="readout">
-      <div><dt>Size</dt><dd id="r-size">—</dd></div>
-      <div><dt>Time</dt><dd id="r-time">—</dd></div>
-      <div><dt>Signature</dt><dd id="r-magic">—</dd></div>
-    </dl>
-  </section>
+        <div class="items-head">
+          <span>Item</span><span>Qty</span><span>Price</span><span></span>
+        </div>
+        <div id="i-items"></div>
+        <button class="link-add" id="i-add" type="button">+ add item</button>
+
+        <div class="actions">
+          <button class="primary" id="i-generate" type="button">Generate PDF</button>
+          <button class="ghost" id="i-download" type="button" disabled>Download</button>
+          <button class="ghost" id="i-newtab" type="button" disabled>Open in new tab</button>
+        </div>
+      </div>
+
+      <div class="viewer is-empty" id="i-viewer">
+        <div class="empty" id="i-placeholder">Click “Generate PDF” to build the document.</div>
+        <iframe id="i-frame" title="Interactive report preview"></iframe>
+
+        <dl class="readout" id="i-readout">
+          <div><dt>Size</dt><dd id="i-r-size">—</dd></div>
+          <div><dt>Time</dt><dd id="i-r-time">—</dd></div>
+          <div><dt>Signature</dt><dd id="i-r-magic">—</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="card-actions">
+      <a class="source" href="https://github.com/romulocrj/js_pdf/blob/main/examples/Browser.html" target="_blank" rel="noopener">View source ↗</a>
+    </div>
+  </article>
+</section>
+
+<div id="gallery-root"></div>
 </main>
+
+<footer>
+  Source for this page: <a href="https://github.com/romulocrj/js_pdf/blob/main/examples/Browser.html">examples/Browser.html</a>.
+  Apache License 2.0.
+</footer>
+
+<template id="card-template">
+  <article class="card">
+    <div class="card-head">
+      <div>
+        <h3 data-role="title"></h3>
+        <p class="card-desc" data-role="desc"></p>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+        <span class="badge" data-role="badge"></span>
+        <span class="status" data-role="status" data-state="queued">queued</span>
+      </div>
+    </div>
+    <div class="preview">
+      <div class="placeholder" data-role="placeholder">Scroll into view to generate…</div>
+      <div class="error" data-role="error" hidden></div>
+      <iframe data-role="frame" title="" hidden></iframe>
+    </div>
+    <dl class="readout" data-role="readout" hidden>
+      <div><dt>Size</dt><dd data-role="size">—</dd></div>
+      <div><dt>Time</dt><dd data-role="time">—</dd></div>
+    </dl>
+    <div class="card-actions">
+      <button type="button" data-role="regenerate">Regenerate</button>
+      <a data-role="download" aria-disabled="true">Download</a>
+      <a class="source" data-role="source" target="_blank" rel="noopener">View source ↗</a>
+    </div>
+  </article>
+</template>
 
 <script type="module">
 /* ------------------------------------------------------------------
-   1. Module loading
+   1. Resource loading (fetch-based mirror of the Node runners in
+      run-upstream-examples.mjs / run-phase-examples.mjs).
    ------------------------------------------------------------------ */
 
-let pw = null;
-let loadError = null;
+const assetUrl = name => new URL(`./assets/${name}`, import.meta.url);
 
-try {
-  pw = await import('@romulocrj/js_pdf');
-} catch (error) {
-  loadError = error;
+async function fetchOk(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText} — ${url}`);
+  return response;
+}
+
+const bytesOf = name => fetchOk(assetUrl(name)).then(r => r.arrayBuffer()).then(b => new Uint8Array(b));
+const textOf = name => fetchOk(assetUrl(name)).then(r => r.text());
+
+function memoize(loader) {
+  let promise = null;
+  return () => (promise ??= loader());
+}
+
+const commonFonts = memoize(async () => ({
+  openSans: await bytesOf('OpenSans-Regular.ttf'),
+  openSansBold: await bytesOf('OpenSans-Bold.ttf')
+}));
+
+const materialIcons = memoize(() => bytesOf('MaterialIcons.ttf'));
+const profileJpg = memoize(() => bytesOf('profile.jpg'));
+
+/* ------------------------------------------------------------------
+   2. Example modules — one static import per file in examples/.
+   ------------------------------------------------------------------ */
+
+import { generateHelloWorld } from './hello-world.mjs';
+import { generateCalendar } from './calendar.mjs';
+import { generateCertificate } from './certificate.mjs';
+import { generateDocument } from './document.mjs';
+import { generateInvoice } from './invoice.mjs';
+import { generateReport } from './report.mjs';
+import { generateResume } from './resume.mjs';
+import { generateServer } from './server.mjs';
+
+import { generateSvgGradientsPhase28 } from './svg-gradients-phase-2.8.mjs';
+import { generateTablePhase31 } from './table-phase-3.1.mjs';
+import { generateTableSpanningPhase32 } from './table-spanning-phase-3.2.mjs';
+import { generateBasicWidgetsPhase33 } from './basic-widgets-phase-3.3.mjs';
+import { generateFlexLayoutPhase34 } from './flex-layout-phase-3.4.mjs';
+import { generateDecorationPhase35 } from './decoration-phase-3.5.mjs';
+import { generateLayoutPhase36 } from './layout-phase-3.6.mjs';
+import { generateRichTextPhase37 } from './rich-text-phase-3.7.mjs';
+import { generateContentPhase38 } from './content-phase-3.8.mjs';
+import { generatePlaceholdersPhase39 } from './placeholders-phase-3.9.mjs';
+import { generateClippingPhase310 } from './clipping-phase-3.10.mjs';
+import { generatePngPhase41 } from './png-phase-4.1.mjs';
+import { generateJpegPhase42 } from './jpeg-phase-4.2.mjs';
+import { generateImagePhase43 } from './image-phase-4.3.mjs';
+import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
+import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
+import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
+import { generateIconsPhase54 } from './icons-phase-5.4.mjs';
+import { generateProgressPhase55 } from './progress-phase-5.5.mjs';
+import { generateFormsPhase56 } from './forms-phase-5.6.mjs';
+import { generateWidgetsPhase57 } from './widgets-phase-5.7.mjs';
+import { generateProductionPaginationExample } from './production-pagination.mjs';
+import { createSalesReport } from './create-sales-report.mjs';
+
+/* ------------------------------------------------------------------
+   3. Catalog — one entry per demo, mirroring examples/README.md.
+   ------------------------------------------------------------------ */
+
+const salesReportModel = {
+  author: 'Blunana',
+  period: 'January through July 2026',
+  revenue: 185430.40,
+  orders: 1248,
+  averageTicket: 148.58,
+  months: [
+    { label: 'Jan', value: 21000 },
+    { label: 'Feb', value: 24000 },
+    { label: 'Mar', value: 23000 },
+    { label: 'Apr', value: 28000 },
+    { label: 'May', value: 27000 },
+    { label: 'Jun', value: 31000 },
+    { label: 'Jul', value: 31430 }
+  ],
+  sales: Array.from({ length: 35 }, (_, index) => ({
+    date: `07/${String((index % 28) + 1).padStart(2, '0')}/2026`,
+    customer: `Customer ${index + 1}`,
+    status: index % 4 === 0 ? 'Pending' : 'Paid',
+    value: 95.5 + index * 13.75
+  }))
+};
+
+const groups = [
+  {
+    id: 'ported',
+    title: 'Ported dart_pdf examples',
+    description: 'The eight examples retained from upstream dart_pdf — parity probes, not reduced approximations.',
+    badge: 'PORT',
+    demos: [
+      {
+        id: 'hello-world',
+        title: 'Hello World',
+        file: 'hello-world.mjs',
+        description: 'Minimal document, page and text — the from-scratch starting point.',
+        generate: () => generateHelloWorld()
+      },
+      {
+        id: 'calendar',
+        title: 'Calendar',
+        file: 'calendar.mjs',
+        description: 'TTF fonts, theming, an SVG background and a full month grid layout.',
+        generate: async () => generateCalendar(undefined, {
+          ...await commonFonts(),
+          calendarSvg: await textOf('calendar.svg')
+        })
+      },
+      {
+        id: 'certificate',
+        title: 'Certificate',
+        file: 'certificate.mjs',
+        description: 'Absolute positioning, transforms and rich text on a decorative certificate.',
+        generate: async () => generateCertificate(undefined, undefined, {
+          libreBaskerville: await bytesOf('LibreBaskerville-Regular.ttf'),
+          libreBaskervilleItalic: await bytesOf('LibreBaskerville-Italic.ttf'),
+          libreBaskervilleBold: await bytesOf('LibreBaskerville-Bold.ttf'),
+          robotoLight: await bytesOf('Roboto-Light.ttf'),
+          medailSvg: await textOf('medail.svg'),
+          swirlsSvg: await textOf('swirls.svg'),
+          swirls1Svg: await textOf('swirls1.svg'),
+          swirls2Svg: await textOf('swirls2.svg'),
+          swirls3Svg: await textOf('swirls3.svg'),
+          garlandSvg: await textOf('garland.svg')
+        })
+      },
+      {
+        id: 'document',
+        title: 'Document',
+        file: 'document.mjs',
+        description: 'Long-form content: headers, paragraphs, a table of contents and links.',
+        generate: async () => generateDocument(undefined, undefined, {
+          ...await commonFonts(),
+          documentSvg: await textOf('document.svg'),
+          swirls2Svg: await textOf('swirls2.svg')
+        })
+      },
+      {
+        id: 'invoice',
+        title: 'Invoice',
+        file: 'invoice.mjs',
+        description: 'Tables, decoration and barcodes on a billing document.',
+        generate: async () => generateInvoice(undefined, undefined, {
+          roboto: await bytesOf('Roboto-Regular.ttf'),
+          robotoBold: await bytesOf('Roboto-Bold.ttf'),
+          robotoItalic: await bytesOf('Roboto-Italic.ttf'),
+          logoSvg: await textOf('logo.svg'),
+          invoiceSvg: await textOf('invoice.svg')
+        })
+      },
+      {
+        id: 'report',
+        title: 'Report',
+        file: 'report.mjs',
+        description: 'Charts and tables — the only upstream example needing no SVG or images.',
+        generate: async () => generateReport(undefined, undefined, await commonFonts())
+      },
+      {
+        id: 'resume',
+        title: 'Resume',
+        file: 'resume.mjs',
+        description: 'Images, icons, clipping, partitions and progress indicators, all together.',
+        generate: async () => generateResume(undefined, undefined, {
+          ...await commonFonts(),
+          materialIcons: await materialIcons(),
+          profileJpg: await profileJpg(),
+          resumeSvg: await textOf('resume.svg')
+        })
+      },
+      {
+        id: 'server',
+        title: 'Server pricing',
+        file: 'server.mjs',
+        description: 'Charts and SVG combined with internal and external links.',
+        generate: async () => {
+          const svg = JSON.parse(await textOf('server-assets.json'));
+          return generateServer(undefined, undefined, {
+            pricingJson: await textOf('server-pricing.json'),
+            metrophobic: await bytesOf('Metrophobic-Regular.ttf'),
+            cpuSvg: svg.svgCpu,
+            trafficSvg: svg.svgTraffic,
+            bannerSvg: svg.svgBanner,
+            ramSvg: svg.svgRam,
+            logoSvg: svg.svgLogo,
+            ssdSvg: svg.svgSsd,
+            overSvg: svg.svgOver,
+            bangSvg: svg.svgBang,
+            netSvg: svg.svgNet,
+            cpu1Svg: svg.svgCpu1
+          });
+        }
+      }
+    ]
+  },
+  {
+    id: 'phases',
+    title: 'Phase proofs & regressions',
+    description: 'One focused visual proof per implementation phase, plus the production pagination regression and the sales-report original.',
+    demos: [
+      {
+        id: 'svg-gradients-phase-2.8',
+        title: 'SVG gradients',
+        file: 'svg-gradients-phase-2.8.mjs',
+        badge: 'PHASE 2.8',
+        description: 'Linear and radial SVG gradients rendered as vector fills.',
+        generate: () => generateSvgGradientsPhase28()
+      },
+      {
+        id: 'table-phase-3.1',
+        title: 'Table',
+        file: 'table-phase-3.1.mjs',
+        badge: 'PHASE 3.1',
+        description: 'Table layout, borders and cell styling.',
+        generate: () => generateTablePhase31()
+      },
+      {
+        id: 'table-spanning-phase-3.2',
+        title: 'Table spanning',
+        file: 'table-spanning-phase-3.2.mjs',
+        badge: 'PHASE 3.2',
+        description: 'Row- and column-spanning table cells.',
+        generate: () => generateTableSpanningPhase32()
+      },
+      {
+        id: 'basic-widgets-phase-3.3',
+        title: 'Basic widgets',
+        file: 'basic-widgets-phase-3.3.mjs',
+        badge: 'PHASE 3.3',
+        description: 'Core layout primitives: containers, rows, columns and padding.',
+        generate: () => generateBasicWidgetsPhase33()
+      },
+      {
+        id: 'flex-layout-phase-3.4',
+        title: 'Flex layout',
+        file: 'flex-layout-phase-3.4.mjs',
+        badge: 'PHASE 3.4',
+        description: 'Constraints, Expanded and Flexible children.',
+        generate: () => generateFlexLayoutPhase34()
+      },
+      {
+        id: 'decoration-phase-3.5',
+        title: 'Decoration',
+        file: 'decoration-phase-3.5.mjs',
+        badge: 'PHASE 3.5',
+        description: 'Borders, background colors, gradients and box shadows.',
+        generate: () => generateDecorationPhase35()
+      },
+      {
+        id: 'layout-phase-3.6',
+        title: 'Stack, wrap & grid',
+        file: 'layout-phase-3.6.mjs',
+        badge: 'PHASE 3.6',
+        description: 'Stack, Wrap, GridView and partition layouts.',
+        generate: () => generateLayoutPhase36()
+      },
+      {
+        id: 'rich-text-phase-3.7',
+        title: 'Rich text',
+        file: 'rich-text-phase-3.7.mjs',
+        badge: 'PHASE 3.7',
+        description: 'Mixed-style spans inside a single text block.',
+        generate: () => generateRichTextPhase37()
+      },
+      {
+        id: 'content-phase-3.8',
+        title: 'Content widgets',
+        file: 'content-phase-3.8.mjs',
+        badge: 'PHASE 3.8',
+        description: 'Content widgets composed together.',
+        generate: () => generateContentPhase38()
+      },
+      {
+        id: 'placeholders-phase-3.9',
+        title: 'Placeholders',
+        file: 'placeholders-phase-3.9.mjs',
+        badge: 'PHASE 3.9',
+        description: 'Placeholder and spacer widgets.',
+        generate: () => generatePlaceholdersPhase39()
+      },
+      {
+        id: 'clipping-phase-3.10',
+        title: 'Clipping',
+        file: 'clipping-phase-3.10.mjs',
+        badge: 'PHASE 3.10',
+        description: 'Clipped shapes and paths.',
+        generate: () => generateClippingPhase310()
+      },
+      {
+        id: 'png-phase-4.1',
+        title: 'PNG decoder',
+        file: 'png-phase-4.1.mjs',
+        badge: 'PHASE 4.1',
+        description: 'A pure-JavaScript PNG decoder — no native or WASM dependency.',
+        generate: () => generatePngPhase41()
+      },
+      {
+        id: 'jpeg-phase-4.2',
+        title: 'JPEG decoder',
+        file: 'jpeg-phase-4.2.mjs',
+        badge: 'PHASE 4.2',
+        description: 'A pure-JavaScript baseline JPEG decoder.',
+        generate: () => generateJpegPhase42()
+      },
+      {
+        id: 'image-phase-4.3',
+        title: 'Image widget',
+        file: 'image-phase-4.3.mjs',
+        badge: 'PHASE 4.3',
+        description: 'The Image widget and image providers.',
+        generate: () => generateImagePhase43()
+      },
+      {
+        id: 'charts-phase-5.1',
+        title: 'Charts',
+        file: 'charts-phase-5.1.mjs',
+        badge: 'PHASE 5.1',
+        description: 'Bar and line charts on a Cartesian grid.',
+        generate: () => generateChartsPhase51()
+      },
+      {
+        id: 'barcode-phase-5.2',
+        title: 'Barcodes',
+        file: 'barcode-phase-5.2.mjs',
+        badge: 'PHASE 5.2',
+        description: 'Barcode generation and rendering.',
+        generate: () => generateBarcodePhase52()
+      },
+      {
+        id: 'annotations-phase-5.3',
+        title: 'Annotations & links',
+        file: 'annotations-phase-5.3.mjs',
+        badge: 'PHASE 5.3',
+        description: 'Whole-widget URL links, inline span annotations and named destinations.',
+        generate: () => generateAnnotationsPhase53()
+      },
+      {
+        id: 'icons-phase-5.4',
+        title: 'Icons',
+        file: 'icons-phase-5.4.mjs',
+        badge: 'PHASE 5.4',
+        description: 'Themed glyph size, color, opacity and RTL mirroring with Material Icons.',
+        generate: async () => generateIconsPhase54(await materialIcons())
+      },
+      {
+        id: 'progress-phase-5.5',
+        title: 'Progress indicators',
+        file: 'progress-phase-5.5.mjs',
+        badge: 'PHASE 5.5',
+        description: 'Circular and linear progress indicators.',
+        generate: () => generateProgressPhase55()
+      },
+      {
+        id: 'forms-phase-5.6',
+        title: 'Forms',
+        file: 'forms-phase-5.6.mjs',
+        badge: 'PHASE 5.6',
+        description: 'AcroForm fields and document metadata.',
+        generate: () => generateFormsPhase56()
+      },
+      {
+        id: 'widgets-phase-5.7',
+        title: 'Remaining widgets',
+        file: 'widgets-phase-5.7.mjs',
+        badge: 'PHASE 5.7',
+        description: 'Atomic pagination, lists, shapes, grid paper, directionality, watermarks and outlines.',
+        generate: () => generateWidgetsPhase57()
+      },
+      {
+        id: 'production-pagination',
+        title: 'Production pagination',
+        file: 'production-pagination.mjs',
+        badge: 'REGRESSION',
+        description: 'A production regression proving Inseparable keeps a chart title with its chart.',
+        generate: async () => generateProductionPaginationExample(await profileJpg())
+      },
+      {
+        id: 'create-sales-report',
+        title: 'Sales report',
+        file: 'create-sales-report.mjs',
+        badge: 'ORIGINAL',
+        description: 'An executive sales dashboard with metric cards, a bar chart and a data table.',
+        generate: () => createSalesReport(salesReportModel)
+      }
+    ]
+  }
+];
+
+/* ------------------------------------------------------------------
+   4. Rendering and per-card lifecycle.
+   ------------------------------------------------------------------ */
+
+const root = document.getElementById('gallery-root');
+const template = document.getElementById('card-template');
+const runners = new Map();
+
+function buildCard(demo) {
+  const node = template.content.firstElementChild.cloneNode(true);
+  const els = {
+    title: node.querySelector('[data-role="title"]'),
+    desc: node.querySelector('[data-role="desc"]'),
+    badge: node.querySelector('[data-role="badge"]'),
+    status: node.querySelector('[data-role="status"]'),
+    placeholder: node.querySelector('[data-role="placeholder"]'),
+    error: node.querySelector('[data-role="error"]'),
+    frame: node.querySelector('[data-role="frame"]'),
+    readout: node.querySelector('[data-role="readout"]'),
+    size: node.querySelector('[data-role="size"]'),
+    time: node.querySelector('[data-role="time"]'),
+    regenerate: node.querySelector('[data-role="regenerate"]'),
+    download: node.querySelector('[data-role="download"]'),
+    source: node.querySelector('[data-role="source"]')
+  };
+
+  els.title.textContent = demo.title;
+  els.desc.textContent = demo.description;
+  els.badge.textContent = demo.badge;
+  els.frame.title = `${demo.title} preview`;
+  els.source.href = `https://github.com/romulocrj/js_pdf/blob/main/examples/${demo.file}`;
+
+  let currentUrl = null;
+  let running = false;
+
+  function setStatus(state, label) {
+    els.status.dataset.state = state;
+    els.status.textContent = label;
+  }
+
+  async function run() {
+    if (running) return;
+    running = true;
+    setStatus('generating', 'generating…');
+    els.error.hidden = true;
+    els.placeholder.hidden = true;
+
+    const started = performance.now();
+    try {
+      const generated = await demo.generate();
+      const bytes = generated instanceof Uint8Array ? generated : new Uint8Array(generated);
+      const elapsed = performance.now() - started;
+
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
+      currentUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+
+      els.frame.src = currentUrl;
+      els.frame.hidden = false;
+      els.readout.hidden = false;
+      els.size.textContent = `${(bytes.length / 1024).toFixed(1)} kB`;
+      els.time.textContent = `${elapsed.toFixed(0)} ms`;
+
+      els.download.href = currentUrl;
+      els.download.download = `${demo.id}.pdf`;
+      els.download.removeAttribute('aria-disabled');
+
+      setStatus('ready', 'ready');
+    } catch (error) {
+      els.frame.hidden = true;
+      els.readout.hidden = true;
+      els.error.hidden = false;
+      els.error.innerHTML = '';
+      els.error.append('Failed to generate this PDF.');
+      const code = document.createElement('code');
+      code.textContent = String((error && error.stack) || error);
+      els.error.append(code);
+      setStatus('error', 'error');
+    } finally {
+      running = false;
+    }
+  }
+
+  els.regenerate.addEventListener('click', run);
+  runners.set(demo.id, { node, run });
+
+  return node;
+}
+
+for (const group of groups) {
+  const section = document.createElement('section');
+  section.className = 'group';
+  section.id = group.id;
+
+  const head = document.createElement('div');
+  head.className = 'group-head';
+  head.innerHTML = `<h2>${group.title}</h2><p>${group.description}</p>`;
+  section.append(head);
+
+  const gallery = document.createElement('div');
+  gallery.className = 'gallery';
+
+  for (const demo of group.demos) {
+    demo.badge = demo.badge || group.badge;
+    gallery.append(buildCard(demo));
+  }
+
+  section.append(gallery);
+  root.append(section);
 }
 
 /* ------------------------------------------------------------------
-   2. Document construction — ported dart_pdf API
+   5. Lazy generation on scroll, plus a manual "generate all" escape
+      hatch for anyone who wants every preview without scrolling.
    ------------------------------------------------------------------ */
+
+const observer = new IntersectionObserver(entries => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    observer.unobserve(entry.target);
+    const id = entry.target.dataset.demoId;
+    runners.get(id)?.run();
+  }
+}, { rootMargin: '200px 0px' });
+
+for (const group of groups) {
+  for (const demo of group.demos) {
+    const { node } = runners.get(demo.id);
+    node.dataset.demoId = demo.id;
+    observer.observe(node);
+  }
+}
+
+document.getElementById('generate-all').addEventListener('click', event => {
+  event.target.disabled = true;
+  for (const { node, run } of runners.values()) {
+    observer.unobserve(node);
+    run();
+  }
+});
+</script>
+
+<script type="module">
+/* ------------------------------------------------------------------
+   Interactive report builder — the original Browser.html demo, kept
+   as its own live item instead of being folded into the static
+   gallery above. Not sourced from an examples/*.mjs module: this
+   script is the source. Resolves the library through the import map
+   in <head>, the way a consumer with no build step would.
+   ------------------------------------------------------------------ */
+import * as pw from '@romulocrj/js_pdf';
+let loadError = null;
+
 
 const money = value =>
   value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -572,15 +1401,12 @@ function buildDocument(model) {
   return document_.save();
 }
 
-/* ------------------------------------------------------------------
-   3. Interface
-   ------------------------------------------------------------------ */
-
 const el = id => document.getElementById(id);
-const itemsBox = el('items');
-const frame = el('frame');
-const placeholder = el('placeholder');
-const readout = el('readout');
+const itemsBox = el('i-items');
+const frame = el('i-frame');
+const placeholder = el('i-placeholder');
+const readout = el('i-readout');
+const statusBadge = el('i-status');
 
 let currentUrl = null;
 
@@ -616,23 +1442,25 @@ function readModel() {
   }));
 
   return {
-    title: el('title').value.trim() || 'Report',
-    subtitle: el('subtitle').value.trim() || ' ',
+    title: el('i-title').value.trim() || 'Report',
+    subtitle: el('i-subtitle').value.trim() || ' ',
     items: items.length ? items : [{ name: 'Unnamed item', qty: 1, price: 0 }]
   };
 }
 
 function showReadout(bytes, milliseconds) {
-  el('r-size').textContent = `${(bytes.length / 1024).toFixed(1)} kB`;
-  el('r-time').textContent = `${milliseconds.toFixed(1)} ms`;
-  el('r-magic').textContent = new TextDecoder().decode(bytes.slice(0, 8));
+  el('i-r-size').textContent = `${(bytes.length / 1024).toFixed(1)} kB`;
+  el('i-r-time').textContent = `${milliseconds.toFixed(1)} ms`;
+  el('i-r-magic').textContent = new TextDecoder().decode(bytes.slice(0, 8));
   readout.classList.remove('fresh');
   void readout.offsetWidth;
   readout.classList.add('fresh');
 }
 
 function setState(state) {
-  el('viewer').className = `panel viewer is-${state}`;
+  el('i-viewer').className = `viewer is-${state}`;
+  statusBadge.dataset.state = state === 'ready' ? 'ready' : state === 'error' ? 'error' : 'queued';
+  statusBadge.textContent = state === 'empty' ? 'waiting' : state;
 }
 
 function failWith(message, detail) {
@@ -645,7 +1473,6 @@ function failWith(message, detail) {
     placeholder.append(code);
   }
   setState('error');
-  el('status').textContent = 'error';
 }
 
 function generate() {
@@ -667,32 +1494,31 @@ function generate() {
   frame.src = currentUrl;
   setState('ready');
 
-  el('download').disabled = false;
-  el('newtab').disabled = false;
-  el('status').textContent = 'ready';
+  el('i-download').disabled = false;
+  el('i-newtab').disabled = false;
   showReadout(bytes, elapsed);
 }
 
-el('add').addEventListener('click', () => addRow());
-el('generate').addEventListener('click', generate);
+el('i-add').addEventListener('click', () => addRow());
+el('i-generate').addEventListener('click', generate);
 
-el('download').addEventListener('click', () => {
+el('i-download').addEventListener('click', () => {
   const anchor = document.createElement('a');
   anchor.href = currentUrl;
   anchor.download = `${readModel().title.replace(/[^\w\-]+/g, '-').toLowerCase()}.pdf`;
   anchor.click();
 });
 
-el('newtab').addEventListener('click', () => window.open(currentUrl, '_blank'));
+el('i-newtab').addEventListener('click', () => window.open(currentUrl, '_blank'));
 
 seed.forEach(addRow);
 
 if (loadError) {
-  el('generate').disabled = true;
+  el('i-generate').disabled = true;
   failWith(
     'The romulocrj/js_pdf module could not be loaded.',
     `${loadError}\n\nOpen the page over HTTP (for example, npx serve .) — module imports ` +
-    `do not work with file://. Without internet access, copy dist/js_pdf.mjs to ` +
+    `do not work with file://. Without internet access, copy dist/js_pdf.min.mjs to ` +
     `./vendor/ and update the import map URL at the top of the file.`
   );
 } else {

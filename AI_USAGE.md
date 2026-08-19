@@ -24,9 +24,10 @@ Use the specifier that matches the host, and do not mix them up:
 |---|---|
 | Node, or any bundler | `import * as pw from '@romulocrj/js_pdf';` |
 | Minified build | `import * as pw from '@romulocrj/js_pdf/min';` |
-| Browser importmap | whatever the importmap maps — the examples map `js_pdf` |
+| Browser importmap | whatever the importmap maps — the examples map `@romulocrj/js_pdf` |
 | Browser, no install | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs';` |
-| ClearScript | the module file resolved from `SearchPath` |
+| ClearScript | the module file resolved from `SearchPath` or customLoader with `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs';` |
+| Deno | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs';` |
 
 A bare `'js_pdf'` only resolves where a host maps it. For an installed package
 it is always the scoped name.
