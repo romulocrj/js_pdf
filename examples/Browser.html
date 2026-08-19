@@ -254,37 +254,6 @@
     background: var(--canvas);
   }
 
-  .preview .placeholder,
-  .preview .error {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    padding: 14px;
-    color: var(--slate);
-    font-size: 12px;
-  }
-
-  .preview .error { color: #b42318; }
-
-  .preview .error code {
-    display: block;
-    margin-top: 8px;
-    max-width: 100%;
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--ink);
-    background: var(--paper);
-    padding: 6px;
-    border-radius: 3px;
-    white-space: pre-wrap;
-    text-align: left;
-    max-height: 90px;
-    overflow: auto;
-  }
-
   dl.readout {
     display: flex;
     border-top: 1px solid var(--rule);
@@ -669,8 +638,6 @@
       </div>
     </div>
     <div class="preview">
-      <div class="placeholder" data-role="placeholder">Scroll into view to generate…</div>
-      <div class="error" data-role="error" hidden></div>
       <iframe data-role="frame" title="" hidden></iframe>
     </div>
     <dl class="readout" data-role="readout" hidden>
@@ -679,6 +646,7 @@
     </dl>
     <div class="card-actions">
       <button type="button" data-role="regenerate">Regenerate</button>
+      <a data-role="view" target="_blank" rel="noopener" aria-disabled="true">View</a>
       <a data-role="download" aria-disabled="true">Download</a>
       <a class="source" data-role="source" target="_blank" rel="noopener">View source ↗</a>
     </div>
@@ -1097,13 +1065,12 @@ function buildCard(demo) {
     desc: node.querySelector('[data-role="desc"]'),
     badge: node.querySelector('[data-role="badge"]'),
     status: node.querySelector('[data-role="status"]'),
-    placeholder: node.querySelector('[data-role="placeholder"]'),
-    error: node.querySelector('[data-role="error"]'),
     frame: node.querySelector('[data-role="frame"]'),
     readout: node.querySelector('[data-role="readout"]'),
     size: node.querySelector('[data-role="size"]'),
     time: node.querySelector('[data-role="time"]'),
     regenerate: node.querySelector('[data-role="regenerate"]'),
+    view: node.querySelector('[data-role="view"]'),
     download: node.querySelector('[data-role="download"]'),
     source: node.querySelector('[data-role="source"]')
   };
@@ -1126,8 +1093,6 @@ function buildCard(demo) {
     if (running) return;
     running = true;
     setStatus('generating', 'generating…');
-    els.error.hidden = true;
-    els.placeholder.hidden = true;
 
     const started = performance.now();
     try {
@@ -1144,6 +1109,9 @@ function buildCard(demo) {
       els.size.textContent = `${(bytes.length / 1024).toFixed(1)} kB`;
       els.time.textContent = `${elapsed.toFixed(0)} ms`;
 
+      els.view.href = currentUrl;
+      els.view.removeAttribute('aria-disabled');
+
       els.download.href = currentUrl;
       els.download.download = `${demo.id}.pdf`;
       els.download.removeAttribute('aria-disabled');
@@ -1152,13 +1120,8 @@ function buildCard(demo) {
     } catch (error) {
       els.frame.hidden = true;
       els.readout.hidden = true;
-      els.error.hidden = false;
-      els.error.innerHTML = '';
-      els.error.append('Failed to generate this PDF.');
-      const code = document.createElement('code');
-      code.textContent = String((error && error.stack) || error);
-      els.error.append(code);
       setStatus('error', 'error');
+      console.error(`Failed to generate ${demo.id}.`, error);
     } finally {
       running = false;
     }
@@ -1232,8 +1195,6 @@ document.getElementById('generate-all').addEventListener('click', event => {
    in <head>, the way a consumer with no build step would.
    ------------------------------------------------------------------ */
 import * as pw from '@romulocrj/js_pdf';
-let loadError = null;
-
 
 const money = value =>
   value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -1512,18 +1473,7 @@ el('i-download').addEventListener('click', () => {
 el('i-newtab').addEventListener('click', () => window.open(currentUrl, '_blank'));
 
 seed.forEach(addRow);
-
-if (loadError) {
-  el('i-generate').disabled = true;
-  failWith(
-    'The romulocrj/js_pdf module could not be loaded.',
-    `${loadError}\n\nOpen the page over HTTP (for example, npx serve .) — module imports ` +
-    `do not work with file://. Without internet access, copy dist/js_pdf.min.mjs to ` +
-    `./vendor/ and update the import map URL at the top of the file.`
-  );
-} else {
-  generate();
-}
+generate();
 </script>
 </body>
 </html>
