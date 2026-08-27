@@ -1,6 +1,6 @@
 # PDF for pure JavaScript
 
-[live demo](https://romulocrj.github.io/js_pdf/examples/Browser.html)
+[Live demo](https://romulocrj.github.io/js_pdf/examples/Browser.html)
 
 This is an independent JavaScript port of [dart_pdf](https://github.com/DavBfr/dart_pdf)
 by David PHAM-VAN.
