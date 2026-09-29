@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { Font } from './font.ts';
 import type { TextDirection } from './text.ts';
 import { StatelessWidget } from './widget.ts';
@@ -20,7 +20,7 @@ export interface IconThemeDataOptions {
 }
 /** Defaults inherited by icon widgets through `ThemeData`. */
 export declare class IconThemeData {
-    readonly color: Rgb | null;
+    readonly color: PaintColor | null;
     readonly opacity: number | null;
     readonly size: number | null;
     readonly font: Font | null;
@@ -38,7 +38,7 @@ export interface IconOptions {
 export declare class Icon extends StatelessWidget {
     readonly icon: IconData;
     readonly size: number | null;
-    readonly color: Rgb | null;
+    readonly color: PaintColor | null;
     readonly textDirection: TextDirection | null;
     readonly font: Font | null;
     constructor(icon: IconData, { size, color, textDirection, font }?: IconOptions);

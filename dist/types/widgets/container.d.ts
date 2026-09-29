@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { BasicAlignmentInput } from './basic.ts';
 import { BoxDecoration } from './decoration.ts';
 import type { BoxDecorationInput, DecorationPosition } from './decoration.ts';
@@ -55,8 +55,8 @@ export declare class Container extends SpanningWidget<ContainerLayoutData, Conta
     readonly height: number | null;
     readonly padding: Insets;
     readonly margin: Insets;
-    readonly background: Rgb | null;
-    readonly borderColor: Rgb | null;
+    readonly background: PaintColor | null;
+    readonly borderColor: PaintColor | null;
     readonly borderWidth: number;
     readonly decoration: BoxDecoration | null;
     readonly foregroundDecoration: BoxDecoration | null;

@@ -180,3 +180,25 @@ bytes, so the destination receives its unused capacity as trailing zero bytes.
 `test/synchronous_output.test.mjs` verifies both bytes and destination offset.
 This was confirmed from the upstream source; no Dart runtime reproduction was
 run in this change.
+
+
+## RGB conversion edge cases (`pdf/color.dart`)
+
+**Source observation:** at audit reference `b97c4a63dc`,
+`PdfColorCmyk.fromRgb` uses a nested maximum expression which returns red
+whenever red exceeds green, even if blue is larger. It also divides by zero
+for black. `PdfColorHsl.fromRgb` only guards white before computing saturation;
+black reaches `0 / 0` before clamping instead of the achromatic zero case.
+
+**How to reproduce:** convert RGB `(0.5, 0.2, 0.8)` to CMYK: the maximum must
+be 0.8 and black 0.2. Convert `(0, 0, 0)` to CMYK: expected components are
+`(0, 0, 0, 1)`, all finite. Convert black to HSL: expected saturation is zero.
+
+**Port correction:** use the maximum of all three RGB channels, special-case
+zero maximum for CMYK and zero delta for HSL. Tests in
+`test/color_values.test.mjs` cover these values and all hue sectors. The
+existing private linear-progress shade translation also reached non-finite
+components for black; it now delegates to the corrected public conversion.
+A regression test renders a black `LinearProgressIndicator` and checks that
+no non-finite number reaches the PDF. Upstream issues were confirmed by source
+inspection; no Dart runtime reproduction was run in this change.

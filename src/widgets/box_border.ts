@@ -15,8 +15,8 @@
  *   - pdf/lib/src/widgets/box_border.dart
  */
 
-import { normalizeColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { colorComponents, normalizePaintColor } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfCanvas } from '../pdf/graphics.ts';
 import { BorderRadius } from './border_radius.ts';
 import type { BoxShape } from './decoration.ts';
@@ -75,12 +75,12 @@ export interface BorderSideOptions {
 export class BorderSide {
   static readonly none = new BorderSide({ width: 0, style: BorderStyle.none });
 
-  readonly color: Rgb;
+  readonly color: PaintColor;
   readonly width: number;
   readonly style: BorderStyle;
 
   constructor({ color = '#000000', width = 1, style = BorderStyle.solid }: BorderSideOptions = {}) {
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
     this.width = Math.max(0, Number(width));
     this.style = normalizeStyle(style);
   }
@@ -94,13 +94,13 @@ export class BorderSide {
   }
 
   equals(other: BorderSide): boolean {
+    const left = colorComponents(this.color), right = colorComponents(other.color);
     return this.width === other.width
       && this.style.paint === other.style.paint
       && this.style.phase === other.style.phase
       && String(this.style.pattern) === String(other.style.pattern)
-      && this.color[0] === other.color[0]
-      && this.color[1] === other.color[1]
-      && this.color[2] === other.color[2];
+      && left.length === right.length
+      && left.every((component, index) => component === right[index]);
   }
 }
 

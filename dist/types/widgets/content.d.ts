@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput, PaintColor, Rgb } from '../pdf/color.ts';
 import type { PdfOutlineStyle } from '../pdf/obj/outline.ts';
 import type { BoxFit } from './svg.ts';
 import type { BoxDecorationInput, BoxShape } from './decoration.ts';
@@ -66,7 +66,7 @@ export declare class Bullet extends StatelessWidget {
     readonly bulletMargin: InsetsInput;
     readonly bulletSize: number;
     readonly bulletShape: BoxShape;
-    readonly bulletColor: Rgb;
+    readonly bulletColor: PaintColor;
     constructor({ text, textAlign, style, margin, padding, bulletMargin, bulletSize, bulletShape, bulletColor }?: BulletOptions);
     build(context: RenderContext): AnyWidget;
 }

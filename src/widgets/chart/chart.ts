@@ -15,8 +15,8 @@
  *   - pdf/lib/src/widgets/chart/chart.dart
  */
 
-import { normalizeColor } from '../../pdf/color.ts';
-import type { ColorInput, Rgb } from '../../pdf/color.ts';
+import { normalizePaintColor } from '../../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../../pdf/color.ts';
 import { Border } from '../box_border.ts';
 import { Container } from '../container.ts';
 import { BoxDecoration } from '../decoration.ts';
@@ -27,7 +27,7 @@ import { Stack } from '../stack.ts';
 import { Widget } from '../widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from '../widget.ts';
 
-/** Upstream `PdfColors.black`, which the port has no palette module for. */
+/** Legacy string spelling of upstream `PdfColors.black`. */
 export const CHART_BLACK = '#000000';
 
 /** Upstream `PdfColors.white`. */
@@ -148,14 +148,14 @@ export interface DatasetOptions {
  */
 export abstract class Dataset<TData = unknown> {
   readonly legend: string | null;
-  readonly color: Rgb | null;
-  readonly borderColor: Rgb | null;
+  readonly color: PaintColor | null;
+  readonly borderColor: PaintColor | null;
   readonly borderWidth: number;
 
   constructor({ legend = null, color = null, borderColor = null, borderWidth = 0.5 }: DatasetOptions = {}) {
     this.legend = legend === null || legend === undefined ? null : String(legend);
-    this.color = color === null || color === undefined ? null : normalizeColor(color);
-    this.borderColor = borderColor === null || borderColor === undefined ? null : normalizeColor(borderColor);
+    this.color = color === null || color === undefined ? null : normalizePaintColor(color);
+    this.borderColor = borderColor === null || borderColor === undefined ? null : normalizePaintColor(borderColor);
     this.borderWidth = Number(borderWidth);
   }
 

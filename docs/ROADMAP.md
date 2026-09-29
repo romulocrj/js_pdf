@@ -258,8 +258,8 @@ runtime scope or format limits; no unresolved port-gap marker remains.
 
 ## Next step
 
-> **Phase 6.6 — layout and text performance — implemented; awaiting PR review and merge.**
-> Phases 6.1–6.5 merged in PRs #5–#9. Start phase 6.7 (colors) only after this performance PR merges. Each domain gets one PR against the
+> **Phase 6.7 — color values and device spaces — implemented; awaiting PR review and merge.**
+> Phases 6.1–6.6 merged in PRs #5–#10. Start phase 6.8 (fonts) only after this color PR merges. Each domain gets one PR against the
 > updated main branch; do not stack PRs or merge automatically.
 
 ## Phase 6 — remaining compatibility and upstream follow-up
@@ -287,8 +287,8 @@ credits and licenses alongside the example.
 | 6.3 | Pages: apply `PageTheme.clip`, expand upstream paper formats | Merged in PR #7 |
 | 6.4 | Text: `LineSplitter`, CJK break customization and hyphenation | Merged in PR #8 |
 | 6.5 | Serialization: synchronous output destinations and lazy JPEG writers | Merged in PR #9 |
-| 6.6 | Performance: unchanged `BoxConstraints` reuse, Flex copies, ASCII single-word path; benchmark in V8 | Implemented; pending merge |
-| 6.7 | Colors: color value types, named constants, DeviceGray, CMYK and upstream color conversions | Pending |
+| 6.6 | Performance: unchanged `BoxConstraints` reuse, Flex copies, ASCII single-word path; benchmark in V8 | Merged in PR #10 |
+| 6.7 | Colors: color value types, named constants, DeviceGray, CMYK and upstream color conversions | Implemented; pending merge |
 | 6.8 | Fonts: simple TrueType compatibility mode and CFF/PostScript support | Pending |
 | 6.9 | Layout: directional geometry, RTL Flex/tables, baseline alignment | Pending |
 | 6.10 | PDF objects: text-note annotations, complete annotation borders and public generic form XObjects | Pending |
@@ -450,6 +450,32 @@ and PDF bytes (normalizing only the generated CreationDate).
 in Browser.html after phase 6.5 and in the phase runner. The same module supplies
 workloads for `examples/benchmark-layout.mjs`; retained measurements include a
 same-version control. No new assets or licenses.
+
+### 6.7 Colors — values, palette and device spaces
+
+Ports `color.dart` and `colors.dart` from `DavBfr/dart_pdf@b97c4a63dc`:
+`PdfColor`, `PdfColorGrey`, `PdfColorCmyk`, `PdfColorHsv`, `PdfColorHsl` and
+`PdfColors`, exposed through named exports, the namespace and the composition
+API. Includes hex/ARGB factories, RYB interpolation, RGB/CMYK/HSV/HSL conversion,
+copy helpers, flattening, luminance, shading and the upstream harmony offsets.
+JavaScript uses `equals`/`hashCode` rather than overloaded operators. Named
+palette entries and the primary/accent lists are frozen.
+
+Solid painting and form/annotation color arrays retain explicit gray and CMYK
+components instead of converting them to RGB. Existing hexadecimal strings and
+RGB tuples preserve their output. Gradients, SVG filters and outline metadata
+remain RGB; alpha values do not automatically change graphics opacity. Use
+`Opacity` or explicit flattening. No ICC profiles or PDF/A claims are introduced.
+
+Corrects upstream's RGB maximum expression and black division by zero during
+CMYK conversion, and the achromatic HSL saturation expression. Linear progress
+shading now uses the public conversion, fixing non-finite output for black.
+Source observations and reproductions are recorded in ORIGINAL-ISSUES.md.
+
+**Example gate:** all eight upstream examples generate with unchanged byte
+counts. `examples/colors-phase-6.7.mjs` shows device spaces, the named palette,
+conversions, flattened alpha and an RGB gradient on one page. It is integrated
+after phase 6.6 in Browser.html and the phase runner. No new assets or licenses.
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
 out of scope, and the complete upstream example set still generates end to end.

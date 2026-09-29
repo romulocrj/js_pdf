@@ -589,6 +589,39 @@ are never mutated. Invalid multi-syllable results or invalid source segments
 raise `RangeError`. The `LineSplitter` and `Hyphenation` exports are TypeScript
 types, not constructors. See [the comparison example](examples/text-breaking-phase-6.4.mjs).
 
+## Color values and device spaces
+
+Use `PdfColors.blue` (the upstream Material palette) or construct `PdfColor`,
+`PdfColorGrey`, `PdfColorCmyk`, `PdfColorHsv` or `PdfColorHsl`. Existing
+`'#RRGGBB'` strings and normalized `[r, g, b]` tuples still work. Each normalized
+component, including alpha, must be finite and in 0..1. Hue is in degrees,
+0 inclusive to 360 exclusive.
+
+```js
+const cyan = new pw.PdfColorCmyk(1, 0, 0, 0);
+const gray = new pw.PdfColorGrey(0.25);
+const translucent = pw.PdfColor.fromHex('#ff000080');
+const opaquePink = translucent.flatten(); // over white by default
+const green = new pw.PdfColorHsv(120, 1, 1);
+new pw.Text('CMYK text', { style: new pw.TextStyle({ color: cyan }) });
+```
+
+`fromHex` accepts 3, 6 or 8 hexadecimal digits, with optional `#`; 8 digits
+mean RRGGBBAA. `fromInt`/`toInt` use unsigned AARRGGBB; `toHex` includes alpha.
+Use `toCmyk`, `toHsv`, `toHsl`, `fromRYB` and copy methods as needed.
+`withValues(alpha, red, green, blue)` uses positional arguments; null keeps
+that component. Treat values as immutable and compare with `equals`, not `===`.
+Inherited RGB copy methods return an RGB value even for gray/CMYK inputs;
+construct a new gray/CMYK value to preserve that device space.
+
+Solid paints and form/annotation arrays preserve gray and CMYK. Gradients,
+SVG filters and outline metadata use RGB. Color alpha alone does not emit a
+transparency state: use `Opacity` or `flatten({ background })` explicitly.
+DeviceCMYK does not embed an ICC profile or establish PDF/A conformance.
+Upstream's unusual `isLight`/`isDark` threshold and harmony offsets are retained;
+`shade` and `monochromatic` return opaque colors as upstream does.
+See the [color gallery](examples/colors-phase-6.7.mjs).
+
 ## Layout performance
 
 Treat `BoxConstraints` values as immutable. `enforce()` may return the same

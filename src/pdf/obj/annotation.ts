@@ -23,7 +23,8 @@ import { PdfDict } from '../format/dict.ts';
 import { PdfName } from '../format/name.ts';
 import { PdfNum } from '../format/num.ts';
 import { PdfString } from '../format/string.ts';
-import type { Rgb } from '../color.ts';
+import { colorOperator, PdfColor } from '../color.ts';
+import type { PaintColor } from '../color.ts';
 import type { PdfFont } from '../font/font.ts';
 import type { PdfImage } from './image.ts';
 import type { PdfXObject } from './xobject.ts';
@@ -54,8 +55,8 @@ export interface PdfGeometricAnnotation {
   readonly rect: PdfRect;
   readonly points?: readonly { readonly x: number; readonly y: number }[];
   readonly inkList?: readonly (readonly { readonly x: number; readonly y: number }[])[];
-  readonly color?: Rgb | null;
-  readonly interiorColor?: Rgb | null;
+  readonly color?: PaintColor | null;
+  readonly interiorColor?: PaintColor | null;
   readonly borderWidth?: number;
   readonly author?: string | null;
   readonly subject?: string | null;
@@ -105,12 +106,12 @@ export interface PdfFormFieldAnnotation {
   readonly alternateName?: string | null;
   readonly mappingName?: string | null;
   readonly textAlign?: PdfTextFieldAlign | null;
-  readonly borderColor?: Rgb | null;
-  readonly backgroundColor?: Rgb | null;
+  readonly borderColor?: PaintColor | null;
+  readonly backgroundColor?: PaintColor | null;
   readonly highlighting?: PdfFormHighlighting | null;
   readonly fontSize?: number;
   readonly font?: PdfFont;
-  readonly textColor?: Rgb;
+  readonly textColor?: PaintColor;
   readonly appearances?: PdfFormAppearances;
 }
 
@@ -186,10 +187,10 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
       ['/S', new PdfName('/S')]
     ]));
     if (annotation.color !== null && annotation.color !== undefined) {
-      this.params.set('/C', PdfArray.fromNum(annotation.color));
+      this.params.set('/C', PdfArray.fromColor(annotation.color));
     }
     if (annotation.interiorColor !== null && annotation.interiorColor !== undefined) {
-      this.params.set('/IC', PdfArray.fromNum(annotation.interiorColor));
+      this.params.set('/IC', PdfArray.fromColor(annotation.interiorColor));
     }
     if (annotation.author) this.params.set('/T', new PdfString(annotation.author));
     if (annotation.subject) this.params.set('/Subj', new PdfString(annotation.subject));
@@ -251,18 +252,19 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
     }
 
     if (this.defaultAppearanceName !== null) {
-      const [r, g, b] = field.textColor ?? [0, 0, 0];
+      const color = field.textColor ?? [0, 0, 0];
+      const operator = color instanceof PdfColor ? colorOperator(color) : `${color[0]} ${color[1]} ${color[2]} rg`;
       this.params.set('/DA', new PdfString(
-        `${this.defaultAppearanceName} ${field.fontSize ?? 12} Tf ${r} ${g} ${b} rg`
+        `${this.defaultAppearanceName} ${field.fontSize ?? 12} Tf ${operator}`
       ));
     }
 
     const appearance = new PdfDict();
     if (field.borderColor !== null && field.borderColor !== undefined) {
-      appearance.set('/BC', PdfArray.fromNum(field.borderColor));
+      appearance.set('/BC', PdfArray.fromColor(field.borderColor));
     }
     if (field.backgroundColor !== null && field.backgroundColor !== undefined) {
-      appearance.set('/BG', PdfArray.fromNum(field.backgroundColor));
+      appearance.set('/BG', PdfArray.fromColor(field.backgroundColor));
     }
     if (!appearance.isEmpty) this.params.set('/MK', appearance);
 

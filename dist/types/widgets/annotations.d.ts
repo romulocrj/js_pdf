@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfGeometricAnnotationKind } from '../pdf/obj/annotation.ts';
 import type { PdfPoint } from '../pdf/rect.ts';
 import type { PdfOutlineStyle } from '../pdf/obj/outline.ts';
@@ -76,8 +76,8 @@ export interface GeometricAnnotationOptions {
 }
 declare abstract class GeometricAnnotationBuilder extends AnnotationBuilder {
     readonly shape: PdfGeometricAnnotationKind;
-    readonly color: Rgb | null;
-    readonly interiorColor: Rgb | null;
+    readonly color: PaintColor | null;
+    readonly interiorColor: PaintColor | null;
     readonly borderWidth: number;
     readonly author: string | null;
     readonly date: Date | null;
@@ -86,8 +86,8 @@ declare abstract class GeometricAnnotationBuilder extends AnnotationBuilder {
     constructor(shape: PdfGeometricAnnotationKind, { color, interiorColor, border, author, date, subject, content }?: GeometricAnnotationOptions);
     protected base(context: RenderContext, rect: AnnotationRect): {
         readonly rect: AnnotationRect;
-        readonly color: Rgb | null;
-        readonly interiorColor: Rgb | null;
+        readonly color: PaintColor | null;
+        readonly interiorColor: PaintColor | null;
         readonly borderWidth: number;
         readonly author: string | null;
         readonly subject: string | null;
@@ -153,7 +153,7 @@ export interface OutlineOptions extends AnchorOptions {
 export declare class Outline extends Anchor {
     readonly title: string;
     readonly level: number;
-    readonly color: Rgb | null;
+    readonly color: PaintColor | null;
     readonly style: PdfOutlineStyle;
     constructor({ title, level, color, style, ...anchor }: OutlineOptions);
     paint(context: RenderContext, box: PositionedBox<AnnotationLayoutData>): void;

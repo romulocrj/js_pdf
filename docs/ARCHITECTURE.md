@@ -125,8 +125,13 @@ licensed Dart `qr` implementation is neither ported nor distributed.
 - **`format/stream.ts`** — geometrically growing typed byte storage used by
   object serialization and content canvases, with no host encoding API. Public
   destinations subclass `PdfStream` and receive byte/string writes synchronously.
-- **`color.ts`** — `#RRGGBB` or `[r,g,b]` → normalized triple, plus the
-  `rg`/`RG` operators. DeviceRGB only.
+- **`color.ts` / `colors.ts`** — RGB, gray, CMYK, HSV and HSL values,
+  conversions and the named Material palette. Solid painting preserves device
+  components (`rg`/`RG`, `g`/`G`, `k`/`K`); legacy strings/tuples stay RGB.
+  `normalizePaintColor` retains values, while `normalizeColor` explicitly
+  converts to RGB for gradients, SVG filters, luminance and outline metadata.
+  Form and geometric annotation arrays use `PdfArray.fromColor`. Alpha is
+  value metadata: callers use `Opacity` or `flatten` for visible transparency.
 - **`page_format.ts`** — upstream paper presets, margins and public physical-unit constants in PDF points.
 - **`font/font_metrics.ts`** — glyph and string bounding metrics, including
   ascent, descent, bearings and advance width.
@@ -285,7 +290,7 @@ divergences or narrower compatibility gaps between the port and upstream.
 | Page orientation | Content rotated through the CTM, paper size unchanged | Paper dimensions are swapped per section so `/MediaBox` reports the resolved physical orientation |
 | Object serialization | A value consults its owning object for compression, encryption and a verbose pretty-printer | `output(stream)` stays context-free; stream objects consult document compression settings, with no encryption or verbose mode |
 | Font naming | `/F$objser`, derived from the font object's serial | Page-local `/F1`, `/F2`, … allocated as the content stream is written |
-| Colors | `PdfColor` value type with CMYK and HSL variants | RGB triple, DeviceRGB only |
+| Colors | `PdfColor` value types and named palette | Value types plus legacy RGB strings/tuples; DeviceGray operators for `PdfColorGrey`; `equals` method; corrected CMYK/achromatic conversion; RGB gradients |
 | Custom line breaks | Word-list callback; implicit spacing follows every token | Ordered source segments retain original whitespace; no synthetic inter-token spaces, consistent with the port's additive `wordSpacing` |
 | Page clipping | `Page.paint` scopes a margin clip; `MultiPage._paintChild` omits it | Both section types clip every widget/layer paint when `PageTheme.clip` is true; layer layout remains full-page |
 | Pagination | `SpanningWidget` saves mutable widget context between pages | Direct spanning children return immutable continuation state; indivisible widgets or rows taller than a full content area still throw `RangeError` |

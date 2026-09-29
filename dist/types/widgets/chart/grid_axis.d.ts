@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../../pdf/color.ts';
 import type { Axis } from '../flex.ts';
 import type { ConstraintSize } from '../geometry.ts';
 import type { TextStyle } from '../text_style.ts';
@@ -55,11 +55,11 @@ export declare abstract class GridAxis {
     readonly margin: number | null;
     readonly marginStart: number;
     readonly marginEnd: number;
-    readonly color: Rgb;
+    readonly color: PaintColor;
     readonly width: number;
     readonly divisions: boolean;
     readonly divisionsWidth: number;
-    readonly divisionsColor: Rgb;
+    readonly divisionsColor: PaintColor;
     readonly divisionsDashed: boolean;
     readonly ticks: boolean;
     readonly axisTick: boolean | null;

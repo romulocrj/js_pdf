@@ -25,8 +25,8 @@
  */
 
 import { assertFiniteNumber } from '../base/assert.ts';
-import { normalizeColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { normalizePaintColor } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
 import type { PdfFontBitmap } from '../pdf/font/font.ts';
 import { logicalToVisual } from '../pdf/font/bidi_utils.ts';
@@ -211,7 +211,7 @@ export interface TextOptions {
 export interface ResolvedTextStyle {
   readonly font: PdfFont;
   readonly fontSize: number;
-  readonly color: Rgb;
+  readonly color: PaintColor;
   readonly lineAdvance: number;
   readonly lineSpacing: number;
   readonly letterSpacing: number;
@@ -219,7 +219,7 @@ export interface ResolvedTextStyle {
   readonly baseline: number;
   readonly background: TextStyle['background'];
   readonly decorations: readonly TextDecorationName[];
-  readonly decorationColor: Rgb;
+  readonly decorationColor: PaintColor;
   readonly decorationStyle: 'solid' | 'double';
   readonly decorationThickness: number;
 }
@@ -979,7 +979,7 @@ export class Text extends RichText {
     font = undefined
   }: TextOptions = {}) {
     const overrides = new TextStyle({
-      color: color === undefined ? null : normalizeColor(color),
+      color: color === undefined ? null : normalizePaintColor(color),
       font: font === undefined ? null : undefined,
       fontSize: fontSize === undefined ? null : assertFiniteNumber(Number(fontSize), 'fontSize'),
       height: lineHeight === undefined ? null : assertFiniteNumber(Number(lineHeight), 'lineHeight')

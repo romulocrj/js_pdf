@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../../pdf/color.ts';
 import type { AnyWidget, RenderContext } from '../widget.ts';
 import { ChartFrame } from './chart.ts';
 import { PointDataSet } from './point_chart.ts';
@@ -18,9 +18,9 @@ export interface LineDataSetOptions extends PointDataSetOptions {
 export declare class LineDataSet extends PointDataSet {
     readonly lineWidth: number;
     readonly drawLine: boolean;
-    readonly lineColor: Rgb | null;
+    readonly lineColor: PaintColor | null;
     readonly drawSurface: boolean;
-    readonly surfaceColor: Rgb | null;
+    readonly surfaceColor: PaintColor | null;
     readonly surfaceOpacity: number;
     readonly isCurved: boolean;
     readonly smoothness: number;

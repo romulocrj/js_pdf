@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { BoxDecorationInput } from './decoration.ts';
 import { SpanningWidget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
@@ -9,7 +9,7 @@ export interface TableBorderSideOptions {
     readonly width?: number;
 }
 export interface TableBorderSide {
-    readonly color: Rgb;
+    readonly color: PaintColor;
     readonly width: number;
 }
 export type TableBorderSideInput = TableBorderSideOptions | TableBorderSide | null;

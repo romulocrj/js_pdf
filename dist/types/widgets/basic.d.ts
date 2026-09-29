@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfCanvas } from '../pdf/graphics.ts';
 import type { PdfMatrix } from '../pdf/matrix.ts';
 import type { PdfPoint } from '../pdf/rect.ts';
@@ -111,7 +111,7 @@ export declare class Divider extends Widget<null> {
     readonly thickness: number;
     readonly indent: number;
     readonly endIndent: number;
-    readonly color: Rgb;
+    readonly color: PaintColor;
     readonly borderStyle: BorderStyle;
     constructor({ height, thickness, indent, endIndent, color, borderStyle }?: DividerOptions);
     layout(_context: RenderContext, constraints: Constraints): LayoutBox<null>;
@@ -290,7 +290,7 @@ export declare class VerticalDivider extends Widget<null> {
     readonly thickness: number;
     readonly indent: number;
     readonly endIndent: number;
-    readonly color: Rgb;
+    readonly color: PaintColor;
     constructor({ width, thickness, indent, endIndent, color }?: VerticalDividerOptions);
     layout(_context: RenderContext, constraints: Constraints): LayoutBox<null>;
     paint(context: RenderContext, box: PositionedBox<null>): void;

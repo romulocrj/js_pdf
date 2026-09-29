@@ -1,5 +1,5 @@
 import { PdfDict } from '../format/dict.ts';
-import type { Rgb } from '../color.ts';
+import type { PaintColor } from '../color.ts';
 import type { PdfFont } from '../font/font.ts';
 import type { PdfImage } from './image.ts';
 import type { PdfXObject } from './xobject.ts';
@@ -31,8 +31,8 @@ export interface PdfGeometricAnnotation {
         readonly x: number;
         readonly y: number;
     }[])[];
-    readonly color?: Rgb | null;
-    readonly interiorColor?: Rgb | null;
+    readonly color?: PaintColor | null;
+    readonly interiorColor?: PaintColor | null;
     readonly borderWidth?: number;
     readonly author?: string | null;
     readonly subject?: string | null;
@@ -77,12 +77,12 @@ export interface PdfFormFieldAnnotation {
     readonly alternateName?: string | null;
     readonly mappingName?: string | null;
     readonly textAlign?: PdfTextFieldAlign | null;
-    readonly borderColor?: Rgb | null;
-    readonly backgroundColor?: Rgb | null;
+    readonly borderColor?: PaintColor | null;
+    readonly backgroundColor?: PaintColor | null;
     readonly highlighting?: PdfFormHighlighting | null;
     readonly fontSize?: number;
     readonly font?: PdfFont;
-    readonly textColor?: Rgb;
+    readonly textColor?: PaintColor;
     readonly appearances?: PdfFormAppearances;
 }
 export type PdfAnnotationSpec = PdfLinkAnnotation | PdfFormFieldAnnotation | PdfGeometricAnnotation;

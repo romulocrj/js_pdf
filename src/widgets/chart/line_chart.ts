@@ -15,8 +15,8 @@
  *   - pdf/lib/src/widgets/chart/line_chart.dart
  */
 
-import { normalizeColor } from '../../pdf/color.ts';
-import type { ColorInput, Rgb } from '../../pdf/color.ts';
+import { normalizePaintColor } from '../../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../../pdf/color.ts';
 import { PdfGraphicState } from '../../pdf/graphic_state.ts';
 import { Border } from '../box_border.ts';
 import { Container } from '../container.ts';
@@ -44,9 +44,9 @@ export interface LineDataSetOptions extends PointDataSetOptions {
 export class LineDataSet extends PointDataSet {
   readonly lineWidth: number;
   readonly drawLine: boolean;
-  readonly lineColor: Rgb | null;
+  readonly lineColor: PaintColor | null;
   readonly drawSurface: boolean;
-  readonly surfaceColor: Rgb | null;
+  readonly surfaceColor: PaintColor | null;
   readonly surfaceOpacity: number;
   readonly isCurved: boolean;
   readonly smoothness: number;
@@ -89,9 +89,9 @@ export class LineDataSet extends PointDataSet {
     }
     this.lineWidth = Number(lineWidth);
     this.drawLine = Boolean(drawLine);
-    this.lineColor = lineColor === null ? null : normalizeColor(lineColor);
+    this.lineColor = lineColor === null ? null : normalizePaintColor(lineColor);
     this.drawSurface = Boolean(drawSurface);
-    this.surfaceColor = surfaceColor === null ? null : normalizeColor(surfaceColor);
+    this.surfaceColor = surfaceColor === null ? null : normalizePaintColor(surfaceColor);
     this.surfaceOpacity = Number(surfaceOpacity);
     this.isCurved = Boolean(isCurved);
     this.smoothness = Number(smoothness);

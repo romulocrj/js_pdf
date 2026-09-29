@@ -21,6 +21,8 @@
  * enforces that by compiling against the ES2020 lib alone.
  */
 
+import { PdfColor, PdfColorGrey, PdfColorCmyk, PdfColorHsv, PdfColorHsl } from './pdf/color.ts';
+import { PdfColors } from './pdf/colors.ts';
 import { PdfStream } from './pdf/format/stream.ts';
 import { PageFormat, PageUnit } from './pdf/page_format.ts';
 import { BarcodeFactory } from './barcode/barcode_factory.ts';
@@ -252,6 +254,12 @@ export {
   Padding,
   Paragraph,
   Page,
+  PdfColor,
+  PdfColorGrey,
+  PdfColorCmyk,
+  PdfColorHsv,
+  PdfColorHsl,
+  PdfColors,
   PageFormat,
   PageUnit,
   PdfStream,
@@ -359,7 +367,7 @@ export type {
   ShapeAnnotationOptions
 } from './widgets/annotations.ts';
 
-export type { ColorInput, Rgb } from './pdf/color.ts';
+export type { ColorInput, PaintColor, Rgb } from './pdf/color.ts';
 export { PdfGraphicState } from './pdf/graphic_state.ts';
 export type { PdfBlendMode, PdfGraphicStateOptions } from './pdf/graphic_state.ts';
 export { PdfBaseFunction } from './pdf/obj/function.ts';
@@ -858,6 +866,12 @@ export interface PublicApi {
   readonly Alignment: typeof Alignment;
   readonly BoxConstraints: typeof BoxConstraints;
   readonly EdgeInsets: typeof EdgeInsets;
+  readonly PdfColor: typeof PdfColor;
+  readonly PdfColorGrey: typeof PdfColorGrey;
+  readonly PdfColorCmyk: typeof PdfColorCmyk;
+  readonly PdfColorHsv: typeof PdfColorHsv;
+  readonly PdfColorHsl: typeof PdfColorHsl;
+  readonly PdfColors: typeof PdfColors;
   readonly PageFormat: typeof PageFormat;
   readonly PageUnit: typeof PageUnit;
   readonly PdfStream: typeof PdfStream;
@@ -1027,6 +1041,12 @@ const publicApi: PublicApi = Object.freeze({
   Alignment,
   BoxConstraints,
   EdgeInsets,
+  PdfColor,
+  PdfColorGrey,
+  PdfColorCmyk,
+  PdfColorHsv,
+  PdfColorHsl,
+  PdfColors,
   PageFormat,
   PageUnit,
   PdfStream,

@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../../pdf/color.ts';
 import type { Axis } from '../flex.ts';
 import type { ConstraintSize } from '../geometry.ts';
 import type { AnyWidget, RenderContext } from '../widget.ts';
@@ -23,7 +23,7 @@ export declare class BarDataSet extends PointDataSet {
     readonly barWidth: number;
     readonly offset: number;
     readonly axis: Axis;
-    readonly surfaceColor: Rgb;
+    readonly surfaceColor: PaintColor;
     constructor({ data, legend, borderColor, borderWidth, color, drawBorder, drawSurface, surfaceOpacity, width, offset, axis, pointColor, pointSize, drawPoints, shape, buildValue, valuePosition }: BarDataSetOptions);
     legendShape(context: RenderContext): AnyWidget;
     private drawBar;

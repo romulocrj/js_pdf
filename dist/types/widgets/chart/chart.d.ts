@@ -1,9 +1,9 @@
-import type { ColorInput, Rgb } from '../../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../../pdf/color.ts';
 import { Alignment } from '../geometry.ts';
 import type { ConstraintSize } from '../geometry.ts';
 import { Widget } from '../widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from '../widget.ts';
-/** Upstream `PdfColors.black`, which the port has no palette module for. */
+/** Legacy string spelling of upstream `PdfColors.black`. */
 export declare const CHART_BLACK = "#000000";
 /** Upstream `PdfColors.white`. */
 export declare const CHART_WHITE = "#ffffff";
@@ -72,8 +72,8 @@ export interface DatasetOptions {
  */
 export declare abstract class Dataset<TData = unknown> {
     readonly legend: string | null;
-    readonly color: Rgb | null;
-    readonly borderColor: Rgb | null;
+    readonly color: PaintColor | null;
+    readonly borderColor: PaintColor | null;
     readonly borderWidth: number;
     constructor({ legend, color, borderColor, borderWidth }?: DatasetOptions);
     abstract layout(context: RenderContext, frame: ChartFrame): TData;

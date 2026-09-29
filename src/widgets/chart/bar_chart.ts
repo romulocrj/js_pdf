@@ -15,8 +15,8 @@
  *   - pdf/lib/src/widgets/chart/bar_chart.dart
  */
 
-import { normalizeColor } from '../../pdf/color.ts';
-import type { ColorInput, Rgb } from '../../pdf/color.ts';
+import { normalizePaintColor, samePaintColor } from '../../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../../pdf/color.ts';
 import { PdfGraphicState } from '../../pdf/graphic_state.ts';
 import { Border } from '../box_border.ts';
 import { Container } from '../container.ts';
@@ -48,7 +48,7 @@ export class BarDataSet extends PointDataSet {
   readonly barWidth: number;
   readonly offset: number;
   readonly axis: Axis;
-  readonly surfaceColor: Rgb;
+  readonly surfaceColor: PaintColor;
 
   constructor({
     data,
@@ -81,11 +81,11 @@ export class BarDataSet extends PointDataSet {
       buildValue,
       valuePosition
     });
-    this.surfaceColor = normalizeColor(color);
-    const border = normalizeColor(borderColor ?? CHART_BLACK);
+    this.surfaceColor = normalizePaintColor(color);
+    const border = normalizePaintColor(borderColor ?? CHART_BLACK);
     this.drawBorder = drawBorder ?? (
       borderColor !== null && borderColor !== undefined
-      && (border[0] !== this.surfaceColor[0] || border[1] !== this.surfaceColor[1] || border[2] !== this.surfaceColor[2])
+      && !samePaintColor(border, this.surfaceColor)
     );
     if (!this.drawBorder && !drawSurface) {
       throw new Error('BarDataSet must draw its surface or its border');

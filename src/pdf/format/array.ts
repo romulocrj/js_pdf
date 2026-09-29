@@ -21,6 +21,8 @@
  * byte-identical. Both forms are valid PDF; the port's is easier to read.
  */
 
+import { colorComponents } from '../color.ts';
+import type { ColorInput } from '../color.ts';
 import { PdfDataType } from './base.ts';
 import { PdfNum } from './num.ts';
 import type { PdfIndirect } from './indirect.ts';
@@ -50,6 +52,10 @@ export class PdfArray extends PdfDataType {
   /** `[5 0 R 9 0 R]` — the `/Kids` and `/Contents` shape. */
   static fromObjects(objects: readonly PdfReferenceable[]): PdfArray {
     return new PdfArray(objects.map(object => object.ref()));
+  }
+
+  static fromColor(color: ColorInput): PdfArray {
+    return PdfArray.fromNum(colorComponents(color));
   }
 
   get length(): number {

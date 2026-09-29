@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { BoxFit } from './svg.ts';
 import type { TextAlign } from './text.ts';
 import type { TextStyle } from './text_style.ts';
@@ -12,7 +12,7 @@ export interface PlaceholderOptions {
 }
 /** A crossed box used when a visual resource is deliberately absent. */
 export declare class Placeholder extends Widget<null> {
-    readonly color: Rgb;
+    readonly color: PaintColor;
     readonly strokeWidth: number;
     readonly fallbackWidth: number;
     readonly fallbackHeight: number;
@@ -25,7 +25,7 @@ export interface PdfLogoOptions {
     readonly fit?: BoxFit;
 }
 export declare class PdfLogo extends StatelessWidget {
-    readonly color: Rgb;
+    readonly color: PaintColor;
     readonly fit: BoxFit;
     constructor({ color, fit }?: PdfLogoOptions);
     build(): AnyWidget;

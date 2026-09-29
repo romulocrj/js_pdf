@@ -15,6 +15,17 @@
  *
  */
 
+function assertFiniteNumber(value, name) {
+  if (!Number.isFinite(value)) {
+    throw new TypeError(`${name} must be a finite number`);
+  }
+  return value;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 const GROW = 65536;
 
 class PdfStream {
@@ -82,6 +93,929 @@ function encodeLatin1(value) {
   }
   return result;
 }
+
+class PdfDataType {
+  toString() {
+    const stream = new PdfStream;
+    this.output(stream);
+    let result = "";
+    for (const byte of stream.output()) {
+      result += String.fromCharCode(byte);
+    }
+    return result;
+  }
+}
+
+function formatNumber(value) {
+  const rounded = Math.abs(value) < 1e-6 ? 0 : value;
+  return Number(rounded.toFixed(4)).toString();
+}
+
+class PdfNum extends PdfDataType {
+  constructor(value) {
+    super();
+    this.value = value;
+  }
+  output(s) {
+    s.putString(formatNumber(this.value));
+  }
+}
+
+function normalizeColor(value, fallback = [ 0, 0, 0 ]) {
+  if (value == null) return fallback;
+  if (value instanceof PdfColor) return [ value.red, value.green, value.blue ];
+  if (Array.isArray(value)) {
+    const [r, g, b] = value;
+    return [ clamp(Number(r), 0, 1), clamp(Number(g), 0, 1), clamp(Number(b), 0, 1) ];
+  }
+  if (typeof value === "string") {
+    const hex = value.startsWith("#") ? value.slice(1) : value;
+    if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+      return [ parseInt(hex.slice(0, 2), 16) / 255, parseInt(hex.slice(2, 4), 16) / 255, parseInt(hex.slice(4, 6), 16) / 255 ];
+    }
+  }
+  throw new TypeError("Color must be [r,g,b] with values from 0 to 1 or #RRGGBB");
+}
+
+function linearizeColorComponent(component) {
+  if (component <= .03928) return component / 12.92;
+  return Math.pow((component + .055) / 1.055, 2.4);
+}
+
+function colorLuminance(color) {
+  const [r, g, b] = normalizeColor(color);
+  return .2126 * linearizeColorComponent(r) + .7152 * linearizeColorComponent(g) + .0722 * linearizeColorComponent(b);
+}
+
+function isLightColor(color) {
+  const relative = colorLuminance(color) + .05;
+  return !(relative * relative > .15);
+}
+
+function colorOperator(color, stroke = false) {
+  const operator = color instanceof PdfColorCmyk ? stroke ? "K" : "k" : color instanceof PdfColorGrey ? stroke ? "G" : "g" : stroke ? "RG" : "rg";
+  return `${colorComponents(color).map(formatNumber).join(" ")} ${operator}`;
+}
+
+function unit(value) {
+  if (!Number.isFinite(value) || value < 0 || value > 1) throw new RangeError("Color components must be finite values in 0..1");
+  return value;
+}
+
+function hueValue(value) {
+  if (!Number.isFinite(value) || value < 0 || value >= 360) throw new RangeError("Hue must be in 0..360, excluding 360");
+  return value;
+}
+
+function wrapHue(value) {
+  return (value % 360 + 360) % 360;
+}
+
+class PdfColor {
+  constructor(red, green, blue, alpha = 1) {
+    this.red = unit(red);
+    this.green = unit(green);
+    this.blue = unit(blue);
+    this.alpha = unit(alpha);
+  }
+  static fromInt(color) {
+    return new PdfColor((color >>> 16 & 255) / 255, (color >>> 8 & 255) / 255, (color & 255) / 255, (color >>> 24 & 255) / 255);
+  }
+  static fromHex(color) {
+    const hex = color.startsWith("#") ? color.slice(1) : color;
+    if (!/^(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(hex)) throw new TypeError("Color hex must contain 3, 6 or 8 hexadecimal digits");
+    const expanded = hex.length === 3 ? [ ...hex ].map(value => value + value).join("") : hex;
+    return new PdfColor(parseInt(expanded.slice(0, 2), 16) / 255, parseInt(expanded.slice(2, 4), 16) / 255, parseInt(expanded.slice(4, 6), 16) / 255, expanded.length === 8 ? parseInt(expanded.slice(6), 16) / 255 : 1);
+  }
+  static fromRYB(red, yellow, blue, alpha = 1) {
+    unit(red);
+    unit(yellow);
+    unit(blue);
+    const magic = [ [ 1, 1, 1 ], [ 1, 1, 0 ], [ 1, 0, 0 ], [ 1, .5, 0 ], [ .163, .373, .6 ], [ 0, .66, .2 ], [ .5, 0, .5 ], [ .2, .094, 0 ] ];
+    const cubic = (t, a, b) => a + t * t * (3 - 2 * t) * (b - a);
+    const component = index => cubic(red, cubic(yellow, cubic(blue, magic[0][index], magic[4][index]), cubic(blue, magic[1][index], magic[5][index])), cubic(yellow, cubic(blue, magic[2][index], magic[6][index]), cubic(blue, magic[3][index], magic[7][index])));
+    return new PdfColor(component(0), component(1), component(2), alpha);
+  }
+  withAlpha(alpha) {
+    return new PdfColor(this.red, this.green, this.blue, alpha);
+  }
+  withRed(red) {
+    return new PdfColor(red, this.green, this.blue, this.alpha);
+  }
+  withGreen(green) {
+    return new PdfColor(this.red, green, this.blue, this.alpha);
+  }
+  withBlue(blue) {
+    return new PdfColor(this.red, this.green, blue, this.alpha);
+  }
+  withValues(alpha, red, green, blue) {
+    return new PdfColor(red ?? this.red, green ?? this.green, blue ?? this.blue, alpha ?? this.alpha);
+  }
+  toInt() {
+    return (Math.round(this.alpha * 255) << 24 | Math.round(this.red * 255) << 16 | Math.round(this.green * 255) << 8 | Math.round(this.blue * 255)) >>> 0;
+  }
+  toHex() {
+    const value = this.toInt();
+    return `#${(value & 16777215).toString(16).padStart(6, "0")}${(value >>> 24).toString(16).padStart(2, "0")}`;
+  }
+  toCmyk() {
+    return PdfColorCmyk.fromRgb(this.red, this.green, this.blue, this.alpha);
+  }
+  toHsv() {
+    return PdfColorHsv.fromRgb(this.red, this.green, this.blue, this.alpha);
+  }
+  toHsl() {
+    return PdfColorHsl.fromRgb(this.red, this.green, this.blue, this.alpha);
+  }
+  get luminance() {
+    return colorLuminance(this);
+  }
+  get isLight() {
+    return !this.isDark;
+  }
+  get isDark() {
+    return (this.luminance + .05) ** 2 > .15;
+  }
+  shade(strength) {
+    const hsl = this.toHsl();
+    return new PdfColorHsl(hsl.hue, hsl.saturation, clamp(hsl.lightness * (1.5 - strength), 0, 1));
+  }
+  get complementary() {
+    return this.toHsv().complementary;
+  }
+  get monochromatic() {
+    return this.toHsv().monochromatic;
+  }
+  get splitcomplementary() {
+    return this.toHsv().splitcomplementary;
+  }
+  get tetradic() {
+    return this.toHsv().tetradic;
+  }
+  get triadic() {
+    return this.toHsv().triadic;
+  }
+  get analagous() {
+    return this.toHsv().analagous;
+  }
+  flatten({background = new PdfColor(1, 1, 1)} = {}) {
+    return new PdfColor(this.alpha * this.red + (1 - this.alpha) * background.red, this.alpha * this.green + (1 - this.alpha) * background.green, this.alpha * this.blue + (1 - this.alpha) * background.blue, background.alpha);
+  }
+  equals(other) {
+    return other instanceof PdfColor && other.constructor === this.constructor && other.red === this.red && other.green === this.green && other.blue === this.blue && other.alpha === this.alpha;
+  }
+  get hashCode() {
+    return this.toInt();
+  }
+  toString() {
+    return `${this.constructor.name}(${this.red}, ${this.green}, ${this.blue}, ${this.alpha})`;
+  }
+}
+
+class PdfColorGrey extends PdfColor {
+  constructor(color, alpha = 1) {
+    super(color, color, color, alpha);
+  }
+}
+
+class PdfColorCmyk extends PdfColor {
+  constructor(cyan, magenta, yellow, black, alpha = 1) {
+    unit(cyan);
+    unit(magenta);
+    unit(yellow);
+    unit(black);
+    super((1 - cyan) * (1 - black), (1 - magenta) * (1 - black), (1 - yellow) * (1 - black), alpha);
+    this.cyan = cyan;
+    this.magenta = magenta;
+    this.yellow = yellow;
+    this.black = black;
+  }
+  static fromRgb(red, green, blue, alpha = 1) {
+    unit(red);
+    unit(green);
+    unit(blue);
+    const max = Math.max(red, green, blue);
+    return max === 0 ? new PdfColorCmyk(0, 0, 0, 1, alpha) : new PdfColorCmyk((max - red) / max, (max - green) / max, (max - blue) / max, 1 - max, alpha);
+  }
+  toCmyk() {
+    return this;
+  }
+  toString() {
+    return `PdfColorCmyk(${this.cyan}, ${this.magenta}, ${this.yellow}, ${this.black}, ${this.alpha})`;
+  }
+}
+
+function rgbHue(red, green, blue, max, delta) {
+  if (delta === 0) return 0;
+  if (max === red) return wrapHue(60 * (green - blue) / delta);
+  if (max === green) return 60 * ((blue - red) / delta + 2);
+  return 60 * ((red - green) / delta + 4);
+}
+
+function cylindricalRgb(hue, chroma, match) {
+  hueValue(hue);
+  const secondary = chroma * (1 - Math.abs(hue / 60 % 2 - 1));
+  const components = hue < 60 ? [ chroma, secondary, 0 ] : hue < 120 ? [ secondary, chroma, 0 ] : hue < 180 ? [ 0, chroma, secondary ] : hue < 240 ? [ 0, secondary, chroma ] : hue < 300 ? [ secondary, 0, chroma ] : [ chroma, 0, secondary ];
+  return [ clamp(components[0] + match, 0, 1), clamp(components[1] + match, 0, 1), clamp(components[2] + match, 0, 1) ];
+}
+
+class PdfColorHsv extends PdfColor {
+  constructor(hue, saturation, value, alpha = 1) {
+    unit(saturation);
+    unit(value);
+    super(...cylindricalRgb(hue, saturation * value, value - saturation * value), alpha);
+    this.hue = hue;
+    this.saturation = saturation;
+    this.value = value;
+  }
+  static fromRgb(red, green, blue, alpha = 1) {
+    unit(red);
+    unit(green);
+    unit(blue);
+    const max = Math.max(red, green, blue), delta = max - Math.min(red, green, blue);
+    return new PdfColorHsv(rgbHue(red, green, blue, max, delta), max === 0 ? 0 : delta / max, max, alpha);
+  }
+  withHue(hue) {
+    return new PdfColorHsv(hue, this.saturation, this.value, this.alpha);
+  }
+  withSaturation(saturation) {
+    return new PdfColorHsv(this.hue, saturation, this.value, this.alpha);
+  }
+  withValue(value) {
+    return new PdfColorHsv(this.hue, this.saturation, value, this.alpha);
+  }
+  toHsv() {
+    return this;
+  }
+  get complementary() {
+    return this.withHue(wrapHue(this.hue - 120));
+  }
+  get monochromatic() {
+    return [ [ .2, .1 ], [ .4, .2 ], [ .15, .05 ] ].map(([s, v]) => new PdfColorHsv(this.hue, clamp(this.saturation + (this.saturation > .5 ? -s : s), 0, 1), clamp(this.value + (this.value > .5 ? -v : v), 0, 1)));
+  }
+  get splitcomplementary() {
+    return [ -150, -180 ].map(offset => this.withHue(wrapHue(this.hue + offset)));
+  }
+  get triadic() {
+    return [ 80, -120 ].map(offset => this.withHue(wrapHue(this.hue + offset)));
+  }
+  get tetradic() {
+    return [ 120, -150, 60 ].map(offset => this.withHue(wrapHue(this.hue + offset)));
+  }
+  get analagous() {
+    return [ 30, -20 ].map(offset => this.withHue(wrapHue(this.hue + offset)));
+  }
+  toString() {
+    return `PdfColorHsv(${this.hue}, ${this.saturation}, ${this.value}, ${this.alpha})`;
+  }
+}
+
+class PdfColorHsl extends PdfColor {
+  constructor(hue, saturation, lightness, alpha = 1) {
+    unit(saturation);
+    unit(lightness);
+    const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+    super(...cylindricalRgb(hue, chroma, lightness - chroma / 2), alpha);
+    this.hue = hue;
+    this.saturation = saturation;
+    this.lightness = lightness;
+  }
+  static fromRgb(red, green, blue, alpha = 1) {
+    unit(red);
+    unit(green);
+    unit(blue);
+    const max = Math.max(red, green, blue), min = Math.min(red, green, blue), delta = max - min;
+    const lightness = (max + min) / 2;
+    const saturation = delta === 0 ? 0 : clamp(delta / (1 - Math.abs(2 * lightness - 1)), 0, 1);
+    return new PdfColorHsl(rgbHue(red, green, blue, max, delta), saturation, lightness, alpha);
+  }
+  withHue(hue) {
+    return new PdfColorHsl(hue, this.saturation, this.lightness, this.alpha);
+  }
+  withSaturation(saturation) {
+    return new PdfColorHsl(this.hue, saturation, this.lightness, this.alpha);
+  }
+  withLightness(lightness) {
+    return new PdfColorHsl(this.hue, this.saturation, lightness, this.alpha);
+  }
+  toHsl() {
+    return this;
+  }
+  toString() {
+    return `PdfColorHsl(${this.hue}, ${this.saturation}, ${this.lightness}, ${this.alpha})`;
+  }
+}
+
+function normalizePaintColor(value) {
+  return value instanceof PdfColor ? value : normalizeColor(value);
+}
+
+function colorComponents(color) {
+  if (color instanceof PdfColorCmyk) return [ color.cyan, color.magenta, color.yellow, color.black ];
+  if (color instanceof PdfColorGrey) return [ color.red ];
+  return normalizeColor(color);
+}
+
+function samePaintColor(left, right) {
+  const a = colorComponents(left), b = colorComponents(right);
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+class PdfColors {
+  constructor() {}
+  static getColor(index) {
+    if (!Number.isSafeInteger(index)) throw new RangeError("Color index must be a safe integer");
+    const hue = (index * 137.508 % 360 + 360) % 360;
+    const color = new PdfColorHsv(hue, 1, 1);
+    return index / 3 % 2 === 0 ? PdfColor.fromRYB(color.red, color.green, color.blue) : color;
+  }
+}
+
+PdfColors.red50 = Object.freeze(PdfColor.fromInt(4294962158));
+
+PdfColors.red100 = Object.freeze(PdfColor.fromInt(4294954450));
+
+PdfColors.red200 = Object.freeze(PdfColor.fromInt(4293892762));
+
+PdfColors.red300 = Object.freeze(PdfColor.fromInt(4293227379));
+
+PdfColors.red400 = Object.freeze(PdfColor.fromInt(4293874512));
+
+PdfColors.red500 = Object.freeze(PdfColor.fromInt(4294198070));
+
+PdfColors.red600 = Object.freeze(PdfColor.fromInt(4293212469));
+
+PdfColors.red700 = Object.freeze(PdfColor.fromInt(4292030255));
+
+PdfColors.red800 = Object.freeze(PdfColor.fromInt(4291176488));
+
+PdfColors.red900 = Object.freeze(PdfColor.fromInt(4290190364));
+
+PdfColors.redAccent100 = Object.freeze(PdfColor.fromInt(4294937216));
+
+PdfColors.redAccent200 = Object.freeze(PdfColor.fromInt(4294922834));
+
+PdfColors.redAccent400 = Object.freeze(PdfColor.fromInt(4294907716));
+
+PdfColors.redAccent700 = Object.freeze(PdfColor.fromInt(4292149248));
+
+PdfColors.pink50 = Object.freeze(PdfColor.fromInt(4294763756));
+
+PdfColors.pink100 = Object.freeze(PdfColor.fromInt(4294491088));
+
+PdfColors.pink200 = Object.freeze(PdfColor.fromInt(4294217649));
+
+PdfColors.pink300 = Object.freeze(PdfColor.fromInt(4293943954));
+
+PdfColors.pink400 = Object.freeze(PdfColor.fromInt(4293673082));
+
+PdfColors.pink500 = Object.freeze(PdfColor.fromInt(4293467747));
+
+PdfColors.pink600 = Object.freeze(PdfColor.fromInt(4292352864));
+
+PdfColors.pink700 = Object.freeze(PdfColor.fromInt(4290910299));
+
+PdfColors.pink800 = Object.freeze(PdfColor.fromInt(4289533015));
+
+PdfColors.pink900 = Object.freeze(PdfColor.fromInt(4287106639));
+
+PdfColors.pinkAccent100 = Object.freeze(PdfColor.fromInt(4294934699));
+
+PdfColors.pinkAccent200 = Object.freeze(PdfColor.fromInt(4294918273));
+
+PdfColors.pinkAccent400 = Object.freeze(PdfColor.fromInt(4294246487));
+
+PdfColors.pinkAccent700 = Object.freeze(PdfColor.fromInt(4291105122));
+
+PdfColors.purple50 = Object.freeze(PdfColor.fromInt(4294174197));
+
+PdfColors.purple100 = Object.freeze(PdfColor.fromInt(4292984551));
+
+PdfColors.purple200 = Object.freeze(PdfColor.fromInt(4291728344));
+
+PdfColors.purple300 = Object.freeze(PdfColor.fromInt(4290406600));
+
+PdfColors.purple400 = Object.freeze(PdfColor.fromInt(4289415100));
+
+PdfColors.purple500 = Object.freeze(PdfColor.fromInt(4288423856));
+
+PdfColors.purple600 = Object.freeze(PdfColor.fromInt(4287505578));
+
+PdfColors.purple700 = Object.freeze(PdfColor.fromInt(4286259106));
+
+PdfColors.purple800 = Object.freeze(PdfColor.fromInt(4285143962));
+
+PdfColors.purple900 = Object.freeze(PdfColor.fromInt(4283045004));
+
+PdfColors.purpleAccent100 = Object.freeze(PdfColor.fromInt(4293558524));
+
+PdfColors.purpleAccent200 = Object.freeze(PdfColor.fromInt(4292886779));
+
+PdfColors.purpleAccent400 = Object.freeze(PdfColor.fromInt(4292149497));
+
+PdfColors.purpleAccent700 = Object.freeze(PdfColor.fromInt(4289331455));
+
+PdfColors.deepPurple50 = Object.freeze(PdfColor.fromInt(4293781494));
+
+PdfColors.deepPurple100 = Object.freeze(PdfColor.fromInt(4291937513));
+
+PdfColors.deepPurple200 = Object.freeze(PdfColor.fromInt(4289961435));
+
+PdfColors.deepPurple300 = Object.freeze(PdfColor.fromInt(4287985101));
+
+PdfColors.deepPurple400 = Object.freeze(PdfColor.fromInt(4286470082));
+
+PdfColors.deepPurple500 = Object.freeze(PdfColor.fromInt(4284955319));
+
+PdfColors.deepPurple600 = Object.freeze(PdfColor.fromInt(4284364209));
+
+PdfColors.deepPurple700 = Object.freeze(PdfColor.fromInt(4283510184));
+
+PdfColors.deepPurple800 = Object.freeze(PdfColor.fromInt(4282722208));
+
+PdfColors.deepPurple900 = Object.freeze(PdfColor.fromInt(4281408402));
+
+PdfColors.deepPurpleAccent100 = Object.freeze(PdfColor.fromInt(4289956095));
+
+PdfColors.deepPurpleAccent200 = Object.freeze(PdfColor.fromInt(4286336511));
+
+PdfColors.deepPurpleAccent400 = Object.freeze(PdfColor.fromInt(4284817407));
+
+PdfColors.deepPurpleAccent700 = Object.freeze(PdfColor.fromInt(4284612842));
+
+PdfColors.indigo50 = Object.freeze(PdfColor.fromInt(4293454582));
+
+PdfColors.indigo100 = Object.freeze(PdfColor.fromInt(4291152617));
+
+PdfColors.indigo200 = Object.freeze(PdfColor.fromInt(4288653530));
+
+PdfColors.indigo300 = Object.freeze(PdfColor.fromInt(4286154443));
+
+PdfColors.indigo400 = Object.freeze(PdfColor.fromInt(4284246976));
+
+PdfColors.indigo500 = Object.freeze(PdfColor.fromInt(4282339765));
+
+PdfColors.indigo600 = Object.freeze(PdfColor.fromInt(4281944491));
+
+PdfColors.indigo700 = Object.freeze(PdfColor.fromInt(4281352095));
+
+PdfColors.indigo800 = Object.freeze(PdfColor.fromInt(4280825235));
+
+PdfColors.indigo900 = Object.freeze(PdfColor.fromInt(4279903102));
+
+PdfColors.indigoAccent100 = Object.freeze(PdfColor.fromInt(4287405823));
+
+PdfColors.indigoAccent200 = Object.freeze(PdfColor.fromInt(4283657726));
+
+PdfColors.indigoAccent400 = Object.freeze(PdfColor.fromInt(4282211070));
+
+PdfColors.indigoAccent700 = Object.freeze(PdfColor.fromInt(4281356286));
+
+PdfColors.blue50 = Object.freeze(PdfColor.fromInt(4293128957));
+
+PdfColors.blue100 = Object.freeze(PdfColor.fromInt(4290502395));
+
+PdfColors.blue200 = Object.freeze(PdfColor.fromInt(4287679225));
+
+PdfColors.blue300 = Object.freeze(PdfColor.fromInt(4284790262));
+
+PdfColors.blue400 = Object.freeze(PdfColor.fromInt(4282557941));
+
+PdfColors.blue500 = Object.freeze(PdfColor.fromInt(4280391411));
+
+PdfColors.blue600 = Object.freeze(PdfColor.fromInt(4280191205));
+
+PdfColors.blue700 = Object.freeze(PdfColor.fromInt(4279858898));
+
+PdfColors.blue800 = Object.freeze(PdfColor.fromInt(4279592384));
+
+PdfColors.blue900 = Object.freeze(PdfColor.fromInt(4279060385));
+
+PdfColors.blueAccent100 = Object.freeze(PdfColor.fromInt(4286755327));
+
+PdfColors.blueAccent200 = Object.freeze(PdfColor.fromInt(4282682111));
+
+PdfColors.blueAccent400 = Object.freeze(PdfColor.fromInt(4280908287));
+
+PdfColors.blueAccent700 = Object.freeze(PdfColor.fromInt(4280902399));
+
+PdfColors.lightBlue50 = Object.freeze(PdfColor.fromInt(4292998654));
+
+PdfColors.lightBlue100 = Object.freeze(PdfColor.fromInt(4289979900));
+
+PdfColors.lightBlue200 = Object.freeze(PdfColor.fromInt(4286698746));
+
+PdfColors.lightBlue300 = Object.freeze(PdfColor.fromInt(4283417591));
+
+PdfColors.lightBlue400 = Object.freeze(PdfColor.fromInt(4280923894));
+
+PdfColors.lightBlue500 = Object.freeze(PdfColor.fromInt(4278430196));
+
+PdfColors.lightBlue600 = Object.freeze(PdfColor.fromInt(4278426597));
+
+PdfColors.lightBlue700 = Object.freeze(PdfColor.fromInt(4278356177));
+
+PdfColors.lightBlue800 = Object.freeze(PdfColor.fromInt(4278351805));
+
+PdfColors.lightBlue900 = Object.freeze(PdfColor.fromInt(4278278043));
+
+PdfColors.lightBlueAccent100 = Object.freeze(PdfColor.fromInt(4286634239));
+
+PdfColors.lightBlueAccent200 = Object.freeze(PdfColor.fromInt(4282434815));
+
+PdfColors.lightBlueAccent400 = Object.freeze(PdfColor.fromInt(4278235391));
+
+PdfColors.lightBlueAccent700 = Object.freeze(PdfColor.fromInt(4278227434));
+
+PdfColors.cyan50 = Object.freeze(PdfColor.fromInt(4292933626));
+
+PdfColors.cyan100 = Object.freeze(PdfColor.fromInt(4289915890));
+
+PdfColors.cyan200 = Object.freeze(PdfColor.fromInt(4286635754));
+
+PdfColors.cyan300 = Object.freeze(PdfColor.fromInt(4283289825));
+
+PdfColors.cyan400 = Object.freeze(PdfColor.fromInt(4280731354));
+
+PdfColors.cyan500 = Object.freeze(PdfColor.fromInt(4278238420));
+
+PdfColors.cyan600 = Object.freeze(PdfColor.fromInt(4278234305));
+
+PdfColors.cyan700 = Object.freeze(PdfColor.fromInt(4278228903));
+
+PdfColors.cyan800 = Object.freeze(PdfColor.fromInt(4278223759));
+
+PdfColors.cyan900 = Object.freeze(PdfColor.fromInt(4278214756));
+
+PdfColors.cyanAccent100 = Object.freeze(PdfColor.fromInt(4286906367));
+
+PdfColors.cyanAccent200 = Object.freeze(PdfColor.fromInt(4279828479));
+
+PdfColors.cyanAccent400 = Object.freeze(PdfColor.fromInt(4278248959));
+
+PdfColors.cyanAccent700 = Object.freeze(PdfColor.fromInt(4278237396));
+
+PdfColors.teal50 = Object.freeze(PdfColor.fromInt(4292932337));
+
+PdfColors.teal100 = Object.freeze(PdfColor.fromInt(4289912795));
+
+PdfColors.teal200 = Object.freeze(PdfColor.fromInt(4286630852));
+
+PdfColors.teal300 = Object.freeze(PdfColor.fromInt(4283283116));
+
+PdfColors.teal400 = Object.freeze(PdfColor.fromInt(4280723098));
+
+PdfColors.teal500 = Object.freeze(PdfColor.fromInt(4278228616));
+
+PdfColors.teal600 = Object.freeze(PdfColor.fromInt(4278225275));
+
+PdfColors.teal700 = Object.freeze(PdfColor.fromInt(4278221163));
+
+PdfColors.teal800 = Object.freeze(PdfColor.fromInt(4278217052));
+
+PdfColors.teal900 = Object.freeze(PdfColor.fromInt(4278209856));
+
+PdfColors.tealAccent100 = Object.freeze(PdfColor.fromInt(4289200107));
+
+PdfColors.tealAccent200 = Object.freeze(PdfColor.fromInt(4284809178));
+
+PdfColors.tealAccent400 = Object.freeze(PdfColor.fromInt(4280150454));
+
+PdfColors.tealAccent700 = Object.freeze(PdfColor.fromInt(4278239141));
+
+PdfColors.green50 = Object.freeze(PdfColor.fromInt(4293457385));
+
+PdfColors.green100 = Object.freeze(PdfColor.fromInt(4291356361));
+
+PdfColors.green200 = Object.freeze(PdfColor.fromInt(4289058471));
+
+PdfColors.green300 = Object.freeze(PdfColor.fromInt(4286695300));
+
+PdfColors.green400 = Object.freeze(PdfColor.fromInt(4284922730));
+
+PdfColors.green500 = Object.freeze(PdfColor.fromInt(4283215696));
+
+PdfColors.green600 = Object.freeze(PdfColor.fromInt(4282622023));
+
+PdfColors.green700 = Object.freeze(PdfColor.fromInt(4281896508));
+
+PdfColors.green800 = Object.freeze(PdfColor.fromInt(4281236786));
+
+PdfColors.green900 = Object.freeze(PdfColor.fromInt(4279983648));
+
+PdfColors.greenAccent100 = Object.freeze(PdfColor.fromInt(4290377418));
+
+PdfColors.greenAccent200 = Object.freeze(PdfColor.fromInt(4285132974));
+
+PdfColors.greenAccent400 = Object.freeze(PdfColor.fromInt(4278249078));
+
+PdfColors.greenAccent700 = Object.freeze(PdfColor.fromInt(4278241363));
+
+PdfColors.lightGreen50 = Object.freeze(PdfColor.fromInt(4294047977));
+
+PdfColors.lightGreen100 = Object.freeze(PdfColor.fromInt(4292668872));
+
+PdfColors.lightGreen200 = Object.freeze(PdfColor.fromInt(4291158437));
+
+PdfColors.lightGreen300 = Object.freeze(PdfColor.fromInt(4289648001));
+
+PdfColors.lightGreen400 = Object.freeze(PdfColor.fromInt(4288466021));
+
+PdfColors.lightGreen500 = Object.freeze(PdfColor.fromInt(4287349578));
+
+PdfColors.lightGreen600 = Object.freeze(PdfColor.fromInt(4286362434));
+
+PdfColors.lightGreen700 = Object.freeze(PdfColor.fromInt(4285046584));
+
+PdfColors.lightGreen800 = Object.freeze(PdfColor.fromInt(4283796271));
+
+PdfColors.lightGreen900 = Object.freeze(PdfColor.fromInt(4281559326));
+
+PdfColors.lightGreenAccent100 = Object.freeze(PdfColor.fromInt(4291624848));
+
+PdfColors.lightGreenAccent200 = Object.freeze(PdfColor.fromInt(4289920857));
+
+PdfColors.lightGreenAccent400 = Object.freeze(PdfColor.fromInt(4285988611));
+
+PdfColors.lightGreenAccent700 = Object.freeze(PdfColor.fromInt(4284800279));
+
+PdfColors.lime50 = Object.freeze(PdfColor.fromInt(4294573031));
+
+PdfColors.lime100 = Object.freeze(PdfColor.fromInt(4293981379));
+
+PdfColors.lime200 = Object.freeze(PdfColor.fromInt(4293324444));
+
+PdfColors.lime300 = Object.freeze(PdfColor.fromInt(4292667253));
+
+PdfColors.lime400 = Object.freeze(PdfColor.fromInt(4292141399));
+
+PdfColors.lime500 = Object.freeze(PdfColor.fromInt(4291681337));
+
+PdfColors.lime600 = Object.freeze(PdfColor.fromInt(4290824755));
+
+PdfColors.lime700 = Object.freeze(PdfColor.fromInt(4289705003));
+
+PdfColors.lime800 = Object.freeze(PdfColor.fromInt(4288584996));
+
+PdfColors.lime900 = Object.freeze(PdfColor.fromInt(4286740247));
+
+PdfColors.limeAccent100 = Object.freeze(PdfColor.fromInt(4294246273));
+
+PdfColors.limeAccent200 = Object.freeze(PdfColor.fromInt(4293852993));
+
+PdfColors.limeAccent400 = Object.freeze(PdfColor.fromInt(4291231488));
+
+PdfColors.limeAccent700 = Object.freeze(PdfColor.fromInt(4289653248));
+
+PdfColors.yellow50 = Object.freeze(PdfColor.fromInt(4294966759));
+
+PdfColors.yellow100 = Object.freeze(PdfColor.fromInt(4294965700));
+
+PdfColors.yellow200 = Object.freeze(PdfColor.fromInt(4294964637));
+
+PdfColors.yellow300 = Object.freeze(PdfColor.fromInt(4294963574));
+
+PdfColors.yellow400 = Object.freeze(PdfColor.fromInt(4294962776));
+
+PdfColors.yellow500 = Object.freeze(PdfColor.fromInt(4294961979));
+
+PdfColors.yellow600 = Object.freeze(PdfColor.fromInt(4294826037));
+
+PdfColors.yellow700 = Object.freeze(PdfColor.fromInt(4294688813));
+
+PdfColors.yellow800 = Object.freeze(PdfColor.fromInt(4294551589));
+
+PdfColors.yellow900 = Object.freeze(PdfColor.fromInt(4294278935));
+
+PdfColors.yellowAccent100 = Object.freeze(PdfColor.fromInt(4294967181));
+
+PdfColors.yellowAccent200 = Object.freeze(PdfColor.fromInt(4294967040));
+
+PdfColors.yellowAccent400 = Object.freeze(PdfColor.fromInt(4294961664));
+
+PdfColors.yellowAccent700 = Object.freeze(PdfColor.fromInt(4294956544));
+
+PdfColors.amber50 = Object.freeze(PdfColor.fromInt(4294965473));
+
+PdfColors.amber100 = Object.freeze(PdfColor.fromInt(4294962355));
+
+PdfColors.amber200 = Object.freeze(PdfColor.fromInt(4294959234));
+
+PdfColors.amber300 = Object.freeze(PdfColor.fromInt(4294956367));
+
+PdfColors.amber400 = Object.freeze(PdfColor.fromInt(4294953512));
+
+PdfColors.amber500 = Object.freeze(PdfColor.fromInt(4294951175));
+
+PdfColors.amber600 = Object.freeze(PdfColor.fromInt(4294947584));
+
+PdfColors.amber700 = Object.freeze(PdfColor.fromInt(4294942720));
+
+PdfColors.amber800 = Object.freeze(PdfColor.fromInt(4294938368));
+
+PdfColors.amber900 = Object.freeze(PdfColor.fromInt(4294930176));
+
+PdfColors.amberAccent100 = Object.freeze(PdfColor.fromInt(4294960511));
+
+PdfColors.amberAccent200 = Object.freeze(PdfColor.fromInt(4294956864));
+
+PdfColors.amberAccent400 = Object.freeze(PdfColor.fromInt(4294951936));
+
+PdfColors.amberAccent700 = Object.freeze(PdfColor.fromInt(4294945536));
+
+PdfColors.orange50 = Object.freeze(PdfColor.fromInt(4294964192));
+
+PdfColors.orange100 = Object.freeze(PdfColor.fromInt(4294959282));
+
+PdfColors.orange200 = Object.freeze(PdfColor.fromInt(4294954112));
+
+PdfColors.orange300 = Object.freeze(PdfColor.fromInt(4294948685));
+
+PdfColors.orange400 = Object.freeze(PdfColor.fromInt(4294944550));
+
+PdfColors.orange500 = Object.freeze(PdfColor.fromInt(4294940672));
+
+PdfColors.orange600 = Object.freeze(PdfColor.fromInt(4294675456));
+
+PdfColors.orange700 = Object.freeze(PdfColor.fromInt(4294278144));
+
+PdfColors.orange800 = Object.freeze(PdfColor.fromInt(4293880832));
+
+PdfColors.orange900 = Object.freeze(PdfColor.fromInt(4293284096));
+
+PdfColors.orangeAccent100 = Object.freeze(PdfColor.fromInt(4294955392));
+
+PdfColors.orangeAccent200 = Object.freeze(PdfColor.fromInt(4294945600));
+
+PdfColors.orangeAccent400 = Object.freeze(PdfColor.fromInt(4294938880));
+
+PdfColors.orangeAccent700 = Object.freeze(PdfColor.fromInt(4294929664));
+
+PdfColors.deepOrange50 = Object.freeze(PdfColor.fromInt(4294699495));
+
+PdfColors.deepOrange100 = Object.freeze(PdfColor.fromInt(4294954172));
+
+PdfColors.deepOrange200 = Object.freeze(PdfColor.fromInt(4294945681));
+
+PdfColors.deepOrange300 = Object.freeze(PdfColor.fromInt(4294937189));
+
+PdfColors.deepOrange400 = Object.freeze(PdfColor.fromInt(4294930499));
+
+PdfColors.deepOrange500 = Object.freeze(PdfColor.fromInt(4294924066));
+
+PdfColors.deepOrange600 = Object.freeze(PdfColor.fromInt(4294201630));
+
+PdfColors.deepOrange700 = Object.freeze(PdfColor.fromInt(4293282329));
+
+PdfColors.deepOrange800 = Object.freeze(PdfColor.fromInt(4292363029));
+
+PdfColors.deepOrange900 = Object.freeze(PdfColor.fromInt(4290721292));
+
+PdfColors.deepOrangeAccent100 = Object.freeze(PdfColor.fromInt(4294942336));
+
+PdfColors.deepOrangeAccent200 = Object.freeze(PdfColor.fromInt(4294929984));
+
+PdfColors.deepOrangeAccent400 = Object.freeze(PdfColor.fromInt(4294917376));
+
+PdfColors.deepOrangeAccent700 = Object.freeze(PdfColor.fromInt(4292684800));
+
+PdfColors.brown50 = Object.freeze(PdfColor.fromInt(4293913577));
+
+PdfColors.brown100 = Object.freeze(PdfColor.fromInt(4292332744));
+
+PdfColors.brown200 = Object.freeze(PdfColor.fromInt(4290554532));
+
+PdfColors.brown300 = Object.freeze(PdfColor.fromInt(4288776319));
+
+PdfColors.brown400 = Object.freeze(PdfColor.fromInt(4287458915));
+
+PdfColors.brown500 = Object.freeze(PdfColor.fromInt(4286141768));
+
+PdfColors.brown600 = Object.freeze(PdfColor.fromInt(4285353025));
+
+PdfColors.brown700 = Object.freeze(PdfColor.fromInt(4284301367));
+
+PdfColors.brown800 = Object.freeze(PdfColor.fromInt(4283315246));
+
+PdfColors.brown900 = Object.freeze(PdfColor.fromInt(4282263331));
+
+PdfColors.grey50 = Object.freeze(PdfColor.fromInt(4294638330));
+
+PdfColors.grey100 = Object.freeze(PdfColor.fromInt(4294309365));
+
+PdfColors.grey200 = Object.freeze(PdfColor.fromInt(4293848814));
+
+PdfColors.grey300 = Object.freeze(PdfColor.fromInt(4292927712));
+
+PdfColors.grey400 = Object.freeze(PdfColor.fromInt(4290624957));
+
+PdfColors.grey500 = Object.freeze(PdfColor.fromInt(4288585374));
+
+PdfColors.grey600 = Object.freeze(PdfColor.fromInt(4285887861));
+
+PdfColors.grey700 = Object.freeze(PdfColor.fromInt(4284572001));
+
+PdfColors.grey800 = Object.freeze(PdfColor.fromInt(4282532418));
+
+PdfColors.grey900 = Object.freeze(PdfColor.fromInt(4280361249));
+
+PdfColors.blueGrey50 = Object.freeze(PdfColor.fromInt(4293718001));
+
+PdfColors.blueGrey100 = Object.freeze(PdfColor.fromInt(4291811548));
+
+PdfColors.blueGrey200 = Object.freeze(PdfColor.fromInt(4289773253));
+
+PdfColors.blueGrey300 = Object.freeze(PdfColor.fromInt(4287669422));
+
+PdfColors.blueGrey400 = Object.freeze(PdfColor.fromInt(4286091420));
+
+PdfColors.blueGrey500 = Object.freeze(PdfColor.fromInt(4284513675));
+
+PdfColors.blueGrey600 = Object.freeze(PdfColor.fromInt(4283723386));
+
+PdfColors.blueGrey700 = Object.freeze(PdfColor.fromInt(4282735204));
+
+PdfColors.blueGrey800 = Object.freeze(PdfColor.fromInt(4281812815));
+
+PdfColors.blueGrey900 = Object.freeze(PdfColor.fromInt(4280693304));
+
+PdfColors.white = Object.freeze(PdfColor.fromInt(4294967295));
+
+PdfColors.black = Object.freeze(PdfColor.fromInt(4278190080));
+
+PdfColors.red = PdfColors.red500;
+
+PdfColors.redAccent = PdfColors.redAccent200;
+
+PdfColors.pink = PdfColors.pink500;
+
+PdfColors.pinkAccent = PdfColors.pinkAccent200;
+
+PdfColors.purple = PdfColors.purple500;
+
+PdfColors.purpleAccent = PdfColors.purpleAccent200;
+
+PdfColors.deepPurple = PdfColors.deepPurple500;
+
+PdfColors.deepPurpleAccent = PdfColors.deepPurpleAccent200;
+
+PdfColors.indigo = PdfColors.indigo500;
+
+PdfColors.indigoAccent = PdfColors.indigoAccent200;
+
+PdfColors.blue = PdfColors.blue500;
+
+PdfColors.blueAccent = PdfColors.blueAccent200;
+
+PdfColors.lightBlue = PdfColors.lightBlue500;
+
+PdfColors.lightBlueAccent = PdfColors.lightBlueAccent200;
+
+PdfColors.cyan = PdfColors.cyan500;
+
+PdfColors.cyanAccent = PdfColors.cyanAccent200;
+
+PdfColors.teal = PdfColors.teal500;
+
+PdfColors.tealAccent = PdfColors.tealAccent200;
+
+PdfColors.green = PdfColors.green500;
+
+PdfColors.greenAccent = PdfColors.greenAccent200;
+
+PdfColors.lightGreen = PdfColors.lightGreen500;
+
+PdfColors.lightGreenAccent = PdfColors.lightGreenAccent200;
+
+PdfColors.lime = PdfColors.lime500;
+
+PdfColors.limeAccent = PdfColors.limeAccent200;
+
+PdfColors.yellow = PdfColors.yellow500;
+
+PdfColors.yellowAccent = PdfColors.yellowAccent200;
+
+PdfColors.amber = PdfColors.amber500;
+
+PdfColors.amberAccent = PdfColors.amberAccent200;
+
+PdfColors.orange = PdfColors.orange500;
+
+PdfColors.orangeAccent = PdfColors.orangeAccent200;
+
+PdfColors.deepOrange = PdfColors.deepOrange500;
+
+PdfColors.deepOrangeAccent = PdfColors.deepOrangeAccent200;
+
+PdfColors.brown = PdfColors.brown500;
+
+PdfColors.grey = PdfColors.grey500;
+
+PdfColors.blueGrey = PdfColors.blueGrey500;
+
+PdfColors.primaries = Object.freeze([ PdfColors.red, PdfColors.pink, PdfColors.purple, PdfColors.deepPurple, PdfColors.indigo, PdfColors.blue, PdfColors.lightBlue, PdfColors.cyan, PdfColors.teal, PdfColors.green, PdfColors.lightGreen, PdfColors.lime, PdfColors.yellow, PdfColors.amber, PdfColors.orange, PdfColors.deepOrange, PdfColors.brown, PdfColors.grey, PdfColors.blueGrey ]);
+
+PdfColors.accents = Object.freeze([ PdfColors.redAccent, PdfColors.pinkAccent, PdfColors.purpleAccent, PdfColors.deepPurpleAccent, PdfColors.indigoAccent, PdfColors.blueAccent, PdfColors.lightBlueAccent, PdfColors.cyanAccent, PdfColors.tealAccent, PdfColors.greenAccent, PdfColors.lightGreenAccent, PdfColors.limeAccent, PdfColors.yellowAccent, PdfColors.amberAccent, PdfColors.orangeAccent, PdfColors.deepOrangeAccent ]);
 
 const CM = 72 / 2.54;
 
@@ -3186,18 +4120,6 @@ PdfFontMetrics.zero = new PdfFontMetrics({
   bottom: 0
 });
 
-class PdfDataType {
-  toString() {
-    const stream = new PdfStream;
-    this.output(stream);
-    let result = "";
-    for (const byte of stream.output()) {
-      result += String.fromCharCode(byte);
-    }
-    return result;
-  }
-}
-
 class PdfDict extends PdfDataType {
   constructor(values) {
     super();
@@ -5255,21 +6177,6 @@ class TtfWriter {
   }
 }
 
-function formatNumber(value) {
-  const rounded = Math.abs(value) < 1e-6 ? 0 : value;
-  return Number(rounded.toFixed(4)).toString();
-}
-
-class PdfNum extends PdfDataType {
-  constructor(value) {
-    super();
-    this.value = value;
-  }
-  output(s) {
-    s.putString(formatNumber(this.value));
-  }
-}
-
 class PdfArray extends PdfDataType {
   constructor(values = []) {
     super();
@@ -5280,6 +6187,9 @@ class PdfArray extends PdfDataType {
   }
   static fromObjects(objects) {
     return new PdfArray(objects.map(object => object.ref()));
+  }
+  static fromColor(color) {
+    return PdfArray.fromNum(colorComponents(color));
   }
   get length() {
     return this.values.length;
@@ -6882,52 +7792,6 @@ class PdfPageLabels extends PdfObject {
   }
 }
 
-function assertFiniteNumber(value, name) {
-  if (!Number.isFinite(value)) {
-    throw new TypeError(`${name} must be a finite number`);
-  }
-  return value;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function normalizeColor(value, fallback = [ 0, 0, 0 ]) {
-  if (value == null) return fallback;
-  if (Array.isArray(value)) {
-    const [r, g, b] = value;
-    return [ clamp(Number(r), 0, 1), clamp(Number(g), 0, 1), clamp(Number(b), 0, 1) ];
-  }
-  if (typeof value === "string") {
-    const hex = value.startsWith("#") ? value.slice(1) : value;
-    if (/^[0-9a-fA-F]{6}$/.test(hex)) {
-      return [ parseInt(hex.slice(0, 2), 16) / 255, parseInt(hex.slice(2, 4), 16) / 255, parseInt(hex.slice(4, 6), 16) / 255 ];
-    }
-  }
-  throw new TypeError("Color must be [r,g,b] with values from 0 to 1 or #RRGGBB");
-}
-
-function linearizeColorComponent(component) {
-  if (component <= .03928) return component / 12.92;
-  return Math.pow((component + .055) / 1.055, 2.4);
-}
-
-function colorLuminance(color) {
-  const [r, g, b] = normalizeColor(color);
-  return .2126 * linearizeColorComponent(r) + .7152 * linearizeColorComponent(g) + .0722 * linearizeColorComponent(b);
-}
-
-function isLightColor(color) {
-  const relative = colorLuminance(color) + .05;
-  return !(relative * relative > .15);
-}
-
-function colorOperator(color, stroke = false) {
-  const [r, g, b] = normalizeColor(color);
-  return `${formatNumber(r)} ${formatNumber(g)} ${formatNumber(b)} ${stroke ? "RG" : "rg"}`;
-}
-
 const BLEND_MODE_NAMES = Object.freeze({
   normal: "/Normal",
   multiply: "/Multiply",
@@ -7527,7 +8391,7 @@ function normalizeStyle(value) {
 
 class BorderSide {
   constructor({color = "#000000", width = 1, style = BorderStyle.solid} = {}) {
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
     this.width = Math.max(0, Number(width));
     this.style = normalizeStyle(style);
   }
@@ -7539,7 +8403,8 @@ class BorderSide {
     });
   }
   equals(other) {
-    return this.width === other.width && this.style.paint === other.style.paint && this.style.phase === other.style.phase && String(this.style.pattern) === String(other.style.pattern) && this.color[0] === other.color[0] && this.color[1] === other.color[1] && this.color[2] === other.color[2];
+    const left = colorComponents(this.color), right = colorComponents(other.color);
+    return this.width === other.width && this.style.paint === other.style.paint && this.style.phase === other.style.phase && String(this.style.pattern) === String(other.style.pattern) && left.length === right.length && left.every((component, index) => component === right[index]);
   }
 }
 
@@ -8232,7 +9097,7 @@ class Divider extends Widget {
     this.thickness = Math.max(0, Number(thickness));
     this.indent = Math.max(0, Number(indent));
     this.endIndent = Math.max(0, Number(endIndent));
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
     this.borderStyle = new BorderSide({
       style: borderStyle
     }).style;
@@ -8875,7 +9740,7 @@ class VerticalDivider extends Widget {
     this.thickness = Math.max(0, assertFiniteNumber(Number(thickness), "divider thickness"));
     this.indent = Math.max(0, assertFiniteNumber(Number(indent), "divider indent"));
     this.endIndent = Math.max(0, assertFiniteNumber(Number(endIndent), "divider endIndent"));
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
   }
   layout(_context, constraints) {
     const size = BoxConstraints.from(constraints).constrain({
@@ -9156,7 +10021,7 @@ class BoxShadow {
     x: 0,
     y: 0
   }, blurRadius = 0, spreadRadius = 0, opacity = .25} = {}) {
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
     this.offset = {
       x: Number(offset.x),
       y: Number(offset.y)
@@ -9198,7 +10063,7 @@ function paintShadow(context, shadow, x, y, width, height, shape, borderRadius) 
 
 class BoxDecoration {
   constructor({color = null, border = null, borderRadius = null, boxShadow = null, gradient = null, image = null, shape = "rectangle"} = {}) {
-    this.color = color === null ? null : normalizeColor(color);
+    this.color = color === null ? null : normalizePaintColor(color);
     this.border = normalizeBoxBorder(border);
     this.borderRadius = borderRadius === null ? null : borderRadius instanceof BorderRadiusGeometry ? borderRadius : BorderRadius.all(borderRadius);
     this.boxShadow = boxShadow === null ? [] : boxShadow.map(value => value instanceof BoxShadow ? value : new BoxShadow(value));
@@ -9311,8 +10176,8 @@ class Container extends SpanningWidget {
     this.height = height == null ? null : Number(height);
     this.padding = normalizeInsets(padding);
     this.margin = normalizeInsets(margin);
-    this.background = background == null ? null : normalizeColor(background);
-    this.borderColor = borderColor == null ? null : normalizeColor(borderColor);
+    this.background = background == null ? null : normalizePaintColor(background);
+    this.borderColor = borderColor == null ? null : normalizePaintColor(borderColor);
     this.borderWidth = Number(borderWidth);
     this.decoration = normalizeBoxDecoration(decoration);
     this.foregroundDecoration = normalizeBoxDecoration(foregroundDecoration);
@@ -9516,7 +10381,7 @@ class TextStyle {
     const isItalic = fontStyle === "italic";
     const isBold = fontWeight === "bold";
     this.inherit = inherit;
-    this.color = color == null ? null : normalizeColor(color);
+    this.color = color == null ? null : normalizePaintColor(color);
     this.fontNormal = fontNormal ?? (!isItalic && !isBold ? font : null);
     this.fontBold = fontBold ?? (!isItalic && isBold ? font : null);
     this.fontItalic = fontItalic ?? (isItalic && !isBold ? font : null);
@@ -9531,7 +10396,7 @@ class TextStyle {
     this.height = height;
     this.background = normalizeBoxDecoration(background);
     this.decoration = decoration;
-    this.decorationColor = decorationColor == null ? null : normalizeColor(decorationColor);
+    this.decorationColor = decorationColor == null ? null : normalizePaintColor(decorationColor);
     this.decorationStyle = decorationStyle;
     this.decorationThickness = decorationThickness;
   }
@@ -9627,7 +10492,7 @@ class BarcodePainter extends Widget {
     super();
     this.data = data;
     this.barcode = barcode;
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
     this.drawText = drawText;
     this.textStyle = textStyle;
     this.textPadding = textPadding;
@@ -10271,7 +11136,7 @@ class Vector extends Widget {
       text: ({value, x, y, fontSize = 12, color = "#000000", font}) => {
         context.canvas.text(String(value), box.x + x * scale, box.y + y * scale, {
           fontSize: fontSize * scale,
-          color: normalizeColor(color),
+          color: normalizePaintColor(color),
           font: font ?? context.document.font
         });
       }
@@ -10518,8 +11383,8 @@ class GeometricAnnotationBuilder extends AnnotationBuilder {
   constructor(shape, {color = null, interiorColor = null, border = null, author = null, date = null, subject = null, content = null} = {}) {
     super();
     this.shape = shape;
-    this.color = color === null ? null : normalizeColor(color);
-    this.interiorColor = interiorColor === null ? null : normalizeColor(interiorColor);
+    this.color = color === null ? null : normalizePaintColor(color);
+    this.interiorColor = interiorColor === null ? null : normalizePaintColor(interiorColor);
     this.borderWidth = Number(border?.width ?? 1);
     if (!Number.isFinite(this.borderWidth) || this.borderWidth < 0) {
       throw new RangeError("Annotation border width must be a finite non-negative number");
@@ -10736,7 +11601,7 @@ class Outline extends Anchor {
     if (!Number.isInteger(level) || level < 0) throw new RangeError("Outline.level must be a non-negative integer");
     this.title = String(title);
     this.level = level;
-    this.color = color === null ? null : normalizeColor(color);
+    this.color = color === null ? null : normalizePaintColor(color);
     this.style = style;
   }
   paint(context, box) {
@@ -10747,7 +11612,7 @@ class Outline extends Anchor {
       pageNumber: context.pageNumber,
       y: context.canvas.transformWidgetPoint(box.x, box.y).y,
       anchor: this.name,
-      color: this.color,
+      color: this.color === null ? null : normalizeColor(this.color),
       style: this.style
     });
   }
@@ -15406,7 +16271,7 @@ class RichText extends SpanningWidget {
 class Text extends RichText {
   constructor(value, {lineSplitter = null, hyphenation = null, style = undefined, fontSize = undefined, lineHeight = undefined, color = undefined, align = undefined, textAlign = undefined, textDirection = null, softWrap = undefined, tightBounds = false, textScaleFactor = 1, margin = 0, maxLines = undefined, overflow = undefined, font = undefined} = {}) {
     const overrides = new TextStyle({
-      color: color === undefined ? null : normalizeColor(color),
+      color: color === undefined ? null : normalizePaintColor(color),
       font: font === undefined ? null : undefined,
       fontSize: fontSize === undefined ? null : assertFiniteNumber(Number(fontSize), "fontSize"),
       height: lineHeight === undefined ? null : assertFiniteNumber(Number(lineHeight), "lineHeight")
@@ -15556,7 +16421,7 @@ class Bullet extends StatelessWidget {
     this.bulletMargin = bulletMargin;
     this.bulletSize = Number(bulletSize);
     this.bulletShape = bulletShape;
-    this.bulletColor = normalizeColor(bulletColor);
+    this.bulletColor = normalizePaintColor(bulletColor);
   }
   build(context) {
     return new Container({
@@ -15905,8 +16770,8 @@ function chartOf(context) {
 class Dataset {
   constructor({legend = null, color = null, borderColor = null, borderWidth = .5} = {}) {
     this.legend = legend === null || legend === undefined ? null : String(legend);
-    this.color = color === null || color === undefined ? null : normalizeColor(color);
-    this.borderColor = borderColor === null || borderColor === undefined ? null : normalizeColor(borderColor);
+    this.color = color === null || color === undefined ? null : normalizePaintColor(color);
+    this.borderColor = borderColor === null || borderColor === undefined ? null : normalizePaintColor(borderColor);
     this.borderWidth = Number(borderWidth);
   }
   paintBackground(_context, _frame, _data) {}
@@ -16273,9 +17138,9 @@ class BarDataSet extends PointDataSet {
       buildValue,
       valuePosition
     });
-    this.surfaceColor = normalizeColor(color);
-    const border = normalizeColor(borderColor ?? CHART_BLACK);
-    this.drawBorder = drawBorder ?? (borderColor !== null && borderColor !== undefined && (border[0] !== this.surfaceColor[0] || border[1] !== this.surfaceColor[1] || border[2] !== this.surfaceColor[2]));
+    this.surfaceColor = normalizePaintColor(color);
+    const border = normalizePaintColor(borderColor ?? CHART_BLACK);
+    this.drawBorder = drawBorder ?? (borderColor !== null && borderColor !== undefined && !samePaintColor(border, this.surfaceColor));
     if (!this.drawBorder && !drawSurface) {
       throw new Error("BarDataSet must draw its surface or its border");
     }
@@ -16351,11 +17216,11 @@ class GridAxis {
     this.margin = margin === null ? null : Number(margin);
     this.marginStart = marginStart ?? 0;
     this.marginEnd = marginEnd ?? 0;
-    this.color = normalizeColor(color ?? CHART_BLACK);
+    this.color = normalizePaintColor(color ?? CHART_BLACK);
     this.width = width ?? 1;
     this.divisions = divisions ?? false;
     this.divisionsWidth = divisionsWidth ?? .5;
-    this.divisionsColor = normalizeColor(divisionsColor ?? GREY);
+    this.divisionsColor = normalizePaintColor(divisionsColor ?? GREY);
     this.divisionsDashed = divisionsDashed ?? false;
     this.ticks = ticks ?? false;
     this.axisTick = axisTick;
@@ -16868,9 +17733,9 @@ class LineDataSet extends PointDataSet {
     }
     this.lineWidth = Number(lineWidth);
     this.drawLine = Boolean(drawLine);
-    this.lineColor = lineColor === null ? null : normalizeColor(lineColor);
+    this.lineColor = lineColor === null ? null : normalizePaintColor(lineColor);
     this.drawSurface = Boolean(drawSurface);
-    this.surfaceColor = surfaceColor === null ? null : normalizeColor(surfaceColor);
+    this.surfaceColor = surfaceColor === null ? null : normalizePaintColor(surfaceColor);
     this.surfaceOpacity = Number(surfaceOpacity);
     this.isCurved = Boolean(isCurved);
     this.smoothness = Number(smoothness);
@@ -16986,9 +17851,9 @@ class PieDataSet extends Dataset {
     if (offset < 0) throw new RangeError("PieDataSet offset must not be negative");
     this.value = Number(value);
     this.legendWidget = legendWidget;
-    const fill = this.color ?? normalizeColor(CHART_BLUE);
+    const fill = this.color ?? normalizePaintColor(CHART_BLUE);
     const border = this.borderColor;
-    this.drawBorder = drawBorder ?? (border !== null && (border[0] !== fill[0] || border[1] !== fill[1] || border[2] !== fill[2]));
+    this.drawBorder = drawBorder ?? (border !== null && !samePaintColor(border, fill));
     if (!this.drawBorder && !drawSurface) {
       throw new Error("PieDataSet must draw its surface or its border");
     }
@@ -16999,7 +17864,7 @@ class PieDataSet extends Dataset {
     this.legendAlign = legendAlign;
     this.legendPosition = legendPosition;
     this.legendLineWidth = Number(legendLineWidth);
-    this.legendLineColor = legendLineColor === null ? fill : normalizeColor(legendLineColor);
+    this.legendLineColor = legendLineColor === null ? fill : normalizePaintColor(legendLineColor);
     this.legendOffset = Number(legendOffset);
     this.innerRadius = Number(innerRadius);
   }
@@ -17025,7 +17890,7 @@ class PieDataSet extends Dataset {
           style: this.legendStyle ?? undefined
         }) ],
         style: new TextStyle({
-          color: position === "inside" ? isLightColor(this.color ?? CHART_BLUE) ? normalizeColor(CHART_WHITE) : normalizeColor(CHART_BLACK) : null
+          color: position === "inside" ? isLightColor(this.color ?? CHART_BLUE) ? normalizePaintColor(CHART_WHITE) : normalizePaintColor(CHART_BLACK) : null
         })
       }),
       textAlign: align
@@ -17613,10 +18478,10 @@ class PdfAnnotation extends PdfObject {
     this.params.set("/F", new PdfNum(4));
     this.params.set("/BS", new PdfDict([ [ "/W", new PdfNum(annotation.borderWidth ?? 1) ], [ "/S", new PdfName("/S") ] ]));
     if (annotation.color !== null && annotation.color !== undefined) {
-      this.params.set("/C", PdfArray.fromNum(annotation.color));
+      this.params.set("/C", PdfArray.fromColor(annotation.color));
     }
     if (annotation.interiorColor !== null && annotation.interiorColor !== undefined) {
-      this.params.set("/IC", PdfArray.fromNum(annotation.interiorColor));
+      this.params.set("/IC", PdfArray.fromColor(annotation.interiorColor));
     }
     if (annotation.author) this.params.set("/T", new PdfString(annotation.author));
     if (annotation.subject) this.params.set("/Subj", new PdfString(annotation.subject));
@@ -17665,15 +18530,16 @@ class PdfAnnotation extends PdfObject {
       this.params.set("/AS", new PdfName(field.value ?? "/Off"));
     }
     if (this.defaultAppearanceName !== null) {
-      const [r, g, b] = field.textColor ?? [ 0, 0, 0 ];
-      this.params.set("/DA", new PdfString(`${this.defaultAppearanceName} ${field.fontSize ?? 12} Tf ${r} ${g} ${b} rg`));
+      const color = field.textColor ?? [ 0, 0, 0 ];
+      const operator = color instanceof PdfColor ? colorOperator(color) : `${color[0]} ${color[1]} ${color[2]} rg`;
+      this.params.set("/DA", new PdfString(`${this.defaultAppearanceName} ${field.fontSize ?? 12} Tf ${operator}`));
     }
     const appearance = new PdfDict;
     if (field.borderColor !== null && field.borderColor !== undefined) {
-      appearance.set("/BC", PdfArray.fromNum(field.borderColor));
+      appearance.set("/BC", PdfArray.fromColor(field.borderColor));
     }
     if (field.backgroundColor !== null && field.backgroundColor !== undefined) {
-      appearance.set("/BG", PdfArray.fromNum(field.backgroundColor));
+      appearance.set("/BG", PdfArray.fromColor(field.backgroundColor));
     }
     if (!appearance.isEmpty) this.params.set("/MK", appearance);
     const highlights = {
@@ -18391,7 +19257,7 @@ class IconData {
 
 class IconThemeData {
   constructor({color = null, opacity = null, size = null, font = null} = {}) {
-    this.color = color === null ? null : normalizeColor(color);
+    this.color = color === null ? null : normalizePaintColor(color);
     this.opacity = opacity === null ? null : assertFiniteNumber(Number(opacity), "icon opacity");
     this.size = size === null ? null : assertFiniteNumber(Number(size), "icon size");
     this.font = font;
@@ -18426,7 +19292,7 @@ class Icon extends StatelessWidget {
     if (!(icon instanceof IconData)) throw new TypeError("Icon expects an IconData value");
     this.icon = icon;
     this.size = size === null ? null : assertFiniteNumber(Number(size), "icon size");
-    this.color = color === null ? null : normalizeColor(color);
+    this.color = color === null ? null : normalizePaintColor(color);
     this.textDirection = textDirection;
     this.font = font;
     if (this.size !== null && this.size < 0) throw new RangeError("icon size cannot be negative");
@@ -19324,34 +20190,8 @@ function nonNegativeNumber(value, name) {
   return resolved;
 }
 
-function hueFor(red, green, blue, maximum, delta) {
-  if (delta === 0 || maximum === 0) return 0;
-  let hue;
-  if (maximum === red) {
-    hue = 60 * ((green - blue) / delta % 6);
-  } else if (maximum === green) {
-    hue = 60 * ((blue - red) / delta + 2);
-  } else {
-    hue = 60 * ((red - green) / delta + 4);
-  }
-  return hue < 0 ? hue + 360 : hue;
-}
-
 function shadeColor(color, strength) {
-  const [red, green, blue] = normalizeColor(color);
-  const maximum = Math.max(red, green, blue);
-  const minimum = Math.min(red, green, blue);
-  const delta = maximum - minimum;
-  const hue = hueFor(red, green, blue, maximum, delta);
-  const lightness = (maximum + minimum) / 2;
-  const saturation = lightness === 1 ? 0 : Math.min(1, Math.max(0, delta / (1 - Math.abs(2 * lightness - 1))));
-  const shadedLightness = Math.min(1, Math.max(0, lightness * (1.5 - strength)));
-  const chroma = (1 - Math.abs(2 * shadedLightness - 1)) * saturation;
-  const secondary = chroma * (1 - Math.abs(hue / 60 % 2 - 1));
-  const match = shadedLightness - chroma / 2;
-  let resolved;
-  if (hue < 60) resolved = [ chroma, secondary, 0 ]; else if (hue < 120) resolved = [ secondary, chroma, 0 ]; else if (hue < 180) resolved = [ 0, chroma, secondary ]; else if (hue < 240) resolved = [ 0, secondary, chroma ]; else if (hue < 300) resolved = [ secondary, 0, chroma ]; else resolved = [ chroma, 0, secondary ];
-  return [ Math.min(1, Math.max(0, resolved[0] + match)), Math.min(1, Math.max(0, resolved[1] + match)), Math.min(1, Math.max(0, resolved[2] + match)) ];
+  return normalizeColor(new PdfColor(...normalizeColor(color)).shade(strength));
 }
 
 class CircularProgressIndicator extends Widget {
@@ -19619,9 +20459,9 @@ class Checkbox extends Widget {
     this.tristate = Boolean(tristate);
     this.width = Number(width);
     this.height = Number(height);
-    this.activeColor = normalizeColor(activeColor);
-    this.checkColor = normalizeColor(checkColor);
-    this.borderColor = normalizeColor(borderColor);
+    this.activeColor = normalizePaintColor(activeColor);
+    this.checkColor = normalizePaintColor(checkColor);
+    this.borderColor = normalizePaintColor(borderColor);
   }
   layout(_context, constraints) {
     const size = BoxConstraints.from(constraints).constrain({
@@ -19696,10 +20536,10 @@ class FlatButton extends Widget {
     super();
     this.name = requireName(name);
     this.childWidget = child;
-    this.textColor = normalizeColor(textColor);
-    this.color = normalizeColor(color);
-    this.colorDown = normalizeColor(colorDown);
-    this.colorRollover = normalizeColor(colorRollover);
+    this.textColor = normalizePaintColor(textColor);
+    this.color = normalizePaintColor(color);
+    this.colorDown = normalizePaintColor(colorDown);
+    this.colorRollover = normalizePaintColor(colorRollover);
     this.padding = padding;
     this.fieldFlags = fieldFlags;
   }
@@ -19801,8 +20641,8 @@ class TextField extends Widget {
       mappingName: this.options.mappingName ?? null,
       fieldFlags: fieldFlagsValue(this.options.fieldFlags ?? []),
       textAlign: this.options.textAlign ?? null,
-      borderColor: this.options.color == null ? null : normalizeColor(this.options.color),
-      backgroundColor: this.options.backgroundColor == null ? null : normalizeColor(this.options.backgroundColor),
+      borderColor: this.options.color == null ? null : normalizePaintColor(this.options.color),
+      backgroundColor: this.options.backgroundColor == null ? null : normalizePaintColor(this.options.backgroundColor),
       highlighting: this.options.highlighting ?? null,
       font: style.font === null ? context.document.font : context.document.resolveFont(style.font),
       fontSize: style.fontSize ?? 12,
@@ -20753,7 +21593,7 @@ class SvgImage extends Widget {
 class Placeholder extends Widget {
   constructor({color = "#455a64", strokeWidth = 2, fallbackWidth = 400, fallbackHeight = 400} = {}) {
     super();
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
     this.strokeWidth = Number(strokeWidth);
     this.fallbackWidth = Number(fallbackWidth);
     this.fallbackHeight = Number(fallbackHeight);
@@ -20783,7 +21623,7 @@ const PDF_LOGO_PATH = "M 2.424 26.712 L 2.424 26.712 C 2.076 26.712 1.742 26.599
 class PdfLogo extends StatelessWidget {
   constructor({color = "#ff0000", fit = "contain"} = {}) {
     super();
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
     this.fit = fit;
   }
   build() {
@@ -20892,7 +21732,7 @@ function side(input) {
     return null;
   }
   return {
-    color: normalizeColor(input.color ?? "#000000"),
+    color: normalizePaintColor(input.color ?? "#000000"),
     width
   };
 }
@@ -21592,6 +22432,12 @@ const publicApi = Object.freeze({
   Alignment,
   BoxConstraints,
   EdgeInsets,
+  PdfColor,
+  PdfColorGrey,
+  PdfColorCmyk,
+  PdfColorHsv,
+  PdfColorHsl,
+  PdfColors,
   PageFormat,
   PageUnit,
   PdfStream,
@@ -21625,4 +22471,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, PageUnit, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfStream, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, PageUnit, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfColor, PdfColorCmyk, PdfColorGrey, PdfColorHsl, PdfColorHsv, PdfColors, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfStream, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };
