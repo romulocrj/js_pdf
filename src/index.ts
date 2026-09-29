@@ -647,9 +647,9 @@ export type {
 } from './widgets/table_helper.ts';
 export type {
   Hyphenation,
-  LineSplitter,
   InlineSpanOptions,
   InlineSpanVisitor,
+  LineSplitter,
   RichTextLayoutData,
   RichTextLineLayout,
   RichTextOptions,

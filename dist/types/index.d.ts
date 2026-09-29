@@ -126,7 +126,7 @@ export type { PositionedDirectionalOptions, PositionedLayoutData, PositionedOpti
 export type { WrapAlignment, WrapChildLayout, WrapCrossAlignment, WrapLayoutData, WrapOptions, WrapState } from './widgets/wrap.ts';
 export type { ColumnLayout, TableBorderInput, TableBorderOptions, TableBorderSide, TableBorderSideInput, TableBorderSideOptions, TableCellLayout, TableCellVerticalAlignment, TableColumnWidthMap, TableDecorationInput, TableLayoutData, TableOptions, TableRowLayout, TableRowOptions, TableSpanState, TableWidth } from './widgets/table.ts';
 export type { OnCell, OnCellDecoration, OnCellFormat, OnCellTextStyle, TableAlignmentInput, TableAlignmentName, TableTextArrayOptions } from './widgets/table_helper.ts';
-export type { Hyphenation, LineSplitter, InlineSpanOptions, InlineSpanVisitor, RichTextLayoutData, RichTextLineLayout, RichTextOptions, RichTextRunLayout, RichTextState, TextAlign, TextLayoutData, TextOptions, TextOverflow, TextSpanOptions, WidgetSpanOptions } from './widgets/text.ts';
+export type { Hyphenation, InlineSpanOptions, InlineSpanVisitor, LineSplitter, RichTextLayoutData, RichTextLineLayout, RichTextOptions, RichTextRunLayout, RichTextState, TextAlign, TextLayoutData, TextOptions, TextOverflow, TextSpanOptions, WidgetSpanOptions } from './widgets/text.ts';
 export type { InkListOptions, PaintedShapeOptions, PolygonOptions, VectorApi, VectorOptions } from './widgets/shape.ts';
 export type { ImageLayoutData, ImageOptions, ShapeLayoutData, ShapeOptions } from './widgets/image.ts';
 export type { DirectionalityOptions } from './widgets/directionality.ts';
