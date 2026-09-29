@@ -29,6 +29,7 @@ import { BoxConstraints } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import { PageTheme } from './page_theme.ts';
 import type { PageOrientation } from './page_theme.ts';
+import { paintPageChild } from './page.ts';
 import type { Section } from './page.ts';
 import type { ThemeData } from './theme.ts';
 import { SpanningWidget, Widget } from './widget.ts';
@@ -172,6 +173,9 @@ export class MultiPage implements Section {
   }
 
   render(documentContext: DocumentContext): SerializedPage[] {
+    if (!Number.isFinite(this.format.width) || !Number.isFinite(this.format.height)) {
+      throw new RangeError('MultiPage requires finite page dimensions');
+    }
     const pages: PageState[] = [];
 
     const startPage = (): PageState => {
@@ -238,7 +242,7 @@ export class MultiPage implements Section {
         const initialAvailable = page.bottom - page.cursor;
 
         if (natural.height <= initialAvailable + 0.001) {
-          child.paint(page.context, {
+          paintPageChild(this.pageTheme, page.context, child, {
             ...natural,
             x: this.margin.left,
             y: page.cursor
@@ -262,7 +266,7 @@ export class MultiPage implements Section {
             maxWidth: page.maxWidth,
             maxHeight: Infinity
           }));
-          child.paint(page.context, {
+          paintPageChild(this.pageTheme, page.context, child, {
             ...moved,
             x: this.margin.left,
             y: page.cursor
@@ -292,7 +296,7 @@ export class MultiPage implements Section {
           }
 
           if (box.height > 0) {
-            child.paint(page.context, {
+            paintPageChild(this.pageTheme, page.context, child, {
               ...box,
               x: this.margin.left,
               y: page.cursor
@@ -327,7 +331,7 @@ export class MultiPage implements Section {
         }));
       }
 
-      child.paint(page.context, {
+      paintPageChild(this.pageTheme, page.context, child, {
         ...box,
         x: this.margin.left,
         y: page.cursor
@@ -355,7 +359,7 @@ export class MultiPage implements Section {
           const headerBox = headerWidget.layout(context, new BoxConstraints({
             maxWidth: state.maxWidth
           }));
-          headerWidget.paint(context, {
+          paintPageChild(this.pageTheme, context, headerWidget, {
             ...headerBox,
             x: this.margin.left,
             y: this.margin.top
@@ -367,7 +371,7 @@ export class MultiPage implements Section {
           const footerBox = footerWidget.layout(context, new BoxConstraints({
             maxWidth: state.maxWidth
           }));
-          footerWidget.paint(context, {
+          paintPageChild(this.pageTheme, context, footerWidget, {
             ...footerBox,
             x: this.margin.left,
             y: this.format.height - this.margin.bottom - footerBox.height
@@ -420,6 +424,6 @@ export class MultiPage implements Section {
       maxWidth: this.format.width,
       maxHeight: this.format.height
     }));
-    widget.paint(context, { ...box, x: 0, y: 0 });
+    paintPageChild(this.pageTheme, context, widget, { ...box, x: 0, y: 0 });
   }
 }

@@ -11,7 +11,7 @@ export interface PageThemeOptions {
     readonly theme?: ThemeData | null;
     readonly orientation?: PageOrientation;
     readonly margin?: InsetsInput | null;
-    /** Accepted for API parity; clipping needs the operators from phase 2.1. */
+    /** Clip painted page layers and content to the resolved margin rectangle. */
     readonly clip?: boolean;
 }
 export declare class PageTheme {
@@ -29,9 +29,8 @@ export declare class PageTheme {
      * The paper as it is actually written.
      *
      * Upstream keeps the declared format and rotates the content stream through
-     * the CTM, which the port cannot do until the transform operators land in
-     * phase 2.1. Swapping the dimensions produces the same page for a reader; the
-     * observable difference is `/MediaBox`, which reports the rotated size rather
+     * the CTM. The port deliberately swaps the dimensions so readers report the
+     * requested physical orientation. The observable difference is `/MediaBox`, which reports the rotated size rather
      * than the original with rotated content inside it.
      */
     get resolvedFormat(): PageSize;

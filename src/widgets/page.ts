@@ -21,7 +21,7 @@ import { PdfCanvas } from '../pdf/graphics.ts';
 import type { PageSize } from '../pdf/page_format.ts';
 import { PageTheme } from './page_theme.ts';
 import type { PageOrientation } from './page_theme.ts';
-import type { AnyWidget, DocumentContext, RenderContext } from './widget.ts';
+import type { AnyWidget, DocumentContext, PositionedBox, RenderContext } from './widget.ts';
 import type { InsetsInput } from './geometry.ts';
 import { BoxConstraints } from './geometry.ts';
 import type { ThemeData } from './theme.ts';
@@ -107,13 +107,12 @@ export class Page implements Section {
   }
 
   render(documentContext: DocumentContext): SerializedPage[] {
-    const format = this.pageTheme.resolvedFormat;
+    let format = this.pageTheme.resolvedFormat;
     const margin = this.pageTheme.margin;
 
-    const canvas = new PdfCanvas(format.height);
-    if (this.background) canvas.fillRect(0, 0, format.width, format.height, this.background);
+    let canvas = new PdfCanvas(Number.isFinite(format.height) ? format.height : 0);
 
-    const context: RenderContext = {
+    let context: RenderContext = {
       ...documentContext,
       canvas,
       pageFormat: format,
@@ -126,10 +125,6 @@ export class Page implements Section {
     const maxWidth = format.width - margin.left - margin.right;
     const maxHeight = format.height - margin.top - margin.bottom;
 
-    // Background and foreground get the whole page, not the content area —
-    // that is what makes a full-bleed watermark possible.
-    this.paintLayer(this.pageTheme.buildBackground, context, format);
-
     const widget = this.build(context);
     const box = widget.layout(context, new BoxConstraints({ maxWidth, maxHeight }));
 
@@ -137,7 +132,25 @@ export class Page implements Section {
       throw new RangeError(`Page content height ${box.height.toFixed(2)} exceeds available height ${maxHeight.toFixed(2)}`);
     }
 
-    widget.paint(context, { ...box, x: margin.left, y: margin.top });
+    if (!Number.isFinite(format.width) || !Number.isFinite(format.height)) {
+      format = {
+        ...format,
+        width: format.width === Infinity ? box.width + margin.left + margin.right : format.width,
+        height: format.height === Infinity ? box.height + margin.top + margin.bottom : format.height
+      };
+      if (!Number.isFinite(format.width) || !Number.isFinite(format.height)
+          || format.width <= 0 || format.height <= 0) {
+        throw new RangeError('Page content must resolve to positive finite dimensions');
+      }
+      // Layout is pure. Paint the measured box on a canvas with the final height.
+      canvas = new PdfCanvas(format.height);
+      context = { ...context, canvas, pageFormat: format };
+    }
+
+    if (this.background) canvas.fillRect(0, 0, format.width, format.height, this.background);
+    // Layers retain full-page layout; clip limits their painting when requested.
+    this.paintLayer(this.pageTheme.buildBackground, context, format);
+    paintPageChild(this.pageTheme, context, widget, { ...box, x: margin.left, y: margin.top });
 
     this.paintLayer(this.pageTheme.buildForeground, context, format);
 
@@ -167,6 +180,33 @@ export class Page implements Section {
       maxWidth: format.width,
       maxHeight: format.height
     }));
-    widget.paint(context, { ...box, x: 0, y: 0 });
+    paintPageChild(this.pageTheme, context, widget, { ...box, x: 0, y: 0 });
+  }
+}
+
+/** Shared page paint scope, translated from Page.paint in the Dart source. */
+export function paintPageChild(
+  theme: PageTheme,
+  context: RenderContext,
+  widget: AnyWidget,
+  box: PositionedBox<unknown>
+): void {
+  if (!theme.clip) {
+    widget.paint(context, box);
+    return;
+  }
+  const { canvas, pageFormat } = context;
+  const margin = theme.margin;
+  canvas.saveContext();
+  try {
+    canvas.drawRect(
+      margin.left, margin.bottom,
+      pageFormat.width - margin.left - margin.right,
+      pageFormat.height - margin.top - margin.bottom
+    );
+    canvas.clipPath();
+    widget.paint(context, box);
+  } finally {
+    canvas.restoreContext();
   }
 }

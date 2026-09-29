@@ -126,7 +126,7 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   object serialization and content canvases, with no host encoding API.
 - **`color.ts`** — `#RRGGBB` or `[r,g,b]` → normalized triple, plus the
   `rg`/`RG` operators. DeviceRGB only.
-- **`page_format.ts`** — page dimensions in PDF points.
+- **`page_format.ts`** — upstream paper presets, margins and public physical-unit constants in PDF points.
 - **`font/font_metrics.ts`** — glyph and string bounding metrics, including
   ascent, descent, bearings and advance width.
 - **`font/font.ts` / `font/type1_fonts.ts`** — the common font seam and AFM
@@ -176,7 +176,8 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   the scalar-array convenience builder; tables span pages through immutable
   continuation state.
 - **`page.ts` / `page_theme.ts`** — one physical page, and everything about it
-  but its body; overflow is an error.
+  but its body; fixed-height overflow is an error. Infinite paper axes are
+  resolved from the body layout before creating the final paint canvas.
 - **`multi_page.ts`** — pagination with per-page header and footer.
 - **`image.ts` / `image_provider.ts`** — decoded and encoded raster providers,
   fitting, alignment, DPI selection and clipped painting.
@@ -279,6 +280,7 @@ divergences or narrower compatibility gaps between the port and upstream.
 | Object serialization | A value consults its owning object for compression, encryption and a verbose pretty-printer | `output(stream)` stays context-free; stream objects consult document compression settings, with no encryption or verbose mode |
 | Font naming | `/F$objser`, derived from the font object's serial | Page-local `/F1`, `/F2`, … allocated as the content stream is written |
 | Colors | `PdfColor` value type with CMYK and HSL variants | RGB triple, DeviceRGB only |
+| Page clipping | `Page.paint` scopes a margin clip; `MultiPage._paintChild` omits it | Both section types clip every widget/layer paint when `PageTheme.clip` is true; layer layout remains full-page |
 | Pagination | `SpanningWidget` saves mutable widget context between pages | Direct spanning children return immutable continuation state; indivisible widgets or rows taller than a full content area still throw `RangeError` |
 | Decoration shadows | Temporary raster images produced by the raster subsystem | Concentric vector fills with scoped opacity; other decoration features are direct ports |
 | Async | `save()` returns a `Future` | `save()` returns `Uint8Array` |

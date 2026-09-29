@@ -718,6 +718,7 @@ import { generateFormsPhase56 } from './forms-phase-5.6.mjs';
 import { generateWidgetsPhase57 } from './widgets-phase-5.7.mjs';
 import { generateImageDpiPhase61 } from './image-dpi-phase-6.1.mjs';
 import { generatePieFullCirclePhase62 } from './pie-full-circle-phase-6.2.mjs';
+import { generatePageFormatsPhase63 } from './page-formats-phase-6.3.mjs';
 import { generateProductionPaginationExample } from './production-pagination.mjs';
 import { createSalesReport } from './create-sales-report.mjs';
 
@@ -1049,6 +1050,14 @@ const groups = [
         badge: 'PHASE 6.2',
         description: 'Exact and rounded full-circle pies and donuts, alongside partial slices that keep their offsets.',
         generate: () => generatePieFullCirclePhase62()
+      },
+      {
+        id: 'page-formats-phase-6.3',
+        title: 'Page clipping & formats',
+        file: 'page-formats-phase-6.3.mjs',
+        badge: 'PHASE 6.3',
+        description: 'Clipping off/on, rotated margins, multiple pages, 57/80 mm receipts and a content-sized label.',
+        generate: () => generatePageFormatsPhase63()
       },
       {
         id: 'production-pagination',
