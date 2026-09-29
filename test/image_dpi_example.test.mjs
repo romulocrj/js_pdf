@@ -36,3 +36,11 @@ test('browser card uses the same generator and local assets as the phase runner'
   }
   assert.match(read('../examples/Browser.html').toString(), /id: 'image-dpi-phase-6\.1'/);
 });
+
+test('browser phase cards follow numeric phase order', () => {
+  const html = read('../examples/Browser.html').toString();
+  const phases = [...html.matchAll(/badge: 'PHASE (\d+)\.(\d+)'/g)]
+    .map(([, major, minor]) => [Number(major), Number(minor)]);
+  assert.ok(phases.length > 0);
+  assert.deepEqual(phases, [...phases].sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+});

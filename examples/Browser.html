@@ -709,7 +709,6 @@ import { generateClippingPhase310 } from './clipping-phase-3.10.mjs';
 import { generatePngPhase41 } from './png-phase-4.1.mjs';
 import { generateJpegPhase42 } from './jpeg-phase-4.2.mjs';
 import { generateImagePhase43 } from './image-phase-4.3.mjs';
-import { generateImageDpiPhase61 } from './image-dpi-phase-6.1.mjs';
 import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
 import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
 import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
@@ -717,6 +716,7 @@ import { generateIconsPhase54 } from './icons-phase-5.4.mjs';
 import { generateProgressPhase55 } from './progress-phase-5.5.mjs';
 import { generateFormsPhase56 } from './forms-phase-5.6.mjs';
 import { generateWidgetsPhase57 } from './widgets-phase-5.7.mjs';
+import { generateImageDpiPhase61 } from './image-dpi-phase-6.1.mjs';
 import { generateProductionPaginationExample } from './production-pagination.mjs';
 import { createSalesReport } from './create-sales-report.mjs';
 
@@ -967,17 +967,6 @@ const groups = [
         generate: () => generateJpegPhase42()
       },
       {
-        id: 'image-dpi-phase-6.1',
-        title: 'Image DPI & JPEG',
-        file: 'image-dpi-phase-6.1.mjs',
-        badge: 'PHASE 6.1',
-        description: 'Original versus reduced JPEG, eight orientations and PNG transparency on light and dark backgrounds.',
-        generate: async () => {
-          const [jpeg, png] = await Promise.all([bytesOf('dpi-pattern.jpg'), bytesOf('dpi-alpha.png')]);
-          return generateImageDpiPhase61({ jpeg, png });
-        }
-      },
-      {
         id: 'image-phase-4.3',
         title: 'Image widget',
         file: 'image-phase-4.3.mjs',
@@ -1040,6 +1029,17 @@ const groups = [
         badge: 'PHASE 5.7',
         description: 'Atomic pagination, lists, shapes, grid paper, directionality, watermarks and outlines.',
         generate: () => generateWidgetsPhase57()
+      },
+      {
+        id: 'image-dpi-phase-6.1',
+        title: 'Image DPI & JPEG',
+        file: 'image-dpi-phase-6.1.mjs',
+        badge: 'PHASE 6.1',
+        description: 'Original versus reduced JPEG, eight orientations and PNG transparency on light and dark backgrounds.',
+        generate: async () => {
+          const [jpeg, png] = await Promise.all([bytesOf('dpi-pattern.jpg'), bytesOf('dpi-alpha.png')]);
+          return generateImageDpiPhase61({ jpeg, png });
+        }
       },
       {
         id: 'production-pagination',
