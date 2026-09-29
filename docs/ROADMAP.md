@@ -4,7 +4,7 @@ Ordered plan for the port dart_pdf-master. Current coverage is in
 [PORTING-STATUS.md](PORTING-STATUS.md); conventions are in
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**Last updated:** 2026-09-28
+**Last updated:** 2026-09-29
 
 
 **Important** if you find an issue in the original code, correct it in the port and document it in [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md) with brief instructions for reproducing and correcting it.
@@ -274,6 +274,12 @@ the missing behavior. Every PR must then pass `npm run verify` and
 update this roadmap and PORTING-STATUS. Optimization PRs also need measured
 benchmarks with unchanged behavior.
 
+Every PR also adds a focused, reproducible example. Visual examples belong in
+`examples/Browser.html` and `examples/run-phase-examples.mjs`, using the same
+exported generator in both environments. Nonvisual APIs need executable
+assertions, and performance work needs a benchmark runner. Keep the asset
+credits and licenses alongside the example.
+
 | Order | Domain / scope | State |
 |---|---|---|
 | 6.1 | Images: DPI guards, cache, rotated axes, JPEG quality-90 re-encoding, EXIF stripping on re-encoding, CMYK decode regression | Implemented; pending merge |
@@ -311,6 +317,12 @@ and a 64 MB heap limit. Existing image tests remain, with the obsolete raw-RGB
 expectation updated to require JPEG compression.
 
 **Example gate:** all eight upstream examples continue to generate.
+`examples/image-dpi-phase-6.1.mjs` adds a three-page visual proof: original vs.
+72/288 DPI JPEGs with actual pixel/byte counts, eight orientations using an
+asymmetric pattern, and PNG alpha on pale/dark backgrounds. It is included in
+`npm run phase-examples` and the **Image DPI & JPEG** card in `Browser.html`.
+The two local assets are original Apache-2.0 artwork with an optional Pillow
+regeneration script; no Python dependency is needed to run the example.
 
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays

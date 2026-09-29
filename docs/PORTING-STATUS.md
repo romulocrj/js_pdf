@@ -2,7 +2,7 @@
 
 Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
-**Last updated:** 2026-09-28
+**Last updated:** 2026-09-29
 **Upstream reference:** historical `pdf/lib/` inventory — 136 Dart files, ~31,800 lines
 **Latest audit:** `DavBfr/dart_pdf@b97c4a63dc` (2026-09-28); this is an audit
 reference, not a claim that all changes through that revision are ported.
@@ -242,3 +242,10 @@ Validation includes baseline/progressive/gray/CMYK inputs, all eight
 orientations, PNG alpha, DCT serialization, cache reuse, and a 2048x2048
 encoder probe under a 64 MB JS heap. A real CMYK fixture also exposed and
 closed an out-of-scope helper reference in the existing decoder.
+
+The three-page `examples/image-dpi-phase-6.1.mjs` visual proof is available in
+`examples/Browser.html` as **Image DPI & JPEG** and through
+`npm run phase-examples` as `examples/out/image-dpi-phase-6.1.pdf`. It compares
+original and reduced JPEGs, all orientations, and PNG transparency. Tests
+verify page count, image dimensions, DCT encoding, alpha masks and wiring to
+both runners. This is an additional phase proof; the upstream gate stays 8/8.

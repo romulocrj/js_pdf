@@ -42,3 +42,11 @@ VPSDime names, logos and related marks belong to their respective owners. The
 snapshot is test data, may not reflect current products or prices, and does not
 imply affiliation with or endorsement by VPSDime. `js_pdf` is not affiliated
 with VPSDime.
+
+## Original DPI gallery patterns
+
+`dpi-pattern.jpg` and `dpi-alpha.png` are original procedural artwork for
+js_pdf, Copyright (C) 2026, Romulo Campos, licensed under Apache-2.0. They
+contain no third-party images or fonts. `generate-dpi-patterns.py` records the
+recipe; optional regeneration uses Pillow. Browser and Node examples load the
+committed bytes and do not need Pillow or Python.
