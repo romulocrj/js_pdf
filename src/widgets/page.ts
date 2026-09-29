@@ -162,7 +162,8 @@ export class Page implements Section {
       patterns: canvas.patterns,
       shadings: canvas.shadings,
       images: canvas.images,
-      annotations: canvas.annotations
+      annotations: canvas.annotations,
+      forms: canvas.forms
     }];
   }
 

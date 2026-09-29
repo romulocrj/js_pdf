@@ -589,6 +589,86 @@ are never mutated. Invalid multi-syllable results or invalid source segments
 raise `RangeError`. The `LineSplitter` and `Hyphenation` exports are TypeScript
 types, not constructors. See [the comparison example](examples/text-breaking-phase-6.4.mjs).
 
+## Font compatibility and CFF
+
+Default `Font.ttf(bytes)` still subsets Unicode TrueType. To request the
+single-byte compatibility path for lazy TrueType declarations in one document,
+use `new Document({ simpleTrueTypeFonts: true })`. Explicit per-font options
+win: `Font.ttf(bytes, { unicode: false })` selects simple mode and
+`{ unicode: true }` keeps Unicode. Existing, already-built `PdfFont` instances
+wrapped with `Font.fromPdfFont` keep their chosen encoding. The low-level
+`PdfTtfFont` constructor accepts the same options; choose them before encoding
+text, not when serializing already-rendered pages.
+
+Simple mode embeds the entire TrueType program, uses WinAnsi (CP1252), and
+cannot represent arbitrary Unicode. Unsupported characters follow normal
+fallback selection; low-level encoding substitutes `?`. Use the default subset
+for normal Unicode documents and smaller PDF font payloads. Font declarations
+are resolved separately per document, including the mode choice.
+
+CFF1 OpenType bytes also use `Font.ttf(bytes)`. Named and CID-keyed CFF fonts
+embed the full OpenType program as `/FontFile3`, with searchable text and
+explicit glyph/CID mapping. CFF remains composite even when the document's
+simple-TrueType setting is enabled; explicit `{ unicode: false }` for CFF
+throws. CFF advances are read from hmtx; exact charstring ink bounds are not
+computed. No CFF subsetting, CFF2, variable-font instancing, font collections
+or raw Type1/PFB support is added. Supply a static OTF/TTF face. Full embedding
+may increase PDF size; font bytes are supplied by the host and are not inside
+the library bundle.
+
+## Reusable forms, notes and annotation borders
+
+```js
+const stamp = new pw.PdfFormXObject({
+  width: 120, height: 40,
+  paint: canvas => {
+    canvas.fillRect(0, 0, 120, 40, '#dbeafe');
+    canvas.text('APPROVED', 8, 12, { fontSize: 12, color: '#1e40af' });
+  }
+});
+const child = new pw.CustomPaint({
+  size: { x: 240, y: 40 },
+  painter: canvas => {
+    canvas.drawForm(stamp, 0, 0);
+    canvas.drawForm(stamp, 120, 0);
+  }
+});
+new pw.TextAnnotation({ child, content: 'Please review', author: 'Reviewer' });
+```
+
+`drawForm(form, x, y, width?, height?)` uses PDF user coordinates (bottom-left,
+y-up), like `drawImage`. `CustomPaint` supplies its local transformation.
+The form's paint callback runs once on construction. Reuse the same form
+instance across pages to share one PDF resource; nested forms, fonts, images
+and shading/state resources are retained. Treat its resource snapshot as
+immutable. Page annotations inside a form are rejected; wrap the placed form
+with an annotation widget instead.
+
+`AnnotationText` is the builder spelling for use with `Annotation`/text spans;
+`TextAnnotation` wraps a child. Notes support content, author, subject, date,
+color, icon and initial `open` state. Reader support determines how note icons
+and borders are displayed. `PdfBorder({ width, style, dash })` supports
+`solid`, `dashed`, `beveled`, `inset`, `underlined`. Plain border options still
+work on geometric annotations; link builders accept an optional second
+`{ border }` argument and `TextField` accepts `border`. This is annotation
+metadata, separate from the painted widget's `Border`/`BorderSide`.
+
+## Compatibility conveniences
+
+`DefaultTextStyle.merge({ style, child, ... })` resolves and merges the inherited
+style at layout/paint time; omitted text defaults remain inherited. It does
+not mutate the parent theme. `PdfPageFormat` adds `a4`/other presets, units,
+`copyWith`, `landscape`, `portrait`, available dimensions and `applyMargin`;
+existing uppercase `PageFormat` presets remain valid. Its `marginAll` overrides
+individual margins as upstream does. `equals` compares values; the numeric
+hash is JavaScript-specific. `LineChartValue` aliases `PointChartValue`, now a
+`ChartValue`. Low-level dictionaries support recursive `merge`, with stable
+scalar/reference deduplication through `PdfArray.uniq`.
+
+The [three gallery proofs](examples/fonts-objects-api-phases.mjs) cover these
+features; [bundle measurements](docs/BUNDLE-SIZE.md) distinguish code size from
+font assets and generated PDF size.
+
 ## Color values and device spaces
 
 Use `PdfColors.blue` (the upstream Material palette) or construct `PdfColor`,

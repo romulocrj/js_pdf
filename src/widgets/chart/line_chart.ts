@@ -192,3 +192,6 @@ export class LineDataSet extends PointDataSet {
     canvas.strokePath();
   }
 }
+
+/** Deprecated upstream name retained for source compatibility. */
+export { PointChartValue as LineChartValue } from './point_chart.ts';

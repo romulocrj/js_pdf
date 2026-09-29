@@ -33,7 +33,7 @@ export declare class Font {
      */
     static fromPdfFont(font: PdfFont): Font;
     /** Build the font object. Callers should go through `getFont` instead. */
-    build(): PdfFont;
+    build(simpleTrueTypeFonts?: boolean): PdfFont;
     /** The `PdfFont` this declaration stands for in `context`'s document. */
     getFont(context: RenderContext): PdfFont;
 }

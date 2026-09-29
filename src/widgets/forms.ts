@@ -21,6 +21,7 @@
 
 import { normalizePaintColor } from '../pdf/color.ts';
 import type { ColorInput, PaintColor } from '../pdf/color.ts';
+import type { PdfBorderOptions } from '../pdf/obj/border.ts';
 import { PdfCanvas } from '../pdf/graphics.ts';
 import type {
   PdfFormAppearance,
@@ -116,7 +117,8 @@ function appearanceFor(
     graphicStates: canvas.graphicStates,
     patterns: canvas.patterns,
     shadings: canvas.shadings,
-    images: canvas.images
+    images: canvas.images,
+    forms: canvas.forms
   };
 }
 
@@ -386,6 +388,7 @@ export class FlatButton extends Widget<FormLayoutData> {
 }
 
 export interface TextFieldOptions {
+  readonly border?: PdfBorderOptions;
   readonly name: string;
   readonly child?: AnyWidget | null;
   readonly width?: number;
@@ -440,6 +443,7 @@ export class TextField extends Widget<FormLayoutData> {
     context.canvas.addFormField({
       kind: 'form',
       fieldType: 'text',
+      border: this.options.border,
       name: this.name,
       value: this.options.value ?? null,
       defaultValue: this.options.defaultValue ?? null,

@@ -69,3 +69,26 @@ not a general-purpose CJK font.
 the pinned source above and pass its path to the script; it verifies the source
 hash. The browser/Node examples use the committed subset and require neither
 Python nor fonttools. The existing font files listed above remain unmodified.
+
+## Source Sans 3 CFF fixtures (phase 6.8)
+
+`JsPdfCffExample.otf` and `JsPdfCffCidExample.otf` are renamed, modified subsets
+of [Adobe Source Sans 3](https://github.com/adobe-fonts/source-sans), revision
+`87b37a2daaed80fcb8e8ccb0085c4d72ddade12e`, file `OTF/SourceSans3-Regular.otf`.
+The CID-keyed fixture remaps glyph IDs to nonidentity CIDs and uses the test
+collection `Adobe-JsPdfTest` to exercise ROS metadata preservation.
+
+Copyright 2010-2024 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'. All Rights Reserved. Source is a trademark of Adobe in the United States and/or other countries.
+
+License: [SIL OFL 1.1](licenses/SourceSans3-OFL.txt), retained in full.
+Source SHA-256: `08df266400933d3178d081a45f94a08814c3e55b4b7dd2e0ff69cb1329f13ab6`.
+
+Reproduce with Python and fonttools 4.66.0 (tool dependency only):
+
+```sh
+python examples/assets/generate-cff-fixtures.py /path/to/SourceSans3-Regular.otf
+```
+
+No font bytes are bundled into dist. The generator keeps the original copyright
+and license name records, renames the family/PostScript name, subsets Latin and
+a few symbols, and produces a second CID-keyed fixture for mapping tests.

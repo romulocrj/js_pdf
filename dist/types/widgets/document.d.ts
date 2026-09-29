@@ -36,6 +36,8 @@ export interface DocumentOptions {
      * magnitude. Turn it off to trade file size back for generation time.
      */
     readonly compress?: boolean;
+    /** Select full-program WinAnsi for lazy TrueType declarations. */
+    readonly simpleTrueTypeFonts?: boolean;
 }
 export interface DocumentOutlineEntry {
     readonly title: string;
@@ -73,7 +75,7 @@ export declare class Document {
     private readonly fonts;
     /** Used only if the theme's default style somehow names no font at all. */
     private readonly fallbackFont;
-    constructor({ title, author, subject, creator, producer, keywords, xmpMetadata, pageLabels, theme, font, pageMode, compress }?: DocumentOptions);
+    constructor({ title, author, subject, creator, producer, keywords, xmpMetadata, pageLabels, theme, font, pageMode, compress, simpleTrueTypeFonts }?: DocumentOptions);
     /** The `PdfFont` `declaration` stands for here, built once. */
     resolveFont(declaration: Font): PdfFont;
     /**

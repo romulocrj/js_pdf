@@ -3,6 +3,7 @@ import { PdfIndirect } from './indirect.ts';
 import type { PdfStream } from './stream.ts';
 /** Document-wide output options. */
 export interface PdfSettings {
+    readonly simpleTrueTypeFonts?: boolean;
     /**
      * Deflate stream data, keeping the result only when it is actually smaller.
      *

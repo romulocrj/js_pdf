@@ -723,6 +723,7 @@ import { generateTextBreakingPhase64 } from './text-breaking-phase-6.4.mjs';
 import { generateSynchronousOutputPhase65 } from './synchronous-output-phase-6.5.mjs';
 import { generateLayoutPerformancePhase66 } from './layout-performance-phase-6.6.mjs';
 import { generateColorsPhase67 } from './colors-phase-6.7.mjs';
+import { generateFontsPhase68, generateObjectsPhase610, generateApiPhase612 } from './fonts-objects-api-phases.mjs';
 import { generateProductionPaginationExample } from './production-pagination.mjs';
 import { createSalesReport } from './create-sales-report.mjs';
 
@@ -1094,6 +1095,19 @@ const groups = [
         badge: 'PHASE 6.7',
         description: 'RGB, gray and CMYK swatches, named colors, HSV/HSL/RYB conversions and flattened alpha.',
         generate: () => generateColorsPhase67()
+      },
+      {
+        id: 'fonts-phase-6.8', title: 'TrueType & CFF fonts', file: 'fonts-objects-api-phases.mjs', badge: 'PHASE 6.8',
+        description: 'Unicode subsets, simple WinAnsi TrueType and named/CID-keyed CFF OpenType fonts.',
+        generate: async () => generateFontsPhase68({ ttf: await bytesOf('OpenSans-Regular.ttf'), cff: await bytesOf('JsPdfCffExample.otf'), cid: await bytesOf('JsPdfCffCidExample.otf') })
+      },
+      {
+        id: 'objects-phase-6.10', title: 'Reusable forms & notes', file: 'fonts-objects-api-phases.mjs', badge: 'PHASE 6.10',
+        description: 'One form reused across pages, a text note and five annotation border styles.', generate: () => generateObjectsPhase610()
+      },
+      {
+        id: 'api-phase-6.12', title: 'API conveniences', file: 'fonts-objects-api-phases.mjs', badge: 'PHASE 6.12',
+        description: 'Merged inherited text styles, page format values and chart compatibility aliases.', generate: () => generateApiPhase612()
       },
       {
         id: 'production-pagination',

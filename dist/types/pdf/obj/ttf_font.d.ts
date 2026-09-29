@@ -10,18 +10,22 @@ export interface PdfTtfFontOptions {
      * Upstream's `protect` flag.
      */
     readonly protect?: boolean;
+    /** False selects full-program WinAnsi TrueType; CFF requires composite text. */
+    readonly unicode?: boolean;
+    readonly simpleTrueTypeFonts?: boolean;
 }
 export declare class PdfTtfFont implements PdfFont {
     readonly font: TtfParser;
     readonly protect: boolean;
-    readonly isComposite = true;
+    readonly isComposite: boolean;
+    private readonly cffMetadata;
     /**
      * Code points in CID order: `cmap[cid]` is the rune drawn by CID `cid`. CID 0
      * is `.notdef`, as `/Identity-H` requires, so index 0 holds rune 0.
      */
     private readonly cmap;
     private readonly cidByRune;
-    constructor(bytes: Uint8Array, { protect }?: PdfTtfFontOptions);
+    constructor(bytes: Uint8Array, { protect, unicode, simpleTrueTypeFonts }?: PdfTtfFontOptions);
     get fontName(): string;
     get ascent(): number;
     get descent(): number;
@@ -44,4 +48,5 @@ export declare class PdfTtfFont implements PdfFont {
      * program, its descriptor, the per-CID widths, and the `/ToUnicode` CMap.
      */
     resourceDict(document: PdfObjectRegistry): PdfDict;
+    private fullFontResource;
 }

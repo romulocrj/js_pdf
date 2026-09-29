@@ -1,3 +1,5 @@
+import { PdfBorder } from '../pdf/obj/border.ts';
+import type { PdfBorderOptions } from '../pdf/obj/border.ts';
 import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfGeometricAnnotationKind } from '../pdf/obj/annotation.ts';
 import type { PdfPoint } from '../pdf/rect.ts';
@@ -15,12 +17,18 @@ export declare abstract class AnnotationBuilder {
 }
 export declare class AnnotationLink extends AnnotationBuilder {
     readonly destination: string;
-    constructor(destination: string);
+    readonly border?: PdfBorder;
+    constructor(destination: string, { border }?: {
+        readonly border?: PdfBorderOptions;
+    });
     build(context: RenderContext, rect: AnnotationRect): void;
 }
 export declare class AnnotationUrl extends AnnotationBuilder {
     readonly destination: string;
-    constructor(destination: string);
+    readonly border?: PdfBorder;
+    constructor(destination: string, { border }?: {
+        readonly border?: PdfBorderOptions;
+    });
     build(context: RenderContext, rect: AnnotationRect): void;
 }
 export interface AnnotationOptions {
@@ -62,13 +70,10 @@ export declare class Anchor extends Widget<AnnotationLayoutData> {
     layout(context: RenderContext, constraints: Constraints): LayoutBox<AnnotationLayoutData>;
     paint(context: RenderContext, box: PositionedBox<AnnotationLayoutData>): void;
 }
-export interface PdfBorder {
-    readonly width?: number;
-}
 export interface GeometricAnnotationOptions {
     readonly color?: ColorInput | null;
     readonly interiorColor?: ColorInput | null;
-    readonly border?: PdfBorder | null;
+    readonly border?: PdfBorderOptions | null;
     readonly author?: string | null;
     readonly date?: Date | null;
     readonly subject?: string | null;
@@ -79,6 +84,7 @@ declare abstract class GeometricAnnotationBuilder extends AnnotationBuilder {
     readonly color: PaintColor | null;
     readonly interiorColor: PaintColor | null;
     readonly borderWidth: number;
+    readonly border: PdfBorder;
     readonly author: string | null;
     readonly date: Date | null;
     readonly subject: string | null;
@@ -89,6 +95,7 @@ declare abstract class GeometricAnnotationBuilder extends AnnotationBuilder {
         readonly color: PaintColor | null;
         readonly interiorColor: PaintColor | null;
         readonly borderWidth: number;
+        readonly border: PdfBorder;
         readonly author: string | null;
         readonly subject: string | null;
         readonly content: string | null;
@@ -157,5 +164,21 @@ export declare class Outline extends Anchor {
     readonly style: PdfOutlineStyle;
     constructor({ title, level, color, style, ...anchor }: OutlineOptions);
     paint(context: RenderContext, box: PositionedBox<AnnotationLayoutData>): void;
+}
+export interface TextAnnotationOptions extends GeometricAnnotationOptions {
+    readonly content: string;
+    readonly open?: boolean;
+    readonly icon?: string;
+}
+export declare class AnnotationText extends GeometricAnnotationBuilder {
+    readonly open: boolean;
+    readonly icon: string;
+    constructor(options: TextAnnotationOptions);
+    build(context: RenderContext, rect: AnnotationRect): void;
+}
+export declare class TextAnnotation extends Annotation {
+    constructor({ child, ...options }: TextAnnotationOptions & {
+        readonly child: AnyWidget;
+    });
 }
 export {};

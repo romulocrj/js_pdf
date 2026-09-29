@@ -6,6 +6,7 @@ export interface PdfFontDescriptorOptions {
     readonly fontName: string;
     /** The embedded font program; becomes `/FontFile2`. */
     readonly file: PdfObject<PdfDictStream>;
+    readonly fileKey?: '/FontFile2' | '/FontFile3';
     /** 4 = symbolic, 32 = non-symbolic. Upstream picks by composite-ness. */
     readonly flags: number;
     /** `[xMin, yMin, xMax, yMax]`, already scaled to 1000 units per em. */

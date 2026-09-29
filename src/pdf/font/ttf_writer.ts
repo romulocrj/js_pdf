@@ -22,9 +22,9 @@
  * Everything is built into byte arrays the caller already owns; nothing here
  * compresses, hashes or reads a file.
  *
- * FORMAT LIMIT: no `CFF `-flavoured OpenType. Those carry PostScript outlines with
+ * SUBSET LIMIT: no `CFF `-flavoured OpenType. Those carry PostScript outlines with
  * no `glyf`/`loca` to rebuild, so a subset has to be produced by a different
- * algorithm entirely. `PdfTtfFont` rejects such a font up front.
+ * algorithm entirely. `PdfTtfFont` embeds the full CFF1 OpenType program instead.
  *
  * Divergences from upstream, each marked at the site that makes it:
  *

@@ -20,18 +20,19 @@ import { SizedBox } from '../basic.ts';
 import { Alignment, BoxConstraints } from '../geometry.ts';
 import type { ConstraintSize } from '../geometry.ts';
 import type { AnyWidget, RenderContext } from '../widget.ts';
-import { CHART_BLUE, ChartFrame, Dataset, drawWidget } from './chart.ts';
+import { CHART_BLUE, ChartFrame, ChartValue, Dataset, drawWidget } from './chart.ts';
 import type { ChartPoint, ChartRect, DatasetOptions } from './chart.ts';
 import { CartesianFrame } from './grid_cartesian.ts';
 
 export type ValuePosition = 'left' | 'top' | 'right' | 'bottom' | 'auto';
 
 /** One (x, y) sample of a cartesian data set. */
-export class PointChartValue {
+export class PointChartValue extends ChartValue {
   readonly x: number;
   readonly y: number;
 
   constructor(x: number, y: number) {
+    super();
     this.x = assertFiniteNumber(Number(x), 'x');
     this.y = assertFiniteNumber(Number(y), 'y');
   }

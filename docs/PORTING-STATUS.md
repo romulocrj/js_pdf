@@ -7,7 +7,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 **Latest audit:** `DavBfr/dart_pdf@b97c4a63dc` (2026-09-28); this is an audit
 reference, not a claim that all changes through that revision are ported.
 Image DPI fixes incorporate `e2e3974f32`, `94e93729fc` and `b9b34aebf9`.
-**Ported:** 150 `.ts` files, 38,034 lines (TypeScript)
+**Ported:** 153 `.ts` files, 38,563 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -75,8 +75,8 @@ each one.
 | `format/stream.dart` | 83 | `src/pdf/format/stream.ts` | done — public growable `PdfStream`, overridable output destinations, bounded patches and used-byte stream copies |
 | `format/base.dart` | 50 | `src/pdf/format/base.ts` | done — `PdfDataType`; `output(stream)` only, no settings or indent |
 | `format/object_base.dart` | 118 | `src/pdf/format/object_base.ts` | partial — `PdfObjectBase`, `ref()`, `prepare()`, `PdfSettings.compress`; no encrypt callback, no version selector |
-| `format/dict.dart` | 135 | `src/pdf/format/dict.ts` | partial — `PdfDict`, insertion-ordered; no `merge`, no type parameter |
-| `format/array.dart` | 126 | `src/pdf/format/array.ts` | partial — `PdfArray`, `fromNum`, `fromObjects`; `fromColor` for RGB/gray/CMYK; no `uniq` |
+| `format/dict.dart` | 135 | `src/pdf/format/dict.ts` | partial — `PdfDict`, insertion-ordered, recursive `merge`; no type parameter |
+| `format/array.dart` | 126 | `src/pdf/format/array.ts` | partial — `PdfArray`, `fromNum`, `fromObjects`; `fromColor` for RGB/gray/CMYK and stable `uniq` |
 | `format/dict_stream.dart` | 98 | `src/pdf/format/dict_stream.ts` | partial — repeatable `PdfDictStream` output with derived `/Length`, `/FlateDecode` kept only when smaller; no Ascii85, no encryption |
 | `format/name.dart` | 63 | `src/pdf/format/name.ts` | done — also escapes `)`, which upstream misses |
 | `format/indirect.dart` | 44 | `src/pdf/format/indirect.ts` | done — `PdfIndirect` |
@@ -90,13 +90,13 @@ each one.
 
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
-| `page_format.dart` | 171 | `src/pdf/page_format.ts` | partial — all upstream paper presets and margins; public `PageUnit` including `dp`; value-class conveniences remain |
+| `page_format.dart` | 171 | `src/pdf/page_format.ts` | partial — all upstream paper presets and margins; public `PageUnit` including `dp`; `PdfPageFormat` value class, units, orientation, copy/margin/dimension/equality helpers |
 | `color.dart` | 725 | `src/pdf/color.ts` | done — `PdfColor`, gray/CMYK/HSV/HSL values, RYB conversion, factories, harmony/shade/luminance helpers; `equals` replaces Dart equality; corrected achromatic/CMYK conversions |
 | `colors.dart` | 406 | `src/pdf/colors.ts` | done — complete named Material palette, aliases, primaries/accents and deterministic `getColor` |
 | `graphics.dart` | 1415 | `src/pdf/graphics.ts`, `src/svg/path.ts` | partial — full path API (`m`/`l`/`c`/`h`/`re`, ellipses, rounded rects, elliptical arcs), SVG path drawing, fill rules, clipping, CTM, cap/join/miter/dash, RGB/DeviceGray/CMYK solid colors, `gs`, image XObjects, shading-pattern paint and direct `sh` shadings |
 | `graphic_state.dart` | 194 | `src/pdf/graphic_state.ts`, `src/pdf/soft_mask.ts` | partial — `/ca`, `/CA`, `/BM`, deduplicated per page, and luminosity `/SMask` form groups; no `PdfGraphicStates` document object or `/TR` |
 | *(no upstream file — `vector_math`)* | — | `src/pdf/matrix.ts` | done — the 2×3 affine `cm` operand, composition, inversion and the y-down conjugation |
-| `document.dart` | 289 | `src/pdf/document.ts` | partial — synchronous `save`/`write`, `PdfDocument` object registry carrying `PdfSettings`; one font/image/soft-mask form object per distinct resource, created on first use |
+| `document.dart` | 289 | `src/pdf/document.ts` | partial — synchronous `save`/`write`, `PdfDocument` object registry carrying `PdfSettings` (compression/simple TrueType selection); one font/image/soft-mask form object per distinct resource, created on first use |
 | `point.dart`, `rect.dart` | 159 | `src/pdf/rect.ts` | done — `PdfPoint`, `PdfRect` as interfaces plus factory objects |
 | `options.dart` | 8 | — | — |
 | `document_parser.dart` | 40 | — | — reading existing PDFs is out of scope |
@@ -121,14 +121,14 @@ on: an object registers itself with the document, hands out references through
 | `obj/info.dart` | 69 | `src/pdf/obj/info.ts` | done — title, author, subject, keywords, creator, upstream-style producer attribution and UTC `/CreationDate` |
 | `obj/array.dart` | 30 | — | — |
 | `obj/type1_font.dart`, `font.dart` | 397 | `src/pdf/font/font.ts`, `src/pdf/font/type1_fonts.ts` | partial — `PdfFont` seam and all 14 standard Type1 fonts; `resourceDict(registry)` returns a `PdfDict` and may create the objects it references |
-| `obj/font_descriptor.dart` | 139 | `src/pdf/obj/font_descriptor.ts` | partial — bbox, flags, ascent/descent, `/FontFile2`; `/ItalicAngle`, `/CapHeight` and `/StemV` are upstream's constants |
-| `obj/ttffont.dart`, `unicode_cmap.dart` | 278 | `src/pdf/obj/ttf_font.ts`, `src/pdf/obj/unicode_cmap.ts` | partial — Type0/CIDFontType2, `/Identity-H`, `/ToUnicode`, Arabic isolated-form aliases and zero-advance diacritics; no simple `/TrueType` branch |
+| `obj/font_descriptor.dart` | 139 | `src/pdf/obj/font_descriptor.ts` | partial — bbox, flags, ascent/descent, `/FontFile2` and `/FontFile3`; `/ItalicAngle`, `/CapHeight` and `/StemV` are upstream's constants |
+| `obj/ttffont.dart`, `unicode_cmap.dart` | 278 | `src/pdf/obj/ttf_font.ts`, `src/pdf/obj/unicode_cmap.ts` | partial — Type0/CIDFontType2, `/Identity-H`, `/ToUnicode`, Arabic isolated-form aliases and zero-advance diacritics; explicit full-program WinAnsi `/TrueType`, CFF1 `/OpenType`/`CIDFontType0` with charset/ROS mapping; CFF ink bounds approximate |
 | `obj/graphic_stream.dart` | 156 | `src/pdf/obj/graphic_stream.ts` | partial — `/Font`, `/XObject`, `/ExtGState`, `/Pattern` and `/Shading` resources (inline dictionaries, per page); base class rather than a mixin and no deprecated `/ProcSet` |
-| `obj/xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 206 | `src/pdf/obj/xobject.ts`, `src/pdf/document.ts`, `src/pdf/soft_mask.ts` | partial — image and form XObjects with appearance resources and transparency groups for luminosity masks; no public generic form-XObject API |
+| `obj/xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 206 | `src/pdf/obj/xobject.ts`, `src/pdf/document.ts`, `src/pdf/soft_mask.ts`, `src/pdf/obj/formxobject.ts` | partial — public reusable/nested `PdfFormXObject` snapshots with resource deduplication, appearance resources and luminosity-mask transparency groups; adapted paint API instead of mutable upstream objects |
 | `obj/image.dart`, `smask.dart` | 347 | `src/pdf/obj/image.ts`, `src/pdf/image/png.ts`, `src/pdf/image/jpeg.ts`, `src/pdf/image/jpeg_decoder.ts`, `src/pdf/image/jpeg_encoder.ts` | partial — typed PNG/JPEG decoding and quality-90 JPEG encoding; original JPEG bytes preserved unless genuinely reduced, lazy RGB JPEG writers, CMYK conversion, EXIF orientation, separate alpha channels and image `/SMask` |
 | `obj/shading.dart`, `pattern.dart`, `function.dart` | 349 | `src/pdf/obj/shading.ts`, `pattern.ts`, `function.ts` | partial — axial/radial DeviceRGB shadings, type-2 interpolation and type-3 stitching, direct shading-pattern dictionaries; no sampled streams or tiling patterns |
 | `obj/names.dart`, `outline.dart` | 296 | `src/pdf/obj/names.ts`, `outline.ts` | done — sorted named destinations and hierarchical outline tree with title, style, colour, siblings and closed descendants |
-| `obj/annotation.dart`, `border.dart` | 1070 | `src/pdf/obj/annotation.ts` | partial — links, square/circle/polygon/polyline/ink annotations and text/choice/checkbox/push-button fields with `/AP`; text notes and the complete custom-border surface remain |
+| `obj/annotation.dart`, `border.dart` | 1070 | `src/pdf/obj/annotation.ts`, `border.ts` | partial — links, text notes, geometric annotations and form fields with `/AP`; all five custom border styles and dash arrays; signatures remain excluded |
 | `obj/metadata.dart`, `page_label.dart` | 248 | `src/pdf/obj/metadata.ts`, `page_label.ts` | done — caller-supplied UTF-8 XMP and all five page-label styles |
 | `obj/encryption.dart`, `signature.dart` | 151 | — | — |
 | `obj/pdfa/*.dart` | 342 | — | — |
@@ -139,8 +139,8 @@ on: an object registers itself with the document, hands out references through
 |---|---:|---|---|
 | `font/font_metrics.dart` | 184 | `src/pdf/font/font_metrics.ts` | done — bounding box, bearings, ascent/descent and advance width |
 | `font/type1_fonts.dart` | 304 | `src/pdf/font/type1_fonts.ts` | done — complete AFM widths for the 14 standard fonts |
-| `font/ttf_parser.dart` | 693 | `src/pdf/font/ttf_parser.ts` | done — tables, `cmap` 0/4/6/12, Arabic isolated-form aliases, `loca`/`glyf`, composite glyphs, `CFF ` detection and format-17 `CBLC`/`CBDT` PNG bitmaps |
-| `font/ttf_writer.dart` | 399 | `src/pdf/font/ttf_writer.ts` | partial — TrueType glyph subset, rebuilt `loca`/`glyf`/`hmtx`/`cmap`, recomputed checksums and stable CID-to-glyph identity; CFF/PostScript outlines are rejected rather than mis-embedded |
+| `font/ttf_parser.dart` | 693 | `src/pdf/font/ttf_parser.ts` | done — tables, `cmap` 0/4/6/12, Arabic isolated-form aliases, `loca`/`glyf`, composite glyphs, CFF1 hmtx advances, charset/ROS metadata via `src/pdf/font/cff.ts`, and format-17 `CBLC`/`CBDT` PNG bitmaps |
+| `font/ttf_writer.dart` | 399 | `src/pdf/font/ttf_writer.ts` | partial — TrueType glyph subset, rebuilt `loca`/`glyf`/`hmtx`/`cmap`, recomputed checksums and stable CID-to-glyph identity; CFF1 bypasses subsetting and embeds the full OpenType program; CFF2 and raw Type1 programs are unsupported |
 | `font/bidi_utils.dart`, `arabic.dart` | 502 | `src/pdf/font/bidi_utils.ts`, `arabic.ts`, `unicode_bidi.ts` | done — Arabic contextual forms/ligatures and full UAX #9 reordering/mirroring with generated Unicode tables |
 
 ## `src/svg/` — SVG subsystem
@@ -183,13 +183,13 @@ both the grammar and the shape factories landed in phase 2.5.
 | `widgets/shape.dart`, `svg.dart` | 400 | `src/widgets/shape.ts`, `src/widgets/svg.ts` | partial — `Circle`, `Rectangle`, two-point open `Polygon`/polyline, `InkList`, validated stroke widths and imperative `Vector`; public `SvgImage` with all `BoxFit` modes, alignment, clipping, colour filter, custom font lookup, text and embedded raster content |
 | `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | done — all upstream public classes, including tight `SizedBox`, `ConstrainedBox`, minimum-preserving `LimitedBox` and aligned `OverflowBox`; dividers paint the equivalent rule directly |
 | `widgets/table.dart`, `table_helper.dart` | 834 | `src/widgets/table.ts`, `table_helper.ts` | partial — fixed/flex/intrinsic/fraction tracks, alignment, decorations, borders, `TableHelper`, page spanning and repeatable headers; no bidi direction |
-| `widgets/theme.dart`, `font.dart` | 461 | `src/widgets/theme.ts`, `src/widgets/font.ts` | partial — `Font`, `ThemeData`, `Theme`, `DefaultTextStyle` and `iconTheme`; no `DefaultTextStyle.merge` |
+| `widgets/theme.dart`, `font.dart` | 461 | `src/widgets/theme.ts`, `src/widgets/font.ts` | partial — `Font`, `ThemeData`, `Theme`, `DefaultTextStyle.merge` and `iconTheme` |
 | `widgets/image.dart`, `image_provider.dart` | 423 | `src/widgets/image.ts`, `src/widgets/image_provider.ts` | partial — `Image`, SVG path-data `Shape`, all seven `BoxFit` modes, alignment, lazy PNG/JPEG decode, DPI downsampling without upscaling, rotated-axis conversion, quality-90 JPEG re-encoding without source EXIF, `ImageProvider`, `ImageProxy`, `MemoryImage`, `RawImage`; bytes are caller-supplied |
 | `widgets/border_radius.dart` | 466 | `src/widgets/border_radius.ts` | done — physical/directional circular or elliptical radii, with oversized radii scaled to a valid path |
 | `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | `src/widgets/stack.ts`, `wrap.ts`, `grid_view.ts`, `partitions.ts` | done — positioned overlays/clipping, multi-run wrap, fixed-track grid and parallel partitions; immutable continuation for wrap/grid/partitions |
 | `widgets/clip.dart` | 134 | `src/widgets/clip.ts` | done — rectangular, scaled rounded-rectangle and elliptical clip scopes over immutable child layout |
-| `widgets/chart/*.dart` | 1989 | `src/widgets/chart/*.ts` | partial — complete chart rendering through `Chart`, `CartesianGrid`, `PieGrid`, `RadialGrid`, `FixedAxis`, `ChartLegend`, `PointDataSet`, `BarDataSet`, `LineDataSet` and `PieDataSet`, including caller-supplied pie legend widgets and full-circle rounding tolerance; the upstream `ChartValue` base and deprecated `LineChartValue` compatibility alias are omitted |
-| `widgets/annotations.dart`, `forms.dart` | 1244 | `src/widgets/annotations.ts`, `forms.ts` | partial — links, `Outline`, all five geometric annotation widgets with validated border widths, plus `ChoiceField`, `Checkbox`, `FlatButton` and `TextField`; `Signature` is intentionally out of scope with digital signatures |
+| `widgets/chart/*.dart` | 1989 | `src/widgets/chart/*.ts` | partial — complete chart rendering through `Chart`, `CartesianGrid`, `PieGrid`, `RadialGrid`, `FixedAxis`, `ChartLegend`, `PointDataSet`, `BarDataSet`, `LineDataSet` and `PieDataSet`, including caller-supplied pie legend widgets and full-circle rounding tolerance; the upstream `ChartValue` base and deprecated `LineChartValue` alias are public |
+| `widgets/annotations.dart`, `forms.dart` | 1244 | `src/widgets/annotations.ts`, `forms.ts` | partial — links, text notes, `Outline`, all five geometric annotation widgets with validated border widths, plus `ChoiceField`, `Checkbox`, `FlatButton` and `TextField`; `Signature` is intentionally out of scope with digital signatures |
 | `widgets/barcode.dart` | 298 | `src/widgets/barcode.ts` | done — `Barcode`, `BarcodeWidget`; symbol operations are immutable layout data |
 | `widgets/content.dart` | 360 | `src/widgets/content.ts` | done — `Header`, `Paragraph`, `Bullet`, `Watermark`, `Footer`, clickable `TableOfContent`, named destinations and conditional two-pass TOC |
 | `widgets/placeholders.dart` | 187 | `src/widgets/placeholders.ts` | done — `Placeholder`, vector `PdfLogo`, SVG `FlutterLogo`, deterministic `LoremText` and stable `Lorem` widget |
@@ -206,7 +206,7 @@ both the grammar and the shape factories landed in phase 2.5.
 | Object syntax / serialization | ~1,700 | self-serializing values and RFC 1951/1950 stream compression; no Ascii85, encryption or xref streams |
 | Graphics | ~1,600 | paths, transforms, clipping, graphic/soft-mask states, shading patterns, direct `sh` resources and raster image XObjects done |
 | Indirect objects | ~4,300 | object model in place; catalog, pages, info, compressed content, resources, form masks and embedded fonts |
-| Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType: parse, subset, Type0/Identity-H, `/ToUnicode`, CBLC/CBDT colour emoji fallback, Arabic shaping and UAX #9 bidi; CFF outlines remain unsupported |
+| Fonts | ~2,100 | Type1 AFM metrics and embedded TrueType: parse, subset, Type0/Identity-H, `/ToUnicode`, CBLC/CBDT colour emoji fallback, Arabic shaping and UAX #9 bidi; simple WinAnsi TrueType and full-program CFF1 embedding; no CFF2/raw Type1 support |
 | SVG | ~2,800 | public widget, paths, XML, transforms, units, shapes, groups, references, clipping, luminosity masks, gradients, text and embedded raster content |
 | Widgets | ~14,000 | the remaining public widget constructors through phase 5.7, plus tables, rich styles, content and themes |
 

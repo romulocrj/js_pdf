@@ -31,3 +31,5 @@ export declare class LineDataSet extends PointDataSet {
     paintBackground(context: RenderContext, frame: ChartFrame, _data: null): void;
     paint(context: RenderContext, frame: ChartFrame, _data: null): void;
 }
+/** Deprecated upstream name retained for source compatibility. */
+export { PointChartValue as LineChartValue } from './point_chart.ts';

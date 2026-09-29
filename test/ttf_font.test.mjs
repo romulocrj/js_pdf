@@ -147,7 +147,7 @@ test('the same declaration is embedded once per document, twice across documents
   assert.equal(toUnicodeMap(other).size, 2, 'only .notdef and `a`');
 });
 
-test('a CFF font is rejected with an explicit unsupported-format error', () => {
+test('a mislabeled glyf table is rejected as malformed CFF', () => {
   const cff = new Uint8Array(asset('OpenSans-Regular.ttf'));
   const view = new DataView(cff.buffer);
   const tableCount = view.getUint16(4);
@@ -162,7 +162,7 @@ test('a CFF font is rejected with an explicit unsupported-format error', () => {
 
   assert.throws(
     () => new PdfTtfFont(cff),
-    { name: 'TypeError', message: /CFF fonts are not supported/ }
+    { name: 'TypeError', message: /Only CFF1 OpenType outlines are supported/ }
   );
 });
 

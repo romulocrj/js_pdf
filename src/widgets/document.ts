@@ -73,6 +73,8 @@ export interface DocumentOptions {
    * magnitude. Turn it off to trade file size back for generation time.
    */
   readonly compress?: boolean;
+  /** Select full-program WinAnsi for lazy TrueType declarations. */
+  readonly simpleTrueTypeFonts?: boolean;
 }
 
 export interface DocumentOutlineEntry {
@@ -128,10 +130,11 @@ export class Document {
     theme = undefined,
     font = undefined,
     pageMode = 'none',
-    compress = true
+    compress = true,
+    simpleTrueTypeFonts = false
   }: DocumentOptions = {}) {
     this.metadata = { title, author, subject, creator, producer, keywords, xmpMetadata };
-    this.settings = { compress };
+    this.settings = { compress, simpleTrueTypeFonts };
     for (const { pageIndex, label } of pageLabels) this.setPageLabel(pageIndex, label);
     this.theme = theme
       ?? (font === undefined
@@ -147,7 +150,7 @@ export class Document {
       return existing;
     }
 
-    const font = declaration.build();
+    const font = declaration.build(this.settings.simpleTrueTypeFonts);
     this.fonts.set(declaration, font);
     return font;
   }

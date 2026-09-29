@@ -1,10 +1,10 @@
 import type { ConstraintSize } from '../geometry.ts';
 import type { AnyWidget, RenderContext } from '../widget.ts';
-import { ChartFrame, Dataset } from './chart.ts';
+import { ChartFrame, ChartValue, Dataset } from './chart.ts';
 import type { ChartPoint, ChartRect, DatasetOptions } from './chart.ts';
 export type ValuePosition = 'left' | 'top' | 'right' | 'bottom' | 'auto';
 /** One (x, y) sample of a cartesian data set. */
-export declare class PointChartValue {
+export declare class PointChartValue extends ChartValue {
     readonly x: number;
     readonly y: number;
     constructor(x: number, y: number);

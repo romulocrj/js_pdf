@@ -26,6 +26,7 @@ import { generateTextBreakingPhase64 } from './text-breaking-phase-6.4.mjs';
 import { generateSynchronousOutputPhase65 } from './synchronous-output-phase-6.5.mjs';
 import { generateLayoutPerformancePhase66 } from './layout-performance-phase-6.6.mjs';
 import { generateColorsPhase67 } from './colors-phase-6.7.mjs';
+import { generateFontsPhase68, generateObjectsPhase610, generateApiPhase612 } from './fonts-objects-api-phases.mjs';
 import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
 import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
 import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
@@ -43,6 +44,10 @@ const [dpiJpeg, dpiPng] = await Promise.all(
     readFile(new URL(`./assets/${name}`, import.meta.url)).then(bytes => new Uint8Array(bytes)))
 );
 
+const compatibilityFonts = Object.fromEntries(await Promise.all(
+  [['ttf', 'OpenSans-Regular.ttf'], ['cff', 'JsPdfCffExample.otf'], ['cid', 'JsPdfCffCidExample.otf']]
+    .map(async ([key, name]) => [key, new Uint8Array(await readFile(new URL('./assets/' + name, import.meta.url)))])
+));
 const cjkFont = new Uint8Array(await readFile(new URL('./assets/JsPdfCjkExample.ttf', import.meta.url)));
 
 const examples = [
@@ -73,7 +78,10 @@ const examples = [
   ['text-breaking-phase-6.4', () => generateTextBreakingPhase64(cjkFont)],
   ['synchronous-output-phase-6.5', () => generateSynchronousOutputPhase65(dpiJpeg)],
   ['layout-performance-phase-6.6', () => generateLayoutPerformancePhase66()],
-  ['colors-phase-6.7', () => generateColorsPhase67()]
+  ['colors-phase-6.7', () => generateColorsPhase67()],
+  ['fonts-phase-6.8', () => generateFontsPhase68(compatibilityFonts)],
+  ['objects-phase-6.10', () => generateObjectsPhase610()],
+  ['api-phase-6.12', () => generateApiPhase612()]
 ];
 
 const outputDirectory = new URL('./out/', import.meta.url);

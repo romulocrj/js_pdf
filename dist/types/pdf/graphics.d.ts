@@ -5,6 +5,8 @@ import type { PdfSoftMask } from './soft_mask.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
 import type { PdfShading } from './obj/shading.ts';
+import type { PdfBorderOptions } from './obj/border.ts';
+import type { PdfFormXObject } from './obj/formxobject.ts';
 import type { PdfImage } from './obj/image.ts';
 import type { PdfAnnotationSpec, PdfFormFieldAnnotation } from './obj/annotation.ts';
 import type { PdfMatrix } from './matrix.ts';
@@ -69,6 +71,7 @@ export interface BezierArcOptions {
 export declare class PdfCanvas {
     readonly pageHeight: number;
     private readonly content;
+    private readonly formNames;
     private commandCount;
     private readonly fontNames;
     private readonly stateNames;
@@ -122,14 +125,17 @@ export declare class PdfCanvas {
     get patterns(): ReadonlyMap<string, PdfDict>;
     /** The direct `/Shading` entries this page selected, by stream name. */
     get shadings(): ReadonlyMap<string, PdfDict>;
+    get forms(): ReadonlyMap<PdfFormXObject, string>;
+    /** Place a reusable form in PDF user space, like drawImage. */
+    drawForm(form: PdfFormXObject, x: number, y: number, width?: number, height?: number): void;
     /** The images this page drew with, mapped to page-local `/I…` names. */
     get images(): ReadonlyMap<PdfImage, string>;
     /** Clickable rectangles registered while this page was painted. */
     get annotations(): readonly PdfAnnotationSpec[];
     /** Registers an annotation whose coordinates are already in PDF space. */
     addAnnotation(annotation: PdfAnnotationSpec): void;
-    addUrlLink(destination: string, x: number, top: number, width: number, height: number): void;
-    addNamedLink(destination: string, x: number, top: number, width: number, height: number): void;
+    addUrlLink(destination: string, x: number, top: number, width: number, height: number, border?: PdfBorderOptions): void;
+    addNamedLink(destination: string, x: number, top: number, width: number, height: number, border?: PdfBorderOptions): void;
     private addLink;
     addFormField(field: Omit<PdfFormFieldAnnotation, 'rect'>, x: number, top: number, width: number, height: number): void;
     private addImage;

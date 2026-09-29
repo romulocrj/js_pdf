@@ -118,6 +118,8 @@ export declare class TtfParser {
      *
      * https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6glyf.html
      */
+    /** CFF advances come from hmtx; use em bounds without interpreting charstrings. */
+    private parseCffMetrics;
     private parseGlyphs;
     /**
      * The raw glyph program, sliced out of `glyf` — this is what phase 1.2 copies

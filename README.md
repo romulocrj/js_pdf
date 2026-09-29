@@ -283,3 +283,12 @@ RGB/gray/CMYK painting, HSV/HSL/RYB conversions and flattened alpha. Its
 `npm run phase-examples` writes `examples/out/colors-phase-6.7.pdf`.
 See [color usage](AI_USAGE.md#color-values-and-device-spaces) for constructors
 and the distinction between color alpha and painting opacity.
+
+
+The combined **6.8 / 6.10 / 6.12** PR adds three ordered gallery cards:
+**TrueType & CFF fonts**, **Reusable forms & notes**, and **API conveniences**.
+They share [one generator module](examples/fonts-objects-api-phases.mjs) with
+`npm run phase-examples`. The CFF fixtures retain Adobe's copyright and the
+complete SIL OFL; they are external assets, not part of dist. See
+[usage and limitations](AI_USAGE.md#font-compatibility-and-cff) and the
+[release-to-current bundle comparison](docs/BUNDLE-SIZE.md).

@@ -70,6 +70,8 @@ export interface DatasetOptions {
  * and returns the value it needs at paint time, which the grid carries in its
  * own layout data.
  */
+export declare abstract class ChartValue {
+}
 export declare abstract class Dataset<TData = unknown> {
     readonly legend: string | null;
     readonly color: PaintColor | null;
