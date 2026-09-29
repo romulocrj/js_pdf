@@ -496,6 +496,57 @@ font beyond the standard PDF families.
 The library does not fetch assets. Fonts, images and SVG strings must be passed
 into the generator by its caller.
 
+## Synchronous output and lazy JPEG sources
+
+`document.save()` returns a complete `Uint8Array`. Use `document.write(output)`
+when the host can consume PDF chunks synchronously. Both use the same serializer;
+`write` returns no bytes and does not close or flush a caller-owned destination.
+
+```js
+class HostOutput extends pw.PdfStream {
+  constructor(consume) { super(); this.consume = consume; this.count = 0; }
+  get offset() { return this.count; }
+  putByte(byte) { this.putBytes(Uint8Array.of(byte)); }
+  putBytes(bytes) { this.consume(bytes); this.count += bytes.length; }
+  output() { throw new Error('No collected output'); }
+}
+document.write(new HostOutput(bytes => host.writeBytes(bytes)));
+```
+
+The injected host function must consume or copy each chunk before returning;
+chunks may be reused by the source. Override **all three** members shown:
+`offset`, `putByte` and `putBytes`. Inherited `putString` forwards through
+`putBytes`. Use a fresh destination at byte offset zero. This API has no
+asynchronous backpressure: asynchronous file/network sinks need a host-side
+adapter or the collected bytes from `save()`. Errors propagate; discard any
+partial output and retry with a fresh destination. The host owns cleanup.
+`PdfStream.setBytes` patches an in-memory stream without moving its offset;
+`putStream` copies another stream's written bytes, excluding unused capacity.
+
+```js
+const image = pw.PdfImage.jpegStream({
+  width: 320, height: 160, length: encodedLength,
+  write: output => host.copyJpegChunksTo(output),
+  orientation: 'topLeft'
+});
+const widget = new pw.Image(new pw.ImageProxy(image), { width: 160 });
+```
+
+The callback supplies **already encoded RGB JPEG** bytes synchronously. Width,
+height, byte length and orientation come from the caller; this path does not
+parse the JPEG, infer EXIF, decode/resample it, or support gray/CMYK metadata.
+Use `MemoryImage`/`PdfImage.fromJpeg` when those automatic inspections are
+needed. The callback is not invoked during layout; serialization calls it once
+per reused image resource and again on each explicit save/write. It must emit
+exactly the declared positive integer length. To avoid retaining the JPEG,
+read chunks inside the callback rather than closing over its complete bytes.
+
+Direct output avoids the final PDF collection; it does not remove page layout,
+font processing or compression allocations. The gallery preview deliberately
+collects bytes to display them. For a working host adapter and lazy file source,
+run `node examples/run-synchronous-output.mjs` after building; see also the
+[shared example](examples/synchronous-output-phase-6.5.mjs).
+
 ## Custom line breaking and hyphenation
 
 `Text` and `RichText` accept synchronous `lineSplitter` and `hyphenation`

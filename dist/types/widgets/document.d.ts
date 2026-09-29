@@ -1,3 +1,4 @@
+import { PdfStream } from '../pdf/format/stream.ts';
 import type { DocumentMetadata, PdfPageMode, SerializedPageLabel } from '../pdf/document.ts';
 import type { PdfSettings } from '../pdf/format/object_base.ts';
 import type { Rgb } from '../pdf/color.ts';
@@ -106,4 +107,6 @@ export declare class Document {
     }): void;
     private renderSections;
     save(): Uint8Array;
+    /** Render and serialize to a caller-owned destination without collecting the PDF. */
+    write(output: PdfStream): void;
 }

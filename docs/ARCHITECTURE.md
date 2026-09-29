@@ -123,7 +123,8 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   UTF-16BE text strings otherwise, and the hex strings an embedded font's CIDs
   are written as.
 - **`format/stream.ts`** — geometrically growing typed byte storage used by
-  object serialization and content canvases, with no host encoding API.
+  object serialization and content canvases, with no host encoding API. Public
+  destinations subclass `PdfStream` and receive byte/string writes synchronously.
 - **`color.ts`** — `#RRGGBB` or `[r,g,b]` → normalized triple, plus the
   `rg`/`RG` operators. DeviceRGB only.
 - **`page_format.ts`** — upstream paper presets, margins and public physical-unit constants in PDF points.
@@ -147,7 +148,8 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   re-reads. It also allocates the `/F1`, `/F2`, … names it writes, because the
   resource dictionary has to agree with the operators.
 - **`document.ts`** — the object registry, xref table and trailer. Produces the
-  final `Uint8Array`.
+  final `Uint8Array` through `save()`, or writes directly to a supplied
+  `PdfStream` through `write(output)`.
 
 ### `src/widgets/` — the layout tree
 
@@ -343,6 +345,24 @@ opens with the exact banner, contains exactly one block comment and no line
 comments, has no imports or host APIs, is minified or readable as intended, and
 produces byte-identical PDFs to `src/`. The tests import `src/index.ts` directly
 — Node strips the types — so they exercise the sources, not the bundle.
+
+### Synchronous output destinations
+
+`Document.write(output)` renders the same sections as `save()` and passes them
+to the same object/xref serializer. The destination owns its byte offset; the
+serializer never asks it for `output()` or an in-memory view. Subclasses of
+`PdfStream` override `offset`, `putByte` and `putBytes`; inherited `putString`
+converts Latin-1 bytes and dispatches through `putBytes`. Patching is available
+on the in-memory stream but is not required by the current serializer.
+
+Lazy RGB JPEG resources carry dimensions, encoded length and a synchronous
+writer instead of bytes. The image object's `writeContent` emits its dictionary,
+invokes the writer directly on the destination, checks its byte count and emits
+the stream terminator. No encoded image array is retained by the library;
+source callbacks may still retain bytes if the caller chooses to. Each explicit
+serialization invokes the writer again, once per distinct used resource.
+Other page/resource data and compression still occupy memory; direct output
+removes the complete final-PDF allocation, not the layout phase.
 
 ## 7. Adding a subsystem
 

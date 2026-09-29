@@ -261,3 +261,10 @@ The **Custom line breaking** card compares CJK prefix wrapping, punctuation
 rules and hyphenation. Its [shared generator](examples/text-breaking-phase-6.4.mjs)
 uses a small, licensed CJK font subset; `npm run phase-examples` writes
 `examples/out/text-breaking-phase-6.4.pdf`.
+
+
+The **Synchronous output** card demonstrates `Document.write(output)` and lazy
+JPEG reuse, with executable checks against `save()`. After building, run
+`node examples/run-synchronous-output.mjs` for direct file output and a JPEG
+source read in 1 KB chunks. The [gallery generator](examples/synchronous-output-phase-6.5.mjs)
+is also included in `npm run phase-examples`.

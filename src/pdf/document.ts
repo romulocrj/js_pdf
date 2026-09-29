@@ -431,6 +431,13 @@ export class PdfDocument {
   }
 
   save(): Uint8Array {
+    const stream = new PdfStream();
+    this.write(stream);
+    return stream.output();
+  }
+
+  /** Serialize directly to a caller-owned synchronous destination. */
+  write(stream: PdfStream): void {
     for (const object of this.objects) {
       object.prepare();
     }
@@ -438,13 +445,11 @@ export class PdfDocument {
     this.xref.params.set('/Root', this.catalog.ref());
     this.xref.params.set('/Info', this.info.ref());
 
-    const stream = new PdfStream();
     this.xref.output(stream);
-    return stream.output();
   }
 }
 
-/** Build a document from already-rendered pages and write it. */
+/** Build a document from already-rendered pages and collect its bytes. */
 export function serializePdf(
   pages: readonly SerializedPage[],
   metadata: DocumentMetadata,
@@ -454,6 +459,22 @@ export function serializePdf(
   pageLabels: readonly SerializedPageLabel[] = [],
   settings: PdfSettings = DEFAULT_PDF_SETTINGS
 ): Uint8Array {
+  const stream = new PdfStream();
+  writePdf(stream, pages, metadata, outlines, pageMode, destinations, pageLabels, settings);
+  return stream.output();
+}
+
+/** Write already-rendered pages without collecting a complete serialized copy. */
+export function writePdf(
+  output: PdfStream,
+  pages: readonly SerializedPage[],
+  metadata: DocumentMetadata,
+  outlines: readonly SerializedOutline[] = [],
+  pageMode: PdfPageMode = 'none',
+  destinations: readonly SerializedDestination[] = [],
+  pageLabels: readonly SerializedPageLabel[] = [],
+  settings: PdfSettings = DEFAULT_PDF_SETTINGS
+): void {
   const document = new PdfDocument(metadata, settings);
 
   for (const page of pages) {
@@ -472,5 +493,5 @@ export function serializePdf(
   document.addNavigation(outlines, pageMode, destinations);
   document.addPageLabels(pageLabels);
 
-  return document.save();
+  document.write(output);
 }

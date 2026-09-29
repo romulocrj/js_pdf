@@ -66,10 +66,21 @@ export class PdfStream {
 
   /** Append a string whose code units are all byte values. */
   putString(value: string): void {
-    this.ensure(value.length);
-    for (let index = 0; index < value.length; index++) {
-      this.buffer[this.length++] = value.charCodeAt(index) & 0xff;
+    // Dispatch through the virtual byte writer so external destinations see text.
+    this.putBytes(encodeLatin1(value));
+  }
+
+  /** Copy the written bytes, excluding the source's unused capacity. */
+  putStream(source: PdfStream): void {
+    this.putBytes(source.output());
+  }
+
+  /** Patch already written bytes without moving the append position. */
+  setBytes(offset: number, bytes: Uint8Array): void {
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset + bytes.length > this.length) {
+      throw new RangeError('Patch offset is outside the written stream bounds');
     }
+    this.buffer.set(bytes, offset);
   }
 
   /** The bytes written, as a copy the caller owns. */

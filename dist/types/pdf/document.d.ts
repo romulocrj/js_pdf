@@ -1,6 +1,7 @@
 import type { PdfDataType } from './format/base.ts';
 import type { PdfObjectBase, PdfSettings } from './format/object_base.ts';
 import { PdfDict } from './format/dict.ts';
+import { PdfStream } from './format/stream.ts';
 import { PdfXrefTable } from './format/xref.ts';
 import type { PdfFont } from './font/font.ts';
 import { PdfCatalog } from './obj/catalog.ts';
@@ -119,6 +120,10 @@ export declare class PdfDocument {
     addNavigation(outlines: readonly SerializedOutline[], pageMode: PdfPageMode, destinations?: readonly SerializedDestination[]): void;
     addPageLabels(labels: readonly SerializedPageLabel[]): void;
     save(): Uint8Array;
+    /** Serialize directly to a caller-owned synchronous destination. */
+    write(stream: PdfStream): void;
 }
-/** Build a document from already-rendered pages and write it. */
+/** Build a document from already-rendered pages and collect its bytes. */
 export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata, outlines?: readonly SerializedOutline[], pageMode?: PdfPageMode, destinations?: readonly SerializedDestination[], pageLabels?: readonly SerializedPageLabel[], settings?: PdfSettings): Uint8Array;
+/** Write already-rendered pages without collecting a complete serialized copy. */
+export declare function writePdf(output: PdfStream, pages: readonly SerializedPage[], metadata: DocumentMetadata, outlines?: readonly SerializedOutline[], pageMode?: PdfPageMode, destinations?: readonly SerializedDestination[], pageLabels?: readonly SerializedPageLabel[], settings?: PdfSettings): void;

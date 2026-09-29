@@ -14,6 +14,10 @@ export declare class PdfStream {
     putBytes(bytes: Uint8Array): void;
     /** Append a string whose code units are all byte values. */
     putString(value: string): void;
+    /** Copy the written bytes, excluding the source's unused capacity. */
+    putStream(source: PdfStream): void;
+    /** Patch already written bytes without moving the append position. */
+    setBytes(offset: number, bytes: Uint8Array): void;
     /** The bytes written, as a copy the caller owns. */
     output(): Uint8Array;
     /** Copy the filled prefix and release the growable backing allocation. */

@@ -15,6 +15,74 @@
  *
  */
 
+const GROW = 65536;
+
+class PdfStream {
+  constructor() {
+    this.buffer = new Uint8Array(GROW);
+    this.length = 0;
+  }
+  get offset() {
+    return this.length;
+  }
+  ensure(size) {
+    if (this.buffer.length - this.length >= size) {
+      return;
+    }
+    const required = this.length + size;
+    let capacity = this.buffer.length === 0 ? GROW : this.buffer.length;
+    while (capacity < required) {
+      capacity *= 2;
+    }
+    const grown = new Uint8Array(capacity);
+    grown.set(this.buffer.subarray(0, this.length));
+    this.buffer = grown;
+  }
+  putByte(byte) {
+    this.ensure(1);
+    this.buffer[this.length++] = byte;
+  }
+  putBytes(bytes) {
+    this.ensure(bytes.length);
+    this.buffer.set(bytes, this.length);
+    this.length += bytes.length;
+  }
+  putString(value) {
+    this.putBytes(encodeLatin1(value));
+  }
+  putStream(source) {
+    this.putBytes(source.output());
+  }
+  setBytes(offset, bytes) {
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset + bytes.length > this.length) {
+      throw new RangeError("Patch offset is outside the written stream bounds");
+    }
+    this.buffer.set(bytes, offset);
+  }
+  output() {
+    return this.buffer.slice(0, this.length);
+  }
+  take(finalByte) {
+    const result = new Uint8Array(this.length + (finalByte === undefined ? 0 : 1));
+    result.set(this.buffer.subarray(0, this.length));
+    if (finalByte !== undefined) result[this.length] = finalByte;
+    this.buffer = new Uint8Array(0);
+    this.length = 0;
+    return result;
+  }
+  view() {
+    return this.buffer.subarray(0, this.length);
+  }
+}
+
+function encodeLatin1(value) {
+  const result = new Uint8Array(value.length);
+  for (let index = 0; index < value.length; index++) {
+    result[index] = value.charCodeAt(index) & 255;
+  }
+  return result;
+}
+
 const CM = 72 / 2.54;
 
 const MM = 72 / 25.4;
@@ -3117,68 +3185,6 @@ PdfFontMetrics.zero = new PdfFontMetrics({
   right: 0,
   bottom: 0
 });
-
-const GROW = 65536;
-
-class PdfStream {
-  constructor() {
-    this.buffer = new Uint8Array(GROW);
-    this.length = 0;
-  }
-  get offset() {
-    return this.length;
-  }
-  ensure(size) {
-    if (this.buffer.length - this.length >= size) {
-      return;
-    }
-    const required = this.length + size;
-    let capacity = this.buffer.length === 0 ? GROW : this.buffer.length;
-    while (capacity < required) {
-      capacity *= 2;
-    }
-    const grown = new Uint8Array(capacity);
-    grown.set(this.buffer.subarray(0, this.length));
-    this.buffer = grown;
-  }
-  putByte(byte) {
-    this.ensure(1);
-    this.buffer[this.length++] = byte;
-  }
-  putBytes(bytes) {
-    this.ensure(bytes.length);
-    this.buffer.set(bytes, this.length);
-    this.length += bytes.length;
-  }
-  putString(value) {
-    this.ensure(value.length);
-    for (let index = 0; index < value.length; index++) {
-      this.buffer[this.length++] = value.charCodeAt(index) & 255;
-    }
-  }
-  output() {
-    return this.buffer.slice(0, this.length);
-  }
-  take(finalByte) {
-    const result = new Uint8Array(this.length + (finalByte === undefined ? 0 : 1));
-    result.set(this.buffer.subarray(0, this.length));
-    if (finalByte !== undefined) result[this.length] = finalByte;
-    this.buffer = new Uint8Array(0);
-    this.length = 0;
-    return result;
-  }
-  view() {
-    return this.buffer.subarray(0, this.length);
-  }
-}
-
-function encodeLatin1(value) {
-  const result = new Uint8Array(value.length);
-  for (let index = 0; index < value.length; index++) {
-    result[index] = value.charCodeAt(index) & 255;
-  }
-  return result;
-}
 
 class PdfDataType {
   toString() {
@@ -6570,6 +6576,7 @@ class PdfImage {
   constructor(options) {
     this.rgba = null;
     const encoded = "jpeg" in options;
+    const lazy = "write" in options;
     const width = encoded ? options.info.width : options.width;
     const height = encoded ? options.info.height : options.height;
     if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
@@ -6578,8 +6585,14 @@ class PdfImage {
     if (!encoded && "pixels" in options && options.pixels.length !== width * height * 4) {
       throw new RangeError(`RGBA image needs ${width * height * 4} bytes, received ${options.pixels.length}`);
     }
+    if (lazy && (!Number.isSafeInteger(options.length) || options.length <= 0)) {
+      throw new RangeError("JPEG stream length must be a positive safe integer");
+    }
+    if (lazy && typeof options.write !== "function") throw new TypeError("JPEG stream write must be a function");
+    this.streamWriter = lazy ? options.write : null;
+    this.streamLength = lazy ? options.length : null;
     const pixelCount = width * height;
-    if (encoded) {
+    if (encoded || lazy) {
       this.rgb = null;
       this.alpha = null;
     } else if ("rgb" in options) {
@@ -6625,6 +6638,9 @@ class PdfImage {
       info,
       orientation: orientation ?? info.orientation
     });
+  }
+  static jpegStream(options) {
+    return new PdfImage(options);
   }
   get pixels() {
     if (this.rgb === null) return null;
@@ -6685,26 +6701,49 @@ class PdfImage {
 class PdfImageObject extends PdfXObject {
   constructor(document, image, channel) {
     const jpeg = image.jpeg;
+    const lazy = image.streamWriter !== null;
     let data;
-    if (jpeg !== null) {
+    if (lazy) {
+      if (channel === "alpha") throw new RangeError("A JPEG image has no separate alpha channel");
+      data = new Uint8Array(0);
+    } else if (jpeg !== null) {
       if (channel === "alpha") throw new RangeError("A JPEG image has no separate alpha channel");
       data = jpeg;
     } else {
       data = image.channel(channel);
     }
     super(document, "/Image", data);
+    this.streamWriter = image.streamWriter;
+    this.streamLength = image.streamLength;
     this.params.set("/Width", new PdfNum(image.sourceWidth));
     this.params.set("/Height", new PdfNum(image.sourceHeight));
     this.params.set("/BitsPerComponent", new PdfNum(8));
     const info = image.jpegInfo;
-    if (info !== null) {
+    if (info !== null || lazy) {
       this.params.set("/Intent", new PdfName("/RelativeColorimetric"));
       this.params.set("/Filter", new PdfName("/DCTDecode"));
-      this.params.set("/ColorSpace", new PdfName(info.colorSpace === "gray" ? "/DeviceGray" : info.colorSpace === "cmyk" ? "/DeviceCMYK" : "/DeviceRGB"));
-      if (info.inverted) this.params.set("/Decode", PdfArray.fromNum([ 1, 0, 1, 0, 1, 0, 1, 0 ]));
+      this.params.set("/ColorSpace", new PdfName(info?.colorSpace === "gray" ? "/DeviceGray" : info?.colorSpace === "cmyk" ? "/DeviceCMYK" : "/DeviceRGB"));
+      if (info?.inverted) this.params.set("/Decode", PdfArray.fromNum([ 1, 0, 1, 0, 1, 0, 1, 0 ]));
     } else {
       this.params.set("/ColorSpace", new PdfName(channel === "rgb" ? "/DeviceRGB" : "/DeviceGray"));
     }
+  }
+  writeContent(output) {
+    if (this.streamWriter === null) {
+      super.writeContent(output);
+      return;
+    }
+    const params = new PdfDict(this.params.values);
+    params.set("/Length", new PdfNum(this.streamLength));
+    params.output(output);
+    output.putString("\nstream\n");
+    const start = output.offset;
+    this.streamWriter(output);
+    const written = output.offset - start;
+    if (written !== this.streamLength) {
+      throw new RangeError(`JPEG stream wrote ${written} bytes; expected ${this.streamLength}`);
+    }
+    output.putString("\nendstream\n");
   }
   setSoftMask(mask) {
     this.params.set("/SMask", mask.ref());
@@ -17872,25 +17911,28 @@ class PdfDocument {
     this.catalog.pageLabels = pageLabels;
   }
   save() {
+    const stream = new PdfStream;
+    this.write(stream);
+    return stream.output();
+  }
+  write(stream) {
     for (const object of this.objects) {
       object.prepare();
     }
     this.xref.params.set("/Root", this.catalog.ref());
     this.xref.params.set("/Info", this.info.ref());
-    const stream = new PdfStream;
     this.xref.output(stream);
-    return stream.output();
   }
 }
 
-function serializePdf(pages, metadata, outlines = [], pageMode = "none", destinations = [], pageLabels = [], settings = DEFAULT_PDF_SETTINGS) {
+function writePdf(output, pages, metadata, outlines = [], pageMode = "none", destinations = [], pageLabels = [], settings = DEFAULT_PDF_SETTINGS) {
   const document = new PdfDocument(metadata, settings);
   for (const page of pages) {
     document.addPage(page.format, page.content, page.fonts, page.graphicStates, page.patterns, page.shadings, page.images, page.annotations);
   }
   document.addNavigation(outlines, pageMode, destinations);
   document.addPageLabels(pageLabels);
-  return document.save();
+  document.write(output);
 }
 
 class PageTheme {
@@ -18739,6 +18781,11 @@ class Document {
     return processed;
   }
   save() {
+    const output = new PdfStream;
+    this.write(output);
+    return output.output();
+  }
+  write(output) {
     this.outlineEntries.length = 0;
     this.outlineRerenderRequested = false;
     let pages = this.renderSections(false);
@@ -18758,7 +18805,7 @@ class Document {
       pageIndex,
       label
     }));
-    return serializePdf(pages, this.metadata, outlines, this.pageMode, destinations, pageLabels, this.settings);
+    writePdf(output, pages, this.metadata, outlines, this.pageMode, destinations, pageLabels, this.settings);
   }
 }
 
@@ -21541,6 +21588,8 @@ const publicApi = Object.freeze({
   EdgeInsets,
   PageFormat,
   PageUnit,
+  PdfStream,
+  PdfImage,
   PdfType1Font,
   PdfTtfFont,
   PdfPageLabel,
@@ -21570,4 +21619,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, PageUnit, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, PageUnit, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfStream, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };
