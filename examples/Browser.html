@@ -721,6 +721,7 @@ import { generatePieFullCirclePhase62 } from './pie-full-circle-phase-6.2.mjs';
 import { generatePageFormatsPhase63 } from './page-formats-phase-6.3.mjs';
 import { generateTextBreakingPhase64 } from './text-breaking-phase-6.4.mjs';
 import { generateSynchronousOutputPhase65 } from './synchronous-output-phase-6.5.mjs';
+import { generateLayoutPerformancePhase66 } from './layout-performance-phase-6.6.mjs';
 import { generateProductionPaginationExample } from './production-pagination.mjs';
 import { createSalesReport } from './create-sales-report.mjs';
 
@@ -1076,6 +1077,14 @@ const groups = [
         badge: 'PHASE 6.5',
         description: 'Direct output, lazy JPEG reuse and executable byte-parity checks against save().',
         generate: async () => generateSynchronousOutputPhase65(await bytesOf('dpi-pattern.jpg'))
+      },
+      {
+        id: 'layout-performance-phase-6.6',
+        title: 'Layout performance',
+        file: 'layout-performance-phase-6.6.mjs',
+        badge: 'PHASE 6.6',
+        description: 'Paginated tickets used to verify unchanged PDF output alongside the comparative V8 benchmark.',
+        generate: () => generateLayoutPerformancePhase66()
       },
       {
         id: 'production-pagination',

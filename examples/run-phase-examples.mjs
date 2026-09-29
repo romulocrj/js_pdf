@@ -24,6 +24,7 @@ import { generatePieFullCirclePhase62 } from './pie-full-circle-phase-6.2.mjs';
 import { generatePageFormatsPhase63 } from './page-formats-phase-6.3.mjs';
 import { generateTextBreakingPhase64 } from './text-breaking-phase-6.4.mjs';
 import { generateSynchronousOutputPhase65 } from './synchronous-output-phase-6.5.mjs';
+import { generateLayoutPerformancePhase66 } from './layout-performance-phase-6.6.mjs';
 import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
 import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
 import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
@@ -69,7 +70,8 @@ const examples = [
   ['pie-full-circle-phase-6.2', () => generatePieFullCirclePhase62()],
   ['page-formats-phase-6.3', () => generatePageFormatsPhase63()],
   ['text-breaking-phase-6.4', () => generateTextBreakingPhase64(cjkFont)],
-  ['synchronous-output-phase-6.5', () => generateSynchronousOutputPhase65(dpiJpeg)]
+  ['synchronous-output-phase-6.5', () => generateSynchronousOutputPhase65(dpiJpeg)],
+  ['layout-performance-phase-6.6', () => generateLayoutPerformancePhase66()]
 ];
 
 const outputDirectory = new URL('./out/', import.meta.url);

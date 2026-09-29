@@ -7185,11 +7185,16 @@ class BoxConstraints {
   }
   enforce(other) {
     const constraints = BoxConstraints.from(other);
+    const minWidth = clampConstraint(this.minWidth, constraints.minWidth, constraints.maxWidth);
+    const maxWidth = clampConstraint(this.maxWidth, constraints.minWidth, constraints.maxWidth);
+    const minHeight = clampConstraint(this.minHeight, constraints.minHeight, constraints.maxHeight);
+    const maxHeight = clampConstraint(this.maxHeight, constraints.minHeight, constraints.maxHeight);
+    if (Object.is(minWidth, this.minWidth) && Object.is(maxWidth, this.maxWidth) && Object.is(minHeight, this.minHeight) && Object.is(maxHeight, this.maxHeight)) return this;
     return new BoxConstraints({
-      minWidth: clampConstraint(this.minWidth, constraints.minWidth, constraints.maxWidth),
-      maxWidth: clampConstraint(this.maxWidth, constraints.minWidth, constraints.maxWidth),
-      minHeight: clampConstraint(this.minHeight, constraints.minHeight, constraints.maxHeight),
-      maxHeight: clampConstraint(this.maxHeight, constraints.minHeight, constraints.maxHeight)
+      minWidth,
+      maxWidth,
+      minHeight,
+      maxHeight
     });
   }
   copyWith(values = {}) {
@@ -9981,30 +9986,21 @@ class Flex extends SpanningWidget {
     if (lastChild === state.firstChild && state.firstChild < this.children.length) {
       lastChild++;
     }
-    const fragment = new Flex({
-      direction: this.direction,
-      children: this.children.slice(state.firstChild, lastChild),
-      mainAxisAlignment: this.mainAxisAlignment,
-      mainAxisSize: this.mainAxisSize,
-      crossAxisAlignment: this.crossAxisAlignment,
-      verticalDirection: this.verticalDirection,
-      gap: this.gap,
-      margin: this.margin,
-      widths: this.widths
-    }).layout(context, incoming);
+    const fragment = this.layoutRange(context, incoming, state.firstChild, lastChild);
     const nextState = {
       firstChild: lastChild
     };
     return {
-      box: {
-        ...fragment,
-        widget: this
-      },
+      box: fragment,
       nextState,
       hasMore: lastChild < this.children.length
     };
   }
   layout(context, incoming) {
+    return this.layoutRange(context, incoming, 0, this.children.length);
+  }
+  layoutRange(context, incoming, firstChild, lastChild) {
+    const count = lastChild - firstChild;
     const outer = BoxConstraints.from(incoming);
     const constraints = outer.deflate(this.margin);
     const horizontal = this.direction === "horizontal";
@@ -10013,12 +10009,12 @@ class Flex extends SpanningWidget {
     const maxCross = horizontal ? constraints.maxHeight : constraints.maxWidth;
     const minCross = horizontal ? constraints.minHeight : constraints.minWidth;
     const canFlex = Number.isFinite(maxMain);
-    const baseGap = this.gap * Math.max(0, this.children.length - 1);
-    const measured = new Array(this.children.length);
+    const baseGap = this.gap * Math.max(0, count - 1);
+    const measured = new Array(count);
     let allocated = 0;
     let crossSize = 0;
     const measure = (index, childConstraints) => {
-      const box = this.children[index].layout(context, childConstraints);
+      const box = this.children[firstChild + index].layout(context, childConstraints);
       measured[index] = box;
       allocated += childMain(box, this.direction);
       crossSize = Math.max(crossSize, childCross(box, this.direction));
@@ -10031,8 +10027,8 @@ class Flex extends SpanningWidget {
       const total = weights.reduce((sum, value) => sum + value, 0) || 1;
       const [childMinCross, childMaxCross] = this.crossConstraints(constraints);
       let used = 0;
-      for (let index = 0; index < this.children.length; index++) {
-        const extent = index === this.children.length - 1 ? available - used : available * weights[index] / total;
+      for (let index = 0; index < count; index++) {
+        const extent = index === count - 1 ? available - used : available * weights[index] / total;
         used += extent;
         measure(index, axisConstraints(this.direction, extent, extent, childMinCross, childMaxCross));
       }
@@ -10040,8 +10036,8 @@ class Flex extends SpanningWidget {
       let totalFlex = 0;
       const flexible = [];
       const [childMinCross, childMaxCross] = this.crossConstraints(constraints);
-      for (let index = 0; index < this.children.length; index++) {
-        const child = this.children[index];
+      for (let index = 0; index < count; index++) {
+        const child = this.children[firstChild + index];
         if (child instanceof Flexible && child.flex > 0) {
           if (!canFlex && (this.mainAxisSize === "max" || child.fit === "tight")) {
             throw new RangeError("Flex children require a bounded main-axis constraint");
@@ -10056,7 +10052,7 @@ class Flex extends SpanningWidget {
       let allocatedFlex = 0;
       for (let flexIndex = 0; flexIndex < flexible.length; flexIndex++) {
         const index = flexible[flexIndex];
-        const child = this.children[index];
+        const child = this.children[firstChild + index];
         const extent = canFlex ? flexIndex === flexible.length - 1 ? freeSpace - allocatedFlex : freeSpace * child.flex / totalFlex : Infinity;
         allocatedFlex += extent;
         measure(index, axisConstraints(this.direction, child.fit === "tight" ? extent : 0, extent, childMinCross, childMaxCross));
@@ -10069,7 +10065,6 @@ class Flex extends SpanningWidget {
     const remaining = Math.max(0, actualMain - allocated);
     let leading = 0;
     let between = this.gap;
-    const count = this.children.length;
     switch (this.mainAxisAlignment) {
      case "end":
       leading = remaining;
@@ -14925,6 +14920,15 @@ function splitLongWord(value, maxWidth, style) {
   return parts.length === 0 ? [ "" ] : parts;
 }
 
+function isSingleAsciiWord(value) {
+  if (value.length === 0) return false;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code < 33 || code > 126) return false;
+  }
+  return true;
+}
+
 function splitLine(line, splitter) {
   if (splitter === null) return line.split(/([^\S\n]+|[^\s]+)/u).filter(part => part !== "");
   const parts = splitter(line);
@@ -15103,14 +15107,16 @@ class RichText extends SpanningWidget {
         group = "";
       };
       const visualText = direction === "rtl" ? logicalToVisual(span.text) : span.text;
-      const lines = visualText.replace(/\r\n?/g, "\n").split("\n");
+      const singleWord = this.lineSplitter === null && isSingleAsciiWord(visualText);
+      const lines = singleWord ? [ visualText ] : visualText.replace(/\r\n?/g, "\n").split("\n");
       for (let index = 0; index < lines.length; index++) {
         if (index > 0) result.push({
           kind: "break",
           style: baseStyle
         });
-        for (const part of splitLine(lines[index] ?? "", this.lineSplitter)) {
-          kind = /^\s+$/u.test(part) ? "gap" : "text";
+        const parts = singleWord ? [ visualText ] : splitLine(lines[index] ?? "", this.lineSplitter);
+        for (const part of parts) {
+          kind = !singleWord && /^\s+$/u.test(part) ? "gap" : "text";
           for (const character of part) {
             const codePoint = character.codePointAt(0) ?? 0;
             let font = baseStyle.font;

@@ -81,6 +81,8 @@ export declare class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
     initialSpanState(): FlexState;
     layoutSpan(context: RenderContext, incoming: Constraints, state: FlexState): SpanLayout<FlexLayoutData, FlexState>;
     layout(context: RenderContext, incoming: Constraints): LayoutBox<FlexLayoutData>;
+    /** Index the original children rather than allocating a Flex and sublist per fragment. */
+    private layoutRange;
     paint(context: RenderContext, box: PositionedBox<FlexLayoutData>): void;
 }
 export declare class Row extends Flex {

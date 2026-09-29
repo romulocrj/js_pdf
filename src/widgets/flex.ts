@@ -307,26 +307,27 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
       lastChild++;
     }
 
-    const fragment = new Flex({
-      direction: this.direction,
-      children: this.children.slice(state.firstChild, lastChild),
-      mainAxisAlignment: this.mainAxisAlignment,
-      mainAxisSize: this.mainAxisSize,
-      crossAxisAlignment: this.crossAxisAlignment,
-      verticalDirection: this.verticalDirection,
-      gap: this.gap,
-      margin: this.margin,
-      widths: this.widths
-    }).layout(context, incoming);
+    const fragment = this.layoutRange(context, incoming, state.firstChild, lastChild);
     const nextState = { firstChild: lastChild };
     return {
-      box: { ...fragment, widget: this },
+      box: fragment,
       nextState,
       hasMore: lastChild < this.children.length
     };
   }
 
   override layout(context: RenderContext, incoming: Constraints): LayoutBox<FlexLayoutData> {
+    return this.layoutRange(context, incoming, 0, this.children.length);
+  }
+
+  /** Index the original children rather than allocating a Flex and sublist per fragment. */
+  private layoutRange(
+    context: RenderContext,
+    incoming: Constraints,
+    firstChild: number,
+    lastChild: number
+  ): LayoutBox<FlexLayoutData> {
+    const count = lastChild - firstChild;
     const outer = BoxConstraints.from(incoming);
     const constraints = outer.deflate(this.margin);
     const horizontal = this.direction === 'horizontal';
@@ -335,13 +336,13 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
     const maxCross = horizontal ? constraints.maxHeight : constraints.maxWidth;
     const minCross = horizontal ? constraints.minHeight : constraints.minWidth;
     const canFlex = Number.isFinite(maxMain);
-    const baseGap = this.gap * Math.max(0, this.children.length - 1);
-    const measured: AnyLayoutBox[] = new Array(this.children.length);
+    const baseGap = this.gap * Math.max(0, count - 1);
+    const measured: AnyLayoutBox[] = new Array(count);
     let allocated = 0;
     let crossSize = 0;
 
     const measure = (index: number, childConstraints: BoxConstraints): AnyLayoutBox => {
-      const box = this.children[index]!.layout(context, childConstraints);
+      const box = this.children[firstChild + index]!.layout(context, childConstraints);
       measured[index] = box;
       allocated += childMain(box, this.direction);
       crossSize = Math.max(crossSize, childCross(box, this.direction));
@@ -358,8 +359,8 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
       const total = weights.reduce((sum, value) => sum + value, 0) || 1;
       const [childMinCross, childMaxCross] = this.crossConstraints(constraints);
       let used = 0;
-      for (let index = 0; index < this.children.length; index++) {
-        const extent = index === this.children.length - 1
+      for (let index = 0; index < count; index++) {
+        const extent = index === count - 1
           ? available - used
           : available * weights[index]! / total;
         used += extent;
@@ -376,8 +377,8 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
       const flexible: number[] = [];
       const [childMinCross, childMaxCross] = this.crossConstraints(constraints);
 
-      for (let index = 0; index < this.children.length; index++) {
-        const child = this.children[index]!;
+      for (let index = 0; index < count; index++) {
+        const child = this.children[firstChild + index]!;
         if (child instanceof Flexible && child.flex > 0) {
           if (!canFlex && (this.mainAxisSize === 'max' || child.fit === 'tight')) {
             throw new RangeError('Flex children require a bounded main-axis constraint');
@@ -399,7 +400,7 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
       let allocatedFlex = 0;
       for (let flexIndex = 0; flexIndex < flexible.length; flexIndex++) {
         const index = flexible[flexIndex]!;
-        const child = this.children[index] as Flexible;
+        const child = this.children[firstChild + index] as Flexible;
         const extent = canFlex
           ? (flexIndex === flexible.length - 1
             ? freeSpace - allocatedFlex
@@ -423,7 +424,6 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
     const remaining = Math.max(0, actualMain - allocated);
     let leading = 0;
     let between = this.gap;
-    const count = this.children.length;
 
     switch (this.mainAxisAlignment) {
       case 'end':

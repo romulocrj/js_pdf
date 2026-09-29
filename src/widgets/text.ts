@@ -367,6 +367,16 @@ function splitLongWord(value: string, maxWidth: number, style: ResolvedTextStyle
   return parts.length === 0 ? [''] : parts;
 }
 
+/** Only printable non-space ASCII is safe to bypass Unicode whitespace splitting. */
+function isSingleAsciiWord(value: string): boolean {
+  if (value.length === 0) return false;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code < 0x21 || code > 0x7e) return false;
+  }
+  return true;
+}
+
 /** Adapt upstream's word-list callback to the port's explicit whitespace tokens. */
 function splitLine(line: string, splitter: LineSplitter | null): readonly string[] {
   if (splitter === null) return line.split(/([^\S\n]+|[^\s]+)/u).filter(part => part !== '');
@@ -643,11 +653,13 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
       };
 
       const visualText = direction === 'rtl' ? logicalToVisual(span.text) : span.text;
-      const lines = visualText.replace(/\r\n?/g, '\n').split('\n');
+      const singleWord = this.lineSplitter === null && isSingleAsciiWord(visualText);
+      const lines = singleWord ? [visualText] : visualText.replace(/\r\n?/g, '\n').split('\n');
       for (let index = 0; index < lines.length; index++) {
         if (index > 0) result.push({ kind: 'break', style: baseStyle });
-        for (const part of splitLine(lines[index] ?? '', this.lineSplitter)) {
-          kind = /^\s+$/u.test(part) ? 'gap' : 'text';
+        const parts = singleWord ? [visualText] : splitLine(lines[index] ?? '', this.lineSplitter);
+        for (const part of parts) {
+          kind = !singleWord && /^\s+$/u.test(part) ? 'gap' : 'text';
           for (const character of part) {
             const codePoint = character.codePointAt(0) ?? 0;
             let font = baseStyle.font;

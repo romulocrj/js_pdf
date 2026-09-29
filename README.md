@@ -268,3 +268,10 @@ JPEG reuse, with executable checks against `save()`. After building, run
 `node examples/run-synchronous-output.mjs` for direct file output and a JPEG
 source read in 1 KB chunks. The [gallery generator](examples/synchronous-output-phase-6.5.mjs)
 is also included in `npm run phase-examples`.
+
+
+The **Layout performance** card generates paginated tickets from the
+[phase 6.6 generator](examples/layout-performance-phase-6.6.mjs).
+`npm run phase-examples` writes `examples/out/layout-performance-phase-6.6.pdf`.
+See [performance measurements and reproduction](docs/PERFORMANCE.md) for the
+comparative Node/V8 benchmark and its equivalence checks.

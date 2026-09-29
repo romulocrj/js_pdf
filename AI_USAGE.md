@@ -589,6 +589,18 @@ are never mutated. Invalid multi-syllable results or invalid source segments
 raise `RangeError`. The `LineSplitter` and `Hyphenation` exports are TypeScript
 types, not constructors. See [the comparison example](examples/text-breaking-phase-6.4.mjs).
 
+## Layout performance
+
+Treat `BoxConstraints` values as immutable. `enforce()` may return the same
+instance when no value changes; do not depend on a fresh identity or mutate
+its fields from JavaScript. Flex pagination and ASCII text optimizations need
+no caller configuration. Custom line splitters are still called for ASCII
+words, and hyphenation and Unicode whitespace retain their behavior.
+
+Use the [layout example](examples/layout-performance-phase-6.6.mjs) and
+[benchmark instructions](docs/PERFORMANCE.md) for comparisons. Local Node/V8
+timings do not establish ClearScript or whole-document performance.
+
 ## Other implemented document features
 
 Models may use their learned [dart_pdf](https://github.com/DavBfr/dart_pdf) structure to compose these available

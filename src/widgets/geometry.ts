@@ -240,12 +240,13 @@ export class BoxConstraints {
 
   enforce(other: BoxConstraintsInput): BoxConstraints {
     const constraints = BoxConstraints.from(other);
-    return new BoxConstraints({
-      minWidth: clampConstraint(this.minWidth, constraints.minWidth, constraints.maxWidth),
-      maxWidth: clampConstraint(this.maxWidth, constraints.minWidth, constraints.maxWidth),
-      minHeight: clampConstraint(this.minHeight, constraints.minHeight, constraints.maxHeight),
-      maxHeight: clampConstraint(this.maxHeight, constraints.minHeight, constraints.maxHeight)
-    });
+    const minWidth = clampConstraint(this.minWidth, constraints.minWidth, constraints.maxWidth);
+    const maxWidth = clampConstraint(this.maxWidth, constraints.minWidth, constraints.maxWidth);
+    const minHeight = clampConstraint(this.minHeight, constraints.minHeight, constraints.maxHeight);
+    const maxHeight = clampConstraint(this.maxHeight, constraints.minHeight, constraints.maxHeight);
+    if (Object.is(minWidth, this.minWidth) && Object.is(maxWidth, this.maxWidth)
+        && Object.is(minHeight, this.minHeight) && Object.is(maxHeight, this.maxHeight)) return this;
+    return new BoxConstraints({ minWidth, maxWidth, minHeight, maxHeight });
   }
 
   copyWith(values: BoxConstraintsInput = {}): BoxConstraints {
