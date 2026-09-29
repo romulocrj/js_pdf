@@ -155,15 +155,18 @@ licensed Dart `qr` implementation is neither ported nor distributed.
 
 - **`widget.ts`** — the `Widget` base class and the layout protocol (§3).
 - **`geometry.ts`** — `BoxConstraints`, `EdgeInsets`, `Alignment`, and inset
-  normalization.
+  normalization. Treat constraints as immutable: `enforce` reuses its receiver
+  when clamping changes none of its values.
 - **`text.ts`** — greedy line breaker, custom segment/hyphenation callbacks,
-  `Text` and `RichText` with immutable measured runs.
+  `Text` and `RichText` with immutable measured runs. Printable ASCII words
+  bypass splitting when no custom splitter is supplied.
 - **`text_style.ts` / `theme.ts` / `font.ts`** — `TextStyle` and its four font
   slots, `ThemeData` and the widgets that scope it, and the lazy `Font`
   declaration a style names.
 - **`flex.ts`** — full `Flex` allocation, `Column`, `Row`, `Expanded`,
   `Flexible`, proportional `Spacer`, `ListView`, plus `gap` and weighted row
-  tracks.
+  tracks. Paginated fragments index the original child range without copying
+  a sublist or retaining mutable layout state.
 - **`stack.ts` / `wrap.ts` / `grid_view.ts` / `partitions.ts`** — overlays,
   positioned children, wrapping runs, fixed-track grids and parallel columns;
   the latter three paginate through immutable continuation cursors.

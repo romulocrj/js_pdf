@@ -1,0 +1,151 @@
+{
+  "baselineCommit": "707426a6ecfc7fcf7956700b75852840a6844201",
+  "baselineBundleSha256": "6100399442507c243cf7626f3eb24c8accd338d081120d661e9e1a0bddf5e7d2",
+  "candidateBundleSha256": "b335520943def2884a8d522aaabe12e9a22fe2e3abb991401d374ef16725d966",
+  "control": {
+    "node": "v26.8.1",
+    "v8": "14.6.202.34-node.28",
+    "platform": "darwin",
+    "arch": "arm64",
+    "normalizedCreationDate": "20260929000000Z",
+    "samples": 9,
+    "warmups": 3,
+    "pdfBytes": 2038,
+    "pdfSha256": "5930b0bf079d445f61dc4f06ac1baabc136f94800570eaa8599f2905107a131a",
+    "results": [
+      {
+        "name": "constraints",
+        "iterations": 1000000,
+        "baseline": {
+          "medianMs": 18.293791999999996,
+          "minMs": 17.87258299999999,
+          "maxMs": 18.897333000000003
+        },
+        "candidate": {
+          "medianMs": 18.29000000000002,
+          "minMs": 18.176500000000033,
+          "maxMs": 18.89341699999997
+        },
+        "changePercent": -0.020728343254239334
+      },
+      {
+        "name": "flex",
+        "iterations": 10000,
+        "baseline": {
+          "medianMs": 7.340583999999922,
+          "minMs": 7.178999999999974,
+          "maxMs": 7.580959000000007
+        },
+        "candidate": {
+          "medianMs": 7.318666000000007,
+          "minMs": 7.200041000000056,
+          "maxMs": 7.464124999999967
+        },
+        "changePercent": -0.2985865974684643
+      },
+      {
+        "name": "ascii",
+        "iterations": 12000,
+        "baseline": {
+          "medianMs": 52.74195899999995,
+          "minMs": 50.4575420000001,
+          "maxMs": 53.50104199999987
+        },
+        "candidate": {
+          "medianMs": 53.06004200000007,
+          "minMs": 51.698875000000044,
+          "maxMs": 53.679999999999836
+        },
+        "changePercent": 0.6030928809453551
+      },
+      {
+        "name": "mixed",
+        "iterations": 12000,
+        "baseline": {
+          "medianMs": 18.907292000000325,
+          "minMs": 18.528707999999824,
+          "maxMs": 19.134291000000303
+        },
+        "candidate": {
+          "medianMs": 18.91037499999993,
+          "minMs": 18.72591599999987,
+          "maxMs": 19.02995800000008
+        },
+        "changePercent": 0.016305878174449617
+      }
+    ]
+  },
+  "comparison": {
+    "node": "v26.8.1",
+    "v8": "14.6.202.34-node.28",
+    "platform": "darwin",
+    "arch": "arm64",
+    "normalizedCreationDate": "20260929000000Z",
+    "samples": 9,
+    "warmups": 3,
+    "pdfBytes": 2038,
+    "pdfSha256": "5930b0bf079d445f61dc4f06ac1baabc136f94800570eaa8599f2905107a131a",
+    "results": [
+      {
+        "name": "constraints",
+        "iterations": 1000000,
+        "baseline": {
+          "medianMs": 22.10187499999995,
+          "minMs": 21.875417000000027,
+          "maxMs": 22.60654199999999
+        },
+        "candidate": {
+          "medianMs": 9.582209000000034,
+          "minMs": 9.273042000000004,
+          "maxMs": 9.800250000000005
+        },
+        "changePercent": -56.64526652150528
+      },
+      {
+        "name": "flex",
+        "iterations": 10000,
+        "baseline": {
+          "medianMs": 7.552708000000052,
+          "minMs": 7.471667000000025,
+          "maxMs": 7.701167000000055
+        },
+        "candidate": {
+          "medianMs": 6.743417000000022,
+          "minMs": 6.630167000000029,
+          "maxMs": 6.909667000000013
+        },
+        "changePercent": -10.715242797682956
+      },
+      {
+        "name": "ascii",
+        "iterations": 12000,
+        "baseline": {
+          "medianMs": 52.68191700000011,
+          "minMs": 52.180417000000034,
+          "maxMs": 53.03429200000005
+        },
+        "candidate": {
+          "medianMs": 50.66583400000013,
+          "minMs": 50.42933400000004,
+          "maxMs": 51.01229199999989
+        },
+        "changePercent": -3.826897567148091
+      },
+      {
+        "name": "mixed",
+        "iterations": 12000,
+        "baseline": {
+          "medianMs": 19.327707999999802,
+          "minMs": 19.072708000000148,
+          "maxMs": 19.475124999999935
+        },
+        "candidate": {
+          "medianMs": 18.18399999999974,
+          "minMs": 17.85929199999964,
+          "maxMs": 18.41270799999984
+        },
+        "changePercent": -5.917452809200507
+      }
+    ]
+  }
+}

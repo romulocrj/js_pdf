@@ -258,8 +258,8 @@ runtime scope or format limits; no unresolved port-gap marker remains.
 
 ## Next step
 
-> **Phase 6.5 — synchronous output and lazy JPEGs — implemented; awaiting PR review and merge.**
-> Phases 6.1–6.4 merged in PRs #5–#8. Start phase 6.6 only after the serialization PR merges. Each domain gets one PR against the
+> **Phase 6.6 — layout and text performance — implemented; awaiting PR review and merge.**
+> Phases 6.1–6.5 merged in PRs #5–#9. Start phase 6.7 (colors) only after this performance PR merges. Each domain gets one PR against the
 > updated main branch; do not stack PRs or merge automatically.
 
 ## Phase 6 — remaining compatibility and upstream follow-up
@@ -286,8 +286,8 @@ credits and licenses alongside the example.
 | 6.2 | Charts: full-circle pie rounding tolerance (`80daf820cd`) | Merged in PR #6 |
 | 6.3 | Pages: apply `PageTheme.clip`, expand upstream paper formats | Merged in PR #7 |
 | 6.4 | Text: `LineSplitter`, CJK break customization and hyphenation | Merged in PR #8 |
-| 6.5 | Serialization: synchronous output destinations and lazy JPEG writers | Implemented; pending merge |
-| 6.6 | Performance: unchanged `BoxConstraints` reuse, Flex copies, ASCII single-word path; benchmark in V8 | Pending |
+| 6.5 | Serialization: synchronous output destinations and lazy JPEG writers | Merged in PR #9 |
+| 6.6 | Performance: unchanged `BoxConstraints` reuse, Flex copies, ASCII single-word path; benchmark in V8 | Implemented; pending merge |
 | 6.7 | Colors: color value types, named constants, DeviceGray, CMYK and upstream color conversions | Pending |
 | 6.8 | Fonts: simple TrueType compatibility mode and CFF/PostScript support | Pending |
 | 6.9 | Layout: directional geometry, RTL Flex/tables, baseline alignment | Pending |
@@ -426,6 +426,30 @@ and lazy image reuse, and supplies the browser card after phase 6.4. Run
 output with JPEG input in 1 KB chunks. Its separate verification step compares
 the file with `save()`. A regression test sends a 64 MB opaque payload to a
 non-collecting destination in 1 MB chunks. No new assets or licenses.
+
+### 6.6 Performance — constraints, Flex and ASCII text
+
+Adapts upstream `5e820c33c7` (unchanged constraints reuse), `0a8b89bdb2`
+(Flex sublist removal) and `b97c4a63dc` (single-word splitting). `enforce`
+returns its receiver only when all four clamped values are unchanged, including
+signed zero. Flex pagination measures an index range in the original children;
+layout results and continuation state remain independent. Printable non-space
+ASCII spans bypass string splitting only with the default splitter. Custom
+callbacks, Unicode whitespace, newlines, font selection and wrapping retain
+the existing path and behavior.
+
+The [reproducible benchmark](PERFORMANCE.md) compares the PR #9 merge with this
+branch on Node's V8: median times fell 56.6% for unchanged constraints, 10.7%
+for paginated Flex and 3.8% for ASCII text in these workloads. These are local
+microbenchmarks, not measured ClearScript or whole-document speedups. Tests
+were added and failed before implementation; equivalence checks cover geometry
+and PDF bytes (normalizing only the generated CreationDate).
+
+**Example gate:** all eight upstream examples remain required.
+`examples/layout-performance-phase-6.6.mjs` supplies a paginated ticket example
+in Browser.html after phase 6.5 and in the phase runner. The same module supplies
+workloads for `examples/benchmark-layout.mjs`; retained measurements include a
+same-version control. No new assets or licenses.
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
 out of scope, and the complete upstream example set still generates end to end.
