@@ -625,6 +625,8 @@ export type {
   TableTextArrayOptions
 } from './widgets/table_helper.ts';
 export type {
+  Hyphenation,
+  LineSplitter,
   InlineSpanOptions,
   InlineSpanVisitor,
   RichTextLayoutData,

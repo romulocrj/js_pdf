@@ -154,7 +154,8 @@ licensed Dart `qr` implementation is neither ported nor distributed.
 - **`widget.ts`** — the `Widget` base class and the layout protocol (§3).
 - **`geometry.ts`** — `BoxConstraints`, `EdgeInsets`, `Alignment`, and inset
   normalization.
-- **`text.ts`** — greedy line breaker plus the `Text` widget.
+- **`text.ts`** — greedy line breaker, custom segment/hyphenation callbacks,
+  `Text` and `RichText` with immutable measured runs.
 - **`text_style.ts` / `theme.ts` / `font.ts`** — `TextStyle` and its four font
   slots, `ThemeData` and the widgets that scope it, and the lazy `Font`
   declaration a style names.
@@ -280,6 +281,7 @@ divergences or narrower compatibility gaps between the port and upstream.
 | Object serialization | A value consults its owning object for compression, encryption and a verbose pretty-printer | `output(stream)` stays context-free; stream objects consult document compression settings, with no encryption or verbose mode |
 | Font naming | `/F$objser`, derived from the font object's serial | Page-local `/F1`, `/F2`, … allocated as the content stream is written |
 | Colors | `PdfColor` value type with CMYK and HSL variants | RGB triple, DeviceRGB only |
+| Custom line breaks | Word-list callback; implicit spacing follows every token | Ordered source segments retain original whitespace; no synthetic inter-token spaces, consistent with the port's additive `wordSpacing` |
 | Page clipping | `Page.paint` scopes a margin clip; `MultiPage._paintChild` omits it | Both section types clip every widget/layer paint when `PageTheme.clip` is true; layer layout remains full-page |
 | Pagination | `SpanningWidget` saves mutable widget context between pages | Direct spanning children return immutable continuation state; indivisible widgets or rows taller than a full content area still throw `RangeError` |
 | Decoration shadows | Temporary raster images produced by the raster subsystem | Concentric vector fills with scoped opacity; other decoration features are direct ports |

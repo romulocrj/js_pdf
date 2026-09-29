@@ -496,6 +496,48 @@ font beyond the standard PDF families.
 The library does not fetch assets. Fonts, images and SVG strings must be passed
 into the generator by its caller.
 
+## Custom line breaking and hyphenation
+
+`Text` and `RichText` accept synchronous `lineSplitter` and `hyphenation`
+callbacks. Both are optional: leaving them null keeps whitespace wrapping and
+character-level fallback for overlong words. No language dictionary or full
+Unicode line-breaking algorithm is bundled.
+
+```js
+new pw.Text('你好，世界', {
+  style: new pw.TextStyle({ font: cjkFont }),
+  lineSplitter: line => [...line]
+});
+new pw.Text('internationalization', {
+  hyphenation: word => word === 'internationalization'
+    ? ['in', 'ter', 'na', 'tion', 'al', 'iza', 'tion']
+    : [word]
+});
+```
+
+`lineSplitter` sees each newline-delimited span line after bidi conversion,
+before fallback-font selection. Return ordered source segments; omitted
+whitespace is recovered from the original line, so `line.split(/\s/u)` keeps
+the default behavior and `[...line]` adds no spaces. Empty segments are allowed.
+Do not replace, reorder or discard non-whitespace characters. Keep closing
+punctuation in the preceding segment when needed; character splitting alone
+does not enforce punctuation rules. A segment wider than the available line
+still uses hard splitting. Use a font that covers the required characters.
+
+`hyphenation` runs only when wrapping an overflowing word. Return nonempty
+syllables which concatenate exactly to that word; an empty or one-item array
+disables hyphenation. The fitter includes the hyphen's width and may call the
+callback again with a suffix, so handle suffixes too when repeated hyphenation
+is desired. If no syllable fits, normal wrapping/hard splitting applies.
+`softWrap: false` disables hyphenation. Both callbacks should be deterministic
+and free of side effects: pagination/repeated layout may call them again.
+
+The port retains additive `wordSpacing`; unlike upstream, these callbacks do
+not synthesize spaces between segments. Returned arrays may be readonly and
+are never mutated. Invalid multi-syllable results or invalid source segments
+raise `RangeError`. The `LineSplitter` and `Hyphenation` exports are TypeScript
+types, not constructors. See [the comparison example](examples/text-breaking-phase-6.4.mjs).
+
 ## Other implemented document features
 
 Models may use their learned [dart_pdf](https://github.com/DavBfr/dart_pdf) structure to compose these available

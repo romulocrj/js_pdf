@@ -56,6 +56,12 @@ export type TextAlign = 'left' | 'right' | 'start' | 'end' | 'center' | 'justify
 export type TextDirection = 'ltr' | 'rtl';
 export type TextOverflow = 'clip' | 'visible' | 'span';
 
+/** Ordered segments of one logical line. Omitted whitespace is preserved. */
+export type LineSplitter = (line: string) => readonly string[];
+
+/** Syllables which concatenate to the original word; zero/one disables hyphenation. */
+export type Hyphenation = (word: string) => readonly string[];
+
 export interface InlineSpanOptions {
   readonly style?: TextStyle | null;
   readonly baseline?: number;
@@ -169,6 +175,8 @@ export class WidgetSpan extends InlineSpan {
 }
 
 export interface RichTextOptions {
+  readonly lineSplitter?: LineSplitter | null;
+  readonly hyphenation?: Hyphenation | null;
   readonly text: InlineSpan;
   readonly textAlign?: TextAlign | null;
   readonly textDirection?: TextDirection | null;
@@ -181,6 +189,8 @@ export interface RichTextOptions {
 }
 
 export interface TextOptions {
+  readonly lineSplitter?: LineSplitter | null;
+  readonly hyphenation?: Hyphenation | null;
   readonly style?: TextStyle;
   readonly fontSize?: number;
   readonly lineHeight?: number;
@@ -357,6 +367,28 @@ function splitLongWord(value: string, maxWidth: number, style: ResolvedTextStyle
   return parts.length === 0 ? [''] : parts;
 }
 
+/** Adapt upstream's word-list callback to the port's explicit whitespace tokens. */
+function splitLine(line: string, splitter: LineSplitter | null): readonly string[] {
+  if (splitter === null) return line.split(/([^\S\n]+|[^\s]+)/u).filter(part => part !== '');
+  const parts = splitter(line);
+  const result: string[] = [];
+  let cursor = 0;
+  for (const part of parts) {
+    if (part === '') continue;
+    const start = line.indexOf(part, cursor);
+    if (typeof part !== 'string' || start < 0 || /\S/u.test(line.slice(cursor, start))) {
+      throw new RangeError('lineSplitter must return ordered source segments, omitting only whitespace');
+    }
+    if (start > cursor) result.push(line.slice(cursor, start));
+    result.push(part);
+    cursor = start + part.length;
+  }
+  const tail = line.slice(cursor);
+  if (/\S/u.test(tail)) throw new RangeError('lineSplitter must preserve all non-whitespace text');
+  if (tail !== '') result.push(tail);
+  return result;
+}
+
 /** Single-style helper kept for compatibility with phase-0 callers. */
 export function wrapText(
   value: string,
@@ -528,6 +560,9 @@ function rebaseLines(lines: readonly RichTextLineLayout[], top: number): RichTex
 }
 
 export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> {
+  protected readonly directFont: PdfFont | null = null;
+  readonly lineSplitter: LineSplitter | null;
+  readonly hyphenation: Hyphenation | null;
   readonly text: InlineSpan;
   readonly textAlign: TextAlign | null;
   readonly textDirection: TextDirection | null;
@@ -539,6 +574,8 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
   readonly margin: Insets;
 
   constructor({
+    lineSplitter = null,
+    hyphenation = null,
     text,
     textAlign = null,
     textDirection = null,
@@ -551,6 +588,8 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
   }: RichTextOptions) {
     super();
     this.text = text;
+    this.lineSplitter = lineSplitter;
+    this.hyphenation = hyphenation;
     this.textAlign = textAlign;
     this.textDirection = textDirection;
     this.softWrap = softWrap;
@@ -570,7 +609,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
     const scale = this.textScaleFactor;
     const direction = this.textDirection ?? Directionality.of(context);
     this.text.visitChildren((span, textStyle, annotation) => {
-      const baseStyle = resolveStyle(context, textStyle, span.baseline, scale);
+      const baseStyle = resolveStyle(context, textStyle, span.baseline, scale, this.directFont);
       if (span instanceof WidgetSpan) {
         const childBox = span.child.layout(context, new BoxConstraints({
           maxWidth,
@@ -590,68 +629,69 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
 
       let group = '';
       let groupFont = baseStyle.font;
+      let kind: 'text' | 'gap' = 'text';
+      const styles = new Map<PdfFont, ResolvedTextStyle>([[baseStyle.font, baseStyle]]);
       const flush = (): void => {
         if (group === '') return;
-        const style = groupFont === baseStyle.font
-          ? baseStyle
-          : { ...baseStyle, font: groupFont };
-        for (const part of group.replace(/\r\n?/g, '\n').split(/(\n|[^\S\n]+|[^\s]+)/u)) {
-          if (part === '') continue;
-          if (part === '\n') result.push({ kind: 'break', style });
-          else result.push({
-            kind: /^\s+$/u.test(part) ? 'gap' : 'text',
-            text: part,
-            width: textWidth(style, part),
-            style,
-            annotation
-          });
+        let style = styles.get(groupFont);
+        if (style === undefined) {
+          style = { ...baseStyle, font: groupFont };
+          styles.set(groupFont, style);
         }
+        result.push({ kind, text: group, width: textWidth(style, group), style, annotation });
         group = '';
       };
 
       const visualText = direction === 'rtl' ? logicalToVisual(span.text) : span.text;
-      for (const character of visualText) {
-        const codePoint = character.codePointAt(0) ?? 0;
-        let font = baseStyle.font;
-        let bitmap: PdfFontBitmap | null = null;
-        if (!supportsRune(font, codePoint)) {
-          for (const fallback of textStyle.fontFallback) {
-            const candidate = fallback.getFont(context);
-            if (supportsRune(candidate, codePoint)) {
-              font = candidate;
-              bitmap = candidate.getBitmap?.(codePoint) ?? null;
-              break;
+      const lines = visualText.replace(/\r\n?/g, '\n').split('\n');
+      for (let index = 0; index < lines.length; index++) {
+        if (index > 0) result.push({ kind: 'break', style: baseStyle });
+        for (const part of splitLine(lines[index] ?? '', this.lineSplitter)) {
+          kind = /^\s+$/u.test(part) ? 'gap' : 'text';
+          for (const character of part) {
+            const codePoint = character.codePointAt(0) ?? 0;
+            let font = baseStyle.font;
+            let bitmap: PdfFontBitmap | null = null;
+            if (!supportsRune(font, codePoint)) {
+              for (const fallback of textStyle.fontFallback) {
+                const candidate = fallback.getFont(context);
+                if (supportsRune(candidate, codePoint)) {
+                  font = candidate;
+                  bitmap = candidate.getBitmap?.(codePoint) ?? null;
+                  break;
+                }
+              }
             }
+            if (bitmap !== null) {
+              flush();
+              const metrics = bitmap.metrics.scale(baseStyle.fontSize);
+              const widget = bitmapWidget(bitmap, baseStyle.fontSize);
+              const childBox = widget.layout(context, new BoxConstraints({
+                maxWidth,
+                maxHeight: Infinity
+              }));
+              result.push({
+                kind: 'widget',
+                width: childBox.width,
+                height: childBox.height,
+                style: {
+                  ...baseStyle,
+                  font,
+                  baseline: baseStyle.baseline + metrics.ascent + metrics.descent - metrics.height
+                },
+                childBox,
+                annotation
+              });
+              groupFont = baseStyle.font;
+              continue;
+            }
+            if (font !== groupFont && group !== '') flush();
+            groupFont = font;
+            group += character;
           }
-        }
-        if (bitmap !== null) {
           flush();
-          const metrics = bitmap.metrics.scale(baseStyle.fontSize);
-          const widget = bitmapWidget(bitmap, baseStyle.fontSize);
-          const childBox = widget.layout(context, new BoxConstraints({
-            maxWidth,
-            maxHeight: Infinity
-          }));
-          result.push({
-            kind: 'widget',
-            width: childBox.width,
-            height: childBox.height,
-            style: {
-              ...baseStyle,
-              font,
-              baseline: baseStyle.baseline + metrics.ascent + metrics.descent - metrics.height
-            },
-            childBox,
-            annotation
-          });
-          groupFont = baseStyle.font;
-          continue;
         }
-        if (font !== groupFont && group !== '') flush();
-        groupFont = font;
-        group += character;
       }
-      flush();
       return true;
     }, context.theme.defaultTextStyle);
     return result;
@@ -673,17 +713,62 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
       current = { tokens: [], width: 0, wrapped: false, emptyStyle: current.emptyStyle };
     };
 
-    for (const token of tokens) {
+    const appendToken = (token: FlowToken, spacing = 0): void => {
+      const index = current.tokens.length - 1;
+      const previous = current.tokens[index];
+      if (previous !== undefined && spacing !== 0) {
+        current.tokens[index] = { ...previous, width: previous.width + spacing };
+      }
+      current.tokens.push(token);
+      current.width += token.width + spacing;
+    };
+
+    for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
+      const token = tokens[tokenIndex];
+      if (token === undefined) continue;
       current.emptyStyle = token.style;
       if (token.kind === 'break') {
         pushLine(false);
         continue;
       }
       if (token.kind === 'gap' && current.tokens.length === 0) continue;
+      const previous = current.tokens[current.tokens.length - 1];
+      const joinSpacing = this.lineSplitter !== null && token.kind === 'text'
+        && previous?.kind === 'text' && previous.style === token.style
+        ? token.style.letterSpacing : 0;
 
-      if (softWrap && current.tokens.length > 0 && current.width + token.width > contentWidth + 0.00001) {
+      if (softWrap && token.kind === 'text' && this.hyphenation !== null
+          && current.width + joinSpacing + token.width > contentWidth + 0.00001) {
+        const syllables = this.hyphenation(token.text);
+        if (syllables.length > 1) {
+          if (syllables.some(part => typeof part !== 'string' || part === '')
+              || syllables.join('') !== token.text) {
+            throw new RangeError('hyphenation must return nonempty syllables which reconstruct the word');
+          }
+          let fits = '';
+          // Keep a nonempty remainder: a trailing hyphen is only a line-break marker.
+          for (let index = 0; index < syllables.length - 1; index++) {
+            const candidate = fits + syllables[index];
+            if (current.width + joinSpacing + textWidth(token.style, candidate + '-') > contentWidth + 0.00001) break;
+            fits = candidate;
+          }
+          if (fits !== '') {
+            const head = fits + '-';
+            const width = textWidth(token.style, head);
+            appendToken({ ...token, text: head, width }, joinSpacing);
+            pushLine(true);
+            const tail = token.text.slice(fits.length);
+            tokens[tokenIndex] = { ...token, text: tail, width: textWidth(token.style, tail) };
+            tokenIndex--;
+            continue;
+          }
+        }
+      }
+
+      if (softWrap && current.tokens.length > 0 && current.width + joinSpacing + token.width > contentWidth + 0.00001) {
         pushLine(true);
-        if (token.kind === 'gap') continue;
+        if (token.kind !== 'gap') tokenIndex--;
+        continue;
       }
 
       if (token.kind === 'text' && softWrap && token.width > contentWidth + 0.00001) {
@@ -699,8 +784,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
         continue;
       }
 
-      current.tokens.push(token);
-      current.width += token.width;
+      appendToken(token, joinSpacing);
     }
     if (current.tokens.length > 0 || raw.length === 0 || tokens[tokens.length - 1]?.kind === 'break') pushLine(false);
 
@@ -865,6 +949,8 @@ export class Text extends RichText {
   readonly value: string;
 
   constructor(value: string, {
+    lineSplitter = null,
+    hyphenation = null,
     style = undefined,
     fontSize = undefined,
     lineHeight = undefined,
@@ -888,6 +974,8 @@ export class Text extends RichText {
     });
     const merged = (style ?? new TextStyle()).merge(overrides);
     super({
+      lineSplitter,
+      hyphenation,
       text: new TextSpan({ text: String(value), style: merged }),
       textAlign: textAlign ?? align ?? null,
       textDirection,
@@ -902,11 +990,5 @@ export class Text extends RichText {
     this.directFont = font ?? null;
   }
 
-  private readonly directFont: PdfFont | null;
-
-  protected override inputTokens(context: RenderContext, maxWidth: number): InputToken[] {
-    if (this.directFont === null) return super.inputTokens(context, maxWidth);
-    const tokens = super.inputTokens(context, maxWidth);
-    return tokens.map(token => ({ ...token, style: { ...token.style, font: this.directFont as PdfFont } }));
-  }
+  protected override readonly directFont: PdfFont | null;
 }

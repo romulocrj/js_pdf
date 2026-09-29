@@ -10,6 +10,10 @@ export { DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT };
 export type TextAlign = 'left' | 'right' | 'start' | 'end' | 'center' | 'justify';
 export type TextDirection = 'ltr' | 'rtl';
 export type TextOverflow = 'clip' | 'visible' | 'span';
+/** Ordered segments of one logical line. Omitted whitespace is preserved. */
+export type LineSplitter = (line: string) => readonly string[];
+/** Syllables which concatenate to the original word; zero/one disables hyphenation. */
+export type Hyphenation = (word: string) => readonly string[];
 export interface InlineSpanOptions {
     readonly style?: TextStyle | null;
     readonly baseline?: number;
@@ -47,6 +51,8 @@ export declare class WidgetSpan extends InlineSpan {
     visitChildren(visitor: InlineSpanVisitor, parentStyle: TextStyle, annotation?: AnnotationBuilder | null): boolean;
 }
 export interface RichTextOptions {
+    readonly lineSplitter?: LineSplitter | null;
+    readonly hyphenation?: Hyphenation | null;
     readonly text: InlineSpan;
     readonly textAlign?: TextAlign | null;
     readonly textDirection?: TextDirection | null;
@@ -58,6 +64,8 @@ export interface RichTextOptions {
     readonly margin?: InsetsInput;
 }
 export interface TextOptions {
+    readonly lineSplitter?: LineSplitter | null;
+    readonly hyphenation?: Hyphenation | null;
     readonly style?: TextStyle;
     readonly fontSize?: number;
     readonly lineHeight?: number;
@@ -144,6 +152,9 @@ export type TextLayoutData = RichTextLayoutData;
 /** Single-style helper kept for compatibility with phase-0 callers. */
 export declare function wrapText(value: string, maxWidth: number, fontSize: number, font?: PdfFont): string[];
 export declare class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> {
+    protected readonly directFont: PdfFont | null;
+    readonly lineSplitter: LineSplitter | null;
+    readonly hyphenation: Hyphenation | null;
     readonly text: InlineSpan;
     readonly textAlign: TextAlign | null;
     readonly textDirection: TextDirection | null;
@@ -153,7 +164,7 @@ export declare class RichText extends SpanningWidget<RichTextLayoutData, RichTex
     readonly maxLines: number | null;
     readonly overflow: TextOverflow | null;
     readonly margin: Insets;
-    constructor({ text, textAlign, textDirection, softWrap, tightBounds, textScaleFactor, maxLines, overflow, margin }: RichTextOptions);
+    constructor({ lineSplitter, hyphenation, text, textAlign, textDirection, softWrap, tightBounds, textScaleFactor, maxLines, overflow, margin }: RichTextOptions);
     initialSpanState(): RichTextState;
     protected inputTokens(context: RenderContext, maxWidth: number): InputToken[];
     private allLines;
@@ -164,7 +175,6 @@ export declare class RichText extends SpanningWidget<RichTextLayoutData, RichTex
 }
 export declare class Text extends RichText {
     readonly value: string;
-    constructor(value: string, { style, fontSize, lineHeight, color, align, textAlign, textDirection, softWrap, tightBounds, textScaleFactor, margin, maxLines, overflow, font }?: TextOptions);
-    private readonly directFont;
-    protected inputTokens(context: RenderContext, maxWidth: number): InputToken[];
+    constructor(value: string, { lineSplitter, hyphenation, style, fontSize, lineHeight, color, align, textAlign, textDirection, softWrap, tightBounds, textScaleFactor, margin, maxLines, overflow, font }?: TextOptions);
+    protected readonly directFont: PdfFont | null;
 }

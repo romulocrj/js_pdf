@@ -22,6 +22,7 @@ import { generateImagePhase43 } from './image-phase-4.3.mjs';
 import { generateImageDpiPhase61 } from './image-dpi-phase-6.1.mjs';
 import { generatePieFullCirclePhase62 } from './pie-full-circle-phase-6.2.mjs';
 import { generatePageFormatsPhase63 } from './page-formats-phase-6.3.mjs';
+import { generateTextBreakingPhase64 } from './text-breaking-phase-6.4.mjs';
 import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
 import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
 import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
@@ -38,6 +39,8 @@ const [dpiJpeg, dpiPng] = await Promise.all(
   ['dpi-pattern.jpg', 'dpi-alpha.png'].map(name =>
     readFile(new URL(`./assets/${name}`, import.meta.url)).then(bytes => new Uint8Array(bytes)))
 );
+
+const cjkFont = new Uint8Array(await readFile(new URL('./assets/JsPdfCjkExample.ttf', import.meta.url)));
 
 const examples = [
   ['svg-gradients-phase-2.8', generateSvgGradientsPhase28],
@@ -63,7 +66,8 @@ const examples = [
   ['widgets-phase-5.7', generateWidgetsPhase57],
   ['image-dpi-phase-6.1', () => generateImageDpiPhase61({ jpeg: dpiJpeg, png: dpiPng })],
   ['pie-full-circle-phase-6.2', () => generatePieFullCirclePhase62()],
-  ['page-formats-phase-6.3', () => generatePageFormatsPhase63()]
+  ['page-formats-phase-6.3', () => generatePageFormatsPhase63()],
+  ['text-breaking-phase-6.4', () => generateTextBreakingPhase64(cjkFont)]
 ];
 
 const outputDirectory = new URL('./out/', import.meta.url);
