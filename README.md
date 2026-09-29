@@ -244,3 +244,8 @@ and open `examples/out/image-dpi-phase-6.1.pdf`. It compares original and
 reduced JPEGs, all eight orientations, and PNG transparency on two backgrounds.
 To serve the local gallery, run `python3 -m http.server 8000` from the repository
 root and open `http://localhost:8000/examples/Browser.html` after building.
+
+The **Pie full circles** gallery card compares exact and rounded one-category
+pies and donuts with partial-slice controls. Its shared generator is
+[pie-full-circle-phase-6.2.mjs](examples/pie-full-circle-phase-6.2.mjs);
+`npm run phase-examples` writes `examples/out/pie-full-circle-phase-6.2.pdf`.

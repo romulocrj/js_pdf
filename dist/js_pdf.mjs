@@ -16876,7 +16876,7 @@ class PieDataSet extends Dataset {
     this.innerRadius = Number(innerRadius);
   }
   isFullCircle(frame) {
-    return frame.angleEnd - frame.angleStart >= Math.PI * 2;
+    return frame.angleEnd - frame.angleStart >= Math.PI * 2 - 1e-12;
   }
   layout(context, frame) {
     if (!(frame instanceof PieFrame)) {

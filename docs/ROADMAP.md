@@ -258,8 +258,8 @@ runtime scope or format limits; no unresolved port-gap marker remains.
 
 ## Next step
 
-> **Phase 6.1 — image DPI/JPEG — implemented; awaiting PR review and merge.**
-> Start phase 6.2 only after that merge. Each domain gets one PR against the
+> **Phase 6.2 — pie full-circle tolerance — implemented; awaiting PR review and merge.**
+> Phase 6.1 merged in PR #5. Start phase 6.3 only after the chart PR merges. Each domain gets one PR against the
 > updated main branch; do not stack PRs or merge automatically.
 
 ## Phase 6 — remaining compatibility and upstream follow-up
@@ -282,8 +282,8 @@ credits and licenses alongside the example.
 
 | Order | Domain / scope | State |
 |---|---|---|
-| 6.1 | Images: DPI guards, cache, rotated axes, JPEG quality-90 re-encoding, EXIF stripping on re-encoding, CMYK decode regression | Implemented; pending merge |
-| 6.2 | Charts: full-circle pie rounding tolerance (`80daf820cd`) | Pending |
+| 6.1 | Images: DPI guards, cache, rotated axes, JPEG quality-90 re-encoding, EXIF stripping on re-encoding, CMYK decode regression | Merged in PR #5 |
+| 6.2 | Charts: full-circle pie rounding tolerance (`80daf820cd`) | Implemented; pending merge |
 | 6.3 | Pages: apply `PageTheme.clip`, expand upstream paper formats | Pending |
 | 6.4 | Text: `LineSplitter`, CJK break customization and hyphenation | Pending |
 | 6.5 | Serialization: synchronous output destinations and lazy JPEG writers | Pending |
@@ -323,6 +323,26 @@ asymmetric pattern, and PNG alpha on pale/dark backgrounds. It is included in
 `npm run phase-examples` and the **Image DPI & JPEG** card in `Browser.html`.
 The two local assets are original Apache-2.0 artwork with an optional Pillow
 regeneration script; no Python dependency is needed to run the example.
+
+
+### 6.2 Charts — full-circle rounding
+
+Translates `DavBfr/dart_pdf@80daf820cd72d57f8b367cd8e5dab2c70d2fefa6`:
+`PieDataSet` recognizes a complete turn within 1e-12 radians. A single value
+of 75 naturally exercises the rounding case in `PieGrid`; it now renders
+identically to a single value of 1. Filled/bordered pies and donuts use the
+complete ellipse paths, ignore slice offsets and keep the full-circle legend
+placement. Real partial arcs outside that tolerance retain their behavior.
+
+Regression tests cover both shapes, shifted starting angles, layout/legend
+coordinates, emitted paths and the complete Chart/PieGrid pipeline. The
+original attribution and source mapping are unchanged.
+
+**Example gate:** all eight upstream examples still generate.
+`examples/pie-full-circle-phase-6.2.mjs` compares exact and rounded circles
+and donuts against partial-slice controls on one landscape page. The browser
+card follows phase 6.1, and `npm run phase-examples` writes
+`examples/out/pie-full-circle-phase-6.2.pdf`. No new assets or licenses.
 
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
