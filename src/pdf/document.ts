@@ -19,7 +19,7 @@
  * left here is the registry that hands out serial numbers and owns the object
  * list.
  *
- * SCOPE AND ARCHITECTURE: `PdfSettings` carries compression only. Encryption
+ * SCOPE AND ARCHITECTURE: `PdfSettings` carries compression and simple-font selection. Encryption
  * is explicitly outside this port's host-free runtime, verbose in-file
  * diagnostics are replaced by a caller-installed sink, and the writer emits
  * one fixed, broadly compatible PDF version rather than branching by version.
@@ -59,6 +59,7 @@ import type {
 import { PdfMetadata } from './obj/metadata.ts';
 import { PdfPageLabels } from './obj/page_label.ts';
 import type { PdfPageLabel } from './obj/page_label.ts';
+import type { PdfFormXObject } from './obj/formxobject.ts';
 import { PdfXObject } from './obj/xobject.ts';
 import { PdfSoftMaskReference } from './soft_mask.ts';
 import type { PdfSoftMask } from './soft_mask.ts';
@@ -90,6 +91,7 @@ export interface SerializedPage {
 
   /** Link and form annotations registered while the page was painted. */
   readonly annotations?: readonly PdfAnnotationSpec[];
+  readonly forms?: ReadonlyMap<PdfFormXObject, string>;
 }
 
 export interface SerializedOutline {
@@ -147,6 +149,7 @@ export class PdfDocument {
    */
   private readonly fontObjects = new Map<PdfFont, PdfObject<PdfDict>>();
   private readonly imageObjects = new Map<PdfImage, PdfImageObject>();
+  private readonly formObjects = new Map<PdfFormXObject, PdfXObject>();
   private readonly softMaskObjects = new Map<PdfSoftMask, PdfXObject>();
   private readonly formFontNames = new Map<PdfFont, string>();
 
@@ -253,6 +256,15 @@ export class PdfDocument {
     return resolved;
   }
 
+  private formObject(form: PdfFormXObject): PdfXObject {
+    let object = this.formObjects.get(form);
+    if (object === undefined) {
+      object = this.formAppearanceObject(form.appearance);
+      this.formObjects.set(form, object);
+    }
+    return object;
+  }
+
   private formAppearanceObject(appearance: PdfFormAppearance): PdfXObject {
     const object = new PdfXObject(this, '/Form', encodeLatin1(appearance.content));
     object.params.set('/FormType', new PdfNum(1));
@@ -269,13 +281,19 @@ export class PdfDocument {
       resources.set('/XObject', PdfDict.fromObjectMap(images));
     }
     if (appearance.graphicStates.size > 0) {
-      resources.set('/ExtGState', new PdfDict(appearance.graphicStates));
+      resources.set('/ExtGState', new PdfDict(Array.from(appearance.graphicStates, ([name, state]) => [name, this.resolveGraphicState(state)])));
     }
     if (appearance.patterns.size > 0) {
       resources.set('/Pattern', new PdfDict(appearance.patterns));
     }
     if (appearance.shadings.size > 0) {
       resources.set('/Shading', new PdfDict(appearance.shadings));
+    }
+    if (appearance.forms !== undefined && appearance.forms.size > 0) {
+      const xobjects = resources.get('/XObject') as PdfDict | undefined;
+      const entries = xobjects ?? new PdfDict();
+      for (const [form, name] of appearance.forms) entries.set(name, this.formObject(form).ref());
+      resources.set('/XObject', entries);
     }
     if (!resources.isEmpty) object.params.set('/Resources', resources);
     return object;
@@ -322,7 +340,8 @@ export class PdfDocument {
     patterns: ReadonlyMap<string, PdfDict> = new Map(),
     shadings: ReadonlyMap<string, PdfDict> = new Map(),
     images: ReadonlyMap<PdfImage, string> = new Map(),
-    annotations: readonly PdfAnnotationSpec[] = []
+    annotations: readonly PdfAnnotationSpec[] = [],
+    forms: ReadonlyMap<PdfFormXObject, string> = new Map()
   ): PdfPage {
     const resources: [string, PdfObject<PdfDict>][] = [];
     for (const [font, name] of fonts) {
@@ -354,6 +373,8 @@ export class PdfDocument {
     for (const [image, name] of images) {
       page.addXObject(name, this.imageObject(image));
     }
+
+    for (const [form, name] of forms) page.addXObject(name, this.formObject(form));
 
     for (const annotation of annotations) {
       let appearanceName: string | null = null;
@@ -486,7 +507,8 @@ export function writePdf(
       page.patterns,
       page.shadings,
       page.images,
-      page.annotations
+      page.annotations,
+      page.forms
     );
   }
 

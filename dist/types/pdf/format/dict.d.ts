@@ -10,5 +10,6 @@ export declare class PdfDict extends PdfDataType {
     has(key: string): boolean;
     get(key: string): PdfDataType | undefined;
     set(key: string, value: PdfDataType): void;
+    merge(other: PdfDict): void;
     output(s: PdfStream): void;
 }

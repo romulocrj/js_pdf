@@ -175,6 +175,7 @@ export class TtfParser {
       this.parseIndexes();
       this.parseGlyphs();
     }
+    if (this.hasCff) this.parseCffMetrics();
     if (this.tableOffsets.has(TtfTable.cblc) && this.tableOffsets.has(TtfTable.cbdt)) {
       this.parseBitmaps();
     }
@@ -463,6 +464,20 @@ export class TtfParser {
    *
    * https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6glyf.html
    */
+  /** CFF advances come from hmtx; use em bounds without interpreting charstrings. */
+  private parseCffMetrics(): void {
+    const offset = this.tableOffset(TtfTable.hmtx), count = this.numOfLongHorMetrics;
+    if (count < 1 || count > this.numGlyphs) throw new TypeError('Invalid CFF horizontal metrics');
+    for (let glyph = 0; glyph < this.numGlyphs; glyph++) {
+      const advance = this.view.getUint16(offset + Math.min(glyph, count - 1) * 4) / this.unitsPerEm;
+      const left = this.view.getInt16(glyph < count ? offset + glyph * 4 + 2 : offset + count * 4 + (glyph - count) * 2) / this.unitsPerEm;
+      this.glyphInfoMap.set(glyph, new PdfFontMetrics({ left, right: left + advance,
+        top: this.descent / this.unitsPerEm, bottom: this.ascent / this.unitsPerEm,
+        ascent: this.ascent / this.unitsPerEm, descent: this.descent / this.unitsPerEm,
+        advanceWidth: advance, leftBearing: left }));
+    }
+  }
+
   private parseGlyphs(): void {
     const baseOffset = this.tableOffset(TtfTable.glyf);
     const hmtxOffset = this.tableOffset(TtfTable.hmtx);

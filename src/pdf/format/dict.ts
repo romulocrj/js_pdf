@@ -29,6 +29,7 @@
  */
 
 import { PdfDataType } from './base.ts';
+import { PdfArray } from './array.ts';
 import type { PdfReferenceable } from './array.ts';
 import type { PdfStream } from './stream.ts';
 
@@ -63,6 +64,16 @@ export class PdfDict extends PdfDataType {
 
   set(key: string, value: PdfDataType): void {
     this.values.set(key, value);
+  }
+
+  merge(other: PdfDict): void {
+    for (const [key, value] of other.values) {
+      const current = this.values.get(key);
+      if (current instanceof PdfArray && value instanceof PdfArray) {
+        current.values.push(...value.values); current.uniq();
+      } else if (current instanceof PdfDict && value instanceof PdfDict) current.merge(value);
+      else this.values.set(key, value);
+    }
   }
 
   override output(s: PdfStream): void {

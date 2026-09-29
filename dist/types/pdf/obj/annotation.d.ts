@@ -1,3 +1,5 @@
+import type { PdfBorderOptions } from './border.ts';
+import type { PdfFormXObject } from './formxobject.ts';
 import { PdfDict } from '../format/dict.ts';
 import type { PaintColor } from '../color.ts';
 import type { PdfFont } from '../font/font.ts';
@@ -8,11 +10,13 @@ import { PdfObject } from './object.ts';
 import type { PdfObjectRegistry } from './object.ts';
 import type { PdfPage } from './page.ts';
 export interface PdfUrlLinkAnnotation {
+    readonly border?: PdfBorderOptions | null;
     readonly kind: 'url';
     readonly rect: PdfRect;
     readonly destination: string;
 }
 export interface PdfNamedLinkAnnotation {
+    readonly border?: PdfBorderOptions | null;
     readonly kind: 'destination';
     readonly rect: PdfRect;
     readonly destination: string;
@@ -20,6 +24,7 @@ export interface PdfNamedLinkAnnotation {
 export type PdfLinkAnnotation = PdfUrlLinkAnnotation | PdfNamedLinkAnnotation;
 export type PdfGeometricAnnotationKind = 'square' | 'circle' | 'polygon' | 'polyline' | 'ink';
 export interface PdfGeometricAnnotation {
+    readonly border?: PdfBorderOptions | null;
     readonly kind: 'geometric';
     readonly shape: PdfGeometricAnnotationKind;
     readonly rect: PdfRect;
@@ -43,6 +48,7 @@ export type PdfFormFieldType = 'text' | 'choice' | 'checkbox' | 'button';
 export type PdfFormHighlighting = 'none' | 'invert' | 'outline' | 'push' | 'toggle';
 export type PdfTextFieldAlign = 'left' | 'center' | 'right';
 export interface PdfFormAppearance {
+    readonly forms?: ReadonlyMap<PdfFormXObject, string>;
     readonly width: number;
     readonly height: number;
     readonly content: string;
@@ -65,6 +71,7 @@ export interface PdfResolvedFormAppearances {
     readonly rollover?: PdfXObject;
 }
 export interface PdfFormFieldAnnotation {
+    readonly border?: PdfBorderOptions | null;
     readonly kind: 'form';
     readonly fieldType: PdfFormFieldType;
     readonly rect: PdfRect;
@@ -85,7 +92,13 @@ export interface PdfFormFieldAnnotation {
     readonly textColor?: PaintColor;
     readonly appearances?: PdfFormAppearances;
 }
-export type PdfAnnotationSpec = PdfLinkAnnotation | PdfFormFieldAnnotation | PdfGeometricAnnotation;
+export interface PdfTextAnnotation extends Omit<PdfGeometricAnnotation, 'kind' | 'shape'> {
+    readonly kind: 'text';
+    readonly content: string;
+    readonly open?: boolean;
+    readonly icon?: string;
+}
+export type PdfAnnotationSpec = PdfLinkAnnotation | PdfFormFieldAnnotation | PdfGeometricAnnotation | PdfTextAnnotation;
 /** One invisible clickable rectangle in a page's `/Annots` array. */
 export declare class PdfAnnotation extends PdfObject<PdfDict> {
     readonly page: PdfPage;

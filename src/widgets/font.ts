@@ -56,9 +56,9 @@ const TYPE1_FACES: Readonly<Record<Type1FontName, () => PdfType1Font>> = Object.
 });
 
 export class Font {
-  private readonly create: () => PdfFont;
+  private readonly create: (simpleTrueTypeFonts?: boolean) => PdfFont;
 
-  private constructor(create: () => PdfFont) {
+  private constructor(create: (simpleTrueTypeFonts?: boolean) => PdfFont) {
     this.create = create;
   }
 
@@ -93,7 +93,7 @@ export class Font {
     if (!(data instanceof Uint8Array)) {
       throw new TypeError('Font.ttf expects the font file as a Uint8Array');
     }
-    return new Font(() => new PdfTtfFont(data, options));
+    return new Font(simpleTrueTypeFonts => new PdfTtfFont(data, { simpleTrueTypeFonts, ...options }));
   }
 
   /**
@@ -106,8 +106,8 @@ export class Font {
   }
 
   /** Build the font object. Callers should go through `getFont` instead. */
-  build(): PdfFont {
-    return this.create();
+  build(simpleTrueTypeFonts = false): PdfFont {
+    return this.create(simpleTrueTypeFonts);
   }
 
   /** The `PdfFont` this declaration stands for in `context`'s document. */

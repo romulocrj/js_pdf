@@ -18,6 +18,8 @@
  * serialized page; widgets never retain page or layout state.
  */
 
+import { PdfBorder } from '../pdf/obj/border.ts';
+import type { PdfBorderOptions } from '../pdf/obj/border.ts';
 import { normalizeColor, normalizePaintColor } from '../pdf/color.ts';
 import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfGeometricAnnotationKind } from '../pdf/obj/annotation.ts';
@@ -48,29 +50,33 @@ export abstract class AnnotationBuilder {
 
 export class AnnotationLink extends AnnotationBuilder {
   readonly destination: string;
+  readonly border?: PdfBorder;
 
-  constructor(destination: string) {
+  constructor(destination: string, { border }: { readonly border?: PdfBorderOptions } = {}) {
     super();
+    this.border = border === undefined ? undefined : new PdfBorder(border);
     this.destination = String(destination);
     if (this.destination.length === 0) throw new RangeError('Annotation destination cannot be empty');
   }
 
   override build(context: RenderContext, rect: AnnotationRect): void {
-    context.canvas.addNamedLink(this.destination, rect.x, rect.y, rect.width, rect.height);
+    context.canvas.addNamedLink(this.destination, rect.x, rect.y, rect.width, rect.height, this.border);
   }
 }
 
 export class AnnotationUrl extends AnnotationBuilder {
   readonly destination: string;
+  readonly border?: PdfBorder;
 
-  constructor(destination: string) {
+  constructor(destination: string, { border }: { readonly border?: PdfBorderOptions } = {}) {
     super();
+    this.border = border === undefined ? undefined : new PdfBorder(border);
     this.destination = String(destination);
     if (this.destination.length === 0) throw new RangeError('Annotation URL cannot be empty');
   }
 
   override build(context: RenderContext, rect: AnnotationRect): void {
-    context.canvas.addUrlLink(this.destination, rect.x, rect.y, rect.width, rect.height);
+    context.canvas.addUrlLink(this.destination, rect.x, rect.y, rect.width, rect.height, this.border);
   }
 }
 
@@ -170,14 +176,10 @@ export class Anchor extends Widget<AnnotationLayoutData> {
   }
 }
 
-export interface PdfBorder {
-  readonly width?: number;
-}
-
 export interface GeometricAnnotationOptions {
   readonly color?: ColorInput | null;
   readonly interiorColor?: ColorInput | null;
-  readonly border?: PdfBorder | null;
+  readonly border?: PdfBorderOptions | null;
   readonly author?: string | null;
   readonly date?: Date | null;
   readonly subject?: string | null;
@@ -189,6 +191,7 @@ abstract class GeometricAnnotationBuilder extends AnnotationBuilder {
   readonly color: PaintColor | null;
   readonly interiorColor: PaintColor | null;
   readonly borderWidth: number;
+  readonly border: PdfBorder;
   readonly author: string | null;
   readonly date: Date | null;
   readonly subject: string | null;
@@ -207,7 +210,8 @@ abstract class GeometricAnnotationBuilder extends AnnotationBuilder {
     this.shape = shape;
     this.color = color === null ? null : normalizePaintColor(color);
     this.interiorColor = interiorColor === null ? null : normalizePaintColor(interiorColor);
-    this.borderWidth = Number(border?.width ?? 1);
+    this.border = new PdfBorder(border ?? {});
+    this.borderWidth = this.border.width;
     if (!Number.isFinite(this.borderWidth) || this.borderWidth < 0) {
       throw new RangeError('Annotation border width must be a finite non-negative number');
     }
@@ -222,6 +226,7 @@ abstract class GeometricAnnotationBuilder extends AnnotationBuilder {
     readonly color: PaintColor | null;
     readonly interiorColor: PaintColor | null;
     readonly borderWidth: number;
+    readonly border: PdfBorder;
     readonly author: string | null;
     readonly subject: string | null;
     readonly content: string | null;
@@ -247,6 +252,7 @@ abstract class GeometricAnnotationBuilder extends AnnotationBuilder {
       color: this.color,
       interiorColor: this.interiorColor,
       borderWidth: this.borderWidth,
+      border: this.border,
       author: this.author,
       subject: this.subject,
       content: this.content,
@@ -435,5 +441,28 @@ export class Outline extends Anchor {
       color: this.color === null ? null : normalizeColor(this.color),
       style: this.style
     });
+  }
+}
+
+export interface TextAnnotationOptions extends GeometricAnnotationOptions {
+  readonly content: string;
+  readonly open?: boolean;
+  readonly icon?: string;
+}
+export class AnnotationText extends GeometricAnnotationBuilder {
+  readonly open: boolean;
+  readonly icon: string;
+  constructor(options: TextAnnotationOptions) {
+    super('square', options);
+    this.open = options.open ?? false;
+    this.icon = options.icon ?? 'Note';
+  }
+  override build(context: RenderContext, rect: AnnotationRect): void {
+    context.canvas.addAnnotation({ ...this.base(context, rect), kind: 'text', content: this.content ?? '', open: this.open, icon: this.icon });
+  }
+}
+export class TextAnnotation extends Annotation {
+  constructor({ child, ...options }: TextAnnotationOptions & { readonly child: AnyWidget }) {
+    super({ child, builder: new AnnotationText(options) });
   }
 }

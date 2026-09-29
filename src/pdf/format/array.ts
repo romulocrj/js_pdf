@@ -25,7 +25,7 @@ import { colorComponents } from '../color.ts';
 import type { ColorInput } from '../color.ts';
 import { PdfDataType } from './base.ts';
 import { PdfNum } from './num.ts';
-import type { PdfIndirect } from './indirect.ts';
+import { PdfIndirect } from './indirect.ts';
 import type { PdfStream } from './stream.ts';
 
 /**
@@ -60,6 +60,17 @@ export class PdfArray extends PdfDataType {
 
   get length(): number {
     return this.values.length;
+  }
+
+  /** Preserve upstream value equality for scalar entries and indirect references. */
+  uniq(): void {
+    const values: PdfDataType[] = [];
+    for (const value of this.values) {
+      if (!values.some(existing => existing === value
+        || (existing instanceof PdfIndirect && value instanceof PdfIndirect && existing.equals(value))
+        || (existing.constructor === value.constructor && 'value' in existing && 'value' in value && existing.value === value.value))) values.push(value);
+    }
+    this.values.splice(0, this.values.length, ...values);
   }
 
   add(value: PdfDataType): void {

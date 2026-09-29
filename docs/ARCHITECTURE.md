@@ -284,7 +284,7 @@ divergences or narrower compatibility gaps between the port and upstream.
 
 | Area | dart_pdf | js_pdf |
 |---|---|---|
-| Embedded TTF | Type0 for `0x00010000` fonts, WinAnsi `/TrueType` otherwise | Type0 only; a non-`0x00010000` or `CFF ` font is rejected at construction |
+| Embedded TTF | Type0 for `0x00010000` fonts, WinAnsi `/TrueType` otherwise | Default Unicode TrueType subset; explicit simple WinAnsi; CFF1 full OpenType program with charset/ROS mapping and approximate ink bounds |
 | Inherited values | Mutable context registry plus dependency lookup | `InheritedWidget` copies an immutable constructor-keyed map; theme keeps a direct context field (§3) |
 | Text layout | Full breaker with rich text, Unicode bidi, Arabic shaping, justification and decorations | Rich text, fallback fonts, Unicode bidi/Arabic shaping, justification and decorations over the port's immutable layout protocol |
 | Page orientation | Content rotated through the CTM, paper size unchanged | Paper dimensions are swapped per section so `/MediaBox` reports the resolved physical orientation |
@@ -402,3 +402,30 @@ The encoder uses fixed-size typed block workspaces and `PdfStream` for
 geometrically growing output. This avoids retaining raw RGB on the resulting
 resource, but decoding and encoding still temporarily need pixel buffers.
 Omitting DPI preserves original JPEG bytes losslessly.
+
+
+## Full-program fonts and reusable forms
+
+Phase 6.8 leaves the default TrueType subset path intact. The optional simple
+branch embeds the full TrueType file with WinAnsi widths and one-byte text.
+The document-level `simpleTrueTypeFonts` setting is applied when a lazy `Font`
+is resolved; explicit per-font `unicode` options win and prebuilt font objects
+retain their encoding. No setting changes after encoding are required.
+CFF1 fonts use a full `/OpenType` stream in `/FontFile3`, a CIDFontType0
+descendant, and a code-to-CID CMap. Named CFF uses glyph indices as CIDs;
+CID-keyed CFF uses its charset and preserves ROS. Mapping follows
+[ISO 32000-1 §9.7.4.2 and Table 126](https://opensource.adobe.com/dc-acrobat-sdk-docs/standards/pdfstandards/pdf/PDF32000_2008.pdf).
+The port-specific metadata reader uses the CFF1 INDEX/DICT/charset format;
+standard SID names are format data from Adobe Technical Note 5176, Appendix A.
+It does not interpret Type2 charstrings. hmtx advances are exact, but glyph ink
+bounds use horizontal bearings/advances and the font ascent/descent. CFF2,
+variable-font instancing and raw Type1 programs remain unsupported.
+
+`PdfFormXObject` captures a synchronous paint callback and its resources before
+serialization. Each `PdfDocument` resolves that snapshot once and references it
+from page or nested form `/XObject` dictionaries. Resources include fonts,
+images, graphic states, patterns, shadings and nested forms; soft-mask references
+in graphic states are resolved by the owning document. The caller treats the
+snapshot as immutable and keeps annotations on pages, not inside forms.
+`drawForm` uses bottom-left PDF user coordinates, like `drawImage`; a
+`CustomPaint` callback already has its local transformation in place.

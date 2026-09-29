@@ -45,6 +45,8 @@ import { formatNumber } from './format/num.ts';
 import type { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
 import type { PdfShading } from './obj/shading.ts';
+import type { PdfBorderOptions } from './obj/border.ts';
+import type { PdfFormXObject } from './obj/formxobject.ts';
 import type { PdfImage } from './obj/image.ts';
 import type {
   PdfAnnotationSpec,
@@ -173,6 +175,7 @@ export interface BezierArcOptions {
 export class PdfCanvas {
   readonly pageHeight: number;
   private readonly content = new PdfStream();
+  private readonly formNames = new Map<PdfFormXObject, string>();
   private commandCount = 0;
   private readonly fontNames = new Map<PdfFont, string>();
   private readonly stateNames = new Map<string, string>();
@@ -263,6 +266,16 @@ export class PdfCanvas {
     return this.shadingDicts;
   }
 
+  get forms(): ReadonlyMap<PdfFormXObject, string> { return this.formNames; }
+
+  /** Place a reusable form in PDF user space, like drawImage. */
+  drawForm(form: PdfFormXObject, x: number, y: number, width = form.width, height = form.height): void {
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) throw new RangeError('Invalid form placement');
+    let name = this.formNames.get(form);
+    if (name === undefined) { name = `/Xf${this.formNames.size + 1}`; this.formNames.set(form, name); }
+    this.push(`q ${formatNumber(width / form.width)} 0 0 ${formatNumber(height / form.height)} ${formatNumber(x)} ${formatNumber(y)} cm ${name} Do Q`);
+  }
+
   /** The images this page drew with, mapped to page-local `/I…` names. */
   get images(): ReadonlyMap<PdfImage, string> {
     return this.imageNames;
@@ -278,12 +291,12 @@ export class PdfCanvas {
     this.pageAnnotations.push(annotation);
   }
 
-  addUrlLink(destination: string, x: number, top: number, width: number, height: number): void {
-    this.addLink('url', destination, x, top, width, height);
+  addUrlLink(destination: string, x: number, top: number, width: number, height: number, border?: PdfBorderOptions): void {
+    this.addLink('url', destination, x, top, width, height, border);
   }
 
-  addNamedLink(destination: string, x: number, top: number, width: number, height: number): void {
-    this.addLink('destination', destination, x, top, width, height);
+  addNamedLink(destination: string, x: number, top: number, width: number, height: number, border?: PdfBorderOptions): void {
+    this.addLink('destination', destination, x, top, width, height, border);
   }
 
   private addLink(
@@ -292,7 +305,8 @@ export class PdfCanvas {
     x: number,
     top: number,
     width: number,
-    height: number
+    height: number,
+    border?: PdfBorderOptions
   ): void {
     if (width <= 0 || height <= 0) return;
     const points = [
@@ -310,6 +324,7 @@ export class PdfCanvas {
     this.pageAnnotations.push({
       kind,
       destination,
+      border,
       rect: { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
     });
   }

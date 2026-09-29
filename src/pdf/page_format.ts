@@ -101,3 +101,63 @@ export const PageUnit = Object.freeze({
   pica: 12,
   dp: 72 / 150
 });
+
+/** Upstream value-class spelling; existing PageFormat objects remain supported. */
+export class PdfPageFormat implements PageSize {
+  readonly width: number;
+  readonly height: number;
+  readonly marginTop: number;
+  readonly marginRight: number;
+  readonly marginBottom: number;
+  readonly marginLeft: number;
+  constructor(width: number, height: number, options: Omit<PageSize, 'width' | 'height'> & { readonly marginAll?: number } = {}) {
+    if (!(width > 0) || !(height > 0)) throw new RangeError('Page dimensions must be positive');
+    this.width = width; this.height = height;
+    this.marginTop = options.marginAll ?? options.marginTop ?? 0;
+    this.marginRight = options.marginAll ?? options.marginRight ?? 0;
+    this.marginBottom = options.marginAll ?? options.marginBottom ?? 0;
+    this.marginLeft = options.marginAll ?? options.marginLeft ?? 0;
+  }
+  static readonly a3 = new PdfPageFormat(PageFormat.A3.width, PageFormat.A3.height, PageFormat.A3);
+  static readonly a4 = new PdfPageFormat(PageFormat.A4.width, PageFormat.A4.height, PageFormat.A4);
+  static readonly a5 = new PdfPageFormat(PageFormat.A5.width, PageFormat.A5.height, PageFormat.A5);
+  static readonly a6 = new PdfPageFormat(PageFormat.A6.width, PageFormat.A6.height, PageFormat.A6);
+  static readonly letter = new PdfPageFormat(PageFormat.LETTER.width, PageFormat.LETTER.height, PageFormat.LETTER);
+  static readonly legal = new PdfPageFormat(PageFormat.LEGAL.width, PageFormat.LEGAL.height, PageFormat.LEGAL);
+  static readonly roll57 = new PdfPageFormat(PageFormat.ROLL57.width, Infinity, PageFormat.ROLL57);
+  static readonly roll80 = new PdfPageFormat(PageFormat.ROLL80.width, Infinity, PageFormat.ROLL80);
+  static readonly undefined = new PdfPageFormat(Infinity, Infinity);
+  static readonly standard = PdfPageFormat.a4;
+  static readonly point = PageUnit.point;
+  static readonly inch = PageUnit.inch;
+  static readonly cm = PageUnit.cm;
+  static readonly mm = PageUnit.mm;
+  static readonly dp = PageUnit.dp;
+  copyWith(values: Partial<PageSize> = {}): PdfPageFormat {
+    return new PdfPageFormat(values.width ?? this.width, values.height ?? this.height, {
+      marginTop: values.marginTop ?? this.marginTop, marginRight: values.marginRight ?? this.marginRight,
+      marginBottom: values.marginBottom ?? this.marginBottom, marginLeft: values.marginLeft ?? this.marginLeft
+    });
+  }
+  get dimension(): { x: number; y: number } { return { x: this.width, y: this.height }; }
+  get availableWidth(): number { return this.width - this.marginLeft - this.marginRight; }
+  get availableHeight(): number { return this.height - this.marginTop - this.marginBottom; }
+  get availableDimension(): { x: number; y: number } { return { x: this.availableWidth, y: this.availableHeight }; }
+  get landscape(): PdfPageFormat { return this.width >= this.height ? this : this.copyWith({ width: this.height, height: this.width }); }
+  get portrait(): PdfPageFormat { return this.height >= this.width ? this : this.copyWith({ width: this.height, height: this.width }); }
+  applyMargin({ left, top, right, bottom }: { left: number; top: number; right: number; bottom: number }): PdfPageFormat {
+    return this.copyWith({ marginLeft: Math.max(this.marginLeft, left), marginTop: Math.max(this.marginTop, top),
+      marginRight: Math.max(this.marginRight, right), marginBottom: Math.max(this.marginBottom, bottom) });
+  }
+  equals(other: unknown): boolean {
+    return other instanceof PdfPageFormat && this.width === other.width && this.height === other.height
+      && this.marginLeft === other.marginLeft && this.marginTop === other.marginTop
+      && this.marginRight === other.marginRight && this.marginBottom === other.marginBottom;
+  }
+  get hashCode(): number {
+    let hash = 0;
+    for (const character of this.toString()) hash = (Math.imul(hash, 31) + character.charCodeAt(0)) | 0;
+    return hash;
+  }
+  toString(): string { return `PdfPageFormat ${this.width}x${this.height} margins:${this.marginLeft}, ${this.marginTop}, ${this.marginRight}, ${this.marginBottom}`; }
+}

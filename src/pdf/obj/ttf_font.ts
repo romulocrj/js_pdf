@@ -26,12 +26,9 @@
  * page to operators before the document exists; upstream instead defers the same
  * work to `prepare()`, since its fonts are indirect objects from birth.
  *
- * DELIBERATE DIVERGENCE: no simple `/TrueType` branch. Upstream falls back to a WinAnsi
- * single-byte font, embedding the file whole, when the sfnt version is not
- * 0x00010000. That branch is strictly narrower than this one and reintroduces
- * the ceiling phase 1 exists to remove, so the port rejects such a font instead.
- *
- * FORMAT LIMIT: no `CFF `-flavoured OpenType — see `font/ttf_writer.ts`.
+ * Full-program embedding supports simple WinAnsi TrueType and CFF1 OpenType.
+ * CFF uses an explicit code-to-CID encoding and hmtx advances; no CFF subset
+ * or charstring interpreter is included. CFF glyph ink bounds are approximate.
  *
  * Arabic diacritics retain their outlines but have zero advance after shaping,
  * matching upstream's bidi-enabled metrics.
@@ -41,13 +38,15 @@ import { isArabicDiacritic } from '../font/arabic.ts';
 import { PdfFontMetrics } from '../font/font_metrics.ts';
 import type { PdfFont } from '../font/font.ts';
 import type { PdfFontBitmap } from '../font/font.ts';
+import { cffFontMetadata } from '../font/cff.ts';
 import { TtfParser } from '../font/ttf_parser.ts';
 import { TtfWriter } from '../font/ttf_writer.ts';
 import { PdfArray } from '../format/array.ts';
 import { PdfDict } from '../format/dict.ts';
 import { PdfName } from '../format/name.ts';
 import { PdfNum } from '../format/num.ts';
-import { pdfHexString, PdfString } from '../format/string.ts';
+import { pdfHexString, pdfLiteral, PdfString, toWinAnsiByte } from '../format/string.ts';
+import { encodeLatin1 } from '../format/stream.ts';
 import { PdfFontDescriptor } from './font_descriptor.ts';
 import { PdfObject } from './object.ts';
 import type { PdfObjectRegistry } from './object.ts';
@@ -60,12 +59,16 @@ export interface PdfTtfFontOptions {
    * Upstream's `protect` flag.
    */
   readonly protect?: boolean;
+  /** False selects full-program WinAnsi TrueType; CFF requires composite text. */
+  readonly unicode?: boolean;
+  readonly simpleTrueTypeFonts?: boolean;
 }
 
 export class PdfTtfFont implements PdfFont {
   readonly font: TtfParser;
   readonly protect: boolean;
-  readonly isComposite = true;
+  readonly isComposite: boolean;
+  private readonly cffMetadata: ReturnType<typeof cffFontMetadata> | null;
 
   /**
    * Code points in CID order: `cmap[cid]` is the rune drawn by CID `cid`. CID 0
@@ -74,20 +77,16 @@ export class PdfTtfFont implements PdfFont {
   private readonly cmap: number[] = [0];
   private readonly cidByRune = new Map<number, number>([[0, 0]]);
 
-  constructor(bytes: Uint8Array, { protect = false }: PdfTtfFontOptions = {}) {
+  constructor(bytes: Uint8Array, { protect = false, unicode, simpleTrueTypeFonts = false }: PdfTtfFontOptions = {}) {
     this.font = new TtfParser(bytes);
     this.protect = protect;
-
-    if (this.font.hasCff) {
-      throw new TypeError(
-        `CFF fonts are not supported: \`${this.font.fontName}\` uses PostScript outlines`
-      );
-    }
-
-    if (!this.font.unicode) {
-      throw new TypeError(
-        `\`${this.font.fontName}\` is not a 0x00010000 TrueType font, which this port requires to embed`
-      );
+    if (this.font.tableOffsets.has('CFF2')) throw new TypeError('CFF2 variable outlines require a static CFF1 instance');
+    this.isComposite = unicode ?? (this.font.hasCff || (this.font.unicode && !simpleTrueTypeFonts));
+    if (this.font.hasCff && !this.isComposite) throw new TypeError('CFF fonts require composite encoding');
+    this.cffMetadata = this.font.hasCff ? cffFontMetadata(bytes.subarray(this.font.tableOffsets.get('CFF ')!,
+      this.font.tableOffsets.get('CFF ')! + this.font.tableSize.get('CFF ')!), this.font.numGlyphs) : null;
+    if (!this.font.hasCff && !this.font.tableOffsets.has('glyf') && !this.font.isBitmap) {
+      throw new TypeError('Font has no supported outlines');
     }
   }
 
@@ -109,7 +108,8 @@ export class PdfTtfFont implements PdfFont {
 
   /** Whether this font can draw `codePoint` at all. */
   isRuneSupported(codePoint: number): boolean {
-    return this.font.charToGlyphIndexMap.has(codePoint);
+    return (this.isComposite || winAnsiRune(toWinAnsiByte(codePoint)) === codePoint)
+      && this.font.charToGlyphIndexMap.has(codePoint);
   }
 
   getBitmap(codePoint: number): PdfFontBitmap | null {
@@ -118,6 +118,7 @@ export class PdfTtfFont implements PdfFont {
 
   /** Metrics in em units, so the caller scales by the font size. */
   glyphMetrics(codePoint: number): PdfFontMetrics {
+    if (!this.isComposite) codePoint = winAnsiRune(toWinAnsiByte(codePoint));
     const glyph = this.font.charToGlyphIndexMap.get(codePoint);
     if (glyph === undefined) {
       return PdfFontMetrics.zero;
@@ -151,6 +152,7 @@ export class PdfTtfFont implements PdfFont {
    * surrogate pair, which is what the format 12 `cmap` the parser reads expects.
    */
   encodeText(text: string): string {
+    if (!this.isComposite) return pdfLiteral(text);
     const cids: number[] = [];
 
     for (const character of String(text)) {
@@ -159,6 +161,7 @@ export class PdfTtfFont implements PdfFont {
 
       if (cid === undefined) {
         cid = this.cmap.length;
+        if (cid > 65535) throw new RangeError('Font encoding exceeds 65535 character codes');
         this.cmap.push(rune);
         this.cidByRune.set(rune, cid);
       }
@@ -174,6 +177,7 @@ export class PdfTtfFont implements PdfFont {
    * program, its descriptor, the per-CID widths, and the `/ToUnicode` CMap.
    */
   resourceDict(document: PdfObjectRegistry): PdfDict {
+    if (!this.isComposite || this.font.hasCff) return this.fullFontResource(document);
     const subset = new TtfWriter(this.font).withChars(this.cmap);
 
     const file = new PdfObjectStream(document, subset);
@@ -228,4 +232,81 @@ export class PdfTtfFont implements PdfFont {
       ['/ToUnicode', unicodeCmap.ref()]
     ]);
   }
+  private fullFontResource(document: PdfObjectRegistry): PdfDict {
+    const cff = this.font.hasCff;
+    const file = new PdfObjectStream(document, this.font.bytes);
+    if (cff) file.params.set('/Subtype', new PdfName('/OpenType'));
+    else file.params.set('/Length1', new PdfNum(this.font.bytes.length));
+    const scale = 1000 / this.font.unitsPerEm;
+    const descriptor = new PdfFontDescriptor(document, {
+      fontName: this.fontName, file, fileKey: cff ? '/FontFile3' : '/FontFile2', flags: cff ? 4 : 32,
+      fontBBox: [this.font.xMin * scale, this.font.yMin * scale, this.font.xMax * scale, this.font.yMax * scale],
+      ascent: this.ascent, descent: this.descent
+    });
+    if (!cff) {
+      const widths = Array.from({ length: 224 }, (_, index) => {
+        const rune = winAnsiRune(index + 32);
+        return Math.trunc(this.glyphMetrics(rune).advanceWidth * 1000);
+      });
+      return new PdfDict([
+        ['/Type', new PdfName('/Font')], ['/Subtype', new PdfName('/TrueType')],
+        ['/BaseFont', new PdfName(`/${this.fontName}`)], ['/Encoding', new PdfName('/WinAnsiEncoding')],
+        ['/FontDescriptor', descriptor.ref()], ['/FirstChar', new PdfNum(32)], ['/LastChar', new PdfNum(255)],
+        ['/Widths', PdfArray.fromNum(widths)],
+        ['/ToUnicode', new PdfObjectStream(document, encodeLatin1(fontCmap(Array.from({ length: 256 }, (_, i) => winAnsiRune(i)), this.protect, false, true))).ref()]
+      ]);
+    }
+    const { registry, ordering, supplement } = this.cffMetadata!;
+    const encoding = fontCmap(this.cmap.map(rune => this.cffMetadata!.cids[this.font.charToGlyphIndexMap.get(rune) ?? 0] ?? 0), false, true, false, { registry, ordering, supplement });
+    const widths = new PdfArray();
+    const seen = new Set<number>();
+    for (const rune of this.cmap) {
+      const cid = this.cffMetadata!.cids[this.font.charToGlyphIndexMap.get(rune) ?? 0] ?? 0;
+      if (seen.has(cid)) continue;
+      seen.add(cid);
+      widths.add(new PdfNum(cid)); widths.add(PdfArray.fromNum([Math.trunc(this.glyphMetrics(rune).advanceWidth * 1000)]));
+    }
+    const descendant = new PdfDict([
+      ['/Type', new PdfName('/Font')], ['/Subtype', new PdfName('/CIDFontType0')],
+      ['/BaseFont', new PdfName(`/${this.fontName}`)], ['/FontDescriptor', descriptor.ref()], ['/W', widths],
+      ['/CIDSystemInfo', new PdfDict([['/Registry', new PdfString(registry)], ['/Ordering', new PdfString(ordering)], ['/Supplement', new PdfNum(supplement)]])]
+    ]);
+    return new PdfDict([
+      ['/Type', new PdfName('/Font')], ['/Subtype', new PdfName('/Type0')], ['/BaseFont', new PdfName(`/${this.fontName}`)],
+      ['/Encoding', new PdfObjectStream(document, encodeLatin1(encoding)).ref()],
+      ['/DescendantFonts', new PdfArray([descendant])],
+      ['/ToUnicode', new PdfObjectStream(document, encodeLatin1(fontCmap(this.cmap, this.protect))).ref()]
+    ]);
+  }
+}
+
+/** CP1252 decoding is derived from the existing encoder rather than a second table. */
+function winAnsiRune(byte: number): number {
+  return WIN_ANSI_RUNES[byte] ?? 0x3f;
+}
+const WIN_ANSI_RUNES = Array.from({ length: 256 }, (_, byte) => byte);
+for (let rune = 256; rune <= 0x2122; rune++) {
+  const byte = toWinAnsiByte(rune);
+  if (byte !== 0x3f) WIN_ANSI_RUNES[byte] = rune;
+}
+
+/** CMaps for full-program paths, with bounded blocks and UTF-16BE destinations. */
+function fontCmap(values: readonly number[], protect = false, cid = false, simple = false, ros = { registry: 'Adobe', ordering: 'Identity', supplement: 0 }): string {
+  const hex = (n: number): string => n.toString(16).toUpperCase().padStart(4, '0');
+  let result = '/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n'
+    + `/CIDSystemInfo << /Registry ${pdfLiteral(ros.registry)} /Ordering ${pdfLiteral(ros.ordering)} /Supplement ${ros.supplement} >> def\n`
+    + `/CMapName /JsPdf${cid ? 'Encoding' : 'Unicode'} def\n/CMapType ${cid ? 1 : 2} def\n`
+    + (cid ? '/WMode 0 def\n' : '')
+    + `1 begincodespacerange\n<${simple ? '00> <FF' : '0000> <FFFF'}>\nendcodespacerange\n`;
+  for (let start = 0; start < values.length; start += 100) {
+    const end = Math.min(start + 100, values.length);
+    result += `${end - start} begin${cid ? 'cid' : 'bf'}char\n`;
+    for (let index = start; index < end; index++) {
+      const rune = protect && index !== 0 ? 32 : values[index]!;
+      const destination = rune <= 0xffff ? hex(rune) : hex(0xd800 + ((rune - 0x10000) >> 10)) + hex(0xdc00 + ((rune - 0x10000) & 1023));
+      result += `<${simple ? index.toString(16).padStart(2, '0') : hex(index)}> ${cid ? rune : '<' + destination + '>'}\n`;
+    }
+    result += `end${cid ? 'cid' : 'bf'}char\n`;
+  }
+  return result + 'endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend';
 }

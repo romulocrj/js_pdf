@@ -258,8 +258,8 @@ runtime scope or format limits; no unresolved port-gap marker remains.
 
 ## Next step
 
-> **Phase 6.7 — color values and device spaces — implemented; awaiting PR review and merge.**
-> Phases 6.1–6.6 merged in PRs #5–#10. Start phase 6.8 (fonts) only after this color PR merges. Each domain gets one PR against the
+> **Phases 6.8 + 6.10 + 6.12 — implemented together at user request; awaiting PR review and merge.**
+> Phases 6.1–6.7 merged in PRs #5–#11. After this combined PR merges, resume at 6.9 (directional layout), then 6.11 (PDF/A). Use the
 > updated main branch; do not stack PRs or merge automatically.
 
 ## Phase 6 — remaining compatibility and upstream follow-up
@@ -288,12 +288,12 @@ credits and licenses alongside the example.
 | 6.4 | Text: `LineSplitter`, CJK break customization and hyphenation | Merged in PR #8 |
 | 6.5 | Serialization: synchronous output destinations and lazy JPEG writers | Merged in PR #9 |
 | 6.6 | Performance: unchanged `BoxConstraints` reuse, Flex copies, ASCII single-word path; benchmark in V8 | Merged in PR #10 |
-| 6.7 | Colors: color value types, named constants, DeviceGray, CMYK and upstream color conversions | Implemented; pending merge |
-| 6.8 | Fonts: simple TrueType compatibility mode and CFF/PostScript support | Pending |
+| 6.7 | Colors: color value types, named constants, DeviceGray, CMYK and upstream color conversions | Merged in PR #11 |
+| 6.8 | Fonts: simple TrueType compatibility mode and CFF/PostScript support | Implemented; combined PR pending merge |
 | 6.9 | Layout: directional geometry, RTL Flex/tables, baseline alignment | Pending |
-| 6.10 | PDF objects: text-note annotations, complete annotation borders and public generic form XObjects | Pending |
+| 6.10 | PDF objects: text-note annotations, complete annotation borders and public generic form XObjects | Implemented; combined PR pending merge |
 | 6.11 | PDF/A: output intents and required conformance integration over the font/color work | Pending |
-| 6.12 | API conveniences: `DefaultTextStyle.merge` and the remaining listed compatibility aliases | Pending |
+| 6.12 | API conveniences: `DefaultTextStyle.merge` and the remaining listed compatibility aliases | Implemented; combined PR pending merge |
 
 The boundaries may be split into smaller PRs within the same domain where
 needed for review. Only one PR is open at a time. Do not expand into reading
@@ -476,6 +476,40 @@ Source observations and reproductions are recorded in ORIGINAL-ISSUES.md.
 counts. `examples/colors-phase-6.7.mjs` shows device spaces, the named palette,
 conversions, flattened alpha and an RGB gradient on one page. It is integrated
 after phase 6.6 in Browser.html and the phase runner. No new assets or licenses.
+
+### 6.8 + 6.10 + 6.12 — fonts, PDF objects and API conveniences
+
+Grouped in one PR at the user's explicit request, after PR #11 merged.
+
+- **6.8:** `Document({ simpleTrueTypeFonts: true })`, explicit per-font
+  `Font.ttf(bytes, { unicode: false })`, and `PdfTtfFont` support
+  full-program WinAnsi TrueType; legacy `true` sfnt headers select that mode
+  automatically. Default TrueType still uses the existing Unicode subset.
+  CFF1 OpenType is embedded whole as `/FontFile3 /OpenType`, using a Type0
+  font with a CIDFontType0 descendant. An explicit encoding preserves both
+  name-keyed glyph indices and CID-keyed charset/ROS mappings. CFF advances
+  come from hmtx; ink bounds are approximate (no charstring interpreter).
+  No CFF subset, CFF2, variable-font instancing or raw Type1/PFB support.
+- **6.10:** public reusable `PdfFormXObject` snapshots, nested resources and
+  per-document deduplication; `PdfCanvas.drawForm` uses PDF user coordinates,
+  like `drawImage`. Text notes expose metadata/open state/icon and transformed
+  rectangles. `PdfBorder` supports solid/dashed/beveled/inset/underlined styles
+  and dash arrays on annotation specs; geometric/link builders and TextField
+  forward them. Signature/encryption exclusions remain.
+- **6.12:** context-time `DefaultTextStyle.merge`, `PdfPageFormat` value helpers
+  alongside unchanged `PageFormat` presets, `ChartValue`/`LineChartValue`
+  compatibility, recursive `PdfDict.merge` and stable scalar/reference
+  `PdfArray.uniq`. `PdfPageFormat.marginAll` overrides individual margins as
+  upstream does; the historical rounded A4 dimensions remain unchanged.
+
+**Example gate:** all eight upstream examples retain their byte counts.
+The shared `examples/fonts-objects-api-phases.mjs` provides three proofs in the
+browser and phase runner, ordered 6.8, 6.10, 6.12 after 6.7. CFF examples use
+renamed Source Sans 3 subsets with the original copyright and complete OFL;
+fonts are external assets, never part of dist. Font specimens were rendered
+and their accented/Euro/Greek text extracted; form stamps were rendered and
+extracted twice on each of two pages. See [bundle measurements](BUNDLE-SIZE.md)
+and [usage details](../AI_USAGE.md#font-compatibility-and-cff).
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
 out of scope, and the complete upstream example set still generates end to end.
@@ -852,13 +886,10 @@ are indirect objects from birth.
 
 Divergences, each noted in the file:
 
-- No simple `/TrueType` branch. Upstream falls back to a WinAnsi single-byte
-  font, embedding the file whole, when the sfnt version is not `0x00010000`.
-  That branch reintroduces the ceiling phase 1 exists to remove, so the port
-  rejects such a font at construction instead — as it does a `CFF `-flavoured
-  OpenType, which has no `glyf`/`loca` to subset.
-- No Arabic or bidi coupling: upstream zeroes a diacritic's advance width when
-  its shaping options are on, and `font/arabic.dart` is unported.
+- Originally Type0-only; phase 6.8 adds the explicit simple TrueType and
+  full-program CFF1 paths while keeping Unicode TrueType subsetting the default.
+- Arabic/bidi coupling landed after this phase, including zero-advance
+  Arabic diacritics.
 - `/ItalicAngle`, `/CapHeight` and `/StemV` are upstream's constants rather than
   measurements. They are required entries no reader consults when the program is
   embedded.
@@ -898,7 +929,7 @@ Other divergences worth knowing:
   the real line breaker in **3.7**.
 - `IconThemeData` landed with `Icon` in **5.4** and rides on the same scoped
   `ThemeData` field as the text styles.
-- No `DefaultTextStyle.merge`, which upstream builds out of `Builder` — one of
+- `DefaultTextStyle.merge` was added in phase 6.12 using `Builder`; originally one of
   the widgets **3.3** left open.
 - `Font` is a pure declaration; the built `PdfFont` is cached on the `Document`
   rather than on the declaration, because an embedded font accumulates the code

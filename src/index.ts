@@ -23,8 +23,13 @@
 
 import { PdfColor, PdfColorGrey, PdfColorCmyk, PdfColorHsv, PdfColorHsl } from './pdf/color.ts';
 import { PdfColors } from './pdf/colors.ts';
+import { ChartValue } from './widgets/chart/chart.ts';
+import { LineChartValue } from './widgets/chart/line_chart.ts';
+import { PdfBorder } from './pdf/obj/border.ts';
+import { PdfFormXObject } from './pdf/obj/formxobject.ts';
+import { AnnotationText, TextAnnotation } from './widgets/annotations.ts';
 import { PdfStream } from './pdf/format/stream.ts';
-import { PageFormat, PageUnit } from './pdf/page_format.ts';
+import { PageFormat, PageUnit, PdfPageFormat } from './pdf/page_format.ts';
 import { BarcodeFactory } from './barcode/barcode_factory.ts';
 import { BarcodeCodabarStartStop } from './barcode/codabar.ts';
 import { BarcodeCode128Fnc } from './barcode/code128.ts';
@@ -260,6 +265,13 @@ export {
   PdfColorHsv,
   PdfColorHsl,
   PdfColors,
+  PdfPageFormat,
+  ChartValue,
+  LineChartValue,
+  PdfBorder,
+  PdfFormXObject,
+  AnnotationText,
+  TextAnnotation,
   PageFormat,
   PageUnit,
   PdfStream,
@@ -361,7 +373,6 @@ export type {
   InkAnnotationOptions,
   LinkOptions,
   OutlineOptions,
-  PdfBorder,
   PointAnnotationOptions,
   PolygonAnnotationOptions,
   ShapeAnnotationOptions
@@ -872,6 +883,13 @@ export interface PublicApi {
   readonly PdfColorHsv: typeof PdfColorHsv;
   readonly PdfColorHsl: typeof PdfColorHsl;
   readonly PdfColors: typeof PdfColors;
+  readonly PdfPageFormat: typeof PdfPageFormat;
+  readonly ChartValue: typeof ChartValue;
+  readonly LineChartValue: typeof LineChartValue;
+  readonly PdfBorder: typeof PdfBorder;
+  readonly PdfFormXObject: typeof PdfFormXObject;
+  readonly AnnotationText: typeof AnnotationText;
+  readonly TextAnnotation: typeof TextAnnotation;
   readonly PageFormat: typeof PageFormat;
   readonly PageUnit: typeof PageUnit;
   readonly PdfStream: typeof PdfStream;
@@ -1047,6 +1065,13 @@ const publicApi: PublicApi = Object.freeze({
   PdfColorHsv,
   PdfColorHsl,
   PdfColors,
+  PdfPageFormat,
+  ChartValue,
+  LineChartValue,
+  PdfBorder,
+  PdfFormXObject,
+  AnnotationText,
+  TextAnnotation,
   PageFormat,
   PageUnit,
   PdfStream,
@@ -1087,3 +1112,7 @@ export function createPdf(
 
 /** Namespace object, for hosts that prefer a single binding. */
 export const js_pdf = Object.freeze({ ...publicApi, createPdf });
+
+export type { PdfBorderOptions, PdfBorderStyle } from './pdf/obj/border.ts';
+export type { PdfFormXObjectOptions } from './pdf/obj/formxobject.ts';
+export type { TextAnnotationOptions } from './widgets/annotations.ts';

@@ -1,4 +1,5 @@
 import type { ColorInput, PaintColor } from '../pdf/color.ts';
+import type { PdfBorderOptions } from '../pdf/obj/border.ts';
 import type { PdfFormHighlighting, PdfTextFieldAlign } from '../pdf/obj/annotation.ts';
 import type { InsetsInput } from './geometry.ts';
 import { TextStyle } from './text_style.ts';
@@ -77,6 +78,7 @@ export declare class FlatButton extends Widget<FormLayoutData> {
     paint(context: RenderContext, box: PositionedBox<FormLayoutData>): void;
 }
 export interface TextFieldOptions {
+    readonly border?: PdfBorderOptions;
     readonly name: string;
     readonly child?: AnyWidget | null;
     readonly width?: number;

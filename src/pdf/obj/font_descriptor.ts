@@ -31,6 +31,7 @@ export interface PdfFontDescriptorOptions {
 
   /** The embedded font program; becomes `/FontFile2`. */
   readonly file: PdfObject<PdfDictStream>;
+  readonly fileKey?: '/FontFile2' | '/FontFile3';
 
   /** 4 = symbolic, 32 = non-symbolic. Upstream picks by composite-ness. */
   readonly flags: number;
@@ -58,7 +59,7 @@ export class PdfFontDescriptor extends PdfObject<PdfDict> {
     super(document, new PdfDict([
       ['/Type', new PdfName('/FontDescriptor')],
       ['/FontName', new PdfName(`/${options.fontName}`)],
-      ['/FontFile2', options.file.ref()],
+      [options.fileKey ?? '/FontFile2', options.file.ref()],
       ['/Flags', new PdfNum(options.flags)],
       ['/FontBBox', PdfArray.fromNum([...options.fontBBox])],
       ['/Ascent', new PdfNum(Math.trunc(options.ascent * 1000))],

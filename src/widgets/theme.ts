@@ -26,6 +26,8 @@
  * a field read.
  */
 
+import { Builder } from './basic.ts';
+
 import type { TextAlign, TextOverflow } from './text.ts';
 import { TextStyle } from './text_style.ts';
 import type { Font } from './font.ts';
@@ -300,6 +302,16 @@ export class DefaultTextStyle extends InheritedTheme {
     this.softWrap = softWrap;
     this.overflow = overflow;
     this.maxLines = maxLines;
+  }
+
+  static merge({ style, child, textAlign, softWrap, overflow, maxLines }: Omit<DefaultTextStyleOptions, 'style'> & { readonly style?: TextStyle }): AnyWidget {
+    return new Builder({ builder: context => new DefaultTextStyle({
+      child, style: context.theme.defaultTextStyle.merge(style),
+      textAlign: textAlign ?? context.theme.textAlign,
+      softWrap: softWrap ?? context.theme.softWrap,
+      overflow: overflow ?? context.theme.overflow,
+      maxLines: maxLines ?? context.theme.maxLines
+    }) });
   }
 
   protected override themeFor(context: RenderContext): ThemeData {

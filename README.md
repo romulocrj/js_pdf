@@ -190,7 +190,10 @@ covers, in [AI_USAGE.md](AI_USAGE.md).
 
 - Reading existing PDFs, rasterizing PDFs, encryption and digital signatures
   are out of scope.
-- PDF/A output intents are not implemented.
+- Directional layout geometry, right-to-left (RTL) layout for Flex and tables,
+  and baseline alignment are not implemented (phase 6.9).
+- PDF/A integration, including output intents and the required conformance
+  handling, is not implemented (phase 6.11).
 - Library code performs no host I/O. Fonts, images and other external assets
   must be supplied by the caller as bytes or text.
 - An indivisible `MultiPage` child taller than one content area is rejected;
@@ -283,3 +286,12 @@ RGB/gray/CMYK painting, HSV/HSL/RYB conversions and flattened alpha. Its
 `npm run phase-examples` writes `examples/out/colors-phase-6.7.pdf`.
 See [color usage](AI_USAGE.md#color-values-and-device-spaces) for constructors
 and the distinction between color alpha and painting opacity.
+
+
+The combined **6.8 / 6.10 / 6.12** PR adds three ordered gallery cards:
+**TrueType & CFF fonts**, **Reusable forms & notes**, and **API conveniences**.
+They share [one generator module](examples/fonts-objects-api-phases.mjs) with
+`npm run phase-examples`. The CFF fixtures retain Adobe's copyright and the
+complete SIL OFL; they are external assets, not part of dist. See
+[usage and limitations](AI_USAGE.md#font-compatibility-and-cff) and the
+[release-to-current bundle comparison](docs/BUNDLE-SIZE.md).

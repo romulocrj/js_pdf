@@ -18,6 +18,10 @@
  * 5.7 adds the geometric annotations consumed by the remaining widgets.
  */
 
+import { PdfBorder } from './border.ts';
+import type { PdfBorderOptions } from './border.ts';
+import type { PdfFormXObject } from './formxobject.ts';
+import { PdfBool } from '../format/bool.ts';
 import { PdfArray } from '../format/array.ts';
 import { PdfDict } from '../format/dict.ts';
 import { PdfName } from '../format/name.ts';
@@ -34,12 +38,14 @@ import type { PdfObjectRegistry } from './object.ts';
 import type { PdfPage } from './page.ts';
 
 export interface PdfUrlLinkAnnotation {
+  readonly border?: PdfBorderOptions | null;
   readonly kind: 'url';
   readonly rect: PdfRect;
   readonly destination: string;
 }
 
 export interface PdfNamedLinkAnnotation {
+  readonly border?: PdfBorderOptions | null;
   readonly kind: 'destination';
   readonly rect: PdfRect;
   readonly destination: string;
@@ -50,6 +56,7 @@ export type PdfLinkAnnotation = PdfUrlLinkAnnotation | PdfNamedLinkAnnotation;
 export type PdfGeometricAnnotationKind = 'square' | 'circle' | 'polygon' | 'polyline' | 'ink';
 
 export interface PdfGeometricAnnotation {
+  readonly border?: PdfBorderOptions | null;
   readonly kind: 'geometric';
   readonly shape: PdfGeometricAnnotationKind;
   readonly rect: PdfRect;
@@ -69,6 +76,7 @@ export type PdfFormHighlighting = 'none' | 'invert' | 'outline' | 'push' | 'togg
 export type PdfTextFieldAlign = 'left' | 'center' | 'right';
 
 export interface PdfFormAppearance {
+  readonly forms?: ReadonlyMap<PdfFormXObject, string>;
   readonly width: number;
   readonly height: number;
   readonly content: string;
@@ -94,6 +102,7 @@ export interface PdfResolvedFormAppearances {
 }
 
 export interface PdfFormFieldAnnotation {
+  readonly border?: PdfBorderOptions | null;
   readonly kind: 'form';
   readonly fieldType: PdfFormFieldType;
   readonly rect: PdfRect;
@@ -115,7 +124,13 @@ export interface PdfFormFieldAnnotation {
   readonly appearances?: PdfFormAppearances;
 }
 
-export type PdfAnnotationSpec = PdfLinkAnnotation | PdfFormFieldAnnotation | PdfGeometricAnnotation;
+export interface PdfTextAnnotation extends Omit<PdfGeometricAnnotation, 'kind' | 'shape'> {
+  readonly kind: 'text';
+  readonly content: string;
+  readonly open?: boolean;
+  readonly icon?: string;
+}
+export type PdfAnnotationSpec = PdfLinkAnnotation | PdfFormFieldAnnotation | PdfGeometricAnnotation | PdfTextAnnotation;
 
 /** One invisible clickable rectangle in a page's `/Annots` array. */
 export class PdfAnnotation extends PdfObject<PdfDict> {
@@ -140,6 +155,15 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
   }
 
   override prepare(): void {
+    if (this.annotation.border != null) this.params.set('/BS', new PdfBorder(this.annotation.border).output());
+    if (this.annotation.kind === 'text') {
+      const note = this.annotation;
+      this.prepareGeometric({ ...note, kind: 'geometric', shape: 'square' });
+      this.params.set('/Subtype', new PdfName('/Text'));
+      this.params.set('/Open', new PdfBool(note.open ?? false));
+      this.params.set('/Name', new PdfName('/' + (note.icon ?? 'Note')));
+      return;
+    }
     if (this.annotation.kind === 'form') {
       this.prepareForm(this.annotation);
       return;
@@ -182,10 +206,7 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
     ]));
     this.params.set('/P', this.page.ref());
     this.params.set('/F', new PdfNum(4));
-    this.params.set('/BS', new PdfDict([
-      ['/W', new PdfNum(annotation.borderWidth ?? 1)],
-      ['/S', new PdfName('/S')]
-    ]));
+    this.params.set('/BS', new PdfBorder(annotation.border ?? { width: annotation.borderWidth ?? 1 }).output());
     if (annotation.color !== null && annotation.color !== undefined) {
       this.params.set('/C', PdfArray.fromColor(annotation.color));
     }

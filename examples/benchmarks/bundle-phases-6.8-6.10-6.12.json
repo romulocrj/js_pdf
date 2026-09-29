@@ -1,0 +1,27 @@
+{
+  "node": "v26.8.1",
+  "gzipLevel": 9,
+  "brotliQuality": 11,
+  "bundles": [
+    {
+      "ref": "v0.1.6",
+      "rawBytes": 405510,
+      "gzipBytes": 123848,
+      "brotliBytes": 101264
+    },
+    {
+      "ref": "68d5b1b",
+      "rawBytes": 434635,
+      "gzipBytes": 132179,
+      "brotliBytes": 107389
+    },
+    {
+      "ref": "working-tree",
+      "rawBytes": 450928,
+      "gzipBytes": 138394,
+      "brotliBytes": 111755
+    }
+  ],
+  "baselineCommit": "68d5b1b1b851fd66bd5fbc96cb3c5c7de80dc10d",
+  "candidateMinifiedSha256": "0ce2767354e370008ac944735b048d3718dd063bc83d19d1e561eeda42518821"
+}

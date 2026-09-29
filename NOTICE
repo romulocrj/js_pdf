@@ -176,3 +176,19 @@ The complete license and original copyright notice accompany the font in
 examples/assets/licenses/NotoSansSC-OFL.txt. The reproduction recipe and source
 hash are recorded in examples/assets/THIRD-PARTY-NOTICES.md. This example asset
 is not part of the library runtime.
+
+--------------------------------------------------------------------------
+
+The phase-6.8 example fonts examples/assets/JsPdfCffExample.otf and
+examples/assets/JsPdfCffCidExample.otf are modified, renamed subsets of
+Adobe Source Sans 3, distributed under the SIL Open Font License 1.1.
+
+Copyright 2010-2024 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'. All Rights Reserved. Source is a trademark of Adobe in the United States and/or other countries.
+
+Source: adobe-fonts/source-sans@87b37a2daaed80fcb8e8ccb0085c4d72ddade12e,
+        OTF/SourceSans3-Regular.otf
+
+The complete license accompanies the fonts in
+examples/assets/licenses/SourceSans3-OFL.txt. The source hash and reproduction
+recipe are in examples/assets/THIRD-PARTY-NOTICES.md. These assets are not
+included in the library runtime bundle.

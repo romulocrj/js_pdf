@@ -127,6 +127,9 @@ export declare class DefaultTextStyle extends InheritedTheme {
     readonly overflow: TextOverflow | null;
     readonly maxLines: number | null;
     constructor({ style, child, textAlign, softWrap, overflow, maxLines }: DefaultTextStyleOptions);
+    static merge({ style, child, textAlign, softWrap, overflow, maxLines }: Omit<DefaultTextStyleOptions, 'style'> & {
+        readonly style?: TextStyle;
+    }): AnyWidget;
     protected themeFor(context: RenderContext): ThemeData;
 }
 export {};
