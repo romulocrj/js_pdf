@@ -20,7 +20,8 @@
  * synchronous so a host such as ClearScript can call it without an event loop.
  */
 
-import { serializePdf } from '../pdf/document.ts';
+import { writePdf } from '../pdf/document.ts';
+import { PdfStream } from '../pdf/format/stream.ts';
 import type {
   DocumentMetadata,
   PdfPageMode,
@@ -306,6 +307,13 @@ export class Document {
   }
 
   save(): Uint8Array {
+    const output = new PdfStream();
+    this.write(output);
+    return output.output();
+  }
+
+  /** Render and serialize to a caller-owned destination without collecting the PDF. */
+  write(output: PdfStream): void {
     this.outlineEntries.length = 0;
     this.outlineRerenderRequested = false;
     let pages = this.renderSections(false);
@@ -323,8 +331,8 @@ export class Document {
     const pageLabels: SerializedPageLabel[] = [...this.pageLabelEntries]
       .sort(([a], [b]) => a - b)
       .map(([pageIndex, label]) => ({ pageIndex, label }));
-    return serializePdf(
-      pages, this.metadata, outlines, this.pageMode, destinations, pageLabels, this.settings
+    writePdf(
+      output, pages, this.metadata, outlines, this.pageMode, destinations, pageLabels, this.settings
     );
   }
 }

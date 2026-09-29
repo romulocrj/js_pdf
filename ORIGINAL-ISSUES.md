@@ -164,3 +164,19 @@ save/rectangle-clip/paint/restore scope using the resolved paper and margins.
 The regression is in `test/page_clipping_formats.test.mjs`; the visual proof is
 `examples/page-formats-phase-6.3.mjs`. This is a source-level finding; an upstream
 Dart runtime reproduction has not been run in this change.
+
+
+## PdfStream.putStream copies unused capacity (`pdf/format/stream.dart`)
+
+**Source observation:** at audit reference `b97c4a63dc`, `putStream` passes the
+source's complete `_stream` allocation to `putBytes`, rather than limiting it
+to `_offset` written bytes.
+
+**How to reproduce:** write two bytes into a default source stream and copy it
+into another stream with `putStream`. The source allocation begins at 65,536
+bytes, so the destination receives its unused capacity as trailing zero bytes.
+
+**Port correction:** copy the source's `output()` (only the used prefix).
+`test/synchronous_output.test.mjs` verifies both bytes and destination offset.
+This was confirmed from the upstream source; no Dart runtime reproduction was
+run in this change.

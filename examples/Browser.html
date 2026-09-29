@@ -720,6 +720,7 @@ import { generateImageDpiPhase61 } from './image-dpi-phase-6.1.mjs';
 import { generatePieFullCirclePhase62 } from './pie-full-circle-phase-6.2.mjs';
 import { generatePageFormatsPhase63 } from './page-formats-phase-6.3.mjs';
 import { generateTextBreakingPhase64 } from './text-breaking-phase-6.4.mjs';
+import { generateSynchronousOutputPhase65 } from './synchronous-output-phase-6.5.mjs';
 import { generateProductionPaginationExample } from './production-pagination.mjs';
 import { createSalesReport } from './create-sales-report.mjs';
 
@@ -1067,6 +1068,14 @@ const groups = [
         badge: 'PHASE 6.4',
         description: 'CJK prefix wrapping, grouped punctuation and syllable-based hyphenation compared with defaults.',
         generate: async () => generateTextBreakingPhase64(await bytesOf('JsPdfCjkExample.ttf'))
+      },
+      {
+        id: 'synchronous-output-phase-6.5',
+        title: 'Synchronous output',
+        file: 'synchronous-output-phase-6.5.mjs',
+        badge: 'PHASE 6.5',
+        description: 'Direct output, lazy JPEG reuse and executable byte-parity checks against save().',
+        generate: async () => generateSynchronousOutputPhase65(await bytesOf('dpi-pattern.jpg'))
       },
       {
         id: 'production-pagination',

@@ -23,6 +23,8 @@
 import { decodePng } from '../image/png.ts';
 import { parseJpeg } from '../image/jpeg.ts';
 import type { JpegInfo } from '../image/jpeg.ts';
+import { PdfDict } from '../format/dict.ts';
+import type { PdfStream } from '../format/stream.ts';
 import { PdfArray } from '../format/array.ts';
 import { PdfName } from '../format/name.ts';
 import { PdfNum } from '../format/num.ts';
@@ -47,6 +49,17 @@ export interface PdfImageOptions {
   readonly orientation?: PdfImageOrientation;
 }
 
+/** Supplies already encoded RGB JPEG bytes synchronously at serialization time. */
+export type PdfImageStreamWriter = (output: PdfStream) => void;
+
+export interface PdfImageJpegStreamOptions {
+  readonly width: number;
+  readonly height: number;
+  readonly length: number;
+  readonly write: PdfImageStreamWriter;
+  readonly orientation?: PdfImageOrientation;
+}
+
 interface EncodedJpegOptions {
   readonly jpeg: Uint8Array;
   readonly info: JpegInfo;
@@ -68,13 +81,16 @@ export class PdfImage {
   private rgba: Uint8Array | null = null;
   readonly jpeg: Uint8Array | null;
   readonly jpegInfo: JpegInfo | null;
+  readonly streamWriter: PdfImageStreamWriter | null;
+  readonly streamLength: number | null;
   readonly sourceWidth: number;
   readonly sourceHeight: number;
   readonly hasAlpha: boolean;
   readonly orientation: PdfImageOrientation;
 
-  constructor(options: PdfImageOptions | EncodedJpegOptions | DecodedChannelOptions) {
+  constructor(options: PdfImageOptions | EncodedJpegOptions | DecodedChannelOptions | PdfImageJpegStreamOptions) {
     const encoded = 'jpeg' in options;
+    const lazy = 'write' in options;
     const width = encoded ? options.info.width : options.width;
     const height = encoded ? options.info.height : options.height;
     if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
@@ -83,8 +99,14 @@ export class PdfImage {
     if (!encoded && 'pixels' in options && options.pixels.length !== width * height * 4) {
       throw new RangeError(`RGBA image needs ${width * height * 4} bytes, received ${options.pixels.length}`);
     }
+    if (lazy && (!Number.isSafeInteger(options.length) || options.length <= 0)) {
+      throw new RangeError('JPEG stream length must be a positive safe integer');
+    }
+    if (lazy && typeof options.write !== 'function') throw new TypeError('JPEG stream write must be a function');
+    this.streamWriter = lazy ? options.write : null;
+    this.streamLength = lazy ? options.length : null;
     const pixelCount = width * height;
-    if (encoded) {
+    if (encoded || lazy) {
       this.rgb = null;
       this.alpha = null;
     } else if ('rgb' in options) {
@@ -125,6 +147,11 @@ export class PdfImage {
     const jpeg = bytes.slice();
     const info = parseJpeg(jpeg);
     return new PdfImage({ jpeg, info, orientation: orientation ?? info.orientation });
+  }
+
+  /** RGB JPEG metadata is trusted; its byte writer is called once per serialization. */
+  static jpegStream(options: PdfImageJpegStreamOptions): PdfImage {
+    return new PdfImage(options);
   }
 
   /** RGBA compatibility view, materialized only for callers that request it. */
@@ -194,34 +221,61 @@ export class PdfImage {
 
 /** The final `/Subtype /Image` stream created inside one PDF registry. */
 export class PdfImageObject extends PdfXObject {
+  private readonly streamWriter: PdfImageStreamWriter | null;
+  private readonly streamLength: number | null;
+
   constructor(
     document: PdfObjectRegistry,
     image: PdfImage,
     channel: 'rgb' | 'alpha'
   ) {
     const jpeg = image.jpeg;
+    const lazy = image.streamWriter !== null;
     let data: Uint8Array;
-    if (jpeg !== null) {
+    if (lazy) {
+      if (channel === 'alpha') throw new RangeError('A JPEG image has no separate alpha channel');
+      data = new Uint8Array(0);
+    } else if (jpeg !== null) {
       if (channel === 'alpha') throw new RangeError('A JPEG image has no separate alpha channel');
       data = jpeg;
     } else {
       data = image.channel(channel);
     }
     super(document, '/Image', data);
+    this.streamWriter = image.streamWriter;
+    this.streamLength = image.streamLength;
     this.params.set('/Width', new PdfNum(image.sourceWidth));
     this.params.set('/Height', new PdfNum(image.sourceHeight));
     this.params.set('/BitsPerComponent', new PdfNum(8));
     const info = image.jpegInfo;
-    if (info !== null) {
+    if (info !== null || lazy) {
       this.params.set('/Intent', new PdfName('/RelativeColorimetric'));
       this.params.set('/Filter', new PdfName('/DCTDecode'));
       this.params.set('/ColorSpace', new PdfName(
-        info.colorSpace === 'gray' ? '/DeviceGray' : info.colorSpace === 'cmyk' ? '/DeviceCMYK' : '/DeviceRGB'
+        info?.colorSpace === 'gray' ? '/DeviceGray' : info?.colorSpace === 'cmyk' ? '/DeviceCMYK' : '/DeviceRGB'
       ));
-      if (info.inverted) this.params.set('/Decode', PdfArray.fromNum([1, 0, 1, 0, 1, 0, 1, 0]));
+      if (info?.inverted) this.params.set('/Decode', PdfArray.fromNum([1, 0, 1, 0, 1, 0, 1, 0]));
     } else {
       this.params.set('/ColorSpace', new PdfName(channel === 'rgb' ? '/DeviceRGB' : '/DeviceGray'));
     }
+  }
+
+  protected override writeContent(output: PdfStream): void {
+    if (this.streamWriter === null) {
+      super.writeContent(output);
+      return;
+    }
+    const params = new PdfDict(this.params.values);
+    params.set('/Length', new PdfNum(this.streamLength!));
+    params.output(output);
+    output.putString('\nstream\n');
+    const start = output.offset;
+    this.streamWriter(output);
+    const written = output.offset - start;
+    if (written !== this.streamLength) {
+      throw new RangeError(`JPEG stream wrote ${written} bytes; expected ${this.streamLength}`);
+    }
+    output.putString('\nendstream\n');
   }
 
   setSoftMask(mask: PdfImageObject): void {

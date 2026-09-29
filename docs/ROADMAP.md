@@ -258,8 +258,8 @@ runtime scope or format limits; no unresolved port-gap marker remains.
 
 ## Next step
 
-> **Phase 6.4 — custom line breaking and hyphenation — implemented; awaiting PR review and merge.**
-> Phases 6.1–6.3 merged in PRs #5–#7. Start phase 6.5 only after the text PR merges. Each domain gets one PR against the
+> **Phase 6.5 — synchronous output and lazy JPEGs — implemented; awaiting PR review and merge.**
+> Phases 6.1–6.4 merged in PRs #5–#8. Start phase 6.6 only after the serialization PR merges. Each domain gets one PR against the
 > updated main branch; do not stack PRs or merge automatically.
 
 ## Phase 6 — remaining compatibility and upstream follow-up
@@ -285,8 +285,8 @@ credits and licenses alongside the example.
 | 6.1 | Images: DPI guards, cache, rotated axes, JPEG quality-90 re-encoding, EXIF stripping on re-encoding, CMYK decode regression | Merged in PR #5 |
 | 6.2 | Charts: full-circle pie rounding tolerance (`80daf820cd`) | Merged in PR #6 |
 | 6.3 | Pages: apply `PageTheme.clip`, expand upstream paper formats | Merged in PR #7 |
-| 6.4 | Text: `LineSplitter`, CJK break customization and hyphenation | Implemented; pending merge |
-| 6.5 | Serialization: synchronous output destinations and lazy JPEG writers | Pending |
+| 6.4 | Text: `LineSplitter`, CJK break customization and hyphenation | Merged in PR #8 |
+| 6.5 | Serialization: synchronous output destinations and lazy JPEG writers | Implemented; pending merge |
 | 6.6 | Performance: unchanged `BoxConstraints` reuse, Flex copies, ASCII single-word path; benchmark in V8 | Pending |
 | 6.7 | Colors: color value types, named constants, DeviceGray, CMYK and upstream color conversions | Pending |
 | 6.8 | Fonts: simple TrueType compatibility mode and CFF/PostScript support | Pending |
@@ -398,6 +398,34 @@ prefix wrapping, punctuation and hyphenation on one page. The browser card is
 after phase 6.3 and uses the same generator as the phase runner. A renamed
 24 KB Noto Sans SC subset ships with its complete OFL, upstream attribution,
 pinned source hash and an optional fonttools regeneration script.
+
+### 6.5 Serialization — synchronous destinations and lazy JPEGs
+
+Ports `DavBfr/dart_pdf@8fd782b860`: `Document.write(output)` and low-level
+`PdfDocument.write(output)` serialize into a caller-owned `PdfStream` without
+collecting a final PDF byte array. `save()` now collects the same write path.
+`PdfStream` is public, and its string writes dispatch through the byte writer;
+a destination overrides `offset`, `putByte` and `putBytes`. The in-memory
+stream also supports bounded patches and copying another stream's used bytes.
+The upstream capacity-copy issue is recorded in ORIGINAL-ISSUES.md.
+
+`PdfImage.jpegStream({ width, height, length, write, orientation })` holds a
+synchronous writer for already encoded RGB JPEG data. It trusts the declared
+image metadata, checks the emitted length, and calls the writer once per
+resource per serialization, even when multiple pages reuse the image. Use
+`ImageProxy` for widget composition. The caller owns source/destination I/O;
+no host API, asynchronous operation, encryption or new runtime dependency is
+introduced. Page rendering and other resource processing still use memory;
+this is not an incremental layout engine. The port's existing empty-document
+validation and repeatable-save behavior remain.
+
+**Example gate:** all eight upstream examples still generate with unchanged
+byte counts. `examples/synchronous-output-phase-6.5.mjs` verifies byte parity
+and lazy image reuse, and supplies the browser card after phase 6.4. Run
+`node examples/run-synchronous-output.mjs` after building for direct file
+output with JPEG input in 1 KB chunks. Its separate verification step compares
+the file with `save()`. A regression test sends a 64 MB opaque payload to a
+non-collecting destination in 1 MB chunks. No new assets or licenses.
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
 out of scope, and the complete upstream example set still generates end to end.

@@ -21,6 +21,7 @@
  * enforces that by compiling against the ES2020 lib alone.
  */
 
+import { PdfStream } from './pdf/format/stream.ts';
 import { PageFormat, PageUnit } from './pdf/page_format.ts';
 import { BarcodeFactory } from './barcode/barcode_factory.ts';
 import { BarcodeCodabarStartStop } from './barcode/codabar.ts';
@@ -253,6 +254,7 @@ export {
   Page,
   PageFormat,
   PageUnit,
+  PdfStream,
   PageTheme,
   Partition,
   Partitions,
@@ -323,7 +325,7 @@ export type { PdfDiagnosticHandler } from './pdf/diagnostics.ts';
 export type { PdfSettings } from './pdf/format/object_base.ts';
 export type { DecodedPng } from './pdf/image/png.ts';
 export type { JpegColorSpace, JpegInfo } from './pdf/image/jpeg.ts';
-export type { PdfImageOptions, PdfImageOrientation } from './pdf/obj/image.ts';
+export type { PdfImageOptions, PdfImageOrientation, PdfImageStreamWriter, PdfImageJpegStreamOptions } from './pdf/obj/image.ts';
 export type { PdfPageLabelOptions, PdfPageLabelStyle } from './pdf/obj/page_label.ts';
 export type { Barcode as BarcodeGenerator, BarcodeType } from './barcode/barcode.ts';
 export type {
@@ -858,6 +860,8 @@ export interface PublicApi {
   readonly EdgeInsets: typeof EdgeInsets;
   readonly PageFormat: typeof PageFormat;
   readonly PageUnit: typeof PageUnit;
+  readonly PdfStream: typeof PdfStream;
+  readonly PdfImage: typeof PdfImage;
   readonly PdfType1Font: typeof PdfType1Font;
   readonly PdfTtfFont: typeof PdfTtfFont;
   readonly PdfPageLabel: typeof PdfPageLabel;
@@ -1025,6 +1029,8 @@ const publicApi: PublicApi = Object.freeze({
   EdgeInsets,
   PageFormat,
   PageUnit,
+  PdfStream,
+  PdfImage,
   PdfType1Font,
   PdfTtfFont,
   PdfPageLabel,
