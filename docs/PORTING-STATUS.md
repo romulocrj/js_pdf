@@ -9,6 +9,12 @@ reference, not a claim that all changes through that revision are ported.
 Image DPI fixes incorporate `e2e3974f32`, `94e93729fc` and `b9b34aebf9`.
 **Ported:** 153 `.ts` files, 38,563 lines (TypeScript)
 
+**Phase-6 status:** phases 6.1–6.8, 6.10 and 6.12 are merged (PRs #5–#12).
+Directional geometry, RTL Flex/table layout and baseline alignment (6.9),
+and PDF/A integration/output intents (6.11), remain unimplemented. Text bidi
+and Arabic shaping are already supported; they do not imply RTL layout for
+Flex or tables.
+
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
 
