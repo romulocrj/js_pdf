@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Version numbers below 1.0.0 do not guarantee a stable public API.
 
-## [Unreleased]
+## [0.2.0] - 2026-09-29
 
 ### Added
 
@@ -124,7 +124,7 @@ were never published to npm. They are recorded here for provenance only.
 - Third-party font licenses and notices added for the bundled example
   resources.
 
-[Unreleased]: https://github.com/romulocrj/js_pdf/compare/v0.1.6...HEAD
+[0.2.0]: https://github.com/romulocrj/js_pdf/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/romulocrj/js_pdf/releases/tag/v0.1.6
 [0.1.5]: https://github.com/romulocrj/js_pdf/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/romulocrj/js_pdf/compare/v0.1.3...v0.1.4

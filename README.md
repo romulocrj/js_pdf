@@ -41,11 +41,10 @@ V8. The current repository passes 561 tests and generates 31 phase examples
 under Node.js.
 
 Version 0.1.6 was the first release candidate and the first version published
-to npm. The additions below describe the current repository and are intended
-for the next npm release; installing 0.1.6 does not include them. The public
-API is not frozen until 1.0.0.
+to npm. Version 0.2.0 includes the additions listed below; installing 0.1.6
+does not include them. The public API is not frozen until 1.0.0.
 
-### Changes since 0.1.6
+### New in 0.2.0
 
 - Images: DPI-aware resizing, caching and JPEG quality-90 re-encoding, with
   orientation and CMYK decoding fixes.
@@ -111,11 +110,11 @@ Pinning the version is recommended — the unpinned URL follows whatever the
 latest published release is:
 
 ```js
-import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs';
+import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs';
 ```
 
 unpkg serves the same file at
-`https://unpkg.com/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs`.
+`https://unpkg.com/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs`.
 
 ## Use
 
@@ -142,7 +141,7 @@ Browser, via importmap (cdn or vendoring) — no build step on the consumer side
 
 ```html
 <script type="importmap">
-  { "imports": { "@romulocrj/js_pdf": "https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs" } }
+  { "imports": { "@romulocrj/js_pdf": "https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs" } }
 </script>
 <script type="module">
   import * as pw from '@romulocrj/js_pdf';

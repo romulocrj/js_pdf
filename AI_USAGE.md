@@ -9,8 +9,8 @@ below.
 
 ## Version scope
 
-This guide describes the current repository, including phases 6.1–6.8, 6.10
-and 6.12. Those additions are not available in npm release 0.1.6. Check the
+This guide describes version 0.2.0, including phases 6.1–6.8, 6.10
+and 6.12. Those additions are not available in version 0.1.6. Check the
 installed package version and declarations before using the newer APIs.
 The remaining phase-6 gaps are directional geometry, RTL Flex/table layout
 and baseline alignment (6.9), and PDF/A integration (6.11).
@@ -33,9 +33,9 @@ Use the specifier that matches the host, and do not mix them up:
 | Node, or any bundler | `import * as pw from '@romulocrj/js_pdf';` |
 | Minified build | `import * as pw from '@romulocrj/js_pdf/min';` |
 | Browser importmap | whatever the importmap maps — the examples map `@romulocrj/js_pdf` |
-| Browser, no install | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs';` |
-| ClearScript | the module file resolved from `SearchPath` or customLoader with `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs';` |
-| Deno | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.1.6/dist/js_pdf.min.mjs';` |
+| Browser, no install | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs';` |
+| ClearScript | the module file resolved from `SearchPath` or customLoader with `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs';` |
+| Deno | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs';` |
 
 A bare `'js_pdf'` only resolves where a host maps it. For an installed package
 it is always the scoped name.
