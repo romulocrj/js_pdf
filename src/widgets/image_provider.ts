@@ -23,6 +23,7 @@ import { reportPdfDiagnostic } from '../pdf/diagnostics.ts';
 import { parseJpeg } from '../pdf/image/jpeg.ts';
 import type { JpegInfo } from '../pdf/image/jpeg.ts';
 import { decodeJpeg } from '../pdf/image/jpeg_decoder.ts';
+import { encodeJpeg } from '../pdf/image/jpeg_encoder.ts';
 import { PdfImage } from '../pdf/obj/image.ts';
 import type { PdfImageOrientation } from '../pdf/obj/image.ts';
 import { PageUnit } from '../pdf/page_format.ts';
@@ -109,21 +110,23 @@ export abstract class ImageProvider {
 
   resolve(size?: PdfPoint, dpi: number | null = null): PdfImage {
     const effectiveDpi = validateDpi(dpi ?? this.dpi);
-    if (effectiveDpi === null || size === undefined) {
-      let image = this.cache.get(0);
-      if (image === undefined) {
-        image = this.buildImage();
-        this.cache.set(0, image);
+    let width = 0;
+    if (effectiveDpi !== null && size !== undefined) {
+      if (!Number.isFinite(size.x) || size.x < 0 || !Number.isFinite(size.y) || size.y < 0) {
+        throw new RangeError('Image resolve size must be finite and non-negative');
       }
-      return image;
+      const target = Math.trunc(size.x / PageUnit.inch * effectiveDpi);
+      if (target > 0 && target < this.width && this.sourceWidth > 0) {
+        // Unlike Dart's decoder, ours keeps the pixels unrotated. Convert the
+        // displayed width to the stored axis before resizing, retaining the
+        // orientation on the resource. Never enlarge or cache a zero target.
+        width = Math.max(1, Math.floor(target * this.sourceWidth / this.width));
+        if (width >= this.sourceWidth) width = 0;
+      }
     }
-    if (!Number.isFinite(size.x) || size.x < 0 || !Number.isFinite(size.y) || size.y < 0) {
-      throw new RangeError('Image resolve size must be finite and non-negative');
-    }
-    const width = Math.max(1, Math.trunc(size.x / PageUnit.inch * effectiveDpi));
     let image = this.cache.get(width);
     if (image === undefined) {
-      image = this.buildImage(width);
+      image = this.buildImage(width === 0 ? undefined : width);
       this.cache.set(width, image);
     }
     return image;
@@ -201,11 +204,10 @@ export class MemoryImage extends ImageProvider {
         });
       }
       const decoded = decodeJpeg(this.bytes, width);
+      const jpeg = encodeJpeg(decoded.rgb, decoded.width, decoded.height);
       return new PdfImage({
-        rgb: decoded.rgb,
-        alpha: null,
-        width: decoded.width,
-        height: decoded.height,
+        jpeg,
+        info: parseJpeg(jpeg),
         orientation: this.orientation
       });
     }

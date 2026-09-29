@@ -2,9 +2,12 @@
 
 Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 
-**Last updated:** 2026-08-06
-**Upstream reference:** `pdf/lib/` — 136 Dart files, ~31,800 lines
-**Ported:** 148 `.ts` files, ~37,900 lines (TypeScript)
+**Last updated:** 2026-09-28
+**Upstream reference:** historical `pdf/lib/` inventory — 136 Dart files, ~31,800 lines
+**Latest audit:** `DavBfr/dart_pdf@b97c4a63dc` (2026-09-28); this is an audit
+reference, not a claim that all changes through that revision are ported.
+Image DPI fixes incorporate `e2e3974f32`, `94e93729fc` and `b9b34aebf9`.
+**Ported:** 149 `.ts` files, 37,265 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -23,10 +26,10 @@ table. Run `npm run examples`; current state, from
 | Example | Status | Missing APIs | Unlocks at |
 |---|---|---:|---|
 | `hello-world` | ✅ generated (788 bytes) | 0 | — |
-| `calendar` | ✅ generated (7,324 bytes) | 0 | 3.6 |
+| `calendar` | ✅ generated (7,457 bytes) | 0 | 3.6 |
 | `certificate` | ✅ generated (38,373 bytes) | 0 | 3.9 |
 | `report` | ✅ generated (14,739 bytes) | 0 | 5.1 |
-| `invoice` | ✅ generated (38,477 bytes) | 0 | 5.2 |
+| `invoice` | ✅ generated (38,481 bytes) | 0 | 5.2 |
 | `document` | ✅ generated (36,421 bytes) | 0 | 5.3 |
 | `server` | ✅ generated (34,415 bytes) | 0 | 5.3 |
 | `resume` | ✅ generated (55,057 bytes) | 0 | 5.5 |
@@ -122,7 +125,7 @@ on: an object registers itself with the document, hands out references through
 | `obj/ttffont.dart`, `unicode_cmap.dart` | 278 | `src/pdf/obj/ttf_font.ts`, `src/pdf/obj/unicode_cmap.ts` | partial — Type0/CIDFontType2, `/Identity-H`, `/ToUnicode`, Arabic isolated-form aliases and zero-advance diacritics; no simple `/TrueType` branch |
 | `obj/graphic_stream.dart` | 156 | `src/pdf/obj/graphic_stream.ts` | partial — `/Font`, `/XObject`, `/ExtGState`, `/Pattern` and `/Shading` resources (inline dictionaries, per page); base class rather than a mixin and no deprecated `/ProcSet` |
 | `obj/xobject.dart`, `formxobject.dart`, `formxobject_extensions.dart` | 206 | `src/pdf/obj/xobject.ts`, `src/pdf/document.ts`, `src/pdf/soft_mask.ts` | partial — image and form XObjects with appearance resources and transparency groups for luminosity masks; no public generic form-XObject API |
-| `obj/image.dart`, `smask.dart` | 347 | `src/pdf/obj/image.ts`, `src/pdf/image/png.ts`, `src/pdf/image/jpeg.ts`, `src/pdf/image/jpeg_decoder.ts` | partial — PNG and baseline/progressive JPEG decode use typed buffers, JPEG pass-through remains lossless without DPI, EXIF orientation, RGB/gray/CMYK, separate alpha channels and image `/SMask` |
+| `obj/image.dart`, `smask.dart` | 347 | `src/pdf/obj/image.ts`, `src/pdf/image/png.ts`, `src/pdf/image/jpeg.ts`, `src/pdf/image/jpeg_decoder.ts`, `src/pdf/image/jpeg_encoder.ts` | partial — typed PNG/JPEG decoding and quality-90 JPEG encoding; original JPEG bytes preserved unless genuinely reduced, CMYK conversion, EXIF orientation, separate alpha channels and image `/SMask` |
 | `obj/shading.dart`, `pattern.dart`, `function.dart` | 349 | `src/pdf/obj/shading.ts`, `pattern.ts`, `function.ts` | partial — axial/radial DeviceRGB shadings, type-2 interpolation and type-3 stitching, direct shading-pattern dictionaries; no sampled streams or tiling patterns |
 | `obj/names.dart`, `outline.dart` | 296 | `src/pdf/obj/names.ts`, `outline.ts` | done — sorted named destinations and hierarchical outline tree with title, style, colour, siblings and closed descendants |
 | `obj/annotation.dart`, `border.dart` | 1070 | `src/pdf/obj/annotation.ts` | partial — links, square/circle/polygon/polyline/ink annotations and text/choice/checkbox/push-button fields with `/AP`; text notes and the complete custom-border surface remain |
@@ -181,7 +184,7 @@ both the grammar and the shape factories landed in phase 2.5.
 | `widgets/basic.dart` | 1090 | `src/widgets/basic.ts` | done — all upstream public classes, including tight `SizedBox`, `ConstrainedBox`, minimum-preserving `LimitedBox` and aligned `OverflowBox`; dividers paint the equivalent rule directly |
 | `widgets/table.dart`, `table_helper.dart` | 834 | `src/widgets/table.ts`, `table_helper.ts` | partial — fixed/flex/intrinsic/fraction tracks, alignment, decorations, borders, `TableHelper`, page spanning and repeatable headers; no bidi direction |
 | `widgets/theme.dart`, `font.dart` | 461 | `src/widgets/theme.ts`, `src/widgets/font.ts` | partial — `Font`, `ThemeData`, `Theme`, `DefaultTextStyle` and `iconTheme`; no `DefaultTextStyle.merge` |
-| `widgets/image.dart`, `image_provider.dart` | 423 | `src/widgets/image.ts`, `src/widgets/image_provider.ts` | partial — `Image`, SVG path-data `Shape`, all seven `BoxFit` modes, alignment, lazy PNG/JPEG decode, DPI-aware resizing, EXIF orientation, `ImageProvider`, `ImageProxy`, `MemoryImage`, `RawImage`; bytes are caller-supplied |
+| `widgets/image.dart`, `image_provider.dart` | 423 | `src/widgets/image.ts`, `src/widgets/image_provider.ts` | partial — `Image`, SVG path-data `Shape`, all seven `BoxFit` modes, alignment, lazy PNG/JPEG decode, DPI downsampling without upscaling, rotated-axis conversion, quality-90 JPEG re-encoding without source EXIF, `ImageProvider`, `ImageProxy`, `MemoryImage`, `RawImage`; bytes are caller-supplied |
 | `widgets/border_radius.dart` | 466 | `src/widgets/border_radius.ts` | done — physical/directional circular or elliptical radii, with oversized radii scaled to a valid path |
 | `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | `src/widgets/stack.ts`, `wrap.ts`, `grid_view.ts`, `partitions.ts` | done — positioned overlays/clipping, multi-run wrap, fixed-track grid and parallel partitions; immutable continuation for wrap/grid/partitions |
 | `widgets/clip.dart` | 134 | `src/widgets/clip.ts` | done — rectangular, scaled rounded-rectangle and elliptical clip scopes over immutable child layout |
@@ -220,3 +223,22 @@ shapes, grid paper, watermarks, footers, outlines and geometric annotations.
 `Signature` remains intentionally excluded with encryption and digital
 signatures. All eight upstream examples still generate with zero missing APIs.
 See [ROADMAP.md](ROADMAP.md).
+
+## Post-roadmap image parity (phase 6.1)
+
+DPI now keeps original resources for zero/subpixel targets and targets at or
+above source resolution. Reduction still works after the original has been
+cached. Orientation is retained on the resource; displayed width is converted
+to the unrotated pixel axis before resizing. PNG/Raw reductions retain alpha.
+
+Reduced JPEGs use baseline 4:4:4 encoding at quality 90, matching upstream's
+default encoder path. This is lossy and does not guarantee a smaller file for
+every tiny input. Original JPEG bytes are preserved when no reduction occurs.
+Source EXIF is omitted only on re-encoding; pass-through bytes are untouched.
+The synchronous encoder is translated from the MIT-licensed Dart `image`
+encoder at `82ae9fc9053a9d9d899a3a353908e4cce3b925f1`; see NOTICE.
+
+Validation includes baseline/progressive/gray/CMYK inputs, all eight
+orientations, PNG alpha, DCT serialization, cache reuse, and a 2048x2048
+encoder probe under a 64 MB JS heap. A real CMYK fixture also exposed and
+closed an out-of-scope helper reference in the existing decoder.

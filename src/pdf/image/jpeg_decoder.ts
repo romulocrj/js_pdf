@@ -1121,9 +1121,9 @@ export function decodeJpeg(bytes: Uint8Array, targetWidth?: number): DecodedJpeg
       const magenta = samples[source + 1];
       const yellow = samples[source + 2];
       const black = samples[source + 3];
-      samples[destination] = 255 - clampTo8bit(cyan * (1 - black / 255) + black);
-      samples[destination + 1] = 255 - clampTo8bit(magenta * (1 - black / 255) + black);
-      samples[destination + 2] = 255 - clampTo8bit(yellow * (1 - black / 255) + black);
+      samples[destination] = 255 - Math.min(255, Math.max(0, cyan * (1 - black / 255) + black));
+      samples[destination + 1] = 255 - Math.min(255, Math.max(0, magenta * (1 - black / 255) + black));
+      samples[destination + 2] = 255 - Math.min(255, Math.max(0, yellow * (1 - black / 255) + black));
     }
     return { width, height, rgb: samples.subarray(0, pixelCount * 3) };
   }

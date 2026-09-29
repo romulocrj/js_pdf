@@ -229,3 +229,11 @@ upstream Dart sources it derives from in its header.
 
 This software is provided “as is”, without warranties of any kind. No support
 is provided or implied.
+
+### Image resolution
+
+`Image`, `DecorationImage` and image providers accept a `dpi` setting. It
+reduces images to their displayed resolution without enlarging the source.
+Reduced JPEGs stay JPEG-compressed at quality 90 (lossy) and omit source EXIF
+metadata. Without reduction, the original JPEG bytes are embedded unchanged.
+PNG and raw-image reductions preserve their alpha channel.
