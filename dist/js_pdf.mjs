@@ -14886,6 +14886,27 @@ function splitLongWord(value, maxWidth, style) {
   return parts.length === 0 ? [ "" ] : parts;
 }
 
+function splitLine(line, splitter) {
+  if (splitter === null) return line.split(/([^\S\n]+|[^\s]+)/u).filter(part => part !== "");
+  const parts = splitter(line);
+  const result = [];
+  let cursor = 0;
+  for (const part of parts) {
+    if (part === "") continue;
+    const start = line.indexOf(part, cursor);
+    if (typeof part !== "string" || start < 0 || /\S/u.test(line.slice(cursor, start))) {
+      throw new RangeError("lineSplitter must return ordered source segments, omitting only whitespace");
+    }
+    if (start > cursor) result.push(line.slice(cursor, start));
+    result.push(part);
+    cursor = start + part.length;
+  }
+  const tail = line.slice(cursor);
+  if (/\S/u.test(tail)) throw new RangeError("lineSplitter must preserve all non-whitespace text");
+  if (tail !== "") result.push(tail);
+  return result;
+}
+
 function trimTrailingGaps(line) {
   while (line.tokens[line.tokens.length - 1]?.kind === "gap") {
     line.width -= line.tokens.pop()?.width ?? 0;
@@ -14977,9 +14998,12 @@ function rebaseLines(lines, top) {
 }
 
 class RichText extends SpanningWidget {
-  constructor({text, textAlign = null, textDirection = null, softWrap = null, tightBounds = false, textScaleFactor = 1, maxLines = null, overflow = null, margin = 0}) {
+  constructor({lineSplitter = null, hyphenation = null, text, textAlign = null, textDirection = null, softWrap = null, tightBounds = false, textScaleFactor = 1, maxLines = null, overflow = null, margin = 0}) {
     super();
+    this.directFont = null;
     this.text = text;
+    this.lineSplitter = lineSplitter;
+    this.hyphenation = hyphenation;
     this.textAlign = textAlign;
     this.textDirection = textDirection;
     this.softWrap = softWrap;
@@ -14999,7 +15023,7 @@ class RichText extends SpanningWidget {
     const scale = this.textScaleFactor;
     const direction = this.textDirection ?? Directionality.of(context);
     this.text.visitChildren((span, textStyle, annotation) => {
-      const baseStyle = resolveStyle(context, textStyle, span.baseline, scale);
+      const baseStyle = resolveStyle(context, textStyle, span.baseline, scale, this.directFont);
       if (span instanceof WidgetSpan) {
         const childBox = span.child.layout(context, new BoxConstraints({
           maxWidth,
@@ -15018,70 +15042,80 @@ class RichText extends SpanningWidget {
       if (!(span instanceof TextSpan) || span.text === null) return true;
       let group = "";
       let groupFont = baseStyle.font;
+      let kind = "text";
+      const styles = new Map([ [ baseStyle.font, baseStyle ] ]);
       const flush = () => {
         if (group === "") return;
-        const style = groupFont === baseStyle.font ? baseStyle : {
-          ...baseStyle,
-          font: groupFont
-        };
-        for (const part of group.replace(/\r\n?/g, "\n").split(/(\n|[^\S\n]+|[^\s]+)/u)) {
-          if (part === "") continue;
-          if (part === "\n") result.push({
-            kind: "break",
-            style
-          }); else result.push({
-            kind: /^\s+$/u.test(part) ? "gap" : "text",
-            text: part,
-            width: textWidth(style, part),
-            style,
-            annotation
-          });
+        let style = styles.get(groupFont);
+        if (style === undefined) {
+          style = {
+            ...baseStyle,
+            font: groupFont
+          };
+          styles.set(groupFont, style);
         }
+        result.push({
+          kind,
+          text: group,
+          width: textWidth(style, group),
+          style,
+          annotation
+        });
         group = "";
       };
       const visualText = direction === "rtl" ? logicalToVisual(span.text) : span.text;
-      for (const character of visualText) {
-        const codePoint = character.codePointAt(0) ?? 0;
-        let font = baseStyle.font;
-        let bitmap = null;
-        if (!supportsRune(font, codePoint)) {
-          for (const fallback of textStyle.fontFallback) {
-            const candidate = fallback.getFont(context);
-            if (supportsRune(candidate, codePoint)) {
-              font = candidate;
-              bitmap = candidate.getBitmap?.(codePoint) ?? null;
-              break;
+      const lines = visualText.replace(/\r\n?/g, "\n").split("\n");
+      for (let index = 0; index < lines.length; index++) {
+        if (index > 0) result.push({
+          kind: "break",
+          style: baseStyle
+        });
+        for (const part of splitLine(lines[index] ?? "", this.lineSplitter)) {
+          kind = /^\s+$/u.test(part) ? "gap" : "text";
+          for (const character of part) {
+            const codePoint = character.codePointAt(0) ?? 0;
+            let font = baseStyle.font;
+            let bitmap = null;
+            if (!supportsRune(font, codePoint)) {
+              for (const fallback of textStyle.fontFallback) {
+                const candidate = fallback.getFont(context);
+                if (supportsRune(candidate, codePoint)) {
+                  font = candidate;
+                  bitmap = candidate.getBitmap?.(codePoint) ?? null;
+                  break;
+                }
+              }
             }
+            if (bitmap !== null) {
+              flush();
+              const metrics = bitmap.metrics.scale(baseStyle.fontSize);
+              const widget = bitmapWidget(bitmap, baseStyle.fontSize);
+              const childBox = widget.layout(context, new BoxConstraints({
+                maxWidth,
+                maxHeight: Infinity
+              }));
+              result.push({
+                kind: "widget",
+                width: childBox.width,
+                height: childBox.height,
+                style: {
+                  ...baseStyle,
+                  font,
+                  baseline: baseStyle.baseline + metrics.ascent + metrics.descent - metrics.height
+                },
+                childBox,
+                annotation
+              });
+              groupFont = baseStyle.font;
+              continue;
+            }
+            if (font !== groupFont && group !== "") flush();
+            groupFont = font;
+            group += character;
           }
-        }
-        if (bitmap !== null) {
           flush();
-          const metrics = bitmap.metrics.scale(baseStyle.fontSize);
-          const widget = bitmapWidget(bitmap, baseStyle.fontSize);
-          const childBox = widget.layout(context, new BoxConstraints({
-            maxWidth,
-            maxHeight: Infinity
-          }));
-          result.push({
-            kind: "widget",
-            width: childBox.width,
-            height: childBox.height,
-            style: {
-              ...baseStyle,
-              font,
-              baseline: baseStyle.baseline + metrics.ascent + metrics.descent - metrics.height
-            },
-            childBox,
-            annotation
-          });
-          groupFont = baseStyle.font;
-          continue;
         }
-        if (font !== groupFont && group !== "") flush();
-        groupFont = font;
-        group += character;
       }
-      flush();
       return true;
     }, context.theme.defaultTextStyle);
     return result;
@@ -15110,16 +15144,65 @@ class RichText extends SpanningWidget {
         emptyStyle: current.emptyStyle
       };
     };
-    for (const token of tokens) {
+    const appendToken = (token, spacing = 0) => {
+      const index = current.tokens.length - 1;
+      const previous = current.tokens[index];
+      if (previous !== undefined && spacing !== 0) {
+        current.tokens[index] = {
+          ...previous,
+          width: previous.width + spacing
+        };
+      }
+      current.tokens.push(token);
+      current.width += token.width + spacing;
+    };
+    for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
+      const token = tokens[tokenIndex];
+      if (token === undefined) continue;
       current.emptyStyle = token.style;
       if (token.kind === "break") {
         pushLine(false);
         continue;
       }
       if (token.kind === "gap" && current.tokens.length === 0) continue;
-      if (softWrap && current.tokens.length > 0 && current.width + token.width > contentWidth + 1e-5) {
+      const previous = current.tokens[current.tokens.length - 1];
+      const joinSpacing = this.lineSplitter !== null && token.kind === "text" && previous?.kind === "text" && previous.style === token.style ? token.style.letterSpacing : 0;
+      if (softWrap && token.kind === "text" && this.hyphenation !== null && current.width + joinSpacing + token.width > contentWidth + 1e-5) {
+        const syllables = this.hyphenation(token.text);
+        if (syllables.length > 1) {
+          if (syllables.some(part => typeof part !== "string" || part === "") || syllables.join("") !== token.text) {
+            throw new RangeError("hyphenation must return nonempty syllables which reconstruct the word");
+          }
+          let fits = "";
+          for (let index = 0; index < syllables.length - 1; index++) {
+            const candidate = fits + syllables[index];
+            if (current.width + joinSpacing + textWidth(token.style, candidate + "-") > contentWidth + 1e-5) break;
+            fits = candidate;
+          }
+          if (fits !== "") {
+            const head = fits + "-";
+            const width = textWidth(token.style, head);
+            appendToken({
+              ...token,
+              text: head,
+              width
+            }, joinSpacing);
+            pushLine(true);
+            const tail = token.text.slice(fits.length);
+            tokens[tokenIndex] = {
+              ...token,
+              text: tail,
+              width: textWidth(token.style, tail)
+            };
+            tokenIndex--;
+            continue;
+          }
+        }
+      }
+      if (softWrap && current.tokens.length > 0 && current.width + joinSpacing + token.width > contentWidth + 1e-5) {
         pushLine(true);
-        if (token.kind === "gap") continue;
+        if (token.kind !== "gap") tokenIndex--;
+        continue;
       }
       if (token.kind === "text" && softWrap && token.width > contentWidth + 1e-5) {
         const pieces = splitLongWord(token.text, contentWidth, token.style);
@@ -15137,8 +15220,7 @@ class RichText extends SpanningWidget {
         }
         continue;
       }
-      current.tokens.push(token);
-      current.width += token.width;
+      appendToken(token, joinSpacing);
     }
     if (current.tokens.length > 0 || raw.length === 0 || tokens[tokens.length - 1]?.kind === "break") pushLine(false);
     const limited = maxLines === null ? raw : raw.slice(0, Math.max(1, maxLines));
@@ -15277,7 +15359,7 @@ class RichText extends SpanningWidget {
 }
 
 class Text extends RichText {
-  constructor(value, {style = undefined, fontSize = undefined, lineHeight = undefined, color = undefined, align = undefined, textAlign = undefined, textDirection = null, softWrap = undefined, tightBounds = false, textScaleFactor = 1, margin = 0, maxLines = undefined, overflow = undefined, font = undefined} = {}) {
+  constructor(value, {lineSplitter = null, hyphenation = null, style = undefined, fontSize = undefined, lineHeight = undefined, color = undefined, align = undefined, textAlign = undefined, textDirection = null, softWrap = undefined, tightBounds = false, textScaleFactor = 1, margin = 0, maxLines = undefined, overflow = undefined, font = undefined} = {}) {
     const overrides = new TextStyle({
       color: color === undefined ? null : normalizeColor(color),
       font: font === undefined ? null : undefined,
@@ -15286,6 +15368,8 @@ class Text extends RichText {
     });
     const merged = (style ?? new TextStyle).merge(overrides);
     super({
+      lineSplitter,
+      hyphenation,
       text: new TextSpan({
         text: String(value),
         style: merged
@@ -15301,17 +15385,6 @@ class Text extends RichText {
     });
     this.value = String(value);
     this.directFont = font ?? null;
-  }
-  inputTokens(context, maxWidth) {
-    if (this.directFont === null) return super.inputTokens(context, maxWidth);
-    const tokens = super.inputTokens(context, maxWidth);
-    return tokens.map(token => ({
-      ...token,
-      style: {
-        ...token.style,
-        font: this.directFont
-      }
-    }));
   }
 }
 

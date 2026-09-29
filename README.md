@@ -255,3 +255,9 @@ The **Page clipping & formats** gallery card compares clipping off/on, rotated
 margins, MultiPage and content-sized receipts/labels. Run `npm run phase-examples`
 to generate `examples/out/page-formats-phase-6.3.pdf` from
 [page-formats-phase-6.3.mjs](examples/page-formats-phase-6.3.mjs).
+
+
+The **Custom line breaking** card compares CJK prefix wrapping, punctuation
+rules and hyphenation. Its [shared generator](examples/text-breaking-phase-6.4.mjs)
+uses a small, licensed CJK font subset; `npm run phase-examples` writes
+`examples/out/text-breaking-phase-6.4.pdf`.

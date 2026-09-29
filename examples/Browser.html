@@ -719,6 +719,7 @@ import { generateWidgetsPhase57 } from './widgets-phase-5.7.mjs';
 import { generateImageDpiPhase61 } from './image-dpi-phase-6.1.mjs';
 import { generatePieFullCirclePhase62 } from './pie-full-circle-phase-6.2.mjs';
 import { generatePageFormatsPhase63 } from './page-formats-phase-6.3.mjs';
+import { generateTextBreakingPhase64 } from './text-breaking-phase-6.4.mjs';
 import { generateProductionPaginationExample } from './production-pagination.mjs';
 import { createSalesReport } from './create-sales-report.mjs';
 
@@ -1058,6 +1059,14 @@ const groups = [
         badge: 'PHASE 6.3',
         description: 'Clipping off/on, rotated margins, multiple pages, 57/80 mm receipts and a content-sized label.',
         generate: () => generatePageFormatsPhase63()
+      },
+      {
+        id: 'text-breaking-phase-6.4',
+        title: 'Custom line breaking',
+        file: 'text-breaking-phase-6.4.mjs',
+        badge: 'PHASE 6.4',
+        description: 'CJK prefix wrapping, grouped punctuation and syllable-based hyphenation compared with defaults.',
+        generate: async () => generateTextBreakingPhase64(await bytesOf('JsPdfCjkExample.ttf'))
       },
       {
         id: 'production-pagination',

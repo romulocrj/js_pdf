@@ -7,7 +7,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 **Latest audit:** `DavBfr/dart_pdf@b97c4a63dc` (2026-09-28); this is an audit
 reference, not a claim that all changes through that revision are ported.
 Image DPI fixes incorporate `e2e3974f32`, `94e93729fc` and `b9b34aebf9`.
-**Ported:** 149 `.ts` files, 37,319 lines (TypeScript)
+**Ported:** 149 `.ts` files, 37,403 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -174,7 +174,7 @@ both the grammar and the shape factories landed in phase 2.5.
 |---|---:|---|---|
 | `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | done — pure layout protocol, spanning `StatelessWidget`, immutable continuation state, `Inherited`/`InheritedWidget`, `DelayedWidget` and `Inseparable` |
 | `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — `BoxConstraints` with factories/transforms, `EdgeInsets`, `Alignment`, `inscribe`; no directional geometry or `TextDirection` |
-| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts`, `src/widgets/directionality.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, scoped `Directionality`, font-metric line boxes, inherited per-run styles, annotations and fallback fonts, CBLC/CBDT colour emoji, wrapping, immutable page continuation, UAX #9 RTL/Arabic shaping, justification, backgrounds and combined decorations |
+| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts`, `src/widgets/directionality.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, scoped `Directionality`, font-metric line boxes, inherited per-run styles, annotations and fallback fonts, CBLC/CBDT colour emoji, wrapping, custom `LineSplitter`, caller-supplied hyphenation, immutable page continuation, UAX #9 RTL/Arabic shaping, justification, backgrounds and combined decorations |
 | `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — full `Flex`/`Row`/`Column` allocation and vertical continuation, all main/cross alignments, `mainAxisSize`, vertical direction, `Expanded`, `Flexible`, proportional `Spacer`, eager/builder/separated `ListView`, plus `gap`/weighted-row extensions; no bidi direction or baseline alignment |
 | `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts`, `decoration.ts`, `box_border.ts` | partial — spanning `Container`, `DecoratedBox`, background/foreground `BoxDecoration`, DPI-aware fitted/clipped decoration images, per-side/dashed borders, axial/radial gradients and vector shadows |
 | `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground, margin clipping, content-fitted infinite dimensions; **one document may mix orientations and paper sizes**, per section |

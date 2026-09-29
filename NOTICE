@@ -161,3 +161,18 @@ Copyright (c) 2008, Adobe Systems Incorporated
   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
   NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+--------------------------------------------------------------------------
+
+The phase-6.4 example font examples/assets/JsPdfCjkExample.ttf is a modified,
+renamed subset of Noto Sans SC, distributed under the SIL Open Font License 1.1.
+
+Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
+
+Source: google/fonts@23e54b51ddffbc7713c583748e3bd86f62b1fa4a,
+        ofl/notosanssc/NotoSansSC[wght].ttf
+
+The complete license and original copyright notice accompany the font in
+examples/assets/licenses/NotoSansSC-OFL.txt. The reproduction recipe and source
+hash are recorded in examples/assets/THIRD-PARTY-NOTICES.md. This example asset
+is not part of the library runtime.

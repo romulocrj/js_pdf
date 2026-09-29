@@ -20,7 +20,7 @@ change the license of the resources themselves.
 | `Roboto-*.ttf` | Copyright 2011 Google Inc. [Source](https://github.com/googlefonts/roboto). Roboto is a trademark of Google. | [Apache License 2.0](../../LICENSE) |
 | `MaterialIcons.ttf` | Copyright 2018 Google, Inc. [Source](https://github.com/google/material-design-icons). | [Apache License 2.0](../../LICENSE) |
 
-The font files are redistributed unmodified. Documents generated with these
+The font files in the table above are redistributed unmodified. Documents generated with these
 fonts are not required to use the font license.
 
 ## Original dart_pdf demo resources
@@ -50,3 +50,22 @@ js_pdf, Copyright (C) 2026, Romulo Campos, licensed under Apache-2.0. They
 contain no third-party images or fonts. `generate-dpi-patterns.py` records the
 recipe; optional regeneration uses Pillow. Browser and Node examples load the
 committed bytes and do not need Pillow or Python.
+
+## CJK line-breaking example font
+
+`JsPdfCjkExample.ttf` is a modified, static weight-400 subset of
+[Noto Sans SC](https://github.com/google/fonts/tree/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl/notosanssc).
+Original font: `NotoSansSC[wght].ttf`, SHA-256
+`a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da`.
+
+Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name
+'Source'. Licensed under the [SIL Open Font License 1.1](licenses/NotoSansSC-OFL.txt),
+retained with its original copyright notice. This subset is renamed
+`JsPdfCjkExample`; its internal copyright and license records are preserved.
+It contains ASCII and the small CJK/punctuation set used by phase 6.4, and is
+not a general-purpose CJK font.
+
+`generate-cjk-subset.py` records the recipe using fonttools 4.66.0. Download
+the pinned source above and pass its path to the script; it verifies the source
+hash. The browser/Node examples use the committed subset and require neither
+Python nor fonttools. The existing font files listed above remain unmodified.

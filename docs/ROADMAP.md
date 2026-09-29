@@ -258,8 +258,8 @@ runtime scope or format limits; no unresolved port-gap marker remains.
 
 ## Next step
 
-> **Phase 6.3 — page clipping and paper formats — implemented; awaiting PR review and merge.**
-> Phases 6.1 and 6.2 merged in PRs #5 and #6. Start phase 6.4 only after the pages PR merges. Each domain gets one PR against the
+> **Phase 6.4 — custom line breaking and hyphenation — implemented; awaiting PR review and merge.**
+> Phases 6.1–6.3 merged in PRs #5–#7. Start phase 6.5 only after the text PR merges. Each domain gets one PR against the
 > updated main branch; do not stack PRs or merge automatically.
 
 ## Phase 6 — remaining compatibility and upstream follow-up
@@ -284,8 +284,8 @@ credits and licenses alongside the example.
 |---|---|---|
 | 6.1 | Images: DPI guards, cache, rotated axes, JPEG quality-90 re-encoding, EXIF stripping on re-encoding, CMYK decode regression | Merged in PR #5 |
 | 6.2 | Charts: full-circle pie rounding tolerance (`80daf820cd`) | Merged in PR #6 |
-| 6.3 | Pages: apply `PageTheme.clip`, expand upstream paper formats | Implemented; pending merge |
-| 6.4 | Text: `LineSplitter`, CJK break customization and hyphenation | Pending |
+| 6.3 | Pages: apply `PageTheme.clip`, expand upstream paper formats | Merged in PR #7 |
+| 6.4 | Text: `LineSplitter`, CJK break customization and hyphenation | Implemented; pending merge |
 | 6.5 | Serialization: synchronous output destinations and lazy JPEG writers | Pending |
 | 6.6 | Performance: unchanged `BoxConstraints` reuse, Flex copies, ASCII single-word path; benchmark in V8 | Pending |
 | 6.7 | Colors: color value types, named constants, DeviceGray, CMYK and upstream color conversions | Pending |
@@ -372,6 +372,32 @@ A5 clipping off/on, landscape A6, two clipped MultiPage pages, 57/80 mm receipts
 and a content-sized label. The **Page clipping & formats** browser card follows
 phase 6.2 and shares its generator with `npm run phase-examples`. No assets or
 third-party licenses are added.
+
+### 6.4 Text — custom boundaries and hyphenation
+
+Ports `LineSplitter` from `ed4b958522` and the hyphenation path from
+`widgets/text.dart` (introduced by `0a7acd8d18`), retaining synchronous callbacks
+on both `Text` and `RichText`. Default whitespace wrapping remains unchanged.
+Caller-provided boundaries allow CJK text to fill the line after a short prefix
+and keep closing punctuation attached to preceding text. This hook does not
+supply a Unicode line-break algorithm or language dictionaries.
+
+The port preserves the original whitespace between returned source segments,
+rather than synthesizing a space after every token as Dart does. This keeps
+its existing additive `wordSpacing` semantics and makes character splitting
+work without artificial CJK gaps. Returned arrays are never mutated. Invalid
+segments/syllables fail explicitly instead of dropping text or risking a loop.
+Hyphenation includes the visible hyphen in fitting, retries on a new line when
+needed, and retains the existing hard-split fallback. Callbacks must be pure
+because spanning layout can invoke them again. Tests also exposed and fixed
+the direct-font escape hatch measuring tokens with the theme font.
+
+**Example gate:** all eight upstream examples still generate with unchanged
+byte counts. `examples/text-breaking-phase-6.4.mjs` compares default/custom CJK
+prefix wrapping, punctuation and hyphenation on one page. The browser card is
+after phase 6.3 and uses the same generator as the phase runner. A renamed
+24 KB Noto Sans SC subset ships with its complete OFL, upstream attribution,
+pinned source hash and an optional fonttools regeneration script.
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
 out of scope, and the complete upstream example set still generates end to end.
