@@ -6031,7 +6031,7 @@ function reverseBits(value, count) {
   return result;
 }
 
-function huffman(lengths) {
+function huffman$1(lengths) {
   let maxBits = 0;
   for (const length of lengths) maxBits = Math.max(maxBits, length);
   if (maxBits === 0) throw new RangeError("Empty DEFLATE Huffman table");
@@ -6144,7 +6144,7 @@ function fixedTables() {
   for (let symbol = 144; symbol <= 255; symbol++) literalLengths[symbol] = 9;
   for (let symbol = 256; symbol <= 279; symbol++) literalLengths[symbol] = 7;
   for (let symbol = 280; symbol <= 287; symbol++) literalLengths[symbol] = 8;
-  return [ huffman(literalLengths), huffman(new Array(32).fill(5)) ];
+  return [ huffman$1(literalLengths), huffman$1(new Array(32).fill(5)) ];
 }
 
 function dynamicTables(reader) {
@@ -6156,7 +6156,7 @@ function dynamicTables(reader) {
   for (let index = 0; index < codeCount; index++) {
     codeLengths[order[index]] = reader.read(3);
   }
-  const codes = huffman(codeLengths);
+  const codes = huffman$1(codeLengths);
   const lengths = [];
   const total = literalCount + distanceCount;
   while (lengths.length < total) {
@@ -6179,10 +6179,10 @@ function dynamicTables(reader) {
     }
     if (lengths.length > total) throw new RangeError("DEFLATE code lengths overflow");
   }
-  const literals = huffman(lengths.slice(0, literalCount));
+  const literals = huffman$1(lengths.slice(0, literalCount));
   const distanceLengths = lengths.slice(literalCount);
   const distances = distanceLengths.every(length => length === 0) ? [ 1, ...distanceLengths.slice(1) ] : distanceLengths;
-  return [ literals, huffman(distances) ];
+  return [ literals, huffman$1(distances) ];
 }
 
 function adler32(bytes) {
@@ -14335,9 +14335,9 @@ function decodeJpeg(bytes, targetWidth) {
       const magenta = samples[source + 1];
       const yellow = samples[source + 2];
       const black = samples[source + 3];
-      samples[destination] = 255 - clampTo8bit(cyan * (1 - black / 255) + black);
-      samples[destination + 1] = 255 - clampTo8bit(magenta * (1 - black / 255) + black);
-      samples[destination + 2] = 255 - clampTo8bit(yellow * (1 - black / 255) + black);
+      samples[destination] = 255 - Math.min(255, Math.max(0, cyan * (1 - black / 255) + black));
+      samples[destination + 1] = 255 - Math.min(255, Math.max(0, magenta * (1 - black / 255) + black));
+      samples[destination + 2] = 255 - Math.min(255, Math.max(0, yellow * (1 - black / 255) + black));
     }
     return {
       width,
@@ -14346,6 +14346,275 @@ function decodeJpeg(bytes, targetWidth) {
     };
   }
   throw new RangeError(`Unsupported JPEG component count ${components}`);
+}
+
+const _zigzag = new Uint8Array([ 0, 1, 5, 6, 14, 15, 27, 28, 2, 4, 7, 13, 16, 26, 29, 42, 3, 8, 12, 17, 25, 30, 41, 43, 9, 11, 18, 24, 31, 40, 44, 53, 10, 19, 23, 32, 39, 45, 52, 54, 20, 22, 33, 38, 46, 51, 55, 60, 21, 34, 37, 47, 50, 56, 59, 61, 35, 36, 48, 49, 57, 58, 62, 63 ]);
+
+const stdDcLuminanceNrCodes = new Uint8Array([ 0, 0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0 ]);
+
+const stdDcLuminanceValues = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 ]);
+
+const stdAcLuminanceNrCodes = new Uint8Array([ 0, 0, 2, 1, 3, 3, 2, 4, 3, 5, 5, 4, 4, 0, 0, 1, 125 ]);
+
+const stdAcLuminanceValues = new Uint8Array([ 1, 2, 3, 0, 4, 17, 5, 18, 33, 49, 65, 6, 19, 81, 97, 7, 34, 113, 20, 50, 129, 145, 161, 8, 35, 66, 177, 193, 21, 82, 209, 240, 36, 51, 98, 114, 130, 9, 10, 22, 23, 24, 25, 26, 37, 38, 39, 40, 41, 42, 52, 53, 54, 55, 56, 57, 58, 67, 68, 69, 70, 71, 72, 73, 74, 83, 84, 85, 86, 87, 88, 89, 90, 99, 100, 101, 102, 103, 104, 105, 106, 115, 116, 117, 118, 119, 120, 121, 122, 131, 132, 133, 134, 135, 136, 137, 138, 146, 147, 148, 149, 150, 151, 152, 153, 154, 162, 163, 164, 165, 166, 167, 168, 169, 170, 178, 179, 180, 181, 182, 183, 184, 185, 186, 194, 195, 196, 197, 198, 199, 200, 201, 202, 210, 211, 212, 213, 214, 215, 216, 217, 218, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250 ]);
+
+const stdDcChrominanceNrCodes = new Uint8Array([ 0, 0, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0 ]);
+
+const stdDcChrominanceValues = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 ]);
+
+const stdAcChrominanceNrCodes = new Uint8Array([ 0, 0, 2, 1, 2, 4, 4, 3, 4, 7, 5, 4, 4, 0, 1, 2, 119 ]);
+
+const stdAcChrominanceValues = new Uint8Array([ 0, 1, 2, 3, 17, 4, 5, 33, 49, 6, 18, 65, 81, 7, 97, 113, 19, 34, 50, 129, 8, 20, 66, 145, 161, 177, 193, 9, 35, 51, 82, 240, 21, 98, 114, 209, 10, 22, 36, 52, 225, 37, 241, 23, 24, 25, 26, 38, 39, 40, 41, 42, 53, 54, 55, 56, 57, 58, 67, 68, 69, 70, 71, 72, 73, 74, 83, 84, 85, 86, 87, 88, 89, 90, 99, 100, 101, 102, 103, 104, 105, 106, 115, 116, 117, 118, 119, 120, 121, 122, 130, 131, 132, 133, 134, 135, 136, 137, 138, 146, 147, 148, 149, 150, 151, 152, 153, 154, 162, 163, 164, 165, 166, 167, 168, 169, 170, 178, 179, 180, 181, 182, 183, 184, 185, 186, 194, 195, 196, 197, 198, 199, 200, 201, 202, 210, 211, 212, 213, 214, 215, 216, 217, 218, 226, 227, 228, 229, 230, 231, 232, 233, 234, 242, 243, 244, 245, 246, 247, 248, 249, 250 ]);
+
+const yqt = new Uint8Array([ 16, 11, 10, 16, 24, 40, 51, 61, 12, 12, 14, 19, 26, 58, 60, 55, 14, 13, 16, 24, 40, 57, 69, 56, 14, 17, 22, 29, 51, 87, 80, 62, 18, 22, 37, 56, 68, 109, 103, 77, 24, 35, 55, 64, 81, 104, 113, 92, 49, 64, 78, 87, 103, 121, 120, 101, 72, 92, 95, 98, 112, 100, 103, 99 ]);
+
+const uvqt = new Uint8Array([ 17, 18, 24, 47, 99, 99, 99, 99, 18, 21, 26, 66, 99, 99, 99, 99, 24, 26, 56, 99, 99, 99, 99, 99, 47, 66, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99 ]);
+
+const aasf = new Float64Array([ 1, 1.387039845, 1.306562965, 1.175875602, 1, .785694958, .5411961, .275899379 ]);
+
+function transform(data) {
+  let dataOff = 0;
+  for (let i = 0; i < 8; ++i) {
+    const d0 = data[dataOff];
+    const d1 = data[dataOff + 1];
+    const d2 = data[dataOff + 2];
+    const d3 = data[dataOff + 3];
+    const d4 = data[dataOff + 4];
+    const d5 = data[dataOff + 5];
+    const d6 = data[dataOff + 6];
+    const d7 = data[dataOff + 7];
+    const tmp0 = d0 + d7;
+    const tmp7 = d0 - d7;
+    const tmp1 = d1 + d6;
+    const tmp6 = d1 - d6;
+    const tmp2 = d2 + d5;
+    const tmp5 = d2 - d5;
+    const tmp3 = d3 + d4;
+    const tmp4 = d3 - d4;
+    let tmp10 = tmp0 + tmp3;
+    const tmp13 = tmp0 - tmp3;
+    let tmp11 = tmp1 + tmp2;
+    let tmp12 = tmp1 - tmp2;
+    data[dataOff] = tmp10 + tmp11;
+    data[dataOff + 4] = tmp10 - tmp11;
+    const z1 = (tmp12 + tmp13) * .707106781;
+    data[dataOff + 2] = tmp13 + z1;
+    data[dataOff + 6] = tmp13 - z1;
+    tmp10 = tmp4 + tmp5;
+    tmp11 = tmp5 + tmp6;
+    tmp12 = tmp6 + tmp7;
+    const z5 = (tmp10 - tmp12) * .382683433;
+    const z2 = .5411961 * tmp10 + z5;
+    const z4 = 1.306562965 * tmp12 + z5;
+    const z3 = tmp11 * .707106781;
+    const z11 = tmp7 + z3;
+    const z13 = tmp7 - z3;
+    data[dataOff + 5] = z13 + z2;
+    data[dataOff + 3] = z13 - z2;
+    data[dataOff + 1] = z11 + z4;
+    data[dataOff + 7] = z11 - z4;
+    dataOff += 8;
+  }
+  dataOff = 0;
+  for (let i = 0; i < 8; ++i) {
+    const d0 = data[dataOff];
+    const d1 = data[dataOff + 8];
+    const d2 = data[dataOff + 16];
+    const d3 = data[dataOff + 24];
+    const d4 = data[dataOff + 32];
+    const d5 = data[dataOff + 40];
+    const d6 = data[dataOff + 48];
+    const d7 = data[dataOff + 56];
+    const tmp0p2 = d0 + d7;
+    const tmp7p2 = d0 - d7;
+    const tmp1p2 = d1 + d6;
+    const tmp6p2 = d1 - d6;
+    const tmp2p2 = d2 + d5;
+    const tmp5p2 = d2 - d5;
+    const tmp3p2 = d3 + d4;
+    const tmp4p2 = d3 - d4;
+    let tmp10p2 = tmp0p2 + tmp3p2;
+    const tmp13p2 = tmp0p2 - tmp3p2;
+    let tmp11p2 = tmp1p2 + tmp2p2;
+    let tmp12p2 = tmp1p2 - tmp2p2;
+    data[dataOff] = tmp10p2 + tmp11p2;
+    data[dataOff + 32] = tmp10p2 - tmp11p2;
+    const z1p2 = (tmp12p2 + tmp13p2) * .707106781;
+    data[dataOff + 16] = tmp13p2 + z1p2;
+    data[dataOff + 48] = tmp13p2 - z1p2;
+    tmp10p2 = tmp4p2 + tmp5p2;
+    tmp11p2 = tmp5p2 + tmp6p2;
+    tmp12p2 = tmp6p2 + tmp7p2;
+    const z5p2 = (tmp10p2 - tmp12p2) * .382683433;
+    const z2p2 = .5411961 * tmp10p2 + z5p2;
+    const z4p2 = 1.306562965 * tmp12p2 + z5p2;
+    const z3p2 = tmp11p2 * .707106781;
+    const z11p2 = tmp7p2 + z3p2;
+    const z13p2 = tmp7p2 - z3p2;
+    data[dataOff + 40] = z13p2 + z2p2;
+    data[dataOff + 24] = z13p2 - z2p2;
+    data[dataOff + 8] = z11p2 + z4p2;
+    data[dataOff + 56] = z11p2 - z4p2;
+    dataOff++;
+  }
+}
+
+function huffman(counts, values) {
+  const codes = new Uint16Array(256);
+  const lengths = new Uint8Array(256);
+  let code = 0;
+  let position = 0;
+  for (let length = 1; length <= 16; length++) {
+    for (let index = 0; index < counts[length]; index++) {
+      const value = values[position++];
+      codes[value] = code++;
+      lengths[value] = length;
+    }
+    code *= 2;
+  }
+  return {
+    codes,
+    lengths
+  };
+}
+
+const ydc = huffman(stdDcLuminanceNrCodes, stdDcLuminanceValues);
+
+const yac = huffman(stdAcLuminanceNrCodes, stdAcLuminanceValues);
+
+const uvdc = huffman(stdDcChrominanceNrCodes, stdDcChrominanceValues);
+
+const uvac = huffman(stdAcChrominanceNrCodes, stdAcChrominanceValues);
+
+function encodeJpeg(rgb, width, height) {
+  if (!Number.isInteger(width) || width <= 0 || width > 65535 || !Number.isInteger(height) || height <= 0 || height > 65535) {
+    throw new RangeError("JPEG dimensions must be integers between 1 and 65535");
+  }
+  if (rgb.length !== width * height * 3) throw new RangeError("JPEG RGB channel length does not match dimensions");
+  const output = new PdfStream;
+  const word = value => {
+    output.putByte(value >>> 8);
+    output.putByte(value & 255);
+  };
+  const yTable = new Uint8Array(64);
+  const uvTable = new Uint8Array(64);
+  const fy = new Float32Array(64);
+  const fuv = new Float32Array(64);
+  for (let i = 0; i < 64; i++) {
+    yTable[_zigzag[i]] = Math.max(1, Math.floor((yqt[i] * 20 + 50) / 100));
+    uvTable[_zigzag[i]] = Math.max(1, Math.floor((uvqt[i] * 20 + 50) / 100));
+  }
+  for (let i = 0; i < 64; i++) {
+    const scale = aasf[i >> 3] * aasf[i & 7] * 8;
+    fy[i] = 1 / (yTable[_zigzag[i]] * scale);
+    fuv[i] = 1 / (uvTable[_zigzag[i]] * scale);
+  }
+  word(65496);
+  word(65504);
+  word(16);
+  output.putBytes(new Uint8Array([ 74, 70, 73, 70, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0 ]));
+  word(65499);
+  word(132);
+  output.putByte(0);
+  output.putBytes(yTable);
+  output.putByte(1);
+  output.putBytes(uvTable);
+  word(65472);
+  word(17);
+  output.putByte(8);
+  word(height);
+  word(width);
+  output.putBytes(new Uint8Array([ 3, 1, 17, 0, 2, 17, 1, 3, 17, 1 ]));
+  word(65476);
+  word(418);
+  const table = (id, counts, values) => {
+    output.putByte(id);
+    output.putBytes(counts.subarray(1));
+    output.putBytes(values);
+  };
+  table(0, stdDcLuminanceNrCodes, stdDcLuminanceValues);
+  table(16, stdAcLuminanceNrCodes, stdAcLuminanceValues);
+  table(1, stdDcChrominanceNrCodes, stdDcChrominanceValues);
+  table(17, stdAcChrominanceNrCodes, stdAcChrominanceValues);
+  word(65498);
+  word(12);
+  output.putBytes(new Uint8Array([ 3, 1, 0, 2, 17, 3, 17, 0, 63, 0 ]));
+  let byte = 0;
+  let bitPosition = 7;
+  const bits = (value, length) => {
+    for (let shift = length - 1; shift >= 0; shift--) {
+      byte |= (value >>> shift & 1) << bitPosition;
+      if (--bitPosition < 0) {
+        output.putByte(byte);
+        if (byte === 255) output.putByte(0);
+        byte = 0;
+        bitPosition = 7;
+      }
+    }
+  };
+  const symbol = (table, value) => {
+    bits(table.codes[value], table.lengths[value]);
+  };
+  const coefficients = new Int32Array(64);
+  const block = (data, factors, previous, dc, ac) => {
+    transform(data);
+    for (let i = 0; i < 64; i++) {
+      const value = data[i] * factors[i];
+      coefficients[_zigzag[i]] = Math.trunc(value + (value > 0 ? .5 : -.5));
+    }
+    const current = coefficients[0];
+    const difference = current - previous;
+    const magnitude = 32 - Math.clz32(Math.abs(difference));
+    symbol(dc, magnitude);
+    if (magnitude > 0) bits(difference < 0 ? difference + (1 << magnitude) - 1 : difference, magnitude);
+    let end = 63;
+    while (end > 0 && coefficients[end] === 0) end--;
+    let zeros = 0;
+    for (let i = 1; i <= end; i++) {
+      const value = coefficients[i];
+      if (value === 0) {
+        zeros++;
+        continue;
+      }
+      while (zeros >= 16) {
+        symbol(ac, 240);
+        zeros -= 16;
+      }
+      const size = 32 - Math.clz32(Math.abs(value));
+      symbol(ac, zeros << 4 | size);
+      bits(value < 0 ? value + (1 << size) - 1 : value, size);
+      zeros = 0;
+    }
+    if (end < 63) symbol(ac, 0);
+    return current;
+  };
+  const ydu = new Float32Array(64);
+  const udu = new Float32Array(64);
+  const vdu = new Float32Array(64);
+  let dcy = 0;
+  let dcu = 0;
+  let dcv = 0;
+  for (let y = 0; y < height; y += 8) {
+    for (let x = 0; x < width; x += 8) {
+      for (let pos = 0; pos < 64; pos++) {
+        const row = Math.min(y + (pos >> 3), height - 1);
+        const col = Math.min(x + (pos & 7), width - 1);
+        const offset = (row * width + col) * 3;
+        const r = rgb[offset];
+        const g = rgb[offset + 1];
+        const b = rgb[offset + 2];
+        ydu[pos] = (19595 * r + 38470 * g + 7471 * b + 32768 >> 16) - 128;
+        udu[pos] = (-11059 * r - 21709 * g + 32768 * b + 8421375 >> 16) - 128;
+        vdu[pos] = (32768 * r - 27439 * g - 5329 * b + 8421375 >> 16) - 128;
+      }
+      dcy = block(ydu, fy, dcy, ydc, yac);
+      dcu = block(udu, fuv, dcu, uvdc, uvac);
+      dcv = block(vdu, fuv, dcv, uvdc, uvac);
+    }
+  }
+  if (bitPosition < 7) bits((1 << bitPosition + 1) - 1, bitPosition + 1);
+  word(65497);
+  return output.take();
 }
 
 const LARGE_IMAGE_PIXELS = 4e6;
@@ -14383,21 +14652,20 @@ class ImageProvider {
   }
   resolve(size, dpi = null) {
     const effectiveDpi = validateDpi(dpi ?? this.dpi);
-    if (effectiveDpi === null || size === undefined) {
-      let image = this.cache.get(0);
-      if (image === undefined) {
-        image = this.buildImage();
-        this.cache.set(0, image);
+    let width = 0;
+    if (effectiveDpi !== null && size !== undefined) {
+      if (!Number.isFinite(size.x) || size.x < 0 || !Number.isFinite(size.y) || size.y < 0) {
+        throw new RangeError("Image resolve size must be finite and non-negative");
       }
-      return image;
+      const target = Math.trunc(size.x / PageUnit.inch * effectiveDpi);
+      if (target > 0 && target < this.width && this.sourceWidth > 0) {
+        width = Math.max(1, Math.floor(target * this.sourceWidth / this.width));
+        if (width >= this.sourceWidth) width = 0;
+      }
     }
-    if (!Number.isFinite(size.x) || size.x < 0 || !Number.isFinite(size.y) || size.y < 0) {
-      throw new RangeError("Image resolve size must be finite and non-negative");
-    }
-    const width = Math.max(1, Math.trunc(size.x / PageUnit.inch * effectiveDpi));
     let image = this.cache.get(width);
     if (image === undefined) {
-      image = this.buildImage(width);
+      image = this.buildImage(width === 0 ? undefined : width);
       this.cache.set(width, image);
     }
     return image;
@@ -14447,11 +14715,10 @@ class MemoryImage extends ImageProvider {
         });
       }
       const decoded = decodeJpeg(this.bytes, width);
+      const jpeg = encodeJpeg(decoded.rgb, decoded.width, decoded.height);
       return new PdfImage({
-        rgb: decoded.rgb,
-        alpha: null,
-        width: decoded.width,
-        height: decoded.height,
+        jpeg,
+        info: parseJpeg(jpeg),
         orientation: this.orientation
       });
     }

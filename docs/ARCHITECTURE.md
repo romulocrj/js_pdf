@@ -17,6 +17,10 @@ only globals it may touch are:
 `Set` `Uint8Array` `DataView` `ArrayBuffer` `Error` `TypeError` `RangeError`
 `JSON` `parseInt` `parseFloat` `Infinity`
 
+Typed numeric workspaces (`Int32Array`, `Uint16Array`, `Float32Array` and
+`Float64Array`) are also used by the image/font codecs; binary boundaries
+remain `Uint8Array`.
+
 Forbidden anywhere in `src/`, without exception:
 
 | Category | Examples |
@@ -351,3 +355,18 @@ produces byte-identical PDFs to `src/`. The tests import `src/index.ts` directly
 8. **Update [PORTING-STATUS.md](PORTING-STATUS.md) and [ROADMAP.md](ROADMAP.md).**
    This is not optional — those two files are how the next session knows where
    the work stands.
+
+## Image DPI encoding
+
+Providers resolve DPI against displayed width and translate that target back
+to the stored pixel axis for rotated resources. Zero/subpixel targets, unknown
+source width and targets at or above source resolution retain the original.
+The original cache entry never blocks a later reduction.
+
+JPEG reduction decodes into a typed RGB buffer and re-encodes with the
+quality-90, baseline 4:4:4 path from Dart's `image` encoder. No EXIF is copied;
+orientation stays on the resource rather than being baked into the pixels.
+The encoder uses fixed-size typed block workspaces and `PdfStream` for
+geometrically growing output. This avoids retaining raw RGB on the resulting
+resource, but decoding and encoding still temporarily need pixel buffers.
+Omitting DPI preserves original JPEG bytes losslessly.

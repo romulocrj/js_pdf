@@ -4,7 +4,7 @@ Ordered plan for the port dart_pdf-master. Current coverage is in
 [PORTING-STATUS.md](PORTING-STATUS.md); conventions are in
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**Last updated:** 2026-08-06
+**Last updated:** 2026-09-29
 
 
 **Important** if you find an issue in the original code, correct it in the port and document it in [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md) with brief instructions for reproducing and correcting it.
@@ -258,10 +258,72 @@ runtime scope or format limits; no unresolved port-gap marker remains.
 
 ## Next step
 
-> **The implementation roadmap and the high-impact upstream parity audit are
-> complete.** The image-decoration, SVG-gradient and final marker-audit
-> follow-ups are also complete. Define and document a new phase before
-> expanding a narrower remaining surface such as CFF/PostScript fonts.
+> **Phase 6.1 — image DPI/JPEG — implemented; awaiting PR review and merge.**
+> Start phase 6.2 only after that merge. Each domain gets one PR against the
+> updated main branch; do not stack PRs or merge automatically.
+
+## Phase 6 — remaining compatibility and upstream follow-up
+
+Approved scope: all items from the 2026-09-28 audit, keeping the existing
+exclusions. Audit reference: `DavBfr/dart_pdf@b97c4a63dc`. This records the
+comparison point; it does not assert blanket parity with that revision.
+
+Before each behavior change, add and run its regression test to demonstrate
+the missing behavior. Every PR must then pass `npm run verify` and
+`npm run examples`, refresh committed bundles and the example report, and
+update this roadmap and PORTING-STATUS. Optimization PRs also need measured
+benchmarks with unchanged behavior.
+
+Every PR also adds a focused, reproducible example. Visual examples belong in
+`examples/Browser.html` and `examples/run-phase-examples.mjs`, using the same
+exported generator in both environments. Nonvisual APIs need executable
+assertions, and performance work needs a benchmark runner. Keep the asset
+credits and licenses alongside the example.
+
+| Order | Domain / scope | State |
+|---|---|---|
+| 6.1 | Images: DPI guards, cache, rotated axes, JPEG quality-90 re-encoding, EXIF stripping on re-encoding, CMYK decode regression | Implemented; pending merge |
+| 6.2 | Charts: full-circle pie rounding tolerance (`80daf820cd`) | Pending |
+| 6.3 | Pages: apply `PageTheme.clip`, expand upstream paper formats | Pending |
+| 6.4 | Text: `LineSplitter`, CJK break customization and hyphenation | Pending |
+| 6.5 | Serialization: synchronous output destinations and lazy JPEG writers | Pending |
+| 6.6 | Performance: unchanged `BoxConstraints` reuse, Flex copies, ASCII single-word path; benchmark in V8 | Pending |
+| 6.7 | Colors: color value types, named constants, DeviceGray, CMYK and upstream color conversions | Pending |
+| 6.8 | Fonts: simple TrueType compatibility mode and CFF/PostScript support | Pending |
+| 6.9 | Layout: directional geometry, RTL Flex/tables, baseline alignment | Pending |
+| 6.10 | PDF objects: text-note annotations, complete annotation borders and public generic form XObjects | Pending |
+| 6.11 | PDF/A: output intents and required conformance integration over the font/color work | Pending |
+| 6.12 | API conveniences: `DefaultTextStyle.merge` and the remaining listed compatibility aliases | Pending |
+
+The boundaries may be split into smaller PRs within the same domain where
+needed for review. Only one PR is open at a time. Do not expand into reading
+PDFs, rasterization, crypto/signatures, full EXIF metadata or platform shims.
+
+### 6.1 Images — implementation and validation
+
+Ports the DPI corrections from `e2e3974f32`, `94e93729fc`, and the zero-target
+regression `b9b34aebf9`. A synchronous RGB JPEG encoder translates the 4:4:4
+path of `brendan-duncan/image@82ae9fc9053a9d9d899a3a353908e4cce3b925f1`,
+which dart_pdf delegates to. No runtime dependency or host API is introduced.
+The decoder leaves pixels unrotated, so this port explicitly maps displayed
+width to stored pixel width and retains orientation on the image resource.
+
+Original JPEGs pass through when DPI would not reduce them. Reduced JPEGs
+are re-encoded at quality 90 without source EXIF. PNG/Raw alpha is preserved.
+Real CMYK fixtures found an existing decoder helper-scope error, fixed here.
+Tests cover degenerate sizes, original/reduced cache order, all orientations,
+RGB/gray/CMYK/progressive JPEGs, PNG alpha, PDF DCT operators, encoder padding
+and a 64 MB heap limit. Existing image tests remain, with the obsolete raw-RGB
+expectation updated to require JPEG compression.
+
+**Example gate:** all eight upstream examples continue to generate.
+`examples/image-dpi-phase-6.1.mjs` adds a three-page visual proof: original vs.
+72/288 DPI JPEGs with actual pixel/byte counts, eight orientations using an
+asymmetric pattern, and PNG alpha on pale/dark backgrounds. It is included in
+`npm run phase-examples` and the **Image DPI & JPEG** card in `Browser.html`.
+The two local assets are original Apache-2.0 artwork with an optional Pillow
+regeneration script; no Python dependency is needed to run the example.
+
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
 out of scope, and the complete upstream example set still generates end to end.

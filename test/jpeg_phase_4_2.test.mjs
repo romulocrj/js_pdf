@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Pdf from '../src/index.ts';
 import { replaceFrameMarker } from '../examples/jpeg-phase-4.2.mjs';
+import { decodeJpeg } from '../src/pdf/image/jpeg_decoder.ts';
 
 const PROFILE = new Uint8Array(readFileSync(new URL('../examples/assets/profile.jpg', import.meta.url)));
 const PROGRESSIVE = new Uint8Array(Buffer.from(
@@ -109,12 +110,12 @@ test('EXIF orientation is parsed and swaps the public dimensions', () => {
   assert.deepEqual([image.width, image.height], [9, 17]);
 });
 
-test('JPEG dpi decodes and resamples instead of embedding the full source', () => {
+test('JPEG dpi resamples and retains JPEG compression instead of raw RGB', () => {
   const provider = new Pdf.MemoryImage(PROFILE, { dpi: 72 });
   const image = provider.resolve({ x: 10, y: 10 });
   assert.deepEqual([image.sourceWidth, image.sourceHeight], [10, 10]);
-  assert.equal(image.jpeg, null);
-  assert.equal(image.channel('rgb').length, 300);
+  assert.ok(image.jpeg instanceof Uint8Array);
+  assert.equal(decodeJpeg(image.jpeg).rgb.length, 300);
 });
 
 test('the phase example replaces only a real JPEG frame marker', () => {

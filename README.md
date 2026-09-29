@@ -229,3 +229,18 @@ upstream Dart sources it derives from in its header.
 
 This software is provided “as is”, without warranties of any kind. No support
 is provided or implied.
+
+### Image resolution
+
+`Image`, `DecorationImage` and image providers accept a `dpi` setting. It
+reduces images to their displayed resolution without enlarging the source.
+Reduced JPEGs stay JPEG-compressed at quality 90 (lossy) and omit source EXIF
+metadata. Without reduction, the original JPEG bytes are embedded unchanged.
+PNG and raw-image reductions preserve their alpha channel.
+
+Review the three-page **Image DPI & JPEG** example in
+[the browser gallery](examples/Browser.html), or run `npm run phase-examples`
+and open `examples/out/image-dpi-phase-6.1.pdf`. It compares original and
+reduced JPEGs, all eight orientations, and PNG transparency on two backgrounds.
+To serve the local gallery, run `python3 -m http.server 8000` from the repository
+root and open `http://localhost:8000/examples/Browser.html` after building.

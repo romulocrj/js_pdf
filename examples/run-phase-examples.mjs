@@ -19,6 +19,7 @@ import { generateClippingPhase310 } from './clipping-phase-3.10.mjs';
 import { generatePngPhase41 } from './png-phase-4.1.mjs';
 import { generateJpegPhase42 } from './jpeg-phase-4.2.mjs';
 import { generateImagePhase43 } from './image-phase-4.3.mjs';
+import { generateImageDpiPhase61 } from './image-dpi-phase-6.1.mjs';
 import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
 import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
 import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
@@ -29,6 +30,11 @@ import { generateWidgetsPhase57 } from './widgets-phase-5.7.mjs';
 
 const materialIcons = new Uint8Array(
   await readFile(new URL('./assets/MaterialIcons.ttf', import.meta.url))
+);
+
+const [dpiJpeg, dpiPng] = await Promise.all(
+  ['dpi-pattern.jpg', 'dpi-alpha.png'].map(name =>
+    readFile(new URL(`./assets/${name}`, import.meta.url)).then(bytes => new Uint8Array(bytes)))
 );
 
 const examples = [
@@ -46,6 +52,7 @@ const examples = [
   ['png-phase-4.1', generatePngPhase41],
   ['jpeg-phase-4.2', generateJpegPhase42],
   ['image-phase-4.3', generateImagePhase43],
+  ['image-dpi-phase-6.1', () => generateImageDpiPhase61({ jpeg: dpiJpeg, png: dpiPng })],
   ['charts-phase-5.1', generateChartsPhase51],
   ['barcode-phase-5.2', generateBarcodePhase52],
   ['annotations-phase-5.3', generateAnnotationsPhase53],
