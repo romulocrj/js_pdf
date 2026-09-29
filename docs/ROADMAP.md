@@ -258,9 +258,11 @@ runtime scope or format limits; no unresolved port-gap marker remains.
 
 ## Next step
 
-> **Phases 6.8 + 6.10 + 6.12 — implemented together at user request; awaiting PR review and merge.**
-> Phases 6.1–6.7 merged in PRs #5–#11. After this combined PR merges, resume at 6.9 (directional layout), then 6.11 (PDF/A). Use the
-> updated main branch; do not stack PRs or merge automatically.
+> **Next implementation phase: 6.9 — directional layout, RTL Flex/tables and baseline alignment.**
+> Phases 6.1–6.7 merged in PRs #5–#11; 6.8 + 6.10 + 6.12 merged together in
+> PR #12. Prepare the next npm release before resuming implementation; 6.11
+> (PDF/A) follows 6.9. Use the updated main branch; do not stack PRs or merge
+> automatically.
 
 ## Phase 6 — remaining compatibility and upstream follow-up
 
@@ -289,11 +291,11 @@ credits and licenses alongside the example.
 | 6.5 | Serialization: synchronous output destinations and lazy JPEG writers | Merged in PR #9 |
 | 6.6 | Performance: unchanged `BoxConstraints` reuse, Flex copies, ASCII single-word path; benchmark in V8 | Merged in PR #10 |
 | 6.7 | Colors: color value types, named constants, DeviceGray, CMYK and upstream color conversions | Merged in PR #11 |
-| 6.8 | Fonts: simple TrueType compatibility mode and CFF/PostScript support | Implemented; combined PR pending merge |
+| 6.8 | Fonts: simple TrueType compatibility mode and CFF/PostScript support | Merged together in PR #12 |
 | 6.9 | Layout: directional geometry, RTL Flex/tables, baseline alignment | Pending |
-| 6.10 | PDF objects: text-note annotations, complete annotation borders and public generic form XObjects | Implemented; combined PR pending merge |
+| 6.10 | PDF objects: text-note annotations, complete annotation borders and public generic form XObjects | Merged together in PR #12 |
 | 6.11 | PDF/A: output intents and required conformance integration over the font/color work | Pending |
-| 6.12 | API conveniences: `DefaultTextStyle.merge` and the remaining listed compatibility aliases | Implemented; combined PR pending merge |
+| 6.12 | API conveniences: `DefaultTextStyle.merge` and the remaining listed compatibility aliases | Merged together in PR #12 |
 
 The boundaries may be split into smaller PRs within the same domain where
 needed for review. Only one PR is open at a time. Do not expand into reading
@@ -479,7 +481,7 @@ after phase 6.6 in Browser.html and the phase runner. No new assets or licenses.
 
 ### 6.8 + 6.10 + 6.12 — fonts, PDF objects and API conveniences
 
-Grouped in one PR at the user's explicit request, after PR #11 merged.
+Merged together in PR #12 at the user's explicit request, after PR #11.
 
 - **6.8:** `Document({ simpleTrueTypeFonts: true })`, explicit per-font
   `Font.ttf(bytes, { unicode: false })`, and `PdfTtfFont` support

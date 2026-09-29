@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Version numbers below 1.0.0 do not guarantee a stable public API.
 
+## [Unreleased]
+
+### Added
+
+- DPI-aware image resizing, caching and quality-90 JPEG re-encoding.
+- Page clipping and additional paper formats; configurable CJK line breaking
+  and caller-supplied hyphenation.
+- Synchronous output destinations and lazy JPEG serialization.
+- Named color palettes, DeviceGray/DeviceCMYK output and HSV/HSL/RYB conversions.
+- Optional simple TrueType/WinAnsi encoding, including the document-level
+  `simpleTrueTypeFonts` setting, and full-program OpenType CFF1 embedding for
+  name-keyed and CID-keyed fonts. Unicode TrueType subsetting stays the default.
+- Text-note annotations, annotation border styles and reusable `PdfFormXObject`
+  resources with nested forms and field appearances.
+- `DefaultTextStyle.merge`, `PdfPageFormat`, `ChartValue`/`LineChartValue`,
+  `PdfDict.merge` and `PdfArray.uniq`.
+- Focused examples for the implemented phase-6 work, shared by the browser
+  gallery and Node runner, with third-party font provenance and licenses.
+
+### Fixed
+
+- Rotated image DPI calculations, CMYK JPEG decoding and full-circle pie rounding.
+
+### Changed
+
+- Reduced layout allocations and added an ASCII single-word text fast path.
+- Minified bundle size increased from 405,510 bytes in 0.1.6 to 450,928 bytes
+  (+11.20%), with no runtime dependencies or embedded example fonts.
+
+### Limitations
+
+- Directional geometry, RTL Flex/table layout, baseline alignment and PDF/A
+  integration remain unimplemented.
+- CFF1 and simple TrueType embed the entire font program. CFF ink bounds are
+  approximate; CFF subsetting, CFF2, variable-font instancing and raw Type1/PFB
+  embedding are not supported.
+
 ## [0.1.6] - 2026-08-06
 
 **First release candidate, and the first version published to npm.**
@@ -87,6 +124,7 @@ were never published to npm. They are recorded here for provenance only.
 - Third-party font licenses and notices added for the bundled example
   resources.
 
+[Unreleased]: https://github.com/romulocrj/js_pdf/compare/v0.1.6...HEAD
 [0.1.6]: https://github.com/romulocrj/js_pdf/releases/tag/v0.1.6
 [0.1.5]: https://github.com/romulocrj/js_pdf/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/romulocrj/js_pdf/compare/v0.1.3...v0.1.4

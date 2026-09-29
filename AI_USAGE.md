@@ -7,6 +7,14 @@ the original Dart package is useful for choosing widgets and composing a
 document. Use that knowledge as a design guide, then apply the JavaScript rules
 below.
 
+## Version scope
+
+This guide describes the current repository, including phases 6.1–6.8, 6.10
+and 6.12. Those additions are not available in npm release 0.1.6. Check the
+installed package version and declarations before using the newer APIs.
+The remaining phase-6 gaps are directional geometry, RTL Flex/table layout
+and baseline alignment (6.9), and PDF/A integration (6.11).
+
 ## Install and import specifier
 
 ```sh
@@ -755,7 +763,14 @@ recompressed, and the XMP metadata packet is always left plain.
 
 - Library code is synchronous and host-neutral.
 - `Page.build` returns one widget; `MultiPage.build` returns an array.
-- Coordinates and widget layout are top-left with the y-axis pointing down.
+- Widget layout uses top-left coordinates with the y-axis pointing down.
+  Low-level `PdfCanvas` operations, including `drawForm`, use PDF user
+  coordinates (bottom-left, y-up); respect transforms installed by widgets.
+- Directional geometry, RTL Flex/table layout and baseline alignment are not
+  implemented. Existing text bidi/Arabic shaping and icon mirroring do not
+  imply support for those layout features.
+- PDF/A integration and output intents are not implemented. Supplying XMP or
+  using CMYK does not establish PDF/A conformance.
 - Reading or rasterizing existing PDFs is not supported.
 - Encryption, digital signatures and `Signature` are out of scope.
 - An indivisible widget or table row taller than a complete page cannot paginate.
