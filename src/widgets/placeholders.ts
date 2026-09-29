@@ -19,8 +19,8 @@
  * replay cannot advance caller-supplied random state or change page geometry.
  */
 
-import { normalizeColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { normalizePaintColor } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import { BoxConstraints } from './geometry.ts';
 import { SvgImage } from './svg.ts';
 import type { BoxFit } from './svg.ts';
@@ -45,7 +45,7 @@ export interface PlaceholderOptions {
 
 /** A crossed box used when a visual resource is deliberately absent. */
 export class Placeholder extends Widget<null> {
-  readonly color: Rgb;
+  readonly color: PaintColor;
   readonly strokeWidth: number;
   readonly fallbackWidth: number;
   readonly fallbackHeight: number;
@@ -57,7 +57,7 @@ export class Placeholder extends Widget<null> {
     fallbackHeight = 400
   }: PlaceholderOptions = {}) {
     super();
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
     this.strokeWidth = Number(strokeWidth);
     this.fallbackWidth = Number(fallbackWidth);
     this.fallbackHeight = Number(fallbackHeight);
@@ -87,12 +87,12 @@ export interface PdfLogoOptions {
 }
 
 export class PdfLogo extends StatelessWidget {
-  readonly color: Rgb;
+  readonly color: PaintColor;
   readonly fit: BoxFit;
 
   constructor({ color = '#ff0000', fit = 'contain' }: PdfLogoOptions = {}) {
     super();
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
     this.fit = fit;
   }
 

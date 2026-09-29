@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import type { AnnotationBuilder } from './annotations.ts';
@@ -85,7 +85,7 @@ export interface TextOptions {
 export interface ResolvedTextStyle {
     readonly font: PdfFont;
     readonly fontSize: number;
-    readonly color: Rgb;
+    readonly color: PaintColor;
     readonly lineAdvance: number;
     readonly lineSpacing: number;
     readonly letterSpacing: number;
@@ -93,7 +93,7 @@ export interface ResolvedTextStyle {
     readonly baseline: number;
     readonly background: TextStyle['background'];
     readonly decorations: readonly TextDecorationName[];
-    readonly decorationColor: Rgb;
+    readonly decorationColor: PaintColor;
     readonly decorationStyle: 'solid' | 'double';
     readonly decorationThickness: number;
 }

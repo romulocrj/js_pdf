@@ -19,8 +19,8 @@
  */
 
 import { assertFiniteNumber } from '../base/assert.ts';
-import { normalizeColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { normalizePaintColor } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import { PdfGraphicState } from '../pdf/graphic_state.ts';
 import type { PdfCanvas } from '../pdf/graphics.ts';
 import {
@@ -335,7 +335,7 @@ export class Divider extends Widget<null> {
   readonly thickness: number;
   readonly indent: number;
   readonly endIndent: number;
-  readonly color: Rgb;
+  readonly color: PaintColor;
   readonly borderStyle: BorderStyle;
 
   constructor({
@@ -351,7 +351,7 @@ export class Divider extends Widget<null> {
     this.thickness = Math.max(0, Number(thickness));
     this.indent = Math.max(0, Number(indent));
     this.endIndent = Math.max(0, Number(endIndent));
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
     this.borderStyle = new BorderSide({ style: borderStyle }).style;
   }
 
@@ -1112,7 +1112,7 @@ export class VerticalDivider extends Widget<null> {
   readonly thickness: number;
   readonly indent: number;
   readonly endIndent: number;
-  readonly color: Rgb;
+  readonly color: PaintColor;
 
   constructor({
     width = DEFAULT_DIVIDER_HEIGHT,
@@ -1126,7 +1126,7 @@ export class VerticalDivider extends Widget<null> {
     this.thickness = Math.max(0, assertFiniteNumber(Number(thickness), 'divider thickness'));
     this.indent = Math.max(0, assertFiniteNumber(Number(indent), 'divider indent'));
     this.endIndent = Math.max(0, assertFiniteNumber(Number(endIndent), 'divider endIndent'));
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
   }
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<null> {

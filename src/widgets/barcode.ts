@@ -23,7 +23,7 @@ import type { Barcode } from '../barcode/barcode.ts';
 import { BarcodeBar, BarcodeText } from '../barcode/barcode_operations.ts';
 import type { BarcodeElement } from '../barcode/barcode_operations.ts';
 import type { ColorInput } from '../pdf/color.ts';
-import { normalizeColor } from '../pdf/color.ts';
+import { normalizePaintColor } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
 import { Padding, SizedBox } from './basic.ts';
 import { DecoratedBox } from './container.ts';
@@ -64,7 +64,7 @@ interface BarcodeLayoutData {
 class BarcodePainter extends Widget<BarcodeLayoutData> {
   readonly data: string | Uint8Array;
   readonly barcode: Barcode;
-  readonly color: ReturnType<typeof normalizeColor>;
+  readonly color: ReturnType<typeof normalizePaintColor>;
   readonly drawText: boolean;
   readonly textStyle: TextStyle;
   readonly textPadding: number;
@@ -80,7 +80,7 @@ class BarcodePainter extends Widget<BarcodeLayoutData> {
     super();
     this.data = data;
     this.barcode = barcode;
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
     this.drawText = drawText;
     this.textStyle = textStyle;
     this.textPadding = textPadding;

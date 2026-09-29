@@ -19,8 +19,8 @@
  */
 
 import { assertFiniteNumber } from '../base/assert.ts';
-import { normalizeColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { normalizePaintColor } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import { Opacity, Transform } from './basic.ts';
 import type { Font } from './font.ts';
 import { RichText, TextSpan } from './text.ts';
@@ -60,13 +60,13 @@ export interface IconThemeDataOptions {
 
 /** Defaults inherited by icon widgets through `ThemeData`. */
 export class IconThemeData {
-  readonly color: Rgb | null;
+  readonly color: PaintColor | null;
   readonly opacity: number | null;
   readonly size: number | null;
   readonly font: Font | null;
 
   constructor({ color = null, opacity = null, size = null, font = null }: IconThemeDataOptions = {}) {
-    this.color = color === null ? null : normalizeColor(color);
+    this.color = color === null ? null : normalizePaintColor(color);
     this.opacity = opacity === null ? null : assertFiniteNumber(Number(opacity), 'icon opacity');
     this.size = size === null ? null : assertFiniteNumber(Number(size), 'icon size');
     this.font = font;
@@ -103,7 +103,7 @@ export interface IconOptions {
 export class Icon extends StatelessWidget {
   readonly icon: IconData;
   readonly size: number | null;
-  readonly color: Rgb | null;
+  readonly color: PaintColor | null;
   readonly textDirection: TextDirection | null;
   readonly font: Font | null;
 
@@ -117,7 +117,7 @@ export class Icon extends StatelessWidget {
     if (!(icon instanceof IconData)) throw new TypeError('Icon expects an IconData value');
     this.icon = icon;
     this.size = size === null ? null : assertFiniteNumber(Number(size), 'icon size');
-    this.color = color === null ? null : normalizeColor(color);
+    this.color = color === null ? null : normalizePaintColor(color);
     this.textDirection = textDirection;
     this.font = font;
     if (this.size !== null && this.size < 0) throw new RangeError('icon size cannot be negative');

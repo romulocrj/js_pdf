@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfFormHighlighting, PdfTextFieldAlign } from '../pdf/obj/annotation.ts';
 import type { InsetsInput } from './geometry.ts';
 import { TextStyle } from './text_style.ts';
@@ -44,9 +44,9 @@ export declare class Checkbox extends Widget<null> {
     readonly tristate: boolean;
     readonly width: number;
     readonly height: number;
-    readonly activeColor: Rgb;
-    readonly checkColor: Rgb;
-    readonly borderColor: Rgb;
+    readonly activeColor: PaintColor;
+    readonly checkColor: PaintColor;
+    readonly borderColor: PaintColor;
     constructor({ name, value, tristate, width, height, activeColor, checkColor, borderColor }: CheckboxOptions);
     layout(_context: RenderContext, constraints: Constraints): LayoutBox<null>;
     paint(context: RenderContext, box: PositionedBox<null>): void;
@@ -65,10 +65,10 @@ export interface FlatButtonOptions {
 export declare class FlatButton extends Widget<FormLayoutData> {
     readonly name: string;
     readonly childWidget: AnyWidget;
-    readonly textColor: Rgb;
-    readonly color: Rgb;
-    readonly colorDown: Rgb;
-    readonly colorRollover: Rgb;
+    readonly textColor: PaintColor;
+    readonly color: PaintColor;
+    readonly colorDown: PaintColor;
+    readonly colorRollover: PaintColor;
     readonly padding: InsetsInput;
     readonly fieldFlags: readonly PdfFieldFlag[];
     constructor({ name, child, textColor, color, colorDown, colorRollover, padding, fieldFlags }: FlatButtonOptions);

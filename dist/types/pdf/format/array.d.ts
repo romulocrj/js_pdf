@@ -1,3 +1,4 @@
+import type { ColorInput } from '../color.ts';
 import { PdfDataType } from './base.ts';
 import type { PdfIndirect } from './indirect.ts';
 import type { PdfStream } from './stream.ts';
@@ -15,6 +16,7 @@ export declare class PdfArray extends PdfDataType {
     static fromNum(values: readonly number[]): PdfArray;
     /** `[5 0 R 9 0 R]` — the `/Kids` and `/Contents` shape. */
     static fromObjects(objects: readonly PdfReferenceable[]): PdfArray;
+    static fromColor(color: ColorInput): PdfArray;
     get length(): number;
     add(value: PdfDataType): void;
     output(s: PdfStream): void;

@@ -15,8 +15,8 @@
  *   - pdf/lib/src/widgets/container.dart
  */
 
-import { normalizeColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { normalizePaintColor } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import { resolveBasicAlignment } from './basic.ts';
 import type { BasicAlignmentInput } from './basic.ts';
 import { BoxDecoration, normalizeBoxDecoration } from './decoration.ts';
@@ -110,8 +110,8 @@ export class Container extends SpanningWidget<ContainerLayoutData, ContainerStat
   readonly height: number | null;
   readonly padding: Insets;
   readonly margin: Insets;
-  readonly background: Rgb | null;
-  readonly borderColor: Rgb | null;
+  readonly background: PaintColor | null;
+  readonly borderColor: PaintColor | null;
   readonly borderWidth: number;
   readonly decoration: BoxDecoration | null;
   readonly foregroundDecoration: BoxDecoration | null;
@@ -142,8 +142,8 @@ export class Container extends SpanningWidget<ContainerLayoutData, ContainerStat
     this.height = height == null ? null : Number(height);
     this.padding = normalizeInsets(padding);
     this.margin = normalizeInsets(margin);
-    this.background = background == null ? null : normalizeColor(background);
-    this.borderColor = borderColor == null ? null : normalizeColor(borderColor);
+    this.background = background == null ? null : normalizePaintColor(background);
+    this.borderColor = borderColor == null ? null : normalizePaintColor(borderColor);
     this.borderWidth = Number(borderWidth);
     this.decoration = normalizeBoxDecoration(decoration);
     this.foregroundDecoration = normalizeBoxDecoration(foregroundDecoration);

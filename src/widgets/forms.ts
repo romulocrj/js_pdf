@@ -19,8 +19,8 @@
  * content so empty fields remain visible in readers that hide annotations.
  */
 
-import { normalizeColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { normalizePaintColor } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import { PdfCanvas } from '../pdf/graphics.ts';
 import type {
   PdfFormAppearance,
@@ -206,9 +206,9 @@ export class Checkbox extends Widget<null> {
   readonly tristate: boolean;
   readonly width: number;
   readonly height: number;
-  readonly activeColor: Rgb;
-  readonly checkColor: Rgb;
-  readonly borderColor: Rgb;
+  readonly activeColor: PaintColor;
+  readonly checkColor: PaintColor;
+  readonly borderColor: PaintColor;
 
   constructor({
     name,
@@ -226,9 +226,9 @@ export class Checkbox extends Widget<null> {
     this.tristate = Boolean(tristate);
     this.width = Number(width);
     this.height = Number(height);
-    this.activeColor = normalizeColor(activeColor);
-    this.checkColor = normalizeColor(checkColor);
-    this.borderColor = normalizeColor(borderColor);
+    this.activeColor = normalizePaintColor(activeColor);
+    this.checkColor = normalizePaintColor(checkColor);
+    this.borderColor = normalizePaintColor(borderColor);
   }
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<null> {
@@ -268,9 +268,9 @@ function paintCheckbox(
   width: number,
   height: number,
   selected: boolean,
-  activeColor: Rgb,
-  checkColor: Rgb,
-  borderColor: Rgb
+  activeColor: PaintColor,
+  checkColor: PaintColor,
+  borderColor: PaintColor
 ): void {
   context.canvas.fillRect(x, y, width, height, selected ? activeColor : '#ffffff');
   if (selected) {
@@ -281,15 +281,15 @@ function paintCheckbox(
 }
 
 class CheckboxAppearance extends Widget<null> {
-  private readonly activeColor: Rgb;
-  private readonly checkColor: Rgb;
-  private readonly borderColor: Rgb;
+  private readonly activeColor: PaintColor;
+  private readonly checkColor: PaintColor;
+  private readonly borderColor: PaintColor;
   private readonly selected: boolean;
 
   constructor(
-    activeColor: Rgb,
-    checkColor: Rgb,
-    borderColor: Rgb,
+    activeColor: PaintColor,
+    checkColor: PaintColor,
+    borderColor: PaintColor,
     selected: boolean
   ) {
     super();
@@ -324,10 +324,10 @@ export interface FlatButtonOptions {
 export class FlatButton extends Widget<FormLayoutData> {
   readonly name: string;
   readonly childWidget: AnyWidget;
-  readonly textColor: Rgb;
-  readonly color: Rgb;
-  readonly colorDown: Rgb;
-  readonly colorRollover: Rgb;
+  readonly textColor: PaintColor;
+  readonly color: PaintColor;
+  readonly colorDown: PaintColor;
+  readonly colorRollover: PaintColor;
   readonly padding: InsetsInput;
   readonly fieldFlags: readonly PdfFieldFlag[];
 
@@ -344,15 +344,15 @@ export class FlatButton extends Widget<FormLayoutData> {
     super();
     this.name = requireName(name);
     this.childWidget = child;
-    this.textColor = normalizeColor(textColor);
-    this.color = normalizeColor(color);
-    this.colorDown = normalizeColor(colorDown);
-    this.colorRollover = normalizeColor(colorRollover);
+    this.textColor = normalizePaintColor(textColor);
+    this.color = normalizePaintColor(color);
+    this.colorDown = normalizePaintColor(colorDown);
+    this.colorRollover = normalizePaintColor(colorRollover);
     this.padding = padding;
     this.fieldFlags = fieldFlags;
   }
 
-  private child(color: Rgb = this.color): AnyWidget {
+  private child(color: PaintColor = this.color): AnyWidget {
     return new Container({
       background: color,
       padding: this.padding,
@@ -448,10 +448,10 @@ export class TextField extends Widget<FormLayoutData> {
       mappingName: this.options.mappingName ?? null,
       fieldFlags: fieldFlagsValue(this.options.fieldFlags ?? []),
       textAlign: this.options.textAlign ?? null,
-      borderColor: this.options.color == null ? null : normalizeColor(this.options.color),
+      borderColor: this.options.color == null ? null : normalizePaintColor(this.options.color),
       backgroundColor: this.options.backgroundColor == null
         ? null
-        : normalizeColor(this.options.backgroundColor),
+        : normalizePaintColor(this.options.backgroundColor),
       highlighting: this.options.highlighting ?? null,
       font: style.font === null ? context.document.font : context.document.resolveFont(style.font),
       fontSize: style.fontSize ?? 12,

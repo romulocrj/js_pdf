@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput, PaintColor, Rgb } from '../pdf/color.ts';
 import type { PdfPoint, PdfRect } from '../pdf/rect.ts';
 import { BorderRadiusGeometry } from './border_radius.ts';
 import type { RadiusValue, TextDirection } from './border_radius.ts';
@@ -82,7 +82,7 @@ export interface BoxShadowOptions {
 }
 /** One vector shadow layer. */
 export declare class BoxShadow {
-    readonly color: Rgb;
+    readonly color: PaintColor;
     readonly offset: PdfPoint;
     readonly blurRadius: number;
     readonly spreadRadius: number;
@@ -101,7 +101,7 @@ export interface BoxDecorationOptions {
 }
 /** Background fill, gradient, shadows and foreground border for a box. */
 export declare class BoxDecoration {
-    readonly color: Rgb | null;
+    readonly color: PaintColor | null;
     readonly border: BoxBorder | null;
     readonly borderRadius: BorderRadiusGeometry | null;
     readonly boxShadow: readonly BoxShadow[];

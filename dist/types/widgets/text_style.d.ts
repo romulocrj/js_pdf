@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { BoxDecoration, BoxDecorationInput } from './decoration.ts';
 import { Font } from './font.ts';
 export type FontWeight = 'normal' | 'bold';
@@ -39,7 +39,7 @@ export interface TextStyleOptions {
 }
 export declare class TextStyle {
     readonly inherit: boolean;
-    readonly color: Rgb | null;
+    readonly color: PaintColor | null;
     readonly fontNormal: Font | null;
     readonly fontBold: Font | null;
     readonly fontItalic: Font | null;
@@ -54,7 +54,7 @@ export declare class TextStyle {
     readonly height: number | null;
     readonly background: BoxDecoration | null;
     readonly decoration: TextDecoration | null;
-    readonly decorationColor: Rgb | null;
+    readonly decorationColor: PaintColor | null;
     readonly decorationStyle: TextDecorationStyle | null;
     readonly decorationThickness: number | null;
     constructor({ inherit, color, font, fontNormal, fontBold, fontItalic, fontBoldItalic, fontFallback, fontSize, fontWeight, fontStyle, letterSpacing, wordSpacing, lineSpacing, height, background, decoration, decorationColor, decorationStyle, decorationThickness }?: TextStyleOptions);

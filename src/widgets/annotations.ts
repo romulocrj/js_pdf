@@ -18,8 +18,8 @@
  * serialized page; widgets never retain page or layout state.
  */
 
-import { normalizeColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { normalizeColor, normalizePaintColor } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfGeometricAnnotationKind } from '../pdf/obj/annotation.ts';
 import type { PdfPoint } from '../pdf/rect.ts';
 import type { PdfOutlineStyle } from '../pdf/obj/outline.ts';
@@ -186,8 +186,8 @@ export interface GeometricAnnotationOptions {
 
 abstract class GeometricAnnotationBuilder extends AnnotationBuilder {
   readonly shape: PdfGeometricAnnotationKind;
-  readonly color: Rgb | null;
-  readonly interiorColor: Rgb | null;
+  readonly color: PaintColor | null;
+  readonly interiorColor: PaintColor | null;
   readonly borderWidth: number;
   readonly author: string | null;
   readonly date: Date | null;
@@ -205,8 +205,8 @@ abstract class GeometricAnnotationBuilder extends AnnotationBuilder {
   }: GeometricAnnotationOptions = {}) {
     super();
     this.shape = shape;
-    this.color = color === null ? null : normalizeColor(color);
-    this.interiorColor = interiorColor === null ? null : normalizeColor(interiorColor);
+    this.color = color === null ? null : normalizePaintColor(color);
+    this.interiorColor = interiorColor === null ? null : normalizePaintColor(interiorColor);
     this.borderWidth = Number(border?.width ?? 1);
     if (!Number.isFinite(this.borderWidth) || this.borderWidth < 0) {
       throw new RangeError('Annotation border width must be a finite non-negative number');
@@ -219,8 +219,8 @@ abstract class GeometricAnnotationBuilder extends AnnotationBuilder {
 
   protected base(context: RenderContext, rect: AnnotationRect): {
     readonly rect: AnnotationRect;
-    readonly color: Rgb | null;
-    readonly interiorColor: Rgb | null;
+    readonly color: PaintColor | null;
+    readonly interiorColor: PaintColor | null;
     readonly borderWidth: number;
     readonly author: string | null;
     readonly subject: string | null;
@@ -412,7 +412,7 @@ export interface OutlineOptions extends AnchorOptions {
 export class Outline extends Anchor {
   readonly title: string;
   readonly level: number;
-  readonly color: Rgb | null;
+  readonly color: PaintColor | null;
   readonly style: PdfOutlineStyle;
 
   constructor({ title, level = 0, color = null, style = 'normal', ...anchor }: OutlineOptions) {
@@ -420,7 +420,7 @@ export class Outline extends Anchor {
     if (!Number.isInteger(level) || level < 0) throw new RangeError('Outline.level must be a non-negative integer');
     this.title = String(title);
     this.level = level;
-    this.color = color === null ? null : normalizeColor(color);
+    this.color = color === null ? null : normalizePaintColor(color);
     this.style = style;
   }
 
@@ -432,7 +432,7 @@ export class Outline extends Anchor {
       pageNumber: context.pageNumber,
       y: context.canvas.transformWidgetPoint(box.x, box.y).y,
       anchor: this.name,
-      color: this.color,
+      color: this.color === null ? null : normalizeColor(this.color),
       style: this.style
     });
   }

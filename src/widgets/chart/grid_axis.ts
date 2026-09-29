@@ -16,8 +16,8 @@
  */
 
 import { assertFiniteNumber } from '../../base/assert.ts';
-import { normalizeColor } from '../../pdf/color.ts';
-import type { ColorInput, Rgb } from '../../pdf/color.ts';
+import { normalizePaintColor } from '../../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../../pdf/color.ts';
 import { Transform } from '../basic.ts';
 import type { Axis } from '../flex.ts';
 import { Alignment, BoxConstraints } from '../geometry.ts';
@@ -86,11 +86,11 @@ export abstract class GridAxis {
   readonly margin: number | null;
   readonly marginStart: number;
   readonly marginEnd: number;
-  readonly color: Rgb;
+  readonly color: PaintColor;
   readonly width: number;
   readonly divisions: boolean;
   readonly divisionsWidth: number;
-  readonly divisionsColor: Rgb;
+  readonly divisionsColor: PaintColor;
   readonly divisionsDashed: boolean;
   readonly ticks: boolean;
   readonly axisTick: boolean | null;
@@ -119,11 +119,11 @@ export abstract class GridAxis {
     this.margin = margin === null ? null : Number(margin);
     this.marginStart = marginStart ?? 0;
     this.marginEnd = marginEnd ?? 0;
-    this.color = normalizeColor(color ?? CHART_BLACK);
+    this.color = normalizePaintColor(color ?? CHART_BLACK);
     this.width = width ?? 1;
     this.divisions = divisions ?? false;
     this.divisionsWidth = divisionsWidth ?? 0.5;
-    this.divisionsColor = normalizeColor(divisionsColor ?? GREY);
+    this.divisionsColor = normalizePaintColor(divisionsColor ?? GREY);
     this.divisionsDashed = divisionsDashed ?? false;
     this.ticks = ticks ?? false;
     this.axisTick = axisTick;

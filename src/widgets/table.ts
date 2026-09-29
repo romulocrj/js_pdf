@@ -20,8 +20,8 @@
  */
 
 import { assertFiniteNumber } from '../base/assert.ts';
-import { normalizeColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { normalizePaintColor } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import { BoxConstraints } from './geometry.ts';
 import { normalizeBoxDecoration } from './decoration.ts';
 import type { BoxDecorationInput } from './decoration.ts';
@@ -44,7 +44,7 @@ export interface TableBorderSideOptions {
 }
 
 export interface TableBorderSide {
-  readonly color: Rgb;
+  readonly color: PaintColor;
   readonly width: number;
 }
 
@@ -67,7 +67,7 @@ function side(input: TableBorderSideInput | undefined): TableBorderSide | null {
   if (width === 0) {
     return null;
   }
-  return { color: normalizeColor(input.color ?? '#000000'), width };
+  return { color: normalizePaintColor(input.color ?? '#000000'), width };
 }
 
 /** Exterior and interior rules for a table. */

@@ -19,8 +19,8 @@
  * port's widget protocol, which never retained mutable debug layout state.
  */
 
-import { isLightColor, normalizeColor } from '../../pdf/color.ts';
-import type { ColorInput, Rgb } from '../../pdf/color.ts';
+import { isLightColor, normalizePaintColor, samePaintColor } from '../../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../../pdf/color.ts';
 import { PdfGraphicState } from '../../pdf/graphic_state.ts';
 import { BoxConstraints } from '../geometry.ts';
 import { RichText, TextSpan } from '../text.ts';
@@ -102,7 +102,7 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
   readonly legendAlign: TextAlign | null;
   readonly legendPosition: PieLegendPosition;
   readonly legendLineWidth: number;
-  readonly legendLineColor: Rgb;
+  readonly legendLineColor: PaintColor;
   readonly legendOffset: number;
   readonly innerRadius: number;
 
@@ -131,10 +131,10 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
 
     this.value = Number(value);
     this.legendWidget = legendWidget;
-    const fill = this.color ?? normalizeColor(CHART_BLUE);
+    const fill = this.color ?? normalizePaintColor(CHART_BLUE);
     const border = this.borderColor;
     this.drawBorder = drawBorder ?? (
-      border !== null && (border[0] !== fill[0] || border[1] !== fill[1] || border[2] !== fill[2])
+      border !== null && !samePaintColor(border, fill)
     );
     if (!this.drawBorder && !drawSurface) {
       throw new Error('PieDataSet must draw its surface or its border');
@@ -146,7 +146,7 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
     this.legendAlign = legendAlign;
     this.legendPosition = legendPosition;
     this.legendLineWidth = Number(legendLineWidth);
-    this.legendLineColor = legendLineColor === null ? fill : normalizeColor(legendLineColor);
+    this.legendLineColor = legendLineColor === null ? fill : normalizePaintColor(legendLineColor);
     this.legendOffset = Number(legendOffset);
     this.innerRadius = Number(innerRadius);
   }
@@ -185,7 +185,7 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
           children: [new TextSpan({ text: this.legend, style: this.legendStyle ?? undefined })],
           style: new TextStyle({
             color: position === 'inside'
-              ? (isLightColor(this.color ?? CHART_BLUE) ? normalizeColor(CHART_WHITE) : normalizeColor(CHART_BLACK))
+              ? (isLightColor(this.color ?? CHART_BLUE) ? normalizePaintColor(CHART_WHITE) : normalizePaintColor(CHART_BLACK))
               : null
           })
         }),

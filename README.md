@@ -275,3 +275,11 @@ The **Layout performance** card generates paginated tickets from the
 `npm run phase-examples` writes `examples/out/layout-performance-phase-6.6.pdf`.
 See [performance measurements and reproduction](docs/PERFORMANCE.md) for the
 comparative Node/V8 benchmark and its equivalence checks.
+
+
+The **Color values & device spaces** card demonstrates the Material palette,
+RGB/gray/CMYK painting, HSV/HSL/RYB conversions and flattened alpha. Its
+[shared generator](examples/colors-phase-6.7.mjs) follows phase 6.6 in the browser;
+`npm run phase-examples` writes `examples/out/colors-phase-6.7.pdf`.
+See [color usage](AI_USAGE.md#color-values-and-device-spaces) for constructors
+and the distinction between color alpha and painting opacity.

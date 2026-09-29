@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../../pdf/color.ts';
 import type { TextAlign } from '../text.ts';
 import { TextStyle } from '../text_style.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from '../widget.ts';
@@ -53,7 +53,7 @@ export declare class PieDataSet extends Dataset<PieSliceLayout> {
     readonly legendAlign: TextAlign | null;
     readonly legendPosition: PieLegendPosition;
     readonly legendLineWidth: number;
-    readonly legendLineColor: Rgb;
+    readonly legendLineColor: PaintColor;
     readonly legendOffset: number;
     readonly innerRadius: number;
     constructor({ value, legend, legendWidget, color, borderColor, borderWidth, drawBorder, drawSurface, surfaceOpacity, offset, legendStyle, legendAlign, legendPosition, legendLineWidth, legendLineColor, legendOffset, innerRadius }: PieDataSetOptions);

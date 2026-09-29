@@ -19,8 +19,8 @@
  * while preserving offset, spread, blur extent, colour and opacity.
  */
 
-import { normalizeColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { normalizeColor, normalizePaintColor } from '../pdf/color.ts';
+import type { ColorInput, PaintColor, Rgb } from '../pdf/color.ts';
 import { PdfGraphicState } from '../pdf/graphic_state.ts';
 import type { PdfPoint, PdfRect } from '../pdf/rect.ts';
 import { PdfBaseFunction } from '../pdf/obj/function.ts';
@@ -262,7 +262,7 @@ export interface BoxShadowOptions {
 
 /** One vector shadow layer. */
 export class BoxShadow {
-  readonly color: Rgb;
+  readonly color: PaintColor;
   readonly offset: PdfPoint;
   readonly blurRadius: number;
   readonly spreadRadius: number;
@@ -275,7 +275,7 @@ export class BoxShadow {
     spreadRadius = 0,
     opacity = 0.25
   }: BoxShadowOptions = {}) {
-    this.color = normalizeColor(color);
+    this.color = normalizePaintColor(color);
     this.offset = { x: Number(offset.x), y: Number(offset.y) };
     this.blurRadius = Math.max(0, Number(blurRadius));
     this.spreadRadius = Number(spreadRadius);
@@ -354,7 +354,7 @@ export interface BoxDecorationOptions {
 
 /** Background fill, gradient, shadows and foreground border for a box. */
 export class BoxDecoration {
-  readonly color: Rgb | null;
+  readonly color: PaintColor | null;
   readonly border: BoxBorder | null;
   readonly borderRadius: BorderRadiusGeometry | null;
   readonly boxShadow: readonly BoxShadow[];
@@ -371,7 +371,7 @@ export class BoxDecoration {
     image = null,
     shape = 'rectangle'
   }: BoxDecorationOptions = {}) {
-    this.color = color === null ? null : normalizeColor(color);
+    this.color = color === null ? null : normalizePaintColor(color);
     this.border = normalizeBoxBorder(border);
     this.borderRadius = borderRadius === null
       ? null

@@ -20,7 +20,7 @@
  * transforms and clipping beyond this convenience surface.
  */
 
-import { normalizeColor } from '../pdf/color.ts';
+import { normalizePaintColor } from '../pdf/color.ts';
 import type { ColorInput } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
 import type { PdfPoint } from '../pdf/rect.ts';
@@ -128,7 +128,7 @@ export class Vector extends Widget<VectorLayoutData> {
       text: ({ value, x, y, fontSize = 12, color = '#000000', font }) => {
         context.canvas.text(String(value), box.x + x * scale, box.y + y * scale, {
           fontSize: fontSize * scale,
-          color: normalizeColor(color),
+          color: normalizePaintColor(color),
           font: font ?? context.document.font
         });
       }

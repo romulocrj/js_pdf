@@ -1,4 +1,4 @@
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfCanvas } from '../pdf/graphics.ts';
 import { BorderRadius } from './border_radius.ts';
 import type { BoxShape } from './decoration.ts';
@@ -30,7 +30,7 @@ export interface BorderSideOptions {
 /** One immutable side of a box border. */
 export declare class BorderSide {
     static readonly none: BorderSide;
-    readonly color: Rgb;
+    readonly color: PaintColor;
     readonly width: number;
     readonly style: BorderStyle;
     constructor({ color, width, style }?: BorderSideOptions);

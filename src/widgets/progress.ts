@@ -15,7 +15,7 @@
  *   - pdf/lib/src/widgets/progress.dart
  */
 
-import { normalizeColor } from '../pdf/color.ts';
+import { normalizeColor, PdfColor } from '../pdf/color.ts';
 import type { ColorInput, Rgb } from '../pdf/color.ts';
 import { BoxConstraints } from './geometry.ts';
 import { Widget } from './widget.ts';
@@ -40,46 +40,9 @@ function nonNegativeNumber(value: number, name: string): number {
   return resolved;
 }
 
-function hueFor(red: number, green: number, blue: number, maximum: number, delta: number): number {
-  if (delta === 0 || maximum === 0) return 0;
-  let hue: number;
-  if (maximum === red) {
-    hue = 60 * (((green - blue) / delta) % 6);
-  } else if (maximum === green) {
-    hue = 60 * (((blue - red) / delta) + 2);
-  } else {
-    hue = 60 * (((red - green) / delta) + 4);
-  }
-  return hue < 0 ? hue + 360 : hue;
-}
-
-/** Upstream `PdfColor.shade`, kept private until the wider color API is ported. */
+/** Use the public upstream color conversion, including its achromatic guard. */
 function shadeColor(color: ColorInput, strength: number): Rgb {
-  const [red, green, blue] = normalizeColor(color);
-  const maximum = Math.max(red, green, blue);
-  const minimum = Math.min(red, green, blue);
-  const delta = maximum - minimum;
-  const hue = hueFor(red, green, blue, maximum, delta);
-  const lightness = (maximum + minimum) / 2;
-  const saturation = lightness === 1
-    ? 0
-    : Math.min(1, Math.max(0, delta / (1 - Math.abs(2 * lightness - 1))));
-  const shadedLightness = Math.min(1, Math.max(0, lightness * (1.5 - strength)));
-  const chroma = (1 - Math.abs(2 * shadedLightness - 1)) * saturation;
-  const secondary = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
-  const match = shadedLightness - chroma / 2;
-  let resolved: Rgb;
-  if (hue < 60) resolved = [chroma, secondary, 0];
-  else if (hue < 120) resolved = [secondary, chroma, 0];
-  else if (hue < 180) resolved = [0, chroma, secondary];
-  else if (hue < 240) resolved = [0, secondary, chroma];
-  else if (hue < 300) resolved = [secondary, 0, chroma];
-  else resolved = [chroma, 0, secondary];
-  return [
-    Math.min(1, Math.max(0, resolved[0] + match)),
-    Math.min(1, Math.max(0, resolved[1] + match)),
-    Math.min(1, Math.max(0, resolved[2] + match))
-  ];
+  return normalizeColor(new PdfColor(...normalizeColor(color)).shade(strength));
 }
 
 export interface CircularProgressIndicatorOptions {

@@ -7,7 +7,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 **Latest audit:** `DavBfr/dart_pdf@b97c4a63dc` (2026-09-28); this is an audit
 reference, not a claim that all changes through that revision are ported.
 Image DPI fixes incorporate `e2e3974f32`, `94e93729fc` and `b9b34aebf9`.
-**Ported:** 149 `.ts` files, 37,516 lines (TypeScript)
+**Ported:** 150 `.ts` files, 38,034 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -76,7 +76,7 @@ each one.
 | `format/base.dart` | 50 | `src/pdf/format/base.ts` | done — `PdfDataType`; `output(stream)` only, no settings or indent |
 | `format/object_base.dart` | 118 | `src/pdf/format/object_base.ts` | partial — `PdfObjectBase`, `ref()`, `prepare()`, `PdfSettings.compress`; no encrypt callback, no version selector |
 | `format/dict.dart` | 135 | `src/pdf/format/dict.ts` | partial — `PdfDict`, insertion-ordered; no `merge`, no type parameter |
-| `format/array.dart` | 126 | `src/pdf/format/array.ts` | partial — `PdfArray`, `fromNum`, `fromObjects`; no `uniq`, no `fromColor` |
+| `format/array.dart` | 126 | `src/pdf/format/array.ts` | partial — `PdfArray`, `fromNum`, `fromObjects`; `fromColor` for RGB/gray/CMYK; no `uniq` |
 | `format/dict_stream.dart` | 98 | `src/pdf/format/dict_stream.ts` | partial — repeatable `PdfDictStream` output with derived `/Length`, `/FlateDecode` kept only when smaller; no Ascii85, no encryption |
 | `format/name.dart` | 63 | `src/pdf/format/name.ts` | done — also escapes `)`, which upstream misses |
 | `format/indirect.dart` | 44 | `src/pdf/format/indirect.ts` | done — `PdfIndirect` |
@@ -91,9 +91,9 @@ each one.
 | Upstream | Lines | Port | Status |
 |---|---:|---|---|
 | `page_format.dart` | 171 | `src/pdf/page_format.ts` | partial — all upstream paper presets and margins; public `PageUnit` including `dp`; value-class conveniences remain |
-| `color.dart` | 725 | `src/pdf/color.ts` | partial — RGB / DeviceRGB only |
-| `colors.dart` | 406 | — | — named color constants |
-| `graphics.dart` | 1415 | `src/pdf/graphics.ts`, `src/svg/path.ts` | partial — full path API (`m`/`l`/`c`/`h`/`re`, ellipses, rounded rects, elliptical arcs), SVG path drawing, fill rules, clipping, CTM, cap/join/miter/dash, colors, `gs`, image XObjects, shading-pattern paint and direct `sh` shadings |
+| `color.dart` | 725 | `src/pdf/color.ts` | done — `PdfColor`, gray/CMYK/HSV/HSL values, RYB conversion, factories, harmony/shade/luminance helpers; `equals` replaces Dart equality; corrected achromatic/CMYK conversions |
+| `colors.dart` | 406 | `src/pdf/colors.ts` | done — complete named Material palette, aliases, primaries/accents and deterministic `getColor` |
+| `graphics.dart` | 1415 | `src/pdf/graphics.ts`, `src/svg/path.ts` | partial — full path API (`m`/`l`/`c`/`h`/`re`, ellipses, rounded rects, elliptical arcs), SVG path drawing, fill rules, clipping, CTM, cap/join/miter/dash, RGB/DeviceGray/CMYK solid colors, `gs`, image XObjects, shading-pattern paint and direct `sh` shadings |
 | `graphic_state.dart` | 194 | `src/pdf/graphic_state.ts`, `src/pdf/soft_mask.ts` | partial — `/ca`, `/CA`, `/BM`, deduplicated per page, and luminosity `/SMask` form groups; no `PdfGraphicStates` document object or `/TR` |
 | *(no upstream file — `vector_math`)* | — | `src/pdf/matrix.ts` | done — the 2×3 affine `cm` operand, composition, inversion and the y-down conjugation |
 | `document.dart` | 289 | `src/pdf/document.ts` | partial — synchronous `save`/`write`, `PdfDocument` object registry carrying `PdfSettings`; one font/image/soft-mask form object per distinct resource, created on first use |

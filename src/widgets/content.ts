@@ -19,8 +19,8 @@
  * paints the completed table. Documents without a table stay single-pass.
  */
 
-import { normalizeColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import { normalizeColor, normalizePaintColor } from '../pdf/color.ts';
+import type { ColorInput, PaintColor, Rgb } from '../pdf/color.ts';
 import { PageUnit } from '../pdf/page_format.ts';
 import type { PdfOutlineStyle } from '../pdf/obj/outline.ts';
 import { Divider, FittedBox, LayoutBuilder, Padding, SizedBox, Transform } from './basic.ts';
@@ -214,7 +214,7 @@ export class Bullet extends StatelessWidget {
   readonly bulletMargin: InsetsInput;
   readonly bulletSize: number;
   readonly bulletShape: BoxShape;
-  readonly bulletColor: Rgb;
+  readonly bulletColor: PaintColor;
 
   constructor({
     text = null,
@@ -240,7 +240,7 @@ export class Bullet extends StatelessWidget {
     this.bulletMargin = bulletMargin;
     this.bulletSize = Number(bulletSize);
     this.bulletShape = bulletShape;
-    this.bulletColor = normalizeColor(bulletColor);
+    this.bulletColor = normalizePaintColor(bulletColor);
   }
 
   override build(context: RenderContext): AnyWidget {
