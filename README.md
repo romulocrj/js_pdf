@@ -28,16 +28,46 @@ Read the full history: [I ported dart_pdf to pure JavaScript](https://daily.dev/
 
 ## Status
 
-The implementation roadmap is complete through phase 5.7. The port includes
-the PDF object model, Type1 and embedded TrueType fonts, declarative layout and
-pagination, SVG, raster images, tables, charts, barcodes, links, forms, page
-labels and metadata/XMP. All eight retained upstream examples generate end to
-end under Node.js and bare ClearScript V8.
+The base port is complete through phase 5.7. Compatibility work from phases
+6.1–6.8, 6.10 and 6.12 has also landed. Directional layout, RTL Flex/tables,
+baseline alignment (6.9) and PDF/A integration (6.11) remain unimplemented.
 
-Version 0.1.6 is the first release candidate, and the first version published to
-npm. The port itself is finished; it is a candidate rather than a stable release
-because nothing outside the project has exercised it yet. The API is expected to
-hold, but is not frozen until 1.0.0.
+The library includes the PDF object model, standard Type1 fonts, embedded
+TrueType and OpenType CFF1 fonts, declarative layout and pagination, SVG,
+raster images, tables, charts, barcodes, annotations, forms, reusable form
+XObjects, page labels and metadata/XMP. All eight retained upstream examples
+generate end to end; the base port was also exercised under bare ClearScript
+V8. The current repository passes 561 tests and generates 31 phase examples
+under Node.js.
+
+Version 0.1.6 was the first release candidate and the first version published
+to npm. The additions below describe the current repository and are intended
+for the next npm release; installing 0.1.6 does not include them. The public
+API is not frozen until 1.0.0.
+
+### Changes since 0.1.6
+
+- Images: DPI-aware resizing, caching and JPEG quality-90 re-encoding, with
+  orientation and CMYK decoding fixes.
+- Charts and pages: full-circle pie fixes, page clipping and additional paper
+  formats.
+- Text and output: configurable CJK line breaking and hyphenation, synchronous
+  output destinations and lazy JPEG serialization.
+- Performance: reduced layout allocations and an ASCII single-word fast path.
+- Colors: named palettes, gray and CMYK device spaces, and HSV/HSL/RYB
+  conversions.
+- Fonts: optional simple TrueType/WinAnsi encoding and full-program OpenType
+  CFF1 embedding for name-keyed and CID-keyed fonts. Unicode TrueType
+  subsetting remains the default.
+- PDF objects: text-note annotations, annotation border styles and reusable
+  `PdfFormXObject` resources, including nested forms and field appearances.
+- API conveniences: `DefaultTextStyle.merge`, `PdfPageFormat`,
+  `ChartValue`/`LineChartValue`, `PdfDict.merge` and `PdfArray.uniq`.
+
+The current minified bundle is **450,928 bytes**, compared with **405,510
+bytes** in 0.1.6 (+11.20%). Example fonts remain external assets. See the
+[bundle measurements](https://github.com/romulocrj/js_pdf/blob/main/docs/BUNDLE-SIZE.md)
+for compressed sizes, methodology and tradeoffs.
 
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each version
 - [docs/PORTING-STATUS.md](docs/PORTING-STATUS.md) — what has been ported so far, file by file
@@ -158,7 +188,8 @@ Highlights include `Document`, `Page`, `MultiPage`, `Text`,
 `Column`, `Row`, `Container`, `Table`, `Chart`, `SvgImage`, `Image`,
 `BarcodeWidget`, `Inseparable`, `ListView`, `GridPaper`, geometric annotation
 widgets, `TextField`, `ChoiceField`, `Checkbox`, `FlatButton`,
-`PageFormat`, `PdfType1Font`, `PdfTtfFont` and `Widget`.
+`PageFormat`, `PdfPageFormat`, `PdfType1Font`, `PdfTtfFont`, `PdfFormXObject`,
+`TextAnnotation`, `PdfBorder`, `DefaultTextStyle` and `Widget`.
 
 See [docs/PORTING-STATUS.md](docs/PORTING-STATUS.md) for the complete implemented
 surface and the remaining upstream gaps.
@@ -194,6 +225,9 @@ covers, in [AI_USAGE.md](AI_USAGE.md).
   and baseline alignment are not implemented (phase 6.9).
 - PDF/A integration, including output intents and the required conformance
   handling, is not implemented (phase 6.11).
+- CFF1 fonts are embedded in full and their ink bounds are approximate.
+  CFF subsetting, CFF2, variable-font instancing and raw Type1/PFB font
+  embedding are not implemented. Simple TrueType also embeds the full font.
 - Library code performs no host I/O. Fonts, images and other external assets
   must be supplied by the caller as bytes or text.
 - An indivisible `MultiPage` child taller than one content area is rejected;
@@ -232,6 +266,8 @@ upstream Dart sources it derives from in its header.
 
 This software is provided “as is”, without warranties of any kind. No support
 is provided or implied.
+
+## Feature examples
 
 ### Image resolution
 
@@ -288,7 +324,7 @@ See [color usage](AI_USAGE.md#color-values-and-device-spaces) for constructors
 and the distinction between color alpha and painting opacity.
 
 
-The combined **6.8 / 6.10 / 6.12** PR adds three ordered gallery cards:
+Phases **6.8 / 6.10 / 6.12** add three ordered gallery cards:
 **TrueType & CFF fonts**, **Reusable forms & notes**, and **API conveniences**.
 They share [one generator module](examples/fonts-objects-api-phases.mjs) with
 `npm run phase-examples`. The CFF fixtures retain Adobe's copyright and the
