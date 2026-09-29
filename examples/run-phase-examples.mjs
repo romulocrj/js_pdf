@@ -20,6 +20,7 @@ import { generatePngPhase41 } from './png-phase-4.1.mjs';
 import { generateJpegPhase42 } from './jpeg-phase-4.2.mjs';
 import { generateImagePhase43 } from './image-phase-4.3.mjs';
 import { generateImageDpiPhase61 } from './image-dpi-phase-6.1.mjs';
+import { generatePieFullCirclePhase62 } from './pie-full-circle-phase-6.2.mjs';
 import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
 import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
 import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
@@ -52,14 +53,15 @@ const examples = [
   ['png-phase-4.1', generatePngPhase41],
   ['jpeg-phase-4.2', generateJpegPhase42],
   ['image-phase-4.3', generateImagePhase43],
-  ['image-dpi-phase-6.1', () => generateImageDpiPhase61({ jpeg: dpiJpeg, png: dpiPng })],
   ['charts-phase-5.1', generateChartsPhase51],
   ['barcode-phase-5.2', generateBarcodePhase52],
   ['annotations-phase-5.3', generateAnnotationsPhase53],
   ['icons-phase-5.4', () => generateIconsPhase54(materialIcons)],
   ['progress-phase-5.5', generateProgressPhase55],
   ['forms-phase-5.6', generateFormsPhase56],
-  ['widgets-phase-5.7', generateWidgetsPhase57]
+  ['widgets-phase-5.7', generateWidgetsPhase57],
+  ['image-dpi-phase-6.1', () => generateImageDpiPhase61({ jpeg: dpiJpeg, png: dpiPng })],
+  ['pie-full-circle-phase-6.2', () => generatePieFullCirclePhase62()]
 ];
 
 const outputDirectory = new URL('./out/', import.meta.url);

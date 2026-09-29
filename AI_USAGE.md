@@ -439,6 +439,13 @@ provider resamples to what the page actually shows, which is the difference
 between a 59 MB document and a 24 KB one. 150 is right for screen and ordinary
 print; use 300 for a photograph meant to be printed large.
 
+DPI never enlarges the source. JPEG bytes remain unchanged when no reduction
+is needed, including zero/subpixel targets. Reduced JPEGs stay JPEG-compressed
+at quality 90 (lossy), omit source EXIF and retain image orientation. PNG/raw
+reductions preserve alpha. File size depends on content; a smaller pixel count
+does not guarantee fewer encoded bytes for every image. See
+[the DPI gallery](examples/image-dpi-phase-6.1.mjs).
+
 The library warns about oversized sources on the host console by default, so on
 Node or in a browser nothing is needed to see them. Under ClearScript the
 console exists but its output goes wherever the host wired it, which is often
@@ -475,6 +482,11 @@ Models may use their learned [dart_pdf](https://github.com/DavBfr/dart_pdf) stru
 features, while checking the TypeScript declarations for exact constructors:
 
 - Charts: `Chart`, cartesian/radial/pie grids and bar/line/point/pie data sets.
+  A single positive `PieDataSet` fills the whole pie, regardless of its value
+  (for example, 1 or 75). Set `innerRadius` for a donut. Complete circles
+  ignore slice `offset`; partial slices retain it. Do not add a dummy slice or
+  adjust values to work around floating-point seams. See
+  [the full-circle example](examples/pie-full-circle-phase-6.2.mjs).
 - Barcodes: `Barcode`, `BarcodeWidget`, including QR and PDF417.
 - Navigation: `UrlLink`, `Link`, `Anchor`, headers, outlines and table of content.
 - Forms: `TextField`, `ChoiceField`, `Checkbox` and `FlatButton`.

@@ -152,7 +152,8 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
   }
 
   private isFullCircle(frame: PieFrame): boolean {
-    return frame.angleEnd - frame.angleStart >= Math.PI * 2;
+    // Summing angles can fall a few ulps short of 2 * pi; allow 1e-12 rad.
+    return frame.angleEnd - frame.angleStart >= Math.PI * 2 - 1e-12;
   }
 
   override layout(context: RenderContext, frame: ChartFrame): PieSliceLayout {

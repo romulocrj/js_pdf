@@ -717,6 +717,7 @@ import { generateProgressPhase55 } from './progress-phase-5.5.mjs';
 import { generateFormsPhase56 } from './forms-phase-5.6.mjs';
 import { generateWidgetsPhase57 } from './widgets-phase-5.7.mjs';
 import { generateImageDpiPhase61 } from './image-dpi-phase-6.1.mjs';
+import { generatePieFullCirclePhase62 } from './pie-full-circle-phase-6.2.mjs';
 import { generateProductionPaginationExample } from './production-pagination.mjs';
 import { createSalesReport } from './create-sales-report.mjs';
 
@@ -1040,6 +1041,14 @@ const groups = [
           const [jpeg, png] = await Promise.all([bytesOf('dpi-pattern.jpg'), bytesOf('dpi-alpha.png')]);
           return generateImageDpiPhase61({ jpeg, png });
         }
+      },
+      {
+        id: 'pie-full-circle-phase-6.2',
+        title: 'Pie full circles',
+        file: 'pie-full-circle-phase-6.2.mjs',
+        badge: 'PHASE 6.2',
+        description: 'Exact and rounded full-circle pies and donuts, alongside partial slices that keep their offsets.',
+        generate: () => generatePieFullCirclePhase62()
       },
       {
         id: 'production-pagination',

@@ -7,7 +7,7 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 **Latest audit:** `DavBfr/dart_pdf@b97c4a63dc` (2026-09-28); this is an audit
 reference, not a claim that all changes through that revision are ported.
 Image DPI fixes incorporate `e2e3974f32`, `94e93729fc` and `b9b34aebf9`.
-**Ported:** 149 `.ts` files, 37,265 lines (TypeScript)
+**Ported:** 149 `.ts` files, 37,266 lines (TypeScript)
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -188,7 +188,7 @@ both the grammar and the shape factories landed in phase 2.5.
 | `widgets/border_radius.dart` | 466 | `src/widgets/border_radius.ts` | done — physical/directional circular or elliptical radii, with oversized radii scaled to a valid path |
 | `widgets/stack.dart`, `wrap.dart`, `grid_view.dart`, `partitions.dart` | 1376 | `src/widgets/stack.ts`, `wrap.ts`, `grid_view.ts`, `partitions.ts` | done — positioned overlays/clipping, multi-run wrap, fixed-track grid and parallel partitions; immutable continuation for wrap/grid/partitions |
 | `widgets/clip.dart` | 134 | `src/widgets/clip.ts` | done — rectangular, scaled rounded-rectangle and elliptical clip scopes over immutable child layout |
-| `widgets/chart/*.dart` | 1989 | `src/widgets/chart/*.ts` | partial — complete chart rendering through `Chart`, `CartesianGrid`, `PieGrid`, `RadialGrid`, `FixedAxis`, `ChartLegend`, `PointDataSet`, `BarDataSet`, `LineDataSet` and `PieDataSet`, including caller-supplied pie legend widgets; the upstream `ChartValue` base and deprecated `LineChartValue` compatibility alias are omitted |
+| `widgets/chart/*.dart` | 1989 | `src/widgets/chart/*.ts` | partial — complete chart rendering through `Chart`, `CartesianGrid`, `PieGrid`, `RadialGrid`, `FixedAxis`, `ChartLegend`, `PointDataSet`, `BarDataSet`, `LineDataSet` and `PieDataSet`, including caller-supplied pie legend widgets and full-circle rounding tolerance; the upstream `ChartValue` base and deprecated `LineChartValue` compatibility alias are omitted |
 | `widgets/annotations.dart`, `forms.dart` | 1244 | `src/widgets/annotations.ts`, `forms.ts` | partial — links, `Outline`, all five geometric annotation widgets with validated border widths, plus `ChoiceField`, `Checkbox`, `FlatButton` and `TextField`; `Signature` is intentionally out of scope with digital signatures |
 | `widgets/barcode.dart` | 298 | `src/widgets/barcode.ts` | done — `Barcode`, `BarcodeWidget`; symbol operations are immutable layout data |
 | `widgets/content.dart` | 360 | `src/widgets/content.ts` | done — `Header`, `Paragraph`, `Bullet`, `Watermark`, `Footer`, clickable `TableOfContent`, named destinations and conditional two-pass TOC |
@@ -249,3 +249,11 @@ The three-page `examples/image-dpi-phase-6.1.mjs` visual proof is available in
 original and reduced JPEGs, all orientations, and PNG transparency. Tests
 verify page count, image dimensions, DCT encoding, alpha masks and wiring to
 both runners. This is an additional phase proof; the upstream gate stays 8/8.
+
+## Post-roadmap chart parity (phase 6.2)
+
+The full-circle predicate incorporates upstream `80daf820cd72d57f8b367cd8e5dab2c70d2fefa6`,
+allowing 1e-12 radians of accumulated rounding. A one-category value of 75 now
+has the same pie/donut paths and legend layout as an exact full turn; genuine
+partial slices keep their offsets. `pie-full-circle-phase-6.2.mjs` is the
+focused visual proof in the browser gallery and Node phase runner.
