@@ -249,3 +249,9 @@ The **Pie full circles** gallery card compares exact and rounded one-category
 pies and donuts with partial-slice controls. Its shared generator is
 [pie-full-circle-phase-6.2.mjs](examples/pie-full-circle-phase-6.2.mjs);
 `npm run phase-examples` writes `examples/out/pie-full-circle-phase-6.2.pdf`.
+
+
+The **Page clipping & formats** gallery card compares clipping off/on, rotated
+margins, MultiPage and content-sized receipts/labels. Run `npm run phase-examples`
+to generate `examples/out/page-formats-phase-6.3.pdf` from
+[page-formats-phase-6.3.mjs](examples/page-formats-phase-6.3.mjs).

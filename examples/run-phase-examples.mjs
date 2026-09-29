@@ -21,6 +21,7 @@ import { generateJpegPhase42 } from './jpeg-phase-4.2.mjs';
 import { generateImagePhase43 } from './image-phase-4.3.mjs';
 import { generateImageDpiPhase61 } from './image-dpi-phase-6.1.mjs';
 import { generatePieFullCirclePhase62 } from './pie-full-circle-phase-6.2.mjs';
+import { generatePageFormatsPhase63 } from './page-formats-phase-6.3.mjs';
 import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
 import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
 import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
@@ -61,7 +62,8 @@ const examples = [
   ['forms-phase-5.6', generateFormsPhase56],
   ['widgets-phase-5.7', generateWidgetsPhase57],
   ['image-dpi-phase-6.1', () => generateImageDpiPhase61({ jpeg: dpiJpeg, png: dpiPng })],
-  ['pie-full-circle-phase-6.2', () => generatePieFullCirclePhase62()]
+  ['pie-full-circle-phase-6.2', () => generatePieFullCirclePhase62()],
+  ['page-formats-phase-6.3', () => generatePageFormatsPhase63()]
 ];
 
 const outputDirectory = new URL('./out/', import.meta.url);

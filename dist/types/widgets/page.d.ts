@@ -3,7 +3,7 @@ import type { ColorInput } from '../pdf/color.ts';
 import type { PageSize } from '../pdf/page_format.ts';
 import { PageTheme } from './page_theme.ts';
 import type { PageOrientation } from './page_theme.ts';
-import type { AnyWidget, DocumentContext, RenderContext } from './widget.ts';
+import type { AnyWidget, DocumentContext, PositionedBox, RenderContext } from './widget.ts';
 import type { InsetsInput } from './geometry.ts';
 import type { ThemeData } from './theme.ts';
 /**
@@ -53,3 +53,5 @@ export declare class Page implements Section {
     render(documentContext: DocumentContext): SerializedPage[];
     private paintLayer;
 }
+/** Shared page paint scope, translated from Page.paint in the Dart source. */
+export declare function paintPageChild(theme: PageTheme, context: RenderContext, widget: AnyWidget, box: PositionedBox<unknown>): void;

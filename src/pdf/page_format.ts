@@ -30,29 +30,31 @@ export interface PageSize {
 }
 
 const CM = 72 / 2.54;
+const MM = 72 / 25.4;
 
-/**
- * Only the two formats the port currently exercises are present; the upstream
- * `PdfPageFormat` carries the full ISO/US set plus marginless variants. The
- * margins are upstream's: 2 cm on ISO paper, one inch on US paper.
- */
-export const PageFormat: Readonly<Record<'A4' | 'LETTER', PageSize>> = Object.freeze({
-  A4: Object.freeze({
-    width: 595.28,
-    height: 841.89,
-    marginTop: 2 * CM,
-    marginRight: 2 * CM,
-    marginBottom: 2 * CM,
-    marginLeft: 2 * CM
-  }),
-  LETTER: Object.freeze({
-    width: 612,
-    height: 792,
-    marginTop: 72,
-    marginRight: 72,
-    marginBottom: 72,
-    marginLeft: 72
-  })
+/** Upstream paper presets, in points, including their default margins. */
+function paper(width: number, height: number, margin: number): PageSize {
+  return Object.freeze({
+    width, height,
+    marginTop: margin, marginRight: margin, marginBottom: margin, marginLeft: margin
+  });
+}
+
+// Preserve the port's historical rounded A4 dimensions for existing callers.
+const A4 = paper(595.28, 841.89, 2 * CM);
+
+/** Infinite dimensions are fitted to the body by Page; MultiPage needs finite paper. */
+export const PageFormat = Object.freeze({
+  A3: paper(29.7 * CM, 42 * CM, 2 * CM),
+  A4,
+  A5: paper(14.8 * CM, 21 * CM, 2 * CM),
+  A6: paper(105 * MM, 148 * MM, CM),
+  LETTER: paper(612, 792, 72),
+  LEGAL: paper(612, 1008, 72),
+  ROLL57: paper(57 * MM, Infinity, 5 * MM),
+  ROLL80: paper(80 * MM, Infinity, 5 * MM),
+  UNDEFINED: paper(Infinity, Infinity, 0),
+  STANDARD: A4
 });
 
 /**
@@ -96,5 +98,6 @@ export const PageUnit = Object.freeze({
   inch: 72,
   cm: 72 / 2.54,
   mm: 72 / 25.4,
-  pica: 12
+  pica: 12,
+  dp: 72 / 150
 });

@@ -11,12 +11,19 @@ export interface PageSize {
     readonly marginBottom?: number;
     readonly marginLeft?: number;
 }
-/**
- * Only the two formats the port currently exercises are present; the upstream
- * `PdfPageFormat` carries the full ISO/US set plus marginless variants. The
- * margins are upstream's: 2 cm on ISO paper, one inch on US paper.
- */
-export declare const PageFormat: Readonly<Record<'A4' | 'LETTER', PageSize>>;
+/** Infinite dimensions are fitted to the body by Page; MultiPage needs finite paper. */
+export declare const PageFormat: Readonly<{
+    A3: PageSize;
+    A4: PageSize;
+    A5: PageSize;
+    A6: PageSize;
+    LETTER: PageSize;
+    LEGAL: PageSize;
+    ROLL57: PageSize;
+    ROLL80: PageSize;
+    UNDEFINED: PageSize;
+    STANDARD: PageSize;
+}>;
 /**
  * The margin a page falls back to when neither it nor its format states one.
  * Upstream has no such value — a `PdfPageFormat` always carries margins — so
@@ -40,4 +47,5 @@ export declare const PageUnit: Readonly<{
     cm: number;
     mm: number;
     pica: 12;
+    dp: number;
 }>;

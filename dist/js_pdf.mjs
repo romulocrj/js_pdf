@@ -17,23 +17,32 @@
 
 const CM = 72 / 2.54;
 
+const MM = 72 / 25.4;
+
+function paper(width, height, margin) {
+  return Object.freeze({
+    width,
+    height,
+    marginTop: margin,
+    marginRight: margin,
+    marginBottom: margin,
+    marginLeft: margin
+  });
+}
+
+const A4 = paper(595.28, 841.89, 2 * CM);
+
 const PageFormat = Object.freeze({
-  A4: Object.freeze({
-    width: 595.28,
-    height: 841.89,
-    marginTop: 2 * CM,
-    marginRight: 2 * CM,
-    marginBottom: 2 * CM,
-    marginLeft: 2 * CM
-  }),
-  LETTER: Object.freeze({
-    width: 612,
-    height: 792,
-    marginTop: 72,
-    marginRight: 72,
-    marginBottom: 72,
-    marginLeft: 72
-  })
+  A3: paper(29.7 * CM, 42 * CM, 2 * CM),
+  A4,
+  A5: paper(14.8 * CM, 21 * CM, 2 * CM),
+  A6: paper(105 * MM, 148 * MM, CM),
+  LETTER: paper(612, 792, 72),
+  LEGAL: paper(612, 1008, 72),
+  ROLL57: paper(57 * MM, Infinity, 5 * MM),
+  ROLL80: paper(80 * MM, Infinity, 5 * MM),
+  UNDEFINED: paper(Infinity, Infinity, 0),
+  STANDARD: A4
 });
 
 const DEFAULT_MARGIN = 40;
@@ -56,7 +65,8 @@ const PageUnit = Object.freeze({
   inch: 72,
   cm: 72 / 2.54,
   mm: 72 / 25.4,
-  pica: 12
+  pica: 12,
+  dp: 72 / 150
 });
 
 function codeUnits(text) {
@@ -17817,6 +17827,9 @@ class PageTheme {
       width: Number(pageFormat.width),
       height: Number(pageFormat.height)
     };
+    if (!(this.pageFormat.width > 0) || !(this.pageFormat.height > 0)) {
+      throw new RangeError("Page dimensions must be positive");
+    }
     this.orientation = orientation;
     this.buildBackground = buildBackground;
     this.buildForeground = buildForeground;
@@ -17853,6 +17866,114 @@ class PageTheme {
       margin: options.margin ?? this.declaredMargin,
       clip: options.clip ?? this.clip
     });
+  }
+}
+
+class Page {
+  constructor({pageTheme = undefined, pageFormat = undefined, format = undefined, margin = undefined, theme = undefined, orientation = undefined, build, background = null}) {
+    if (typeof build !== "function") throw new TypeError("Page.build must be a function");
+    const base = pageTheme ?? new PageTheme;
+    this.pageTheme = base.copyWith({
+      pageFormat: pageFormat ?? format,
+      margin,
+      theme,
+      orientation
+    });
+    this.build = build;
+    this.background = background;
+  }
+  get format() {
+    return this.pageTheme.resolvedFormat;
+  }
+  render(documentContext) {
+    let format = this.pageTheme.resolvedFormat;
+    const margin = this.pageTheme.margin;
+    let canvas = new PdfCanvas(Number.isFinite(format.height) ? format.height : 0);
+    let context = {
+      ...documentContext,
+      canvas,
+      pageFormat: format,
+      pageNumber: documentContext.pageOffset + 1,
+      pageLabel: documentContext.document.pageLabel(documentContext.pageOffset),
+      pagesCount: documentContext.pagesCount || documentContext.pageOffset + 1,
+      theme: this.pageTheme.theme ?? documentContext.document.theme
+    };
+    const maxWidth = format.width - margin.left - margin.right;
+    const maxHeight = format.height - margin.top - margin.bottom;
+    const widget = this.build(context);
+    const box = widget.layout(context, new BoxConstraints({
+      maxWidth,
+      maxHeight
+    }));
+    if (box.height > maxHeight + .001) {
+      throw new RangeError(`Page content height ${box.height.toFixed(2)} exceeds available height ${maxHeight.toFixed(2)}`);
+    }
+    if (!Number.isFinite(format.width) || !Number.isFinite(format.height)) {
+      format = {
+        ...format,
+        width: format.width === Infinity ? box.width + margin.left + margin.right : format.width,
+        height: format.height === Infinity ? box.height + margin.top + margin.bottom : format.height
+      };
+      if (!Number.isFinite(format.width) || !Number.isFinite(format.height) || format.width <= 0 || format.height <= 0) {
+        throw new RangeError("Page content must resolve to positive finite dimensions");
+      }
+      canvas = new PdfCanvas(format.height);
+      context = {
+        ...context,
+        canvas,
+        pageFormat: format
+      };
+    }
+    if (this.background) canvas.fillRect(0, 0, format.width, format.height, this.background);
+    this.paintLayer(this.pageTheme.buildBackground, context, format);
+    paintPageChild(this.pageTheme, context, widget, {
+      ...box,
+      x: margin.left,
+      y: margin.top
+    });
+    this.paintLayer(this.pageTheme.buildForeground, context, format);
+    return [ {
+      format,
+      content: canvas.takeOutputBytes(),
+      fonts: canvas.fonts,
+      graphicStates: canvas.graphicStates,
+      patterns: canvas.patterns,
+      shadings: canvas.shadings,
+      images: canvas.images,
+      annotations: canvas.annotations
+    } ];
+  }
+  paintLayer(build, context, format) {
+    if (build === null) {
+      return;
+    }
+    const widget = build(context);
+    const box = widget.layout(context, new BoxConstraints({
+      maxWidth: format.width,
+      maxHeight: format.height
+    }));
+    paintPageChild(this.pageTheme, context, widget, {
+      ...box,
+      x: 0,
+      y: 0
+    });
+  }
+}
+
+function paintPageChild(theme, context, widget, box) {
+  if (!theme.clip) {
+    widget.paint(context, box);
+    return;
+  }
+  const {canvas, pageFormat} = context;
+  const margin = theme.margin;
+  canvas.saveContext();
+  try {
+    canvas.drawRect(margin.left, margin.bottom, pageFormat.width - margin.left - margin.right, pageFormat.height - margin.top - margin.bottom);
+    canvas.clipPath();
+    widget.paint(context, box);
+  } finally {
+    canvas.restoreContext();
   }
 }
 
@@ -17914,6 +18035,9 @@ class MultiPage {
     return this.pageTheme.margin;
   }
   render(documentContext) {
+    if (!Number.isFinite(this.format.width) || !Number.isFinite(this.format.height)) {
+      throw new RangeError("MultiPage requires finite page dimensions");
+    }
     const pages = [];
     const startPage = () => {
       if (pages.length >= this.maxPages) {
@@ -17976,7 +18100,7 @@ class MultiPage {
         }));
         const initialAvailable = page.bottom - page.cursor;
         if (natural.height <= initialAvailable + .001) {
-          child.paint(page.context, {
+          paintPageChild(this.pageTheme, page.context, child, {
             ...natural,
             x: this.margin.left,
             y: page.cursor
@@ -17991,7 +18115,7 @@ class MultiPage {
             maxWidth: page.maxWidth,
             maxHeight: Infinity
           }));
-          child.paint(page.context, {
+          paintPageChild(this.pageTheme, page.context, child, {
             ...moved,
             x: this.margin.left,
             y: page.cursor
@@ -18017,7 +18141,7 @@ class MultiPage {
             throw new RangeError("A spanning row exceeds a full MultiPage content area");
           }
           if (box.height > 0) {
-            child.paint(page.context, {
+            paintPageChild(this.pageTheme, page.context, child, {
               ...box,
               x: this.margin.left,
               y: page.cursor
@@ -18046,7 +18170,7 @@ class MultiPage {
           maxHeight: Infinity
         }));
       }
-      child.paint(page.context, {
+      paintPageChild(this.pageTheme, page.context, child, {
         ...box,
         x: this.margin.left,
         y: page.cursor
@@ -18070,7 +18194,7 @@ class MultiPage {
           const headerBox = headerWidget.layout(context, new BoxConstraints({
             maxWidth: state.maxWidth
           }));
-          headerWidget.paint(context, {
+          paintPageChild(this.pageTheme, context, headerWidget, {
             ...headerBox,
             x: this.margin.left,
             y: this.margin.top
@@ -18081,7 +18205,7 @@ class MultiPage {
           const footerBox = footerWidget.layout(context, new BoxConstraints({
             maxWidth: state.maxWidth
           }));
-          footerWidget.paint(context, {
+          paintPageChild(this.pageTheme, context, footerWidget, {
             ...footerBox,
             x: this.margin.left,
             y: this.format.height - this.margin.bottom - footerBox.height
@@ -18125,82 +18249,7 @@ class MultiPage {
       maxWidth: this.format.width,
       maxHeight: this.format.height
     }));
-    widget.paint(context, {
-      ...box,
-      x: 0,
-      y: 0
-    });
-  }
-}
-
-class Page {
-  constructor({pageTheme = undefined, pageFormat = undefined, format = undefined, margin = undefined, theme = undefined, orientation = undefined, build, background = null}) {
-    if (typeof build !== "function") throw new TypeError("Page.build must be a function");
-    const base = pageTheme ?? new PageTheme;
-    this.pageTheme = base.copyWith({
-      pageFormat: pageFormat ?? format,
-      margin,
-      theme,
-      orientation
-    });
-    this.build = build;
-    this.background = background;
-  }
-  get format() {
-    return this.pageTheme.resolvedFormat;
-  }
-  render(documentContext) {
-    const format = this.pageTheme.resolvedFormat;
-    const margin = this.pageTheme.margin;
-    const canvas = new PdfCanvas(format.height);
-    if (this.background) canvas.fillRect(0, 0, format.width, format.height, this.background);
-    const context = {
-      ...documentContext,
-      canvas,
-      pageFormat: format,
-      pageNumber: documentContext.pageOffset + 1,
-      pageLabel: documentContext.document.pageLabel(documentContext.pageOffset),
-      pagesCount: documentContext.pagesCount || documentContext.pageOffset + 1,
-      theme: this.pageTheme.theme ?? documentContext.document.theme
-    };
-    const maxWidth = format.width - margin.left - margin.right;
-    const maxHeight = format.height - margin.top - margin.bottom;
-    this.paintLayer(this.pageTheme.buildBackground, context, format);
-    const widget = this.build(context);
-    const box = widget.layout(context, new BoxConstraints({
-      maxWidth,
-      maxHeight
-    }));
-    if (box.height > maxHeight + .001) {
-      throw new RangeError(`Page content height ${box.height.toFixed(2)} exceeds available height ${maxHeight.toFixed(2)}`);
-    }
-    widget.paint(context, {
-      ...box,
-      x: margin.left,
-      y: margin.top
-    });
-    this.paintLayer(this.pageTheme.buildForeground, context, format);
-    return [ {
-      format,
-      content: canvas.takeOutputBytes(),
-      fonts: canvas.fonts,
-      graphicStates: canvas.graphicStates,
-      patterns: canvas.patterns,
-      shadings: canvas.shadings,
-      images: canvas.images,
-      annotations: canvas.annotations
-    } ];
-  }
-  paintLayer(build, context, format) {
-    if (build === null) {
-      return;
-    }
-    const widget = build(context);
-    const box = widget.layout(context, new BoxConstraints({
-      maxWidth: format.width,
-      maxHeight: format.height
-    }));
-    widget.paint(context, {
+    paintPageChild(this.pageTheme, context, widget, {
       ...box,
       x: 0,
       y: 0
@@ -21418,6 +21467,7 @@ const publicApi = Object.freeze({
   BoxConstraints,
   EdgeInsets,
   PageFormat,
+  PageUnit,
   PdfType1Font,
   PdfTtfFont,
   PdfPageLabel,
@@ -21447,4 +21497,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, PageUnit, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfFontMetrics, PdfGraphicState, PdfImage, PdfLogo, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };

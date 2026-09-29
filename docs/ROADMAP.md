@@ -258,8 +258,8 @@ runtime scope or format limits; no unresolved port-gap marker remains.
 
 ## Next step
 
-> **Phase 6.2 — pie full-circle tolerance — implemented; awaiting PR review and merge.**
-> Phase 6.1 merged in PR #5. Start phase 6.3 only after the chart PR merges. Each domain gets one PR against the
+> **Phase 6.3 — page clipping and paper formats — implemented; awaiting PR review and merge.**
+> Phases 6.1 and 6.2 merged in PRs #5 and #6. Start phase 6.4 only after the pages PR merges. Each domain gets one PR against the
 > updated main branch; do not stack PRs or merge automatically.
 
 ## Phase 6 — remaining compatibility and upstream follow-up
@@ -283,8 +283,8 @@ credits and licenses alongside the example.
 | Order | Domain / scope | State |
 |---|---|---|
 | 6.1 | Images: DPI guards, cache, rotated axes, JPEG quality-90 re-encoding, EXIF stripping on re-encoding, CMYK decode regression | Merged in PR #5 |
-| 6.2 | Charts: full-circle pie rounding tolerance (`80daf820cd`) | Implemented; pending merge |
-| 6.3 | Pages: apply `PageTheme.clip`, expand upstream paper formats | Pending |
+| 6.2 | Charts: full-circle pie rounding tolerance (`80daf820cd`) | Merged in PR #6 |
+| 6.3 | Pages: apply `PageTheme.clip`, expand upstream paper formats | Implemented; pending merge |
 | 6.4 | Text: `LineSplitter`, CJK break customization and hyphenation | Pending |
 | 6.5 | Serialization: synchronous output destinations and lazy JPEG writers | Pending |
 | 6.6 | Performance: unchanged `BoxConstraints` reuse, Flex copies, ASCII single-word path; benchmark in V8 | Pending |
@@ -344,6 +344,34 @@ and donuts against partial-slice controls on one landscape page. The browser
 card follows phase 6.1, and `npm run phase-examples` writes
 `examples/out/pie-full-circle-phase-6.2.pdf`. No new assets or licenses.
 
+
+### 6.3 Pages — clipping and paper formats
+
+`PageTheme.clip` now scopes every body/layer paint to the resolved margin
+rectangle. It also applies to `MultiPage` fragments, headers and footers on
+every page. Layout/pagination remain unchanged; the default is still false.
+The port retains full-page layout for background/foreground builders, while
+clip limits their painting. The separate solid `background` option remains a
+full-page paper fill. The upstream MultiPage omission is documented in
+[ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md).
+
+`PageFormat` adds A3, A5, A6, LEGAL, ROLL57, ROLL80, UNDEFINED and STANDARD,
+with upstream margins. A4/LETTER retain their existing dimensions. `PageUnit`
+is public, including upstream's `dp`. `Page` resolves infinite axes from its
+body's measured size plus margins before painting or writing `/MediaBox`.
+`MultiPage` rejects infinite paper dimensions, as upstream requires. Invalid
+paper or non-finite fitted dimensions fail before serialization.
+
+Regression tests cover asymmetric/rotated clips, every layer on multiple
+pages, the disabled default, preset dimensions/margins, roll and fully fitted
+paper, repeated saves, and invalid dimensions. All eight upstream examples
+still generate with unchanged byte counts.
+
+**Example gate:** `examples/page-formats-phase-6.3.mjs` generates eight pages:
+A5 clipping off/on, landscape A6, two clipped MultiPage pages, 57/80 mm receipts,
+and a content-sized label. The **Page clipping & formats** browser card follows
+phase 6.2 and shares its generator with `npm run phase-examples`. No assets or
+third-party licenses are added.
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
 out of scope, and the complete upstream example set still generates end to end.

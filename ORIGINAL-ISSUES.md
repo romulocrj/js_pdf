@@ -145,3 +145,22 @@ The same method added `subsequent` before adding one to the result, even though
 it writes that value directly as `/St`. Consequently, `/St 5` appeared as 6 in
 the widget context. The port subtracts the internal offset so the context text
 matches the label displayed by the reader.
+
+
+## MultiPage omits PageTheme.clip (`widgets/multi_page.dart`)
+
+**Source observation:** at audit reference `b97c4a63dc`, `Page.paint` applies
+`pageTheme.clip`, but `MultiPage._paintChild` calls `child.paint` directly
+(with an optional orientation transform). The same path paints body fragments,
+headers, footers and page layers without the margin clip.
+
+**How to reproduce:** create a MultiPage with `PageTheme(clip: true)`, nonzero
+margins, and a custom painter that draws outside its measured box. Its paint
+can enter the margins despite clipping being enabled. Repeat with a page break
+and asymmetric margins to check every physical page.
+
+**Port correction:** route all page child painting through a shared
+save/rectangle-clip/paint/restore scope using the resolved paper and margins.
+The regression is in `test/page_clipping_formats.test.mjs`; the visual proof is
+`examples/page-formats-phase-6.3.mjs`. This is a source-level finding; an upstream
+Dart runtime reproduction has not been run in this change.

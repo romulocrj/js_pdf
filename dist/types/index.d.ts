@@ -1,4 +1,4 @@
-import { PageFormat } from './pdf/page_format.ts';
+import { PageFormat, PageUnit } from './pdf/page_format.ts';
 import { BarcodeFactory } from './barcode/barcode_factory.ts';
 import { BarcodeCodabarStartStop } from './barcode/codabar.ts';
 import { BarcodeCode128Fnc } from './barcode/code128.ts';
@@ -57,7 +57,7 @@ import { DefaultTextStyle, Theme, ThemeData } from './widgets/theme.ts';
 import { DelayedWidget, Inherited, InheritedWidget, Inseparable, SpanningWidget, StatelessWidget, Widget } from './widgets/widget.ts';
 import { Wrap } from './widgets/wrap.ts';
 import type { DocumentOptions } from './widgets/document.ts';
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, DecorationGraphic, DecorationImage, Bullet, BarDataSet, Builder, CartesianFrame, CartesianGrid, Center, Circle, CircleAnnotation, CircularProgressIndicator, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, ClipOval, ClipRect, ClipRRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DefaultTextStyle, DelayedWidget, DecoratedBox, Divider, Directionality, Document, EdgeInsets, Expanded, FixedColumnWidth, FlexColumnWidth, FittedBox, Flex, Flexible, FlatButton, Font, Footer, FlutterLogo, FixedAxis, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, Inseparable, IntrinsicColumnWidth, LayoutBuilder, Link, ListView, LineDataSet, LimitedBox, LinearProgressIndicator, LinearGradient, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Paragraph, Page, PageFormat, PageTheme, Partition, Partitions, PdfLogo, PdfPageLabel, Pdf417SecurityLevel, PdfImage, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, PointChartValue, PointDataSet, Polygon, PolygonAnnotation, PolyLineAnnotation, RadialFrame, RadialGradient, RadialGrid, Radius, Positioned, PositionedDirectional, Placeholder, Row, SizedBox, Spacer, Stack, SpanningWidget, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, InlineSpan, RichText, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, RawImage, Rectangle, Shape, SquareAnnotation, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap };
+export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationUrl, AspectRatio, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, DecorationGraphic, DecorationImage, Bullet, BarDataSet, Builder, CartesianFrame, CartesianGrid, Center, Circle, CircleAnnotation, CircularProgressIndicator, Chart, ChartFrame, ChartGrid, ChartLegend, Checkbox, ChoiceField, ClipOval, ClipRect, ClipRRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DefaultTextStyle, DelayedWidget, DecoratedBox, Divider, Directionality, Document, EdgeInsets, Expanded, FixedColumnWidth, FlexColumnWidth, FittedBox, Flex, Flexible, FlatButton, Font, Footer, FlutterLogo, FixedAxis, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, Inseparable, IntrinsicColumnWidth, LayoutBuilder, Link, ListView, LineDataSet, LimitedBox, LinearProgressIndicator, LinearGradient, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Paragraph, Page, PageFormat, PageUnit, PageTheme, Partition, Partitions, PdfLogo, PdfPageLabel, Pdf417SecurityLevel, PdfImage, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, PointChartValue, PointDataSet, Polygon, PolygonAnnotation, PolyLineAnnotation, RadialFrame, RadialGradient, RadialGrid, Radius, Positioned, PositionedDirectional, Placeholder, Row, SizedBox, Spacer, Stack, SpanningWidget, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, InlineSpan, RichText, Text, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, RawImage, Rectangle, Shape, SquareAnnotation, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap };
 export { decodePng, inflateZlib, parseJpeg };
 export { deflateRaw, deflateZlib } from './pdf/format/deflate.ts';
 export { pdfDiagnosticHandler, reportPdfDiagnostic, setPdfDiagnosticHandler } from './pdf/diagnostics.ts';
@@ -290,6 +290,7 @@ export interface PublicApi {
     readonly BoxConstraints: typeof BoxConstraints;
     readonly EdgeInsets: typeof EdgeInsets;
     readonly PageFormat: typeof PageFormat;
+    readonly PageUnit: typeof PageUnit;
     readonly PdfType1Font: typeof PdfType1Font;
     readonly PdfTtfFont: typeof PdfTtfFont;
     readonly PdfPageLabel: typeof PdfPageLabel;
@@ -461,6 +462,7 @@ export declare const js_pdf: Readonly<{
     BoxConstraints: typeof BoxConstraints;
     EdgeInsets: typeof EdgeInsets;
     PageFormat: typeof PageFormat;
+    PageUnit: typeof PageUnit;
     PdfType1Font: typeof PdfType1Font;
     PdfTtfFont: typeof PdfTtfFont;
     PdfPageLabel: typeof PdfPageLabel;

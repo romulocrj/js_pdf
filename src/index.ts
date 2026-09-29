@@ -21,7 +21,7 @@
  * enforces that by compiling against the ES2020 lib alone.
  */
 
-import { PageFormat } from './pdf/page_format.ts';
+import { PageFormat, PageUnit } from './pdf/page_format.ts';
 import { BarcodeFactory } from './barcode/barcode_factory.ts';
 import { BarcodeCodabarStartStop } from './barcode/codabar.ts';
 import { BarcodeCode128Fnc } from './barcode/code128.ts';
@@ -252,6 +252,7 @@ export {
   Paragraph,
   Page,
   PageFormat,
+  PageUnit,
   PageTheme,
   Partition,
   Partitions,
@@ -854,6 +855,7 @@ export interface PublicApi {
   readonly BoxConstraints: typeof BoxConstraints;
   readonly EdgeInsets: typeof EdgeInsets;
   readonly PageFormat: typeof PageFormat;
+  readonly PageUnit: typeof PageUnit;
   readonly PdfType1Font: typeof PdfType1Font;
   readonly PdfTtfFont: typeof PdfTtfFont;
   readonly PdfPageLabel: typeof PdfPageLabel;
@@ -1020,6 +1022,7 @@ const publicApi: PublicApi = Object.freeze({
   BoxConstraints,
   EdgeInsets,
   PageFormat,
+  PageUnit,
   PdfType1Font,
   PdfTtfFont,
   PdfPageLabel,

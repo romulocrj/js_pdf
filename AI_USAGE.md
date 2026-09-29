@@ -212,6 +212,26 @@ document.addPage(new pw.MultiPage({
 }));
 ```
 
+Paper presets are `PageFormat.A3`, `A4`, `A5`, `A6`, `LETTER`, `LEGAL`,
+`ROLL57`, `ROLL80`, `UNDEFINED` and `STANDARD` (A4). They include upstream
+margins; override `margin` explicitly when needed. `PageUnit.mm`, `.cm`,
+`.inch`, `.point`, `.pica` and `.dp` convert dimensions to PDF points.
+
+Use `Page` for a receipt on `ROLL57` or `ROLL80`: its height follows the
+measured content plus margins. `UNDEFINED` fits both axes and has zero margins;
+provide content with a finite intrinsic size (for example, a fixed-width
+container with a shrink-wrapped column). Build/layout see the declared infinite
+axes; paint and layer builders see the resolved finite format. `MultiPage`
+requires finite width and height, so use a custom finite roll format if the
+receipt must paginate.
+
+Set `pageTheme: new pw.PageTheme({ clip: true, ... })` to clip painting to the
+margin rectangle, including background/foreground widgets and MultiPage
+headers/footers. This does not shrink layout or fix overflowing content, and
+PDF annotations are not graphics clipped. The separate solid `background`
+option still fills the paper. Clipping is disabled by default. Compare the
+controls in [the phase 6.3 example](examples/page-formats-phase-6.3.mjs).
+
 Headers and footers belong to `MultiPage.header` and `MultiPage.footer`. The
 render context exposes `pageNumber`, `pagesCount`, `pageLabel`, `pageFormat` and
 the active theme.
