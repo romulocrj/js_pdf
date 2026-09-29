@@ -190,7 +190,10 @@ covers, in [AI_USAGE.md](AI_USAGE.md).
 
 - Reading existing PDFs, rasterizing PDFs, encryption and digital signatures
   are out of scope.
-- PDF/A output intents are not implemented.
+- Directional layout geometry, right-to-left (RTL) layout for Flex and tables,
+  and baseline alignment are not implemented (phase 6.9).
+- PDF/A integration, including output intents and the required conformance
+  handling, is not implemented (phase 6.11).
 - Library code performs no host I/O. Fonts, images and other external assets
   must be supplied by the caller as bytes or text.
 - An indivisible `MultiPage` child taller than one content area is rejected;
