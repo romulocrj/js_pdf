@@ -5,7 +5,7 @@ import type { RadiusValue, TextDirection } from './border_radius.ts';
 import { BoxBorder } from './box_border.ts';
 import type { BoxBorderInput } from './box_border.ts';
 import type { BasicAlignmentInput } from './basic.ts';
-import { Alignment } from './geometry.ts';
+import type { AlignmentGeometry } from './geometry.ts';
 import type { BoxFit } from './svg.ts';
 import type { ImageProvider } from './image_provider.ts';
 import type { RenderContext } from './widget.ts';
@@ -27,7 +27,7 @@ export interface DecorationImageOptions {
 export declare class DecorationImage extends DecorationGraphic {
     readonly image: ImageProvider;
     readonly fit: BoxFit;
-    readonly alignment: Alignment;
+    readonly alignment: AlignmentGeometry;
     readonly dpi: number | null;
     constructor({ image, fit, alignment, dpi }: DecorationImageOptions);
     paint(context: RenderContext, box: PdfRect): void;
@@ -47,31 +47,31 @@ export declare abstract class Gradient {
     abstract paint(context: RenderContext, box: PdfRect): void;
 }
 export interface LinearGradientOptions extends GradientOptions {
-    readonly begin?: Alignment;
-    readonly end?: Alignment;
+    readonly begin?: AlignmentGeometry;
+    readonly end?: AlignmentGeometry;
     readonly tileMode?: TileMode;
 }
 /** An axial PDF shading between two alignment points. */
 export declare class LinearGradient extends Gradient {
-    readonly begin: Alignment;
-    readonly end: Alignment;
+    readonly begin: AlignmentGeometry;
+    readonly end: AlignmentGeometry;
     readonly tileMode: TileMode;
     constructor({ colors, stops, begin, end, tileMode }: LinearGradientOptions);
     paint(context: RenderContext, box: PdfRect): void;
 }
 export interface RadialGradientOptions extends GradientOptions {
-    readonly center?: Alignment;
+    readonly center?: AlignmentGeometry;
     readonly radius?: number;
     readonly tileMode?: TileMode;
-    readonly focal?: Alignment | null;
+    readonly focal?: AlignmentGeometry | null;
     readonly focalRadius?: number;
 }
 /** A radial PDF shading with optional independent focal point. */
 export declare class RadialGradient extends Gradient {
-    readonly center: Alignment;
+    readonly center: AlignmentGeometry;
     readonly radius: number;
     readonly tileMode: TileMode;
-    readonly focal: Alignment | null;
+    readonly focal: AlignmentGeometry | null;
     readonly focalRadius: number;
     constructor({ colors, stops, center, radius, tileMode, focal, focalRadius }: RadialGradientOptions);
     paint(context: RenderContext, box: PdfRect): void;

@@ -1285,6 +1285,31 @@ function normalizeInsets(value = 0) {
   };
 }
 
+function normalizeInsetsGeometry(value = 0) {
+  if (typeof value === "number" || value.start == null && value.end == null) return normalizeInsets(value);
+  const {top, bottom} = normalizeInsets(value);
+  const side = own => Number(own ?? value.horizontal ?? value.all ?? 0);
+  return {
+    top,
+    start: side(value.start),
+    end: side(value.end),
+    bottom,
+    left: Number(value.left ?? 0),
+    right: Number(value.right ?? 0)
+  };
+}
+
+function resolveInsets(value, direction) {
+  if (!("start" in value)) return value;
+  const rtl = direction === "rtl";
+  return {
+    top: value.top,
+    right: (value.right ?? 0) + (rtl ? value.start : value.end),
+    bottom: value.bottom,
+    left: (value.left ?? 0) + (rtl ? value.end : value.start)
+  };
+}
+
 function edgeInsetsConstructor(value = 0) {
   return normalizeInsets(value);
 }
@@ -1329,6 +1354,47 @@ const EdgeInsets = Object.freeze(Object.assign(edgeInsetsConstructor, {
     };
   }
 }));
+
+const EdgeInsetsDirectional = Object.freeze({
+  zero: Object.freeze({
+    top: 0,
+    start: 0,
+    end: 0,
+    bottom: 0
+  }),
+  all(value) {
+    return {
+      top: value,
+      start: value,
+      end: value,
+      bottom: value
+    };
+  },
+  symmetric({vertical = 0, horizontal = 0} = {}) {
+    return {
+      top: vertical,
+      start: horizontal,
+      end: horizontal,
+      bottom: vertical
+    };
+  },
+  only({start = 0, top = 0, end = 0, bottom = 0} = {}) {
+    return {
+      top,
+      start,
+      end,
+      bottom
+    };
+  },
+  fromSTEB(start, top, end, bottom) {
+    return {
+      top,
+      start,
+      end,
+      bottom
+    };
+  }
+});
 
 function insetsHorizontal(insets) {
   return insets.left + insets.right;
@@ -1376,6 +1442,18 @@ const Alignment = Object.freeze({
     y: -1
   })
 });
+
+const AlignmentDirectional = Object.freeze(Object.fromEntries(Object.entries(Alignment).map(([name, {x, y}]) => [ name.replace("Left", "Start").replace("Right", "End"), Object.freeze({
+  start: x,
+  y
+}) ])));
+
+function resolveAlignment$1(value, direction) {
+  return "start" in value ? {
+    x: direction === "rtl" ? 0 - value.start : value.start,
+    y: value.y
+  } : value;
+}
 
 function inscribe(alignment, childWidth, childHeight, boxWidth, boxHeight) {
   const halfWidthDelta = (boxWidth - childWidth) / 2;
@@ -1774,16 +1852,52 @@ class Inseparable extends SpanningWidget {
   }
 }
 
+class InheritedDirectionality extends Inherited {
+  constructor(textDirection) {
+    super();
+    this.textDirection = textDirection;
+  }
+}
+
+class Directionality extends StatelessWidget {
+  constructor({textDirection, child}) {
+    super();
+    if (textDirection !== "ltr" && textDirection !== "rtl") {
+      throw new TypeError(`Unknown text direction: ${String(textDirection)}`);
+    }
+    this.textDirection = textDirection;
+    this.child = child;
+  }
+  static of(context) {
+    return InheritedWidget.of(context, InheritedDirectionality)?.textDirection ?? context.textDirection ?? "ltr";
+  }
+  build(_context) {
+    return new InheritedWidget({
+      inherited: new InheritedDirectionality(this.textDirection),
+      build: () => this.child
+    });
+  }
+}
+
+function insetsIn(context, value) {
+  return resolveInsets(value, Directionality.of(context));
+}
+
+function alignmentIn(context, value) {
+  return resolveAlignment$1(value, Directionality.of(context));
+}
+
 class Padding extends Widget {
   constructor({padding = 0, child = null} = {}) {
     super();
-    this.padding = normalizeInsets(padding);
+    this.padding = normalizeInsetsGeometry(padding);
     this.child = child;
   }
   layout(context, constraints) {
     const parent = BoxConstraints.from(constraints);
-    const horizontal = insetsHorizontal(this.padding);
-    const vertical = insetsVertical(this.padding);
+    const padding = insetsIn(context, this.padding);
+    const horizontal = insetsHorizontal(padding);
+    const vertical = insetsVertical(padding);
     if (this.child === null) {
       const size = parent.constrain({
         width: horizontal,
@@ -1798,7 +1912,7 @@ class Padding extends Widget {
         }
       };
     }
-    const childBox = this.child.layout(context, parent.deflate(this.padding));
+    const childBox = this.child.layout(context, parent.deflate(padding));
     const size = parent.constrain({
       width: childBox.width + horizontal,
       height: childBox.height + vertical
@@ -1815,17 +1929,22 @@ class Padding extends Widget {
   paint(context, box) {
     const {childBox} = box.data;
     if (childBox === null) return;
+    const padding = insetsIn(context, this.padding);
     childBox.widget.paint(context, {
       ...childBox,
-      x: box.x + this.padding.left,
-      y: box.y + this.padding.top
+      x: box.x + padding.left,
+      y: box.y + padding.top
     });
   }
 }
 
+function namedAlignment(name) {
+  return Alignment[name] ?? AlignmentDirectional[name];
+}
+
 function resolveBasicAlignment(value) {
   if (typeof value !== "string") return value;
-  const result = Alignment[value];
+  const result = namedAlignment(value);
   if (result === undefined) throw new TypeError(`Unknown alignment: ${value}`);
   return result;
 }
@@ -1863,7 +1982,7 @@ class Align extends Widget {
       width: shrinkWidth ? childBox.width * (this.widthFactor ?? 1) : Infinity,
       height: shrinkHeight ? childBox.height * (this.heightFactor ?? 1) : Infinity
     });
-    const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+    const offset = inscribe(alignmentIn(context, this.alignment), childBox.width, childBox.height, size.width, size.height);
     return {
       widget: this,
       width: size.width,
@@ -2137,8 +2256,9 @@ class Transform extends Widget {
     if (this.adjustLayout) {
       widgetMatrix = multiplyMatrix(translationMatrix(box.x + layoutDx, box.y + layoutDy), multiplyMatrix(this.transform, translationMatrix(-box.x, -box.y)));
     } else {
-      const alignedX = this.alignment === null ? 0 : (this.alignment.x + 1) * box.width / 2;
-      const alignedY = this.alignment === null ? 0 : (1 - this.alignment.y) * box.height / 2;
+      const alignment = this.alignment === null ? null : alignmentIn(context, this.alignment);
+      const alignedX = alignment === null ? 0 : (alignment.x + 1) * box.width / 2;
+      const alignedY = alignment === null ? 0 : (1 - alignment.y) * box.height / 2;
       const anchorX = box.x + alignedX + this.origin.x;
       const anchorY = box.y + alignedY + this.origin.y;
       widgetMatrix = multiplyMatrix(translationMatrix(anchorX, anchorY), multiplyMatrix(this.transform, translationMatrix(-anchorX, -anchorY)));
@@ -2326,8 +2446,9 @@ class FittedBox extends Widget {
       height: box.height
     });
     if (fitted.source.width <= 0 || fitted.source.height <= 0) return;
-    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, childBox.width, childBox.height);
-    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, box.width, box.height);
+    const alignment = alignmentIn(context, this.alignment);
+    const sourceOffset = inscribe(alignment, fitted.source.width, fitted.source.height, childBox.width, childBox.height);
+    const destinationOffset = inscribe(alignment, fitted.destination.width, fitted.destination.height, box.width, box.height);
     const scaleX = fitted.destination.width / fitted.source.width;
     const scaleY = fitted.destination.height / fitted.source.height;
     const widgetMatrix = multiplyMatrix(translationMatrix(box.x + destinationOffset.dx, box.y + destinationOffset.dy), multiplyMatrix(scaleMatrix(scaleX, scaleY), translationMatrix(-box.x - sourceOffset.dx, -box.y - sourceOffset.dy)));
@@ -2606,7 +2727,7 @@ class OverflowBox extends Widget {
     const offset = childBox === null ? {
       dx: 0,
       dy: 0
-    } : inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+    } : inscribe(alignmentIn(context, this.alignment), childBox.width, childBox.height, size.width, size.height);
     return {
       widget: this,
       width: size.width,
@@ -2813,8 +2934,9 @@ class DecorationImage extends DecorationGraphic {
       height: box.height
     });
     if (fitted.source.width <= 0 || fitted.source.height <= 0) return;
-    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, image.width, image.height);
-    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, box.width, box.height);
+    const alignment = alignmentIn(context, this.alignment);
+    const sourceOffset = inscribe(alignment, fitted.source.width, fitted.source.height, image.width, image.height);
+    const destinationOffset = inscribe(alignment, fitted.destination.width, fitted.destination.height, box.width, box.height);
     const scaleX = fitted.destination.width / fitted.source.width;
     const scaleY = fitted.destination.height / fitted.source.height;
     const boxTop = context.canvas.pageHeight - box.y - box.height;
@@ -2832,7 +2954,8 @@ class DecorationImage extends DecorationGraphic {
   }
 }
 
-function alignmentPoint(alignment, box) {
+function alignmentPoint(context, geometry, box) {
+  const alignment = alignmentIn(context, geometry);
   return {
     x: box.x + (alignment.x + 1) * box.width / 2,
     y: box.y + (alignment.y + 1) * box.height / 2
@@ -2875,8 +2998,8 @@ class LinearGradient extends Gradient {
         type: "axial",
         boundingBox: box,
         fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: alignmentPoint(this.begin, box),
-        end: alignmentPoint(this.end, box),
+        start: alignmentPoint(context, this.begin, box),
+        end: alignmentPoint(context, this.end, box),
         extendStart: true,
         extendEnd: true
       })
@@ -2907,8 +3030,8 @@ class RadialGradient extends Gradient {
         type: "radial",
         boundingBox: box,
         fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: alignmentPoint(this.focal ?? this.center, box),
-        end: alignmentPoint(this.center, box),
+        start: alignmentPoint(context, this.focal ?? this.center, box),
+        end: alignmentPoint(context, this.center, box),
         radius0: this.focalRadius * scale,
         radius1: this.radius * scale,
         extendStart: true,
@@ -2979,7 +3102,7 @@ class BoxDecoration {
       throw new Error("A circular BoxDecoration cannot have a border radius");
     }
   }
-  paint(context, x, y, width, height, phase = "all", direction = "ltr") {
+  paint(context, x, y, width, height, phase = "all", direction = Directionality.of(context)) {
     const resolvedRadius = this.borderRadius?.resolve(direction) ?? null;
     const box = {
       x,
@@ -3079,8 +3202,8 @@ class Container extends SpanningWidget {
     this.child = child;
     this.width = width == null ? null : Number(width);
     this.height = height == null ? null : Number(height);
-    this.padding = normalizeInsets(padding);
-    this.margin = normalizeInsets(margin);
+    this.padding = normalizeInsetsGeometry(padding);
+    this.margin = normalizeInsetsGeometry(margin);
     if (color != null && background != null) {
       throw new Error("Container cannot have both color and background");
     }
@@ -3100,26 +3223,30 @@ class Container extends SpanningWidget {
       childState: this.child instanceof SpanningWidget ? this.child.initialSpanState() : null
     };
   }
-  finishLayout(parent, desired, childBox) {
+  edges(context) {
+    return [ insetsIn(context, this.margin), insetsIn(context, this.padding) ];
+  }
+  finishLayout(context, parent, desired, childBox) {
+    const [margin, padding] = this.edges(context);
     const content = childBox ?? {
       width: 0,
       height: 0
     };
     const decorated = desired.constrain({
-      width: content.width + this.padding.left + this.padding.right,
-      height: content.height + this.padding.top + this.padding.bottom
+      width: content.width + padding.left + padding.right,
+      height: content.height + padding.top + padding.bottom
     });
     const boxWidth = decorated.width;
     const boxHeight = decorated.height;
-    const contentWidth = Math.max(0, boxWidth - this.padding.left - this.padding.right);
-    const contentHeight = Math.max(0, boxHeight - this.padding.top - this.padding.bottom);
+    const contentWidth = Math.max(0, boxWidth - padding.left - padding.right);
+    const contentHeight = Math.max(0, boxHeight - padding.top - padding.bottom);
     const childOffset = childBox === null || this.alignment === null ? {
       dx: 0,
       dy: 0
-    } : inscribe(this.alignment, childBox.width, childBox.height, contentWidth, contentHeight);
+    } : inscribe(alignmentIn(context, this.alignment), childBox.width, childBox.height, contentWidth, contentHeight);
     const size = parent.constrain({
-      width: boxWidth + this.margin.left + this.margin.right,
-      height: boxHeight + this.margin.top + this.margin.bottom
+      width: boxWidth + margin.left + margin.right,
+      height: boxHeight + margin.top + margin.bottom
     });
     return {
       widget: this,
@@ -3136,15 +3263,16 @@ class Container extends SpanningWidget {
   }
   layout(context, constraints) {
     const parent = BoxConstraints.from(constraints);
-    const outer = parent.deflate(this.margin);
+    const [margin, padding] = this.edges(context);
+    const outer = parent.deflate(margin);
     const fill = this.alignment !== null || this.child === null;
     const desired = outer.tighten({
       width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
       height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
     });
-    const inner = desired.deflate(this.padding);
+    const inner = desired.deflate(padding);
     const childBox = this.child?.layout(context, this.alignment === null ? inner : inner.loosen()) ?? null;
-    return this.finishLayout(parent, desired, childBox);
+    return this.finishLayout(context, parent, desired, childBox);
   }
   layoutSpan(context, constraints, state) {
     if (!(this.child instanceof SpanningWidget) || !this.canSpan) {
@@ -3155,16 +3283,17 @@ class Container extends SpanningWidget {
       };
     }
     const parent = BoxConstraints.from(constraints);
-    const outer = parent.deflate(this.margin);
+    const [margin, padding] = this.edges(context);
+    const outer = parent.deflate(margin);
     const fill = this.alignment !== null || this.child === null;
     const desired = outer.tighten({
       width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
       height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
     });
-    const inner = desired.deflate(this.padding);
+    const inner = desired.deflate(padding);
     const fragment = this.child.layoutSpan(context, this.alignment === null ? inner : inner.loosen(), state.childState);
     return {
-      box: this.finishLayout(parent, desired, fragment.box),
+      box: this.finishLayout(context, parent, desired, fragment.box),
       nextState: {
         childState: fragment.nextState
       },
@@ -3172,8 +3301,9 @@ class Container extends SpanningWidget {
     };
   }
   paint(context, box) {
-    const x = box.x + this.margin.left;
-    const y = box.y + this.margin.top;
+    const [margin, padding] = this.edges(context);
+    const x = box.x + margin.left;
+    const y = box.y + margin.top;
     const {boxWidth, boxHeight, childBox, childX, childY} = box.data;
     if (this.decoration !== null) {
       this.decoration.paint(context, x, y, boxWidth, boxHeight);
@@ -3186,12 +3316,29 @@ class Container extends SpanningWidget {
     if (childBox) {
       childBox.widget.paint(context, {
         ...childBox,
-        x: x + this.padding.left + childX,
-        y: y + this.padding.top + childY
+        x: x + padding.left + childX,
+        y: y + padding.top + childY
       });
     }
     this.foregroundDecoration?.paint(context, x, y, boxWidth, boxHeight);
   }
+}
+
+function reversedAxes(context, horizontal, verticalDirection) {
+  const up = verticalDirection === "up";
+  const rtl = Directionality.of(context) === "rtl";
+  return horizontal ? [ rtl, up ] : [ up, rtl ];
+}
+
+function crossOffset(alignment, free, flip) {
+  return alignment === "center" ? free / 2 : alignment === "end" !== flip ? free : 0;
+}
+
+function checkCrossAxisAlignment(value) {
+  if (![ "start", "end", "center", "stretch" ].includes(value)) {
+    throw new TypeError(`Unknown CrossAxisAlignment: ${value}`);
+  }
+  return value;
 }
 
 function finiteNonNegative$1(value, name) {
@@ -3302,9 +3449,7 @@ class Flex extends SpanningWidget {
     if (mainAxisSize !== "min" && mainAxisSize !== "max") {
       throw new TypeError(`Unknown MainAxisSize: ${mainAxisSize}`);
     }
-    if (![ "start", "end", "center", "stretch" ].includes(crossAxisAlignment)) {
-      throw new TypeError(`Unknown CrossAxisAlignment: ${crossAxisAlignment}`);
-    }
+    checkCrossAxisAlignment(crossAxisAlignment);
     if (verticalDirection !== "up" && verticalDirection !== "down") {
       throw new TypeError(`Unknown VerticalDirection: ${verticalDirection}`);
     }
@@ -3475,14 +3620,14 @@ class Flex extends SpanningWidget {
         break;
       }
     }
-    const reverse = this.direction === "vertical" && this.verticalDirection === "up";
+    const [reverse, flipCross] = reversedAxes(context, horizontal, this.verticalDirection);
     let cursor = reverse ? actualMain - leading : leading;
     const children = [];
     for (let index = 0; index < measured.length; index++) {
       const box = measured[index];
       const main = childMain(box, this.direction);
       const cross = childCross(box, this.direction);
-      const crossPosition = this.crossAxisAlignment === "end" ? actualCross - cross : this.crossAxisAlignment === "center" ? (actualCross - cross) / 2 : 0;
+      const crossPosition = this.crossAxisAlignment === "stretch" ? 0 : crossOffset(this.crossAxisAlignment, actualCross - cross, flipCross);
       const mainPosition = reverse ? cursor - main : cursor;
       children.push({
         box,
@@ -3666,7 +3811,7 @@ class Positioned extends Widget {
 }
 
 class PositionedDirectional extends Positioned {
-  constructor({start = null, top = null, end = null, bottom = null, width = null, height = null, child, textDirection = "ltr"}) {
+  constructor({start = null, top = null, end = null, bottom = null, width = null, height = null, child, textDirection = null}) {
     super({
       left: textDirection === "rtl" ? end : start,
       right: textDirection === "rtl" ? start : end,
@@ -3680,7 +3825,7 @@ class PositionedDirectional extends Positioned {
     this.end = end;
     this.textDirection = textDirection;
   }
-  static fill({start = 0, top = 0, end = 0, bottom = 0, child, textDirection = "ltr"}) {
+  static fill({start = 0, top = 0, end = 0, bottom = 0, child, textDirection = null}) {
     return new PositionedDirectional({
       start,
       top,
@@ -3734,10 +3879,12 @@ class Stack extends Widget {
       height: constraints.hasBoundedHeight ? constraints.maxHeight : 0
     });
     const placed = [];
+    const direction = Directionality.of(context);
+    const alignment = resolveAlignment$1(this.alignment, direction);
     for (const child of this.children) {
       if (!(child instanceof Positioned)) {
         const childBox = measured.get(child);
-        const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+        const offset = inscribe(alignment, childBox.width, childBox.height, size.width, size.height);
         placed.push({
           box: childBox,
           dx: offset.dx,
@@ -3745,16 +3892,17 @@ class Stack extends Widget {
         });
         continue;
       }
+      const [left, right] = direction === "rtl" && child instanceof PositionedDirectional && child.textDirection === null ? [ child.right, child.left ] : [ child.left, child.right ];
       let positionedConstraints = new BoxConstraints;
-      const tightWidth = child.left !== null && child.right !== null ? Math.max(0, size.width - child.left - child.right) : child.width;
+      const tightWidth = left !== null && right !== null ? Math.max(0, size.width - left - right) : child.width;
       const tightHeight = child.top !== null && child.bottom !== null ? Math.max(0, size.height - child.top - child.bottom) : child.height;
       positionedConstraints = positionedConstraints.tighten({
         width: tightWidth,
         height: tightHeight
       });
       const childBox = child.layout(context, positionedConstraints);
-      const aligned = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
-      const dx = child.left !== null ? child.left : child.right !== null ? size.width - child.right - childBox.width : aligned.dx;
+      const aligned = inscribe(alignment, childBox.width, childBox.height, size.width, size.height);
+      const dx = left !== null ? left : right !== null ? size.width - right - childBox.width : aligned.dx;
       const dy = child.top !== null ? child.top : child.bottom !== null ? size.height - child.bottom - childBox.height : aligned.dy;
       placed.push({
         box: childBox,
@@ -12835,33 +12983,6 @@ class ClipOval extends ClipWidget {
   }
 }
 
-class InheritedDirectionality extends Inherited {
-  constructor(textDirection) {
-    super();
-    this.textDirection = textDirection;
-  }
-}
-
-class Directionality extends StatelessWidget {
-  constructor({textDirection, child}) {
-    super();
-    if (textDirection !== "ltr" && textDirection !== "rtl") {
-      throw new TypeError(`Unknown text direction: ${String(textDirection)}`);
-    }
-    this.textDirection = textDirection;
-    this.child = child;
-  }
-  static of(context) {
-    return InheritedWidget.of(context, InheritedDirectionality)?.textDirection ?? context.textDirection ?? "ltr";
-  }
-  build(_context) {
-    return new InheritedWidget({
-      inherited: new InheritedDirectionality(this.textDirection),
-      build: () => this.child
-    });
-  }
-}
-
 const PdfPoint = Object.freeze({
   zero: Object.freeze({
     x: 0,
@@ -14840,7 +14961,7 @@ class Image extends Widget {
     this.height = height;
     this.dpi = dpi;
   }
-  layout(_context, constraints) {
+  layout(context, constraints) {
     const parent = BoxConstraints.from(constraints);
     const offered = {
       width: parent.constrainWidth(this.width ?? (parent.hasBoundedWidth ? parent.maxWidth : this.image.width)),
@@ -14858,8 +14979,9 @@ class Image extends Widget {
       width: image.width,
       height: image.height
     }, layoutFit.destination);
-    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, image.width, image.height);
-    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, layoutFit.destination.width, layoutFit.destination.height);
+    const alignment = alignmentIn(context, this.alignment);
+    const sourceOffset = inscribe(alignment, fitted.source.width, fitted.source.height, image.width, image.height);
+    const destinationOffset = inscribe(alignment, fitted.destination.width, fitted.destination.height, layoutFit.destination.width, layoutFit.destination.height);
     return {
       widget: this,
       width: layoutFit.destination.width,
@@ -17843,28 +17965,25 @@ class Wrap extends SpanningWidget {
     const containerMain = horizontal ? size.width : size.height;
     const containerCross = horizontal ? size.height : size.width;
     const [runLeading, runBetweenExtra] = spaces(this.runAlignment, Math.max(0, containerCross - usedCross), runs.length);
-    const reverseRuns = horizontal && this.verticalDirection === "up";
+    const [reverseChildren, reverseRuns] = reversedAxes(context, horizontal, this.verticalDirection);
     let crossCursor = reverseRuns ? containerCross - runLeading : runLeading;
     const placed = [];
     for (const run of runs) {
       if (reverseRuns) crossCursor -= run.cross;
       const [childLeading, childBetweenExtra] = spaces(this.alignment, Math.max(0, containerMain - run.main), run.children.length);
-      const reverseChildren = !horizontal && this.verticalDirection === "up";
       let mainCursor = reverseChildren ? containerMain - childLeading : childLeading;
       for (const child of run.children) {
         if (reverseChildren) mainCursor -= child.main;
         const freeCross = run.cross - child.cross;
-        const childCross = this.crossAxisAlignment === "end" ? freeCross : this.crossAxisAlignment === "center" ? freeCross / 2 : 0;
+        const childCross = crossOffset(this.crossAxisAlignment, freeCross, reverseRuns);
         placed.push({
           box: child.box,
           dx: horizontal ? mainCursor : crossCursor + childCross,
           dy: horizontal ? crossCursor + childCross : mainCursor
         });
-        const advance = child.main + this.spacing + childBetweenExtra;
-        mainCursor += reverseChildren ? -advance : advance;
+        mainCursor += reverseChildren ? -(this.spacing + childBetweenExtra) : child.main + this.spacing + childBetweenExtra;
       }
-      const runAdvance = run.cross + this.runSpacing + runBetweenExtra;
-      crossCursor += reverseRuns ? -runAdvance : runAdvance;
+      crossCursor += reverseRuns ? -(this.runSpacing + runBetweenExtra) : run.cross + this.runSpacing + runBetweenExtra;
     }
     const lastChild = placed.length === 0 ? state.firstChild : Math.max(...runs.flatMap(run => run.children.map(child => child.index))) + 1;
     const data = {
@@ -17919,7 +18038,7 @@ class ChartLegend extends StatelessWidget {
     this.position = resolveLegendPosition(position);
     this.direction = direction;
     this.decoration = normalizeBoxDecoration(decoration);
-    this.padding = normalizeInsets(padding);
+    this.padding = normalizeInsetsGeometry(padding);
   }
   buildLegend(context, dataset) {
     const style = context.theme.defaultTextStyle.merge(this.textStyle);
@@ -18996,7 +19115,7 @@ function writePdf(output, pages, metadata, outlines = [], pageMode = "none", des
 }
 
 class PageTheme {
-  constructor({pageFormat = PageFormat.A4, buildBackground = null, buildForeground = null, theme = null, orientation = "natural", margin = null, clip = false} = {}) {
+  constructor({pageFormat = PageFormat.A4, buildBackground = null, buildForeground = null, theme = null, orientation = "natural", margin = null, clip = false, textDirection = null} = {}) {
     this.pageFormat = {
       ...pageFormat,
       width: Number(pageFormat.width),
@@ -19010,7 +19129,8 @@ class PageTheme {
     this.buildForeground = buildForeground;
     this.theme = theme;
     this.clip = clip;
-    this.declaredMargin = margin == null ? null : normalizeInsets(margin);
+    this.textDirection = textDirection;
+    this.declaredMargin = margin == null ? null : normalizeInsetsGeometry(margin);
   }
   get mustRotate() {
     return this.orientation === "landscape" && this.pageFormat.height > this.pageFormat.width || this.orientation === "portrait" && this.pageFormat.width > this.pageFormat.height;
@@ -19023,7 +19143,7 @@ class PageTheme {
   }
   get margin() {
     const fromFormat = formatMargin(this.pageFormat);
-    const declared = this.declaredMargin ?? (fromFormat === null ? normalizeInsets(DEFAULT_MARGIN) : fromFormat);
+    const declared = this.declaredMargin ? resolveInsets(this.declaredMargin, this.textDirection) : fromFormat === null ? normalizeInsets(DEFAULT_MARGIN) : fromFormat;
     return this.mustRotate ? {
       left: declared.bottom,
       top: declared.left,
@@ -19039,20 +19159,22 @@ class PageTheme {
       theme: options.theme ?? this.theme,
       orientation: options.orientation ?? this.orientation,
       margin: options.margin ?? this.declaredMargin,
-      clip: options.clip ?? this.clip
+      clip: options.clip ?? this.clip,
+      textDirection: options.textDirection ?? this.textDirection
     });
   }
 }
 
 class Page {
-  constructor({pageTheme = undefined, pageFormat = undefined, format = undefined, margin = undefined, theme = undefined, orientation = undefined, build, background = null}) {
+  constructor({pageTheme = undefined, pageFormat = undefined, format = undefined, margin = undefined, theme = undefined, orientation = undefined, textDirection = undefined, build, background = null}) {
     if (typeof build !== "function") throw new TypeError("Page.build must be a function");
     const base = pageTheme ?? new PageTheme;
     this.pageTheme = base.copyWith({
       pageFormat: pageFormat ?? format,
       margin,
       theme,
-      orientation
+      orientation,
+      textDirection
     });
     this.build = build;
     this.background = background;
@@ -19072,7 +19194,8 @@ class Page {
       pageNumber: documentContext.pageOffset + 1,
       pageLabel: documentContext.document.pageLabel(documentContext.pageOffset),
       pagesCount: documentContext.pagesCount || documentContext.pageOffset + 1,
-      theme: this.pageTheme.theme ?? documentContext.document.theme
+      theme: this.pageTheme.theme ?? documentContext.document.theme,
+      textDirection: this.pageTheme.textDirection
     };
     const maxWidth = format.width - margin.left - margin.right;
     const maxHeight = format.height - margin.top - margin.bottom;
@@ -19104,7 +19227,7 @@ class Page {
     this.paintLayer(this.pageTheme.buildBackground, context, format);
     paintPageChild(this.pageTheme, context, widget, {
       ...box,
-      x: margin.left,
+      x: pageChildX(this.pageTheme, margin.left, format.width - margin.left - margin.right, box.width),
       y: margin.top
     });
     this.paintLayer(this.pageTheme.buildForeground, context, format);
@@ -19131,10 +19254,14 @@ class Page {
     }));
     paintPageChild(this.pageTheme, context, widget, {
       ...box,
-      x: 0,
+      x: pageChildX(this.pageTheme, 0, format.width, box.width),
       y: 0
     });
   }
+}
+
+function pageChildX(theme, left, available, width, alignment = "start") {
+  return left + crossOffset(alignment, available - width, theme.textDirection === "rtl");
 }
 
 function paintPageChild(theme, context, widget, box) {
@@ -19182,7 +19309,7 @@ class NewPage extends Widget {
 }
 
 class MultiPage {
-  constructor({pageTheme = undefined, format = undefined, pageFormat = undefined, margin = undefined, orientation = undefined, gap = 0, theme = undefined, build, header = null, footer = null, background = null, maxPages = 50}) {
+  constructor({pageTheme = undefined, format = undefined, pageFormat = undefined, margin = undefined, orientation = undefined, textDirection = undefined, crossAxisAlignment = "start", gap = 0, theme = undefined, build, header = null, footer = null, background = null, maxPages = 50}) {
     this.renderedPages = [];
     if (typeof build !== "function") throw new TypeError("MultiPage.build must be a function");
     const base = pageTheme ?? new PageTheme({
@@ -19192,8 +19319,10 @@ class MultiPage {
       pageFormat: pageFormat ?? format,
       margin,
       orientation,
-      theme
+      theme,
+      textDirection
     });
+    this.crossAxisAlignment = checkCrossAxisAlignment(crossAxisAlignment);
     this.theme = this.pageTheme.theme;
     this.gap = Number(gap);
     this.build = build;
@@ -19230,7 +19359,8 @@ class MultiPage {
         pageNumber,
         pageLabel: documentContext.document.pageLabel(pageNumber - 1),
         pagesCount: documentContext.pagesCount || pageNumber,
-        theme: this.theme ?? documentContext.document.theme
+        theme: this.theme ?? documentContext.document.theme,
+        textDirection: this.pageTheme.textDirection
       };
       this.paintLayer(this.pageTheme.buildBackground, context);
       const maxWidth = this.format.width - this.margin.left - this.margin.right;
@@ -19279,7 +19409,7 @@ class MultiPage {
         if (natural.height <= initialAvailable + .001) {
           paintPageChild(this.pageTheme, page.context, child, {
             ...natural,
-            x: this.margin.left,
+            x: this.childX(page, natural.width),
             y: page.cursor
           });
           page.cursor += natural.height + this.gap;
@@ -19294,7 +19424,7 @@ class MultiPage {
           }));
           paintPageChild(this.pageTheme, page.context, child, {
             ...moved,
-            x: this.margin.left,
+            x: this.childX(page, moved.width),
             y: page.cursor
           });
           page.cursor += moved.height + this.gap;
@@ -19329,7 +19459,7 @@ class MultiPage {
           if (box.height > 0) {
             paintPageChild(this.pageTheme, page.context, child, {
               ...box,
-              x: this.margin.left,
+              x: this.childX(page, box.width),
               y: page.cursor
             });
           }
@@ -19358,7 +19488,7 @@ class MultiPage {
       }
       paintPageChild(this.pageTheme, page.context, child, {
         ...box,
-        x: this.margin.left,
+        x: this.childX(page, box.width),
         y: page.cursor
       });
       page.cursor += box.height + this.gap;
@@ -19382,7 +19512,7 @@ class MultiPage {
           }));
           paintPageChild(this.pageTheme, context, headerWidget, {
             ...headerBox,
-            x: this.margin.left,
+            x: pageChildX(this.pageTheme, this.margin.left, state.maxWidth, headerBox.width),
             y: this.margin.top
           });
         }
@@ -19393,7 +19523,7 @@ class MultiPage {
           }));
           paintPageChild(this.pageTheme, context, footerWidget, {
             ...footerBox,
-            x: this.margin.left,
+            x: pageChildX(this.pageTheme, this.margin.left, state.maxWidth, footerBox.width),
             y: this.format.height - this.margin.bottom - footerBox.height
           });
         }
@@ -19439,9 +19569,12 @@ class MultiPage {
     }));
     paintPageChild(this.pageTheme, context, widget, {
       ...box,
-      x: 0,
+      x: pageChildX(this.pageTheme, 0, this.format.width, box.width),
       y: 0
     });
+  }
+  childX(page, width) {
+    return pageChildX(this.pageTheme, this.margin.left, page.maxWidth, width, this.crossAxisAlignment);
   }
 }
 
@@ -19510,7 +19643,7 @@ class Icon extends StatelessWidget {
     if (font === null) {
       throw new Error("Icon requires Icon.font or ThemeData.withFont({ icons })");
     }
-    const direction = this.textDirection ?? "ltr";
+    const direction = this.textDirection ?? Directionality.of(context);
     let widget = new RichText({
       textDirection: direction,
       text: new TextSpan({
@@ -19906,7 +20039,7 @@ class GridView extends SpanningWidget {
       throw new TypeError(`Unknown GridView axis: ${direction}`);
     }
     this.direction = direction;
-    this.padding = normalizeInsets(padding);
+    this.padding = normalizeInsetsGeometry(padding);
     this.crossAxisCount = Math.trunc(Number(crossAxisCount));
     if (!Number.isFinite(this.crossAxisCount) || this.crossAxisCount <= 0) {
       throw new RangeError("GridView.crossAxisCount must be a positive integer");
@@ -19951,7 +20084,9 @@ class GridView extends SpanningWidget {
         hasMore: false
       };
     }
-    const inner = parent.deflate(this.padding);
+    const direction = Directionality.of(context);
+    const padding = resolveInsets(this.padding, direction);
+    const inner = parent.deflate(padding);
     const vertical = this.direction === "vertical";
     const maxMain = vertical ? inner.maxHeight : inner.maxWidth;
     const maxCross = vertical ? inner.maxWidth : inner.maxHeight;
@@ -19977,6 +20112,9 @@ class GridView extends SpanningWidget {
     const count = Math.min(remaining, childCapacity);
     const runCount = count === 0 ? 0 : Math.ceil(count / this.crossAxisCount);
     const children = [];
+    const totalMain = runCount === 0 ? 0 : runCount * childMainAxis + (runCount - 1) * this.mainAxisSpacing;
+    const totalCross = this.crossAxisCount * childCrossAxis + (this.crossAxisCount - 1) * this.crossAxisSpacing;
+    const band = vertical ? totalCross : totalMain;
     for (let local = 0; local < count; local++) {
       const index = state.firstChild + local;
       const run = Math.floor(local / this.crossAxisCount);
@@ -19989,20 +20127,19 @@ class GridView extends SpanningWidget {
         height: childCrossAxis
       });
       const childBox = this.children[index].layout(context, childConstraints);
+      const dx = padding.left + (vertical ? cross * (childCrossAxis + this.crossAxisSpacing) : run * (childMainAxis + this.mainAxisSpacing));
       children.push({
         box: childBox,
-        dx: this.padding.left + (vertical ? cross * (childCrossAxis + this.crossAxisSpacing) : run * (childMainAxis + this.mainAxisSpacing)),
-        dy: this.padding.top + (vertical ? run * (childMainAxis + this.mainAxisSpacing) : cross * (childCrossAxis + this.crossAxisSpacing))
+        dx: direction === "rtl" ? 2 * padding.left + band - dx - childBox.width : dx,
+        dy: padding.top + (vertical ? run * (childMainAxis + this.mainAxisSpacing) : cross * (childCrossAxis + this.crossAxisSpacing))
       });
     }
-    const totalMain = runCount === 0 ? 0 : runCount * childMainAxis + (runCount - 1) * this.mainAxisSpacing;
-    const totalCross = this.crossAxisCount * childCrossAxis + (this.crossAxisCount - 1) * this.crossAxisSpacing;
     const natural = vertical ? {
-      width: totalCross + this.padding.left + this.padding.right,
-      height: totalMain + this.padding.top + this.padding.bottom
+      width: totalCross + padding.left + padding.right,
+      height: totalMain + padding.top + padding.bottom
     } : {
-      width: totalMain + this.padding.left + this.padding.right,
-      height: totalCross + this.padding.top + this.padding.bottom
+      width: totalMain + padding.left + padding.right,
+      height: totalCross + padding.top + padding.bottom
     };
     const size = parent.constrain(natural);
     const lastChild = state.firstChild + count;
@@ -20075,7 +20212,7 @@ class GridPaper extends Widget {
     this.verticalDivisions = verticalDivisions;
     this.horizontalSubdivisions = horizontalSubdivisions;
     this.verticalSubdivisions = verticalSubdivisions;
-    this.margin = normalizeInsets(margin);
+    this.margin = normalizeInsetsGeometry(margin);
     this.horizontalOffset = resolvedHorizontalOffset;
     this.verticalOffset = resolvedVerticalOffset;
     this.border = border;
@@ -20160,9 +20297,10 @@ class GridPaper extends Widget {
       width: parent.hasBoundedWidth ? parent.maxWidth : parent.minWidth,
       height: parent.hasBoundedHeight ? parent.maxHeight : parent.minHeight
     };
+    const margin = insetsIn(context, this.margin);
     const childBox = this.child?.layout(context, new BoxConstraints({
-      maxWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
-      maxHeight: Math.max(0, size.height - this.margin.top - this.margin.bottom)
+      maxWidth: Math.max(0, size.width - margin.left - margin.right),
+      maxHeight: Math.max(0, size.height - margin.top - margin.bottom)
     })) ?? null;
     return {
       widget: this,
@@ -20175,10 +20313,11 @@ class GridPaper extends Widget {
   }
   paint(context, box) {
     const childBox = box.data.childBox;
+    const margin = insetsIn(context, this.margin);
     childBox?.widget.paint(context, {
       ...childBox,
-      x: box.x + this.margin.left,
-      y: box.y + this.margin.top
+      x: box.x + margin.left,
+      y: box.y + margin.top
     });
     const canvas = context.canvas;
     canvas.saveContext();
@@ -20192,8 +20331,8 @@ class GridPaper extends Widget {
       if (!(step > 0)) return;
       canvas.setStrokeColor(color);
       let n = offset;
-      const start = vertical ? box.x + this.margin.left : box.y + this.margin.top;
-      const end = vertical ? box.x + box.width - this.margin.right : box.y + box.height - this.margin.bottom;
+      const start = vertical ? box.x + margin.left : box.y + margin.top;
+      const end = vertical ? box.x + box.width - margin.right : box.y + box.height - margin.bottom;
       for (let position = start; position <= end + .001; position += step) {
         canvas.setLineWidth(n % (subdivisions * divisions) === 0 ? widths[0] : n % subdivisions === 0 ? widths[1] : widths[2]);
         if (vertical) canvas.drawLine(position, canvas.toPdfY(box.y), position, canvas.toPdfY(box.y + box.height)); else canvas.drawLine(box.x, canvas.toPdfY(position), box.x + box.width, canvas.toPdfY(position));
@@ -22197,7 +22336,7 @@ function mappedWidth(map, index) {
 }
 
 class Table extends SpanningWidget {
-  constructor({children = [], border = null, defaultVerticalAlignment = "top", columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max"} = {}) {
+  constructor({children = [], border = null, defaultVerticalAlignment = "top", columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max", textDirection = null} = {}) {
     super();
     if (![ "bottom", "middle", "top", "full" ].includes(defaultVerticalAlignment)) {
       throw new TypeError(`Unknown table vertical alignment: ${defaultVerticalAlignment}`);
@@ -22211,6 +22350,10 @@ class Table extends SpanningWidget {
     this.columnWidths = columnWidths;
     this.defaultColumnWidth = defaultColumnWidth;
     this.tableWidth = tableWidth;
+    this.textDirection = textDirection;
+  }
+  rtl(context) {
+    return (this.textDirection ?? Directionality.of(context)) === "rtl";
   }
   resolveWidths(context, constraints) {
     const count = this.children.reduce((maximum, row) => Math.max(maximum, row.children.length), 0);
@@ -22310,6 +22453,8 @@ class Table extends SpanningWidget {
     const rowHeights = [];
     let rowY = 0;
     const total = headers.length + this.children.length - start;
+    const width = columnWidths.reduce((sum, value) => sum + value, 0);
+    const rtl = this.rtl(context);
     for (let position = 0; position < total; position++) {
       const row = position < headers.length ? headers[position] : this.children[start + position - headers.length];
       const measured = [];
@@ -22317,19 +22462,19 @@ class Table extends SpanningWidget {
       let rowHeight = 0;
       for (let column = 0; column < row.children.length; column++) {
         const child = row.children[column];
-        const width = columnWidths[column] ?? 0;
+        const columnWidth = columnWidths[column] ?? 0;
         const box = child.layout(context, new BoxConstraints({
-          minWidth: width,
-          maxWidth: width,
+          minWidth: columnWidth,
+          maxWidth: columnWidth,
           maxHeight: Infinity
         }));
         measured.push({
           box,
           column,
-          x
+          x: rtl ? width - x - columnWidth : x
         });
         rowHeight = Math.max(rowHeight, box.height);
-        x += width;
+        x += columnWidth;
       }
       if (rowY + rowHeight > maxHeight + .001) break;
       const alignment = row.verticalAlignment ?? this.defaultVerticalAlignment;
@@ -22354,7 +22499,7 @@ class Table extends SpanningWidget {
     }
     return {
       widget: this,
-      width: columnWidths.reduce((sum, value) => sum + value, 0),
+      width,
       height: rowY,
       data: {
         columnWidths,
@@ -22445,7 +22590,7 @@ class Table extends SpanningWidget {
     for (const row of box.data.rows) {
       paintTableDecorationBorder(context, row.row.decoration, box.x, box.y + row.y, box.width, row.height);
     }
-    this.border?.paint(context, box.x, box.y, box.width, box.height, box.data.columnWidths, box.data.rowHeights);
+    this.border?.paint(context, box.x, box.y, box.width, box.height, this.rtl(context) ? [ ...box.data.columnWidths ].reverse() : box.data.columnWidths, box.data.rowHeights);
   }
 }
 
@@ -22459,7 +22604,7 @@ function alignment(value) {
   if (typeof value !== "string") {
     return value;
   }
-  const resolved = Alignment[value];
+  const resolved = namedAlignment(value);
   if (resolved === undefined) {
     throw new TypeError(`Unknown table alignment: ${value}`);
   }
@@ -22467,24 +22612,27 @@ function alignment(value) {
 }
 
 function textAlign(value) {
-  if (value.x === 0) return "center";
-  return value.x < 0 ? "left" : "right";
+  const directional = "start" in value;
+  const x = directional ? value.start : value.x;
+  if (x === 0) return "center";
+  return directional ? x < 0 ? "start" : "end" : x < 0 ? "left" : "right";
 }
 
 class HelperCell extends Widget {
   constructor({child, padding, minimumHeight, alignment: cellAlignment, decoration}) {
     super();
     this.child = child;
-    this.padding = normalizeInsets(padding);
+    this.padding = normalizeInsetsGeometry(padding);
     this.minimumHeight = Math.max(0, assertFiniteNumber(Number(minimumHeight), "table cell height"));
     this.alignment = cellAlignment;
     this.decoration = decoration;
   }
   layout(context, constraints) {
     const parent = BoxConstraints.from(constraints);
-    const horizontal = insetsHorizontal(this.padding);
-    const vertical = insetsVertical(this.padding);
-    const childBox = this.child.layout(context, parent.deflate(this.padding));
+    const padding = insetsIn(context, this.padding);
+    const horizontal = insetsHorizontal(padding);
+    const vertical = insetsVertical(padding);
+    const childBox = this.child.layout(context, parent.deflate(padding));
     const size = parent.constrain({
       width: childBox.width + horizontal,
       height: Math.max(this.minimumHeight, childBox.height + vertical)
@@ -22501,13 +22649,14 @@ class HelperCell extends Widget {
   paint(context, box) {
     paintTableDecorationBackground(context, this.decoration, box.x, box.y, box.width, box.height);
     const {childBox} = box.data;
-    const innerWidth = Math.max(0, box.width - insetsHorizontal(this.padding));
-    const innerHeight = Math.max(0, box.height - insetsVertical(this.padding));
-    const offset = inscribe(this.alignment, childBox.width, childBox.height, innerWidth, innerHeight);
+    const padding = insetsIn(context, this.padding);
+    const innerWidth = Math.max(0, box.width - insetsHorizontal(padding));
+    const innerHeight = Math.max(0, box.height - insetsVertical(padding));
+    const offset = inscribe(alignmentIn(context, this.alignment), childBox.width, childBox.height, innerWidth, innerHeight);
     childBox.widget.paint(context, {
       ...childBox,
-      x: box.x + this.padding.left + offset.dx,
-      y: box.y + this.padding.top + offset.dy
+      x: box.x + padding.left + offset.dx,
+      y: box.y + padding.top + offset.dy
     });
     paintTableDecorationBorder(context, this.decoration, box.x, box.y, box.width, box.height);
   }
@@ -22516,7 +22665,7 @@ class HelperCell extends Widget {
 const defaultBorder = TableBorder.all();
 
 class TableHelper {
-  static fromTextArray({context = null, data, cellPadding = 5, cellHeight = 0, cellAlignment = "topLeft", cellAlignments = null, cellStyle = null, oddCellStyle = null, cellFormat = null, cellDecoration = null, headerCount = 1, headers = null, headerPadding = cellPadding, headerHeight = cellHeight, headerAlignment = "center", headerAlignments = cellAlignments, headerStyle = null, headerFormat = null, border = defaultBorder, columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max", headerDecoration = null, headerCellDecoration = null, rowDecoration = null, oddRowDecoration = rowDecoration, cellBuilder = null, textStyleBuilder = null}) {
+  static fromTextArray({context = null, data, cellPadding = 5, cellHeight = 0, cellAlignment = "topLeft", cellAlignments = null, cellStyle = null, oddCellStyle = null, cellFormat = null, cellDecoration = null, headerCount = 1, headers = null, headerPadding = cellPadding, headerHeight = cellHeight, headerAlignment = "center", headerAlignments = cellAlignments, headerStyle = null, headerFormat = null, border = defaultBorder, columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max", headerDecoration = null, headerCellDecoration = null, rowDecoration = null, oddRowDecoration = rowDecoration, headerDirection = null, tableDirection = null, cellBuilder = null, textStyleBuilder = null}) {
     if (!Array.isArray(data)) {
       throw new TypeError("TableHelper.fromTextArray requires a data array");
     }
@@ -22563,7 +22712,8 @@ class TableHelper {
         },
         ...isHeaderRow ? {} : {
           align: textAlign(resolvedAlignment)
-        }
+        },
+        textDirection: isHeader ? headerDirection : tableDirection
       });
       return new HelperCell({
         child: text,
@@ -22756,8 +22906,12 @@ const publicApi = Object.freeze({
   Directionality,
   InheritedDirectionality,
   Alignment,
+  AlignmentDirectional,
   BoxConstraints,
   EdgeInsets,
+  EdgeInsetsDirectional,
+  resolveAlignment: resolveAlignment$1,
+  resolveInsets,
   PdfColor,
   PdfColorGrey,
   PdfColorCmyk,
@@ -22804,4 +22958,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationText, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ChartValue, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, PointChartValue as LineChartValue, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, PageUnit, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfBorder, PdfColor, PdfColorCmyk, PdfColorGrey, PdfColorHsl, PdfColorHsv, PdfColors, PdfFontMetrics, PdfFormXObject, PdfGraphicState, PdfImage, PdfLogo, PdfPageFormat, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfStream, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextAnnotation, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AlignmentDirectional, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationText, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ChartValue, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, EdgeInsetsDirectional, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, PointChartValue as LineChartValue, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, PageUnit, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfBorder, PdfColor, PdfColorCmyk, PdfColorGrey, PdfColorHsl, PdfColorHsv, PdfColors, PdfFontMetrics, PdfFormXObject, PdfGraphicState, PdfImage, PdfLogo, PdfPageFormat, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfStream, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextAnnotation, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, resolveAlignment$1 as resolveAlignment, resolveInsets, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };

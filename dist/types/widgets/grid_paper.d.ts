@@ -1,6 +1,6 @@
 import type { ColorInput } from '../pdf/color.ts';
 import type { BoxBorder } from './box_border.ts';
-import type { Insets, InsetsInput } from './geometry.ts';
+import type { InsetsGeometry, InsetsInput } from './geometry.ts';
 import { Widget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
 export interface GridPaperOptions {
@@ -37,7 +37,7 @@ export declare class GridPaper extends Widget<GridPaperLayoutData> {
     readonly verticalDivisions: number;
     readonly horizontalSubdivisions: number;
     readonly verticalSubdivisions: number;
-    readonly margin: Insets;
+    readonly margin: InsetsGeometry;
     readonly horizontalOffset: number;
     readonly verticalOffset: number;
     readonly border: BoxBorder;

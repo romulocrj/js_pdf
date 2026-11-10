@@ -33,6 +33,8 @@ import type { BoxBorderInput } from './box_border.ts';
 import { applyBoxFit, resolveBasicAlignment } from './basic.ts';
 import type { BasicAlignmentInput } from './basic.ts';
 import { Alignment, inscribe } from './geometry.ts';
+import type { AlignmentGeometry } from './geometry.ts';
+import { alignmentIn, Directionality } from './directionality.ts';
 import type { BoxFit } from './svg.ts';
 import type { ImageProvider } from './image_provider.ts';
 import type { RenderContext } from './widget.ts';
@@ -58,7 +60,7 @@ export interface DecorationImageOptions {
 export class DecorationImage extends DecorationGraphic {
   readonly image: ImageProvider;
   readonly fit: BoxFit;
-  readonly alignment: Alignment;
+  readonly alignment: AlignmentGeometry;
   readonly dpi: number | null;
 
   constructor({
@@ -88,15 +90,16 @@ export class DecorationImage extends DecorationGraphic {
     );
     if (fitted.source.width <= 0 || fitted.source.height <= 0) return;
 
+    const alignment = alignmentIn(context, this.alignment);
     const sourceOffset = inscribe(
-      this.alignment,
+      alignment,
       fitted.source.width,
       fitted.source.height,
       image.width,
       image.height
     );
     const destinationOffset = inscribe(
-      this.alignment,
+      alignment,
       fitted.destination.width,
       fitted.destination.height,
       box.width,
@@ -126,7 +129,9 @@ export class DecorationImage extends DecorationGraphic {
   }
 }
 
-function alignmentPoint(alignment: Alignment, box: PdfRect): PdfPoint {
+/** Upstream's `alignment.resolve(Directionality.of(context)).withinRect(box)`. */
+function alignmentPoint(context: RenderContext, geometry: AlignmentGeometry, box: PdfRect): PdfPoint {
+  const alignment = alignmentIn(context, geometry);
   return {
     x: box.x + ((alignment.x + 1) * box.width) / 2,
     y: box.y + ((alignment.y + 1) * box.height) / 2
@@ -172,15 +177,15 @@ export abstract class Gradient {
 }
 
 export interface LinearGradientOptions extends GradientOptions {
-  readonly begin?: Alignment;
-  readonly end?: Alignment;
+  readonly begin?: AlignmentGeometry;
+  readonly end?: AlignmentGeometry;
   readonly tileMode?: TileMode;
 }
 
 /** An axial PDF shading between two alignment points. */
 export class LinearGradient extends Gradient {
-  readonly begin: Alignment;
-  readonly end: Alignment;
+  readonly begin: AlignmentGeometry;
+  readonly end: AlignmentGeometry;
   readonly tileMode: TileMode;
 
   constructor({
@@ -203,8 +208,8 @@ export class LinearGradient extends Gradient {
         type: 'axial',
         boundingBox: box,
         fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: alignmentPoint(this.begin, box),
-        end: alignmentPoint(this.end, box),
+        start: alignmentPoint(context, this.begin, box),
+        end: alignmentPoint(context, this.end, box),
         extendStart: true,
         extendEnd: true
       })
@@ -216,19 +221,19 @@ export class LinearGradient extends Gradient {
 }
 
 export interface RadialGradientOptions extends GradientOptions {
-  readonly center?: Alignment;
+  readonly center?: AlignmentGeometry;
   readonly radius?: number;
   readonly tileMode?: TileMode;
-  readonly focal?: Alignment | null;
+  readonly focal?: AlignmentGeometry | null;
   readonly focalRadius?: number;
 }
 
 /** A radial PDF shading with optional independent focal point. */
 export class RadialGradient extends Gradient {
-  readonly center: Alignment;
+  readonly center: AlignmentGeometry;
   readonly radius: number;
   readonly tileMode: TileMode;
-  readonly focal: Alignment | null;
+  readonly focal: AlignmentGeometry | null;
   readonly focalRadius: number;
 
   constructor({
@@ -256,8 +261,8 @@ export class RadialGradient extends Gradient {
         type: 'radial',
         boundingBox: box,
         fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: alignmentPoint(this.focal ?? this.center, box),
-        end: alignmentPoint(this.center, box),
+        start: alignmentPoint(context, this.focal ?? this.center, box),
+        end: alignmentPoint(context, this.center, box),
         radius0: this.focalRadius * scale,
         radius1: this.radius * scale,
         extendStart: true,
@@ -414,7 +419,7 @@ export class BoxDecoration {
     width: number,
     height: number,
     phase: PaintPhase = 'all',
-    direction: TextDirection = 'ltr'
+    direction: TextDirection = Directionality.of(context)
   ): void {
     const resolvedRadius = this.borderRadius?.resolve(direction) ?? null;
     const box = { x, y: context.canvas.pageHeight - y - height, width, height };

@@ -45,6 +45,17 @@ export interface FlexState {
 export interface FlexibleLayoutData {
     readonly childBox: AnyLayoutBox;
 }
+/**
+ * Upstream's `_startIsTopLeft` for both axes of a flex or a wrap: whether the
+ * main and the cross axis run backwards. A horizontal axis starts on the side
+ * the text direction starts on, a vertical one where `verticalDirection` says.
+ * (Upstream reads inverted for the vertical axis only because its y is up.)
+ */
+export declare function reversedAxes(context: RenderContext, horizontal: boolean, verticalDirection: VerticalDirection): readonly [boolean, boolean];
+/** The offset of a child with `free` space beside it; `flip` exchanges start and end. */
+export declare function crossOffset(alignment: string, free: number, flip: boolean): number;
+/** Shared with `MultiPage`, which takes the same four values. */
+export declare function checkCrossAxisAlignment(value: CrossAxisAlignment): CrossAxisAlignment;
 /** Controls how a direct child of `Flex`, `Row` or `Column` uses free space. */
 export declare class Flexible extends Widget<FlexibleLayoutData> {
     readonly flex: number;

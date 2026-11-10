@@ -27,6 +27,7 @@ import { generateSynchronousOutputPhase65 } from './synchronous-output-phase-6.5
 import { generateLayoutPerformancePhase66 } from './layout-performance-phase-6.6.mjs';
 import { generateColorsPhase67 } from './colors-phase-6.7.mjs';
 import { generateFontsPhase68, generateObjectsPhase610, generateApiPhase612 } from './fonts-objects-api-phases.mjs';
+import { generateDirectionalLayoutPhase69 } from './directional-layout-phase-6.9.mjs';
 import { generateSerializationPhase71 } from './serialization-phase-7.1.mjs';
 import { generateFontsPhase72 } from './fonts-phase-7.2.mjs';
 import { generateTextBidiPhase73 } from './text-bidi-phase-7.3.mjs';
@@ -87,6 +88,7 @@ const examples = [
   ['layout-performance-phase-6.6', () => generateLayoutPerformancePhase66()],
   ['colors-phase-6.7', () => generateColorsPhase67()],
   ['fonts-phase-6.8', () => generateFontsPhase68(compatibilityFonts)],
+  ['directional-layout-phase-6.9', () => generateDirectionalLayoutPhase69()],
   ['objects-phase-6.10', () => generateObjectsPhase610()],
   ['api-phase-6.12', () => generateApiPhase612()],
   ['serialization-phase-7.1', () => generateSerializationPhase71()],

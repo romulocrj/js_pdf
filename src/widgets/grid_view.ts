@@ -20,8 +20,9 @@
  */
 
 import type { Axis } from './flex.ts';
-import { BoxConstraints, normalizeInsets } from './geometry.ts';
-import type { Insets, InsetsInput } from './geometry.ts';
+import { Directionality } from './directionality.ts';
+import { BoxConstraints, normalizeInsetsGeometry, resolveInsets } from './geometry.ts';
+import type { InsetsGeometry, InsetsInput } from './geometry.ts';
 import { SpanningWidget } from './widget.ts';
 import type {
   AnyLayoutBox,
@@ -73,7 +74,7 @@ function finiteNonNegative(value: number, name: string): number {
 /** A fixed-track grid that can continue on later `MultiPage` pages. */
 export class GridView extends SpanningWidget<GridViewLayoutData, GridViewState> {
   readonly direction: Axis;
-  readonly padding: Insets;
+  readonly padding: InsetsGeometry;
   readonly crossAxisCount: number;
   readonly mainAxisSpacing: number;
   readonly crossAxisSpacing: number;
@@ -94,7 +95,7 @@ export class GridView extends SpanningWidget<GridViewLayoutData, GridViewState> 
       throw new TypeError(`Unknown GridView axis: ${direction}`);
     }
     this.direction = direction;
-    this.padding = normalizeInsets(padding);
+    this.padding = normalizeInsetsGeometry(padding);
     this.crossAxisCount = Math.trunc(Number(crossAxisCount));
     if (!Number.isFinite(this.crossAxisCount) || this.crossAxisCount <= 0) {
       throw new RangeError('GridView.crossAxisCount must be a positive integer');
@@ -135,7 +136,9 @@ export class GridView extends SpanningWidget<GridViewLayoutData, GridViewState> 
       };
     }
 
-    const inner = parent.deflate(this.padding);
+    const direction = Directionality.of(context);
+    const padding = resolveInsets(this.padding, direction);
+    const inner = parent.deflate(padding);
     const vertical = this.direction === 'vertical';
     const maxMain = vertical ? inner.maxHeight : inner.maxWidth;
     const maxCross = vertical ? inner.maxWidth : inner.maxHeight;
@@ -180,6 +183,12 @@ export class GridView extends SpanningWidget<GridViewLayoutData, GridViewState> 
     const count = Math.min(remaining, childCapacity);
     const runCount = count === 0 ? 0 : Math.ceil(count / this.crossAxisCount);
     const children: GridChildLayout[] = [];
+    const totalMain = runCount === 0
+      ? 0
+      : runCount * childMainAxis + (runCount - 1) * this.mainAxisSpacing;
+    const totalCross = this.crossAxisCount * childCrossAxis
+      + (this.crossAxisCount - 1) * this.crossAxisSpacing;
+    const band = vertical ? totalCross : totalMain;
 
     for (let local = 0; local < count; local++) {
       const index = state.firstChild + local;
@@ -189,30 +198,32 @@ export class GridView extends SpanningWidget<GridViewLayoutData, GridViewState> 
         ? BoxConstraints.tight({ width: childCrossAxis, height: childMainAxis })
         : BoxConstraints.tight({ width: childMainAxis, height: childCrossAxis });
       const childBox = this.children[index]!.layout(context, childConstraints);
+      const dx = padding.left + (vertical
+        ? cross * (childCrossAxis + this.crossAxisSpacing)
+        : run * (childMainAxis + this.mainAxisSpacing));
       children.push({
         box: childBox,
-        dx: this.padding.left + (vertical
-          ? cross * (childCrossAxis + this.crossAxisSpacing)
-          : run * (childMainAxis + this.mainAxisSpacing)),
-        dy: this.padding.top + (vertical
+        /*
+         * RTL mirrors the ltr position about the padded band, as upstream PR
+         * #1980 does (CHANGELOG L83). Upstream wrote the rtl position as a
+         * second formula, which shifted children by about a cell and, from
+         * four columns on, put them outside the grid.
+         */
+        dx: direction === 'rtl' ? 2 * padding.left + band - dx - childBox.width : dx,
+        dy: padding.top + (vertical
           ? run * (childMainAxis + this.mainAxisSpacing)
           : cross * (childCrossAxis + this.crossAxisSpacing))
       });
     }
 
-    const totalMain = runCount === 0
-      ? 0
-      : runCount * childMainAxis + (runCount - 1) * this.mainAxisSpacing;
-    const totalCross = this.crossAxisCount * childCrossAxis
-      + (this.crossAxisCount - 1) * this.crossAxisSpacing;
     const natural = vertical
       ? {
-        width: totalCross + this.padding.left + this.padding.right,
-        height: totalMain + this.padding.top + this.padding.bottom
+        width: totalCross + padding.left + padding.right,
+        height: totalMain + padding.top + padding.bottom
       }
       : {
-        width: totalMain + this.padding.left + this.padding.right,
-        height: totalCross + this.padding.top + this.padding.bottom
+        width: totalMain + padding.left + padding.right,
+        height: totalCross + padding.top + padding.bottom
       };
     const size = parent.constrain(natural);
     const lastChild = state.firstChild + count;

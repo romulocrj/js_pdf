@@ -13,9 +13,12 @@
  *
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/widgets/text_style.dart
+ *   - pdf/lib/src/widgets/geometry.dart
  */
 
 import type { TextDirection } from './border_radius.ts';
+import { resolveAlignment, resolveInsets } from './geometry.ts';
+import type { Alignment, AlignmentGeometry, Insets, InsetsGeometry } from './geometry.ts';
 import {
   Inherited,
   InheritedWidget,
@@ -63,4 +66,14 @@ export class Directionality extends StatelessWidget {
       build: () => this.child
     });
   }
+}
+
+/** Upstream's `padding.resolve(Directionality.of(context))`. */
+export function insetsIn(context: RenderContext, value: InsetsGeometry): Insets {
+  return resolveInsets(value, Directionality.of(context));
+}
+
+/** Upstream's `alignment.resolve(Directionality.of(context))`. */
+export function alignmentIn(context: RenderContext, value: AlignmentGeometry): Alignment {
+  return resolveAlignment(value, Directionality.of(context));
 }

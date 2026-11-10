@@ -13,6 +13,7 @@
  *
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/widgets/flex.dart
+ *   - pdf/lib/src/widgets/wrap.dart
  *
  * Layout results and child offsets live in `FlexLayoutData`; unlike upstream,
  * no child box or continuation cursor is written back onto a widget instance.
@@ -23,6 +24,7 @@
 import { BoxConstraints, normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import { Padding, SizedBox } from './basic.ts';
+import { Directionality } from './directionality.ts';
 import { SpanningWidget, StatelessWidget, Widget } from './widget.ts';
 import type {
   AnyLayoutBox,
@@ -90,6 +92,35 @@ export interface FlexState {
 
 export interface FlexibleLayoutData {
   readonly childBox: AnyLayoutBox;
+}
+
+/**
+ * Upstream's `_startIsTopLeft` for both axes of a flex or a wrap: whether the
+ * main and the cross axis run backwards. A horizontal axis starts on the side
+ * the text direction starts on, a vertical one where `verticalDirection` says.
+ * (Upstream reads inverted for the vertical axis only because its y is up.)
+ */
+export function reversedAxes(
+  context: RenderContext,
+  horizontal: boolean,
+  verticalDirection: VerticalDirection
+): readonly [boolean, boolean] {
+  const up = verticalDirection === 'up';
+  const rtl = Directionality.of(context) === 'rtl';
+  return horizontal ? [rtl, up] : [up, rtl];
+}
+
+/** The offset of a child with `free` space beside it; `flip` exchanges start and end. */
+export function crossOffset(alignment: string, free: number, flip: boolean): number {
+  return alignment === 'center' ? free / 2 : (alignment === 'end') !== flip ? free : 0;
+}
+
+/** Shared with `MultiPage`, which takes the same four values. */
+export function checkCrossAxisAlignment(value: CrossAxisAlignment): CrossAxisAlignment {
+  if (!['start', 'end', 'center', 'stretch'].includes(value)) {
+    throw new TypeError(`Unknown CrossAxisAlignment: ${value}`);
+  }
+  return value;
 }
 
 function finiteNonNegative(value: number, name: string): number {
@@ -223,9 +254,7 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
     if (mainAxisSize !== 'min' && mainAxisSize !== 'max') {
       throw new TypeError(`Unknown MainAxisSize: ${mainAxisSize}`);
     }
-    if (!['start', 'end', 'center', 'stretch'].includes(crossAxisAlignment)) {
-      throw new TypeError(`Unknown CrossAxisAlignment: ${crossAxisAlignment}`);
-    }
+    checkCrossAxisAlignment(crossAxisAlignment);
     if (verticalDirection !== 'up' && verticalDirection !== 'down') {
       throw new TypeError(`Unknown VerticalDirection: ${verticalDirection}`);
     }
@@ -451,18 +480,17 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
         break;
     }
 
-    const reverse = this.direction === 'vertical' && this.verticalDirection === 'up';
+    // A reversed cross axis exchanges `start` and `end`; `stretch` stays at 0.
+    const [reverse, flipCross] = reversedAxes(context, horizontal, this.verticalDirection);
     let cursor = reverse ? actualMain - leading : leading;
     const children: FlexChildLayout[] = [];
     for (let index = 0; index < measured.length; index++) {
       const box = measured[index]!;
       const main = childMain(box, this.direction);
       const cross = childCross(box, this.direction);
-      const crossPosition = this.crossAxisAlignment === 'end'
-        ? actualCross - cross
-        : this.crossAxisAlignment === 'center'
-          ? (actualCross - cross) / 2
-          : 0;
+      const crossPosition = this.crossAxisAlignment === 'stretch'
+        ? 0
+        : crossOffset(this.crossAxisAlignment, actualCross - cross, flipCross);
       const mainPosition = reverse ? cursor - main : cursor;
       children.push({
         box,

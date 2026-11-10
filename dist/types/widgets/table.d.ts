@@ -1,4 +1,5 @@
 import type { ColorInput, PaintColor } from '../pdf/color.ts';
+import type { TextDirection } from './border_radius.ts';
 import type { BoxDecorationInput } from './decoration.ts';
 import type { ThemeData } from './theme.ts';
 import { SpanningWidget } from './widget.ts';
@@ -124,6 +125,11 @@ export interface TableOptions {
     readonly columnWidths?: TableColumnWidthMap | null;
     readonly defaultColumnWidth?: TableColumnWidth;
     readonly tableWidth?: TableWidth;
+    /**
+     * The order the columns are laid out in; the ambient `Directionality` when
+     * null. Pass `'ltr'` to keep a table left to right inside an rtl subtree.
+     */
+    readonly textDirection?: TextDirection | null;
 }
 /** A grid whose rows share one set of computed column tracks. */
 export declare class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
@@ -133,7 +139,10 @@ export declare class Table extends SpanningWidget<TableLayoutData, TableSpanStat
     readonly columnWidths: TableColumnWidthMap | null;
     readonly defaultColumnWidth: TableColumnWidth;
     readonly tableWidth: TableWidth;
-    constructor({ children, border, defaultVerticalAlignment, columnWidths, defaultColumnWidth, tableWidth }?: TableOptions);
+    readonly textDirection: TextDirection | null;
+    constructor({ children, border, defaultVerticalAlignment, columnWidths, defaultColumnWidth, tableWidth, textDirection }?: TableOptions);
+    /** Whether the columns run right to left; upstream PR #1980 (CHANGELOG L81). */
+    private rtl;
     private resolveWidths;
     /**
      * Shrinks the inflexible columns, which together overflow `maximum`, in place.

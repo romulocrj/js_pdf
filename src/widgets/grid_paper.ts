@@ -20,8 +20,9 @@ import { PdfGraphicState } from '../pdf/graphic_state.ts';
 import { PageUnit } from '../pdf/page_format.ts';
 import { Border, BorderSide } from './box_border.ts';
 import type { BoxBorder } from './box_border.ts';
-import { BoxConstraints, normalizeInsets } from './geometry.ts';
-import type { Insets, InsetsInput } from './geometry.ts';
+import { BoxConstraints, normalizeInsetsGeometry } from './geometry.ts';
+import type { InsetsGeometry, InsetsInput } from './geometry.ts';
+import { insetsIn } from './directionality.ts';
 import { Widget } from './widget.ts';
 import type {
   AnyLayoutBox,
@@ -70,7 +71,7 @@ export class GridPaper extends Widget<GridPaperLayoutData> {
   readonly verticalDivisions: number;
   readonly horizontalSubdivisions: number;
   readonly verticalSubdivisions: number;
-  readonly margin: Insets;
+  readonly margin: InsetsGeometry;
   readonly horizontalOffset: number;
   readonly verticalOffset: number;
   readonly border: BoxBorder;
@@ -124,7 +125,7 @@ export class GridPaper extends Widget<GridPaperLayoutData> {
     this.verticalDivisions = verticalDivisions;
     this.horizontalSubdivisions = horizontalSubdivisions;
     this.verticalSubdivisions = verticalSubdivisions;
-    this.margin = normalizeInsets(margin);
+    this.margin = normalizeInsetsGeometry(margin);
     this.horizontalOffset = resolvedHorizontalOffset;
     this.verticalOffset = resolvedVerticalOffset;
     this.border = border;
@@ -168,19 +169,21 @@ export class GridPaper extends Widget<GridPaperLayoutData> {
       width: parent.hasBoundedWidth ? parent.maxWidth : parent.minWidth,
       height: parent.hasBoundedHeight ? parent.maxHeight : parent.minHeight
     };
+    const margin = insetsIn(context, this.margin);
     const childBox = this.child?.layout(context, new BoxConstraints({
-      maxWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
-      maxHeight: Math.max(0, size.height - this.margin.top - this.margin.bottom)
+      maxWidth: Math.max(0, size.width - margin.left - margin.right),
+      maxHeight: Math.max(0, size.height - margin.top - margin.bottom)
     })) ?? null;
     return { widget: this, width: size.width, height: size.height, data: { childBox } };
   }
 
   override paint(context: RenderContext, box: PositionedBox<GridPaperLayoutData>): void {
     const childBox = box.data.childBox;
+    const margin = insetsIn(context, this.margin);
     childBox?.widget.paint(context, {
       ...childBox,
-      x: box.x + this.margin.left,
-      y: box.y + this.margin.top
+      x: box.x + margin.left,
+      y: box.y + margin.top
     });
     const canvas = context.canvas;
     canvas.saveContext();
@@ -199,10 +202,10 @@ export class GridPaper extends Widget<GridPaperLayoutData> {
       if (!(step > 0)) return;
       canvas.setStrokeColor(color);
       let n = offset;
-      const start = vertical ? box.x + this.margin.left : box.y + this.margin.top;
+      const start = vertical ? box.x + margin.left : box.y + margin.top;
       const end = vertical
-        ? box.x + box.width - this.margin.right
-        : box.y + box.height - this.margin.bottom;
+        ? box.x + box.width - margin.right
+        : box.y + box.height - margin.bottom;
       for (let position = start; position <= end + 0.001; position += step) {
         canvas.setLineWidth(n % (subdivisions * divisions) === 0 ? widths[0]! : n % subdivisions === 0 ? widths[1]! : widths[2]!);
         if (vertical) canvas.drawLine(position, canvas.toPdfY(box.y), position, canvas.toPdfY(box.y + box.height));

@@ -36,13 +36,22 @@ import type { PdfMatrix } from '../pdf/matrix.ts';
 import type { PdfPoint } from '../pdf/rect.ts';
 import {
   Alignment,
+  AlignmentDirectional,
   BoxConstraints,
   inscribe,
   insetsHorizontal,
   insetsVertical,
-  normalizeInsets
+  normalizeInsetsGeometry
 } from './geometry.ts';
-import type { BoxConstraintsInput, Insets, InsetsInput, Offset } from './geometry.ts';
+import type {
+  AlignmentDirectionalName,
+  AlignmentGeometry,
+  BoxConstraintsInput,
+  InsetsGeometry,
+  InsetsInput,
+  Offset
+} from './geometry.ts';
+import { alignmentIn, insetsIn } from './directionality.ts';
 import type { BoxFit } from './svg.ts';
 import { BorderSide } from './box_border.ts';
 import type { BorderStyle, BorderStyleInput } from './box_border.ts';
@@ -67,21 +76,25 @@ export interface PaddingOptions {
   readonly child?: AnyWidget | null;
 }
 
-/** Insets its child by `padding`, growing by that much in each direction. */
+/**
+ * Insets its child by `padding`, growing by that much in each direction. A
+ * directional padding resolves against the ambient `Directionality`.
+ */
 export class Padding extends Widget<SingleChildLayoutData> {
-  readonly padding: Insets;
+  readonly padding: InsetsGeometry;
   readonly child: AnyWidget | null;
 
   constructor({ padding = 0, child = null }: PaddingOptions = {}) {
     super();
-    this.padding = normalizeInsets(padding);
+    this.padding = normalizeInsetsGeometry(padding);
     this.child = child;
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData> {
     const parent = BoxConstraints.from(constraints);
-    const horizontal = insetsHorizontal(this.padding);
-    const vertical = insetsVertical(this.padding);
+    const padding = insetsIn(context, this.padding);
+    const horizontal = insetsHorizontal(padding);
+    const vertical = insetsVertical(padding);
 
     if (this.child === null) {
       const size = parent.constrain({ width: horizontal, height: vertical });
@@ -93,7 +106,7 @@ export class Padding extends Widget<SingleChildLayoutData> {
       };
     }
 
-    const childBox = this.child.layout(context, parent.deflate(this.padding));
+    const childBox = this.child.layout(context, parent.deflate(padding));
     const size = parent.constrain({
       width: childBox.width + horizontal,
       height: childBox.height + vertical
@@ -111,10 +124,11 @@ export class Padding extends Widget<SingleChildLayoutData> {
     const { childBox } = box.data;
     if (childBox === null) return;
 
+    const padding = insetsIn(context, this.padding);
     childBox.widget.paint(context, {
       ...childBox,
-      x: box.x + this.padding.left,
-      y: box.y + this.padding.top
+      x: box.x + padding.left,
+      y: box.y + padding.top
     });
   }
 }
@@ -134,13 +148,21 @@ export type BasicAlignmentName =
   | 'centerRight'
   | 'bottomLeft'
   | 'bottomCenter'
-  | 'bottomRight';
+  | 'bottomRight'
+  | AlignmentDirectionalName;
 
-export type BasicAlignmentInput = Alignment | BasicAlignmentName;
+export type BasicAlignmentInput = AlignmentGeometry | BasicAlignmentName;
 
-export function resolveBasicAlignment(value: BasicAlignmentInput): Alignment {
+/** An `Alignment` or `AlignmentDirectional` constant by name, or undefined. */
+export function namedAlignment(name: string): AlignmentGeometry | undefined {
+  return (Alignment as Readonly<Record<string, Alignment>>)[name]
+    ?? (AlignmentDirectional as Readonly<Record<string, AlignmentDirectional>>)[name];
+}
+
+/** Turns a name into its constant; a directional one is resolved at layout. */
+export function resolveBasicAlignment(value: BasicAlignmentInput): AlignmentGeometry {
   if (typeof value !== 'string') return value;
-  const result = Alignment[value];
+  const result = namedAlignment(value);
   if (result === undefined) throw new TypeError(`Unknown alignment: ${value}`);
   return result;
 }
@@ -159,7 +181,7 @@ export interface AlignOptions {
  * unbounded maximum, and otherwise fills the available extent.
  */
 export class Align extends Widget<AlignLayoutData> {
-  readonly alignment: Alignment;
+  readonly alignment: AlignmentGeometry;
   readonly widthFactor: number | null;
   readonly heightFactor: number | null;
   readonly child: AnyWidget | null;
@@ -200,7 +222,13 @@ export class Align extends Widget<AlignLayoutData> {
       height: shrinkHeight ? childBox.height * (this.heightFactor ?? 1) : Infinity
     });
 
-    const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+    const offset = inscribe(
+      alignmentIn(context, this.alignment),
+      childBox.width,
+      childBox.height,
+      size.width,
+      size.height
+    );
 
     return {
       widget: this,
@@ -444,7 +472,7 @@ function pointCoordinates(value: PdfPoint | Offset | null): { readonly x: number
 export class Transform extends Widget<TransformLayoutData> {
   readonly transform: PdfMatrix;
   readonly origin: { readonly x: number; readonly y: number };
-  readonly alignment: Alignment | null;
+  readonly alignment: AlignmentGeometry | null;
   readonly adjustLayout: boolean;
   readonly unconstrained: boolean;
   readonly child: AnyWidget | null;
@@ -589,8 +617,9 @@ export class Transform extends Widget<TransformLayoutData> {
         multiplyMatrix(this.transform, translationMatrix(-box.x, -box.y))
       );
     } else {
-      const alignedX = this.alignment === null ? 0 : (this.alignment.x + 1) * box.width / 2;
-      const alignedY = this.alignment === null ? 0 : (1 - this.alignment.y) * box.height / 2;
+      const alignment = this.alignment === null ? null : alignmentIn(context, this.alignment);
+      const alignedX = alignment === null ? 0 : (alignment.x + 1) * box.width / 2;
+      const alignedY = alignment === null ? 0 : (1 - alignment.y) * box.height / 2;
       const anchorX = box.x + alignedX + this.origin.x;
       const anchorY = box.y + alignedY + this.origin.y;
       widgetMatrix = multiplyMatrix(
@@ -701,7 +730,7 @@ export interface FittedBoxLayoutData extends SingleChildLayoutData {}
 
 export class FittedBox extends Widget<FittedBoxLayoutData> {
   readonly fit: BoxFit;
-  readonly alignment: Alignment;
+  readonly alignment: AlignmentGeometry;
   readonly child: AnyWidget | null;
 
   constructor({ fit = 'contain', alignment = 'center', child = null }: FittedBoxOptions = {}) {
@@ -743,15 +772,16 @@ export class FittedBox extends Widget<FittedBoxLayoutData> {
       { width: box.width, height: box.height }
     );
     if (fitted.source.width <= 0 || fitted.source.height <= 0) return;
+    const alignment = alignmentIn(context, this.alignment);
     const sourceOffset = inscribe(
-      this.alignment,
+      alignment,
       fitted.source.width,
       fitted.source.height,
       childBox.width,
       childBox.height
     );
     const destinationOffset = inscribe(
-      this.alignment,
+      alignment,
       fitted.destination.width,
       fitted.destination.height,
       box.width,
@@ -1077,7 +1107,7 @@ export interface OverflowBoxLayoutData extends SingleChildLayoutData {
 
 /** Gives its child replacement constraints and permits it to exceed this box. */
 export class OverflowBox extends Widget<OverflowBoxLayoutData> {
-  readonly alignment: Alignment;
+  readonly alignment: AlignmentGeometry;
   readonly minWidth: number | null;
   readonly maxWidth: number | null;
   readonly minHeight: number | null;
@@ -1118,7 +1148,7 @@ export class OverflowBox extends Widget<OverflowBoxLayoutData> {
     })) ?? null;
     const offset = childBox === null
       ? { dx: 0, dy: 0 }
-      : inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+      : inscribe(alignmentIn(context, this.alignment), childBox.width, childBox.height, size.width, size.height);
     return {
       widget: this,
       width: size.width,

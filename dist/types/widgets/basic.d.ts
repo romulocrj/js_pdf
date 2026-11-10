@@ -2,8 +2,8 @@ import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfCanvas } from '../pdf/graphics.ts';
 import type { PdfMatrix } from '../pdf/matrix.ts';
 import type { PdfPoint } from '../pdf/rect.ts';
-import { Alignment, BoxConstraints } from './geometry.ts';
-import type { BoxConstraintsInput, Insets, InsetsInput, Offset } from './geometry.ts';
+import { BoxConstraints } from './geometry.ts';
+import type { AlignmentDirectionalName, AlignmentGeometry, BoxConstraintsInput, InsetsGeometry, InsetsInput, Offset } from './geometry.ts';
 import type { BoxFit } from './svg.ts';
 import type { BorderStyle, BorderStyleInput } from './box_border.ts';
 import { StatelessWidget, Widget } from './widget.ts';
@@ -16,9 +16,12 @@ export interface PaddingOptions {
     readonly padding?: InsetsInput;
     readonly child?: AnyWidget | null;
 }
-/** Insets its child by `padding`, growing by that much in each direction. */
+/**
+ * Insets its child by `padding`, growing by that much in each direction. A
+ * directional padding resolves against the ambient `Directionality`.
+ */
 export declare class Padding extends Widget<SingleChildLayoutData> {
-    readonly padding: Insets;
+    readonly padding: InsetsGeometry;
     readonly child: AnyWidget | null;
     constructor({ padding, child }?: PaddingOptions);
     layout(context: RenderContext, constraints: Constraints): LayoutBox<SingleChildLayoutData>;
@@ -29,9 +32,12 @@ export interface AlignLayoutData extends SingleChildLayoutData {
     readonly dx: number;
     readonly dy: number;
 }
-export type BasicAlignmentName = 'topLeft' | 'topCenter' | 'topRight' | 'centerLeft' | 'center' | 'centerRight' | 'bottomLeft' | 'bottomCenter' | 'bottomRight';
-export type BasicAlignmentInput = Alignment | BasicAlignmentName;
-export declare function resolveBasicAlignment(value: BasicAlignmentInput): Alignment;
+export type BasicAlignmentName = 'topLeft' | 'topCenter' | 'topRight' | 'centerLeft' | 'center' | 'centerRight' | 'bottomLeft' | 'bottomCenter' | 'bottomRight' | AlignmentDirectionalName;
+export type BasicAlignmentInput = AlignmentGeometry | BasicAlignmentName;
+/** An `Alignment` or `AlignmentDirectional` constant by name, or undefined. */
+export declare function namedAlignment(name: string): AlignmentGeometry | undefined;
+/** Turns a name into its constant; a directional one is resolved at layout. */
+export declare function resolveBasicAlignment(value: BasicAlignmentInput): AlignmentGeometry;
 export interface AlignOptions {
     readonly alignment?: BasicAlignmentInput;
     readonly widthFactor?: number | null;
@@ -45,7 +51,7 @@ export interface AlignOptions {
  * unbounded maximum, and otherwise fills the available extent.
  */
 export declare class Align extends Widget<AlignLayoutData> {
-    readonly alignment: Alignment;
+    readonly alignment: AlignmentGeometry;
     readonly widthFactor: number | null;
     readonly heightFactor: number | null;
     readonly child: AnyWidget | null;
@@ -140,7 +146,7 @@ export declare class Transform extends Widget<TransformLayoutData> {
         readonly x: number;
         readonly y: number;
     };
-    readonly alignment: Alignment | null;
+    readonly alignment: AlignmentGeometry | null;
     readonly adjustLayout: boolean;
     readonly unconstrained: boolean;
     readonly child: AnyWidget | null;
@@ -177,7 +183,7 @@ export interface FittedBoxLayoutData extends SingleChildLayoutData {
 }
 export declare class FittedBox extends Widget<FittedBoxLayoutData> {
     readonly fit: BoxFit;
-    readonly alignment: Alignment;
+    readonly alignment: AlignmentGeometry;
     readonly child: AnyWidget | null;
     constructor({ fit, alignment, child }?: FittedBoxOptions);
     layout(context: RenderContext, constraints: Constraints): LayoutBox<FittedBoxLayoutData>;
@@ -268,7 +274,7 @@ export interface OverflowBoxLayoutData extends SingleChildLayoutData {
 }
 /** Gives its child replacement constraints and permits it to exceed this box. */
 export declare class OverflowBox extends Widget<OverflowBoxLayoutData> {
-    readonly alignment: Alignment;
+    readonly alignment: AlignmentGeometry;
     readonly minWidth: number | null;
     readonly maxWidth: number | null;
     readonly minHeight: number | null;

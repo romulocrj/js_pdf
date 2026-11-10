@@ -1,11 +1,12 @@
-import { Alignment } from './geometry.ts';
-import type { InsetsInput } from './geometry.ts';
+import type { AlignmentGeometry, InsetsInput } from './geometry.ts';
+import type { BasicAlignmentName } from './basic.ts';
+import type { TextDirection } from './border_radius.ts';
 import { Table } from './table.ts';
 import type { TableBorderInput, TableColumnWidth, TableColumnWidthMap, TableDecorationInput, TableWidth } from './table.ts';
 import type { TextStyle } from './text_style.ts';
 import type { AnyWidget, RenderContext } from './widget.ts';
-export type TableAlignmentName = 'topLeft' | 'topCenter' | 'topRight' | 'centerLeft' | 'center' | 'centerRight' | 'bottomLeft' | 'bottomCenter' | 'bottomRight';
-export type TableAlignmentInput = Alignment | TableAlignmentName;
+export type TableAlignmentName = BasicAlignmentName;
+export type TableAlignmentInput = AlignmentGeometry | TableAlignmentName;
 type IndexedValues<T> = Readonly<Record<number, T>> | ReadonlyMap<number, T>;
 export type OnCellFormat = (index: number, data: unknown) => string;
 export type OnCellDecoration = (index: number, data: unknown, rowNumber: number) => TableDecorationInput | null;
@@ -38,13 +39,15 @@ export interface TableTextArrayOptions {
     readonly headerCellDecoration?: TableDecorationInput | null;
     readonly rowDecoration?: TableDecorationInput | null;
     readonly oddRowDecoration?: TableDecorationInput | null;
-    readonly headerDirection?: unknown;
-    readonly tableDirection?: unknown;
+    /** The `textDirection` of the header cells' text. */
+    readonly headerDirection?: TextDirection | null;
+    /** The `textDirection` of the body cells' text. */
+    readonly tableDirection?: TextDirection | null;
     readonly cellBuilder?: OnCell | null;
     readonly textStyleBuilder?: OnCellTextStyle | null;
 }
 /** Convenience builders that translate scalar arrays into table cells. */
 export declare class TableHelper {
-    static fromTextArray({ context, data, cellPadding, cellHeight, cellAlignment, cellAlignments, cellStyle, oddCellStyle, cellFormat, cellDecoration, headerCount, headers, headerPadding, headerHeight, headerAlignment, headerAlignments, headerStyle, headerFormat, border, columnWidths, defaultColumnWidth, tableWidth, headerDecoration, headerCellDecoration, rowDecoration, oddRowDecoration, cellBuilder, textStyleBuilder }: TableTextArrayOptions): Table;
+    static fromTextArray({ context, data, cellPadding, cellHeight, cellAlignment, cellAlignments, cellStyle, oddCellStyle, cellFormat, cellDecoration, headerCount, headers, headerPadding, headerHeight, headerAlignment, headerAlignments, headerStyle, headerFormat, border, columnWidths, defaultColumnWidth, tableWidth, headerDecoration, headerCellDecoration, rowDecoration, oddRowDecoration, headerDirection, tableDirection, cellBuilder, textStyleBuilder }: TableTextArrayOptions): Table;
 }
 export {};

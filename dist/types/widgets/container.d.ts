@@ -2,8 +2,7 @@ import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { BasicAlignmentInput } from './basic.ts';
 import { BoxDecoration } from './decoration.ts';
 import type { BoxDecorationInput, DecorationPosition } from './decoration.ts';
-import { Alignment } from './geometry.ts';
-import type { Insets, InsetsInput } from './geometry.ts';
+import type { AlignmentGeometry, InsetsGeometry, InsetsInput } from './geometry.ts';
 import { SpanningWidget, Widget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext, SpanLayout } from './widget.ts';
 export interface ContainerOptions {
@@ -56,17 +55,19 @@ export declare class Container extends SpanningWidget<ContainerLayoutData, Conta
     readonly child: AnyWidget | null;
     readonly width: number | null;
     readonly height: number | null;
-    readonly padding: Insets;
-    readonly margin: Insets;
+    readonly padding: InsetsGeometry;
+    readonly margin: InsetsGeometry;
     readonly background: PaintColor | null;
     readonly borderColor: PaintColor | null;
     readonly borderWidth: number;
     readonly decoration: BoxDecoration | null;
     readonly foregroundDecoration: BoxDecoration | null;
-    readonly alignment: Alignment | null;
+    readonly alignment: AlignmentGeometry | null;
     get canSpan(): boolean;
     constructor({ child, width, height, padding, margin, color, background, borderColor, borderWidth, decoration, foregroundDecoration, alignment }?: ContainerOptions);
     initialSpanState(): ContainerState;
+    /** Margin and padding in physical edges, for the ambient text direction. */
+    private edges;
     private finishLayout;
     layout(context: RenderContext, constraints: Constraints): LayoutBox<ContainerLayoutData>;
     layoutSpan(context: RenderContext, constraints: Constraints, state: ContainerState): SpanLayout<ContainerLayoutData, ContainerState>;

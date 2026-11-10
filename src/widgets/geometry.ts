@@ -16,6 +16,8 @@
  *   - pdf/lib/src/pdf/rect.dart
  */
 
+import type { TextDirection } from './border_radius.ts';
+
 /** Structural input accepted wherever callers historically supplied maxima. */
 export interface BoxConstraintsInput {
   readonly minWidth?: number;
@@ -277,7 +279,27 @@ export type InsetsInput =
     readonly all?: number;
     readonly vertical?: number;
     readonly horizontal?: number;
+    /** Directional sides, upstream's `EdgeInsetsDirectional`; see `InsetsDirectional`. */
+    readonly start?: number;
+    readonly end?: number;
   };
+
+/**
+ * Upstream's `EdgeInsetsDirectional`: `start` is the side text starts on, the
+ * left under ltr and the right under rtl. `left` and `right` may ride along,
+ * which is upstream's `_MixedEdgeInsets`; `resolveInsets` adds them.
+ */
+export interface InsetsDirectional {
+  readonly top: number;
+  readonly start: number;
+  readonly end: number;
+  readonly bottom: number;
+  readonly left?: number;
+  readonly right?: number;
+}
+
+/** Upstream's `EdgeInsetsGeometry`: physical or directional insets. */
+export type InsetsGeometry = Insets | InsetsDirectional;
 
 export function normalizeInsets(value: InsetsInput = 0): Insets {
   if (typeof value === 'number') {
@@ -290,6 +312,41 @@ export function normalizeInsets(value: InsetsInput = 0): Insets {
     right: Number(value.right ?? value.horizontal ?? all ?? 0),
     bottom: Number(value.bottom ?? value.vertical ?? all ?? 0),
     left: Number(value.left ?? value.horizontal ?? all ?? 0)
+  };
+}
+
+/**
+ * Normalise insets without choosing a direction: physical input gives `Insets`
+ * exactly as `normalizeInsets` does, and input naming `start` or `end` keeps
+ * them for `resolveInsets` to place once the direction is known.
+ */
+export function normalizeInsetsGeometry(value: InsetsInput = 0): InsetsGeometry {
+  if (typeof value === 'number' || value.start == null && value.end == null) return normalizeInsets(value);
+  const { top, bottom } = normalizeInsets(value);
+  const side = (own: number | undefined): number => Number(own ?? value.horizontal ?? value.all ?? 0);
+  return {
+    top,
+    start: side(value.start),
+    end: side(value.end),
+    bottom,
+    left: Number(value.left ?? 0),
+    right: Number(value.right ?? 0)
+  };
+}
+
+/**
+ * Upstream's `EdgeInsetsGeometry.resolve`, as a function because the port's
+ * insets are plain objects. Physical insets are returned as they are; with no
+ * direction this resolves as ltr, the fallback of `Directionality.of`.
+ */
+export function resolveInsets(value: InsetsGeometry, direction?: TextDirection | null): Insets {
+  if (!('start' in value)) return value;
+  const rtl = direction === 'rtl';
+  return {
+    top: value.top,
+    right: (value.right ?? 0) + (rtl ? value.start : value.end),
+    bottom: value.bottom,
+    left: (value.left ?? 0) + (rtl ? value.end : value.start)
   };
 }
 
@@ -334,6 +391,27 @@ export const EdgeInsets = Object.freeze(Object.assign(edgeInsetsConstructor, {
   }
 })) as unknown as EdgeInsetsConstructor;
 
+/** Upstream's `EdgeInsetsDirectional` named constructors, shaped like `EdgeInsets`. */
+export const EdgeInsetsDirectional = Object.freeze({
+  zero: Object.freeze({ top: 0, start: 0, end: 0, bottom: 0 }) as InsetsDirectional,
+
+  all(value: number): InsetsDirectional {
+    return { top: value, start: value, end: value, bottom: value };
+  },
+
+  symmetric({ vertical = 0, horizontal = 0 }: { vertical?: number; horizontal?: number } = {}): InsetsDirectional {
+    return { top: vertical, start: horizontal, end: horizontal, bottom: vertical };
+  },
+
+  only({ start = 0, top = 0, end = 0, bottom = 0 }: Partial<InsetsDirectional> = {}): InsetsDirectional {
+    return { top, start, end, bottom };
+  },
+
+  fromSTEB(start: number, top: number, end: number, bottom: number): InsetsDirectional {
+    return { top, start, end, bottom };
+  }
+});
+
 /** Total inset along each axis, upstream's `horizontal` / `vertical` getters. */
 export function insetsHorizontal(insets: Insets): number {
   return insets.left + insets.right;
@@ -368,6 +446,52 @@ export const Alignment = Object.freeze({
   bottomCenter: Object.freeze({ x: 0, y: -1 }) as Alignment,
   bottomRight: Object.freeze({ x: 1, y: -1 }) as Alignment
 });
+
+/**
+ * Upstream's `AlignmentDirectional`: `start` is -1 on the side text starts on.
+ *
+ * Its `y` follows `Alignment`, **y up**, so `topStart` is `(-1, 1)` and each
+ * constant resolves to the physical one of the same name. Upstream copied
+ * Flutter's y-down constants beside its own y-up `Alignment`, which put
+ * `topStart` at the bottom of the box until PR #1980 (CHANGELOG L85).
+ */
+export interface AlignmentDirectional {
+  readonly start: number;
+  readonly y: number;
+}
+
+/** Upstream's `AlignmentGeometry`: a physical or a directional alignment. */
+export type AlignmentGeometry = Alignment | AlignmentDirectional;
+
+export type AlignmentDirectionalName =
+  | 'topStart'
+  | 'topCenter'
+  | 'topEnd'
+  | 'centerStart'
+  | 'center'
+  | 'centerEnd'
+  | 'bottomStart'
+  | 'bottomCenter'
+  | 'bottomEnd';
+
+/**
+ * Derived from `Alignment` rather than spelled out: left becomes start and
+ * right becomes end, so the two tables cannot disagree about `y`.
+ */
+export const AlignmentDirectional = Object.freeze(Object.fromEntries(
+  Object.entries(Alignment).map(([name, { x, y }]) => [
+    name.replace('Left', 'Start').replace('Right', 'End'),
+    Object.freeze({ start: x, y })
+  ])
+)) as Readonly<Record<AlignmentDirectionalName, AlignmentDirectional>>;
+
+/**
+ * Upstream's `AlignmentGeometry.resolve`; a physical alignment is returned as
+ * it is. `0 - start` rather than `-start`, so a centred one stays `+0`.
+ */
+export function resolveAlignment(value: AlignmentGeometry, direction?: TextDirection | null): Alignment {
+  return 'start' in value ? { x: direction === 'rtl' ? 0 - value.start : value.start, y: value.y } : value;
+}
 
 /** A top-left offset, the widget layer's placement unit. */
 export interface Offset {

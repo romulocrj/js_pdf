@@ -31,7 +31,7 @@ export declare class Image extends Widget<ImageLayoutData> {
     readonly height: number | null;
     readonly dpi: number | null;
     constructor(image: ImageProvider, { fit, alignment, width, height, dpi }?: ImageOptions);
-    layout(_context: RenderContext, constraints: Constraints): LayoutBox<ImageLayoutData>;
+    layout(context: RenderContext, constraints: Constraints): LayoutBox<ImageLayoutData>;
     paint(context: RenderContext, box: PositionedBox<ImageLayoutData>): void;
 }
 export interface ShapeOptions {
