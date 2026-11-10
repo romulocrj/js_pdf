@@ -714,6 +714,15 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
     const softWrap = this.softWrap ?? context.theme.softWrap;
     const maxLines = this.maxLines ?? context.theme.maxLines;
     const tokens = this.inputTokens(context, contentWidth);
+    if (context.minContent === true) {
+      // A table's min-content pass: break at every opportunity, so the widest
+      // line is the widest piece that cannot be split.
+      let widest = 1;
+      for (const token of tokens) {
+        if (token.kind === 'text' || token.kind === 'widget') widest = Math.max(widest, token.width);
+      }
+      contentWidth = Math.min(contentWidth, widest);
+    }
     const fallbackStyle = resolveStyle(context, context.theme.defaultTextStyle, 0, this.textScaleFactor);
     const raw: MutableLine[] = [];
     let current: MutableLine = { tokens: [], width: 0, wrapped: false, emptyStyle: fallbackStyle };

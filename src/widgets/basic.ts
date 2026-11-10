@@ -507,11 +507,8 @@ export class Transform extends Widget<TransformLayoutData> {
       };
     }
 
-    const childBox = this.child.layout(
-      context,
-      this.adjustLayout && this.unconstrained ? new BoxConstraints() : parent
-    );
     if (!this.adjustLayout) {
+      const childBox = this.child.layout(context, parent);
       const size = parent.constrain(childBox);
       return {
         widget: this,
@@ -521,26 +518,63 @@ export class Transform extends Widget<TransformLayoutData> {
       };
     }
 
-    const corners = [
-      transformPoint(this.transform, 0, 0),
-      transformPoint(this.transform, childBox.width, 0),
-      transformPoint(this.transform, childBox.width, childBox.height),
-      transformPoint(this.transform, 0, childBox.height)
-    ];
-    const minimumX = Math.min(...corners.map(point => point.x));
-    const maximumX = Math.max(...corners.map(point => point.x));
-    const minimumY = Math.min(...corners.map(point => point.y));
-    const maximumY = Math.max(...corners.map(point => point.y));
+    /*
+     * The child measures in its own frame but is painted rotated, so it has to
+     * fit the incoming constraints turned the same way (upstream PR #1980). A
+     * quarter turn exchanges the axes, as Flutter's RenderRotatedBox does; any
+     * other transform whose bounding box overflows is measured once more in a
+     * frame scaled down by the overflow. Measuring against the unrotated
+     * constraints laid a portrait image out 642pt wide in a 482pt slot.
+     */
+    const [a, b] = this.transform;
+    let childConstraints = this.unconstrained
+      ? new BoxConstraints()
+      : Math.abs(a) <= 1e-9 && Math.abs(b) > 1e-9
+        ? new BoxConstraints({
+          minWidth: parent.minHeight,
+          maxWidth: parent.maxHeight,
+          minHeight: parent.minWidth,
+          maxHeight: parent.maxWidth
+        })
+        : parent;
+    let childBox = this.child.layout(context, childConstraints);
+    const bounds = (): { x: number; y: number; width: number; height: number } => {
+      const corners = [
+        transformPoint(this.transform, 0, 0),
+        transformPoint(this.transform, childBox.width, 0),
+        transformPoint(this.transform, childBox.width, childBox.height),
+        transformPoint(this.transform, 0, childBox.height)
+      ];
+      const x = Math.min(...corners.map(point => point.x));
+      const y = Math.min(...corners.map(point => point.y));
+      return {
+        x,
+        y,
+        width: Math.max(...corners.map(point => point.x)) - x,
+        height: Math.max(...corners.map(point => point.y)) - y
+      };
+    };
+    let rotated = bounds();
+    if (!this.unconstrained && (rotated.width > parent.maxWidth || rotated.height > parent.maxHeight)) {
+      const scale = Math.min(
+        rotated.width > parent.maxWidth ? parent.maxWidth / rotated.width : 1,
+        rotated.height > parent.maxHeight ? parent.maxHeight / rotated.height : 1
+      );
+      // An unbounded axis of the child's frame shrinks from what the child took.
+      childConstraints = new BoxConstraints({
+        maxWidth: (childConstraints.hasBoundedWidth ? childConstraints.maxWidth : childBox.width) * scale,
+        maxHeight: (childConstraints.hasBoundedHeight ? childConstraints.maxHeight : childBox.height) * scale
+      });
+      childBox = this.child.layout(context, childConstraints);
+      rotated = bounds();
+    }
 
-    const size = parent.constrain({
-      width: maximumX - minimumX,
-      height: maximumY - minimumY
-    });
+    const size = parent.constrain(rotated);
     return {
       widget: this,
       width: size.width,
       height: size.height,
-      data: { childBox, layoutDx: -minimumX, layoutDy: -minimumY }
+      data: { childBox, layoutDx: -rotated.x, layoutDy: -rotated.y }
     };
   }
 

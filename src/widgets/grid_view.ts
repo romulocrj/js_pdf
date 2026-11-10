@@ -115,7 +115,8 @@ export class GridView extends SpanningWidget<GridViewLayoutData, GridViewState> 
   private fragment(
     context: RenderContext,
     incoming: Constraints,
-    state: GridViewState
+    state: GridViewState,
+    spanning: boolean
   ): SpanLayout<GridViewLayoutData, GridViewState> {
     const parent = BoxConstraints.from(incoming);
     if (state.firstChild >= this.children.length) {
@@ -163,8 +164,17 @@ export class GridView extends SpanningWidget<GridViewLayoutData, GridViewState> 
       }
     }
 
+    /*
+     * Outside a MultiPage nothing continues on a later page, so a run taller
+     * than the space is still drawn, overflowing, as upstream PR #1980 does; it
+     * used to draw nothing at all. A MultiPage fragment keeps a zero capacity,
+     * which moves the grid to a fresh page or fails there, so it terminates.
+     */
     const runCapacity = Number.isFinite(maxMain)
-      ? Math.max(0, Math.floor((maxMain + this.mainAxisSpacing + 0.000001) / (childMainAxis + this.mainAxisSpacing)))
+      ? Math.max(
+        spanning ? 0 : 1,
+        Math.floor((maxMain + this.mainAxisSpacing + 0.000001) / (childMainAxis + this.mainAxisSpacing))
+      )
       : neededRuns;
     const childCapacity = runCapacity * this.crossAxisCount;
     const count = Math.min(remaining, childCapacity);
@@ -222,7 +232,7 @@ export class GridView extends SpanningWidget<GridViewLayoutData, GridViewState> 
   }
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<GridViewLayoutData> {
-    return this.fragment(context, constraints, this.initialSpanState()).box;
+    return this.fragment(context, constraints, this.initialSpanState(), false).box;
   }
 
   override layoutSpan(
@@ -230,7 +240,7 @@ export class GridView extends SpanningWidget<GridViewLayoutData, GridViewState> 
     constraints: Constraints,
     state: GridViewState
   ): SpanLayout<GridViewLayoutData, GridViewState> {
-    return this.fragment(context, constraints, state);
+    return this.fragment(context, constraints, state, true);
   }
 
   override paint(context: RenderContext, box: PositionedBox<GridViewLayoutData>): void {
