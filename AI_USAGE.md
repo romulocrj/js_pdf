@@ -10,10 +10,10 @@ below.
 ## Version scope
 
 This guide describes version 0.2.0, including phases 6.1–6.8, 6.10
-and 6.12. Those additions are not available in version 0.1.6. Check the
-installed package version and declarations before using the newer APIs.
-The remaining phase-6 gaps are directional geometry, RTL Flex/table layout
-and baseline alignment (6.9), and PDF/A integration (6.11).
+and 6.12, and the unreleased 1.0 series on branch `release/1.0` (phase 6.9
+and phases 7.0–7.7). Additions marked *1.0 series* are not in 0.2.0 or
+earlier; check the installed package version and declarations before using
+them. PDF/A integration (6.11) is not implemented.
 
 ## Install and import specifier
 
@@ -280,6 +280,36 @@ Prefer the same composition strategy used by [dart_pdf](https://github.com/DavBf
 Insets accept a single number or a structural object such as
 `{ top: 8, right: 12, bottom: 8, left: 12 }`. Colors accept hexadecimal strings
 or normalized RGB arrays.
+
+`Container` takes upstream's `color` for a solid background (*1.0 series*;
+`background` is the older alias and still works). Do not combine either with
+`decoration`.
+
+## Directional layout
+
+*1.0 series.* Layout follows the ambient text direction, as in dart_pdf.
+Set it with `Directionality`, or with `textDirection` on `PageTheme`, `Page`
+or `MultiPage`; it defaults to left-to-right.
+
+- `EdgeInsetsDirectional.only({ start, top, end, bottom })`, `.all`,
+  `.symmetric`, `.fromSTEB(start, top, end, bottom)` and `.zero` are accepted
+  wherever insets are: `Padding`, `Container` margin/padding, `GridView`
+  padding, page margins and more.
+- `AlignmentDirectional.topStart` … `bottomEnd` (or the names `'topStart'`,
+  `'centerEnd'`, …) are accepted wherever alignments are, including gradients
+  and images.
+- `PositionedDirectional({ start, end, top, bottom })` places a `Stack` child
+  by start/end edges.
+- `Row`/`Flex`, `Wrap`, `GridView` and `Table` run right to left under RTL.
+  `Table` also takes its own `textDirection`; pass `'ltr'` to keep a table's
+  column order on an RTL page.
+- `MultiPage({ crossAxisAlignment })` accepts `'start'`, `'end'`, `'center'`
+  and `'stretch'`.
+- `resolveInsets(value, direction)` and `resolveAlignment(value, direction)`
+  turn directional values into physical ones in custom widgets.
+
+There is no baseline cross-axis alignment, as in dart_pdf. See the
+[directional example](examples/directional-layout-phase-6.9.mjs).
 
 ## Text and fonts
 
@@ -703,11 +733,16 @@ Inherited RGB copy methods return an RGB value even for gray/CMYK inputs;
 construct a new gray/CMYK value to preserve that device space.
 
 Solid paints and form/annotation arrays preserve gray and CMYK. Gradients,
-SVG filters and outline metadata use RGB. Color alpha alone does not emit a
-transparency state: use `Opacity` or `flatten({ background })` explicitly.
+SVG filters and outline metadata use RGB. Since phase 7.5 a color's alpha is
+painted: fills and strokes emit a constant-alpha `/ExtGState`, multiplied by any
+enclosing `Opacity`, and nested `Opacity` widgets multiply. Pass
+`colorAlpha: false` to `Document`/`createPdf` (or `PdfDocument`) to ignore color
+alpha, for example for PDF/A-1, where transparency is forbidden. A one-color
+gradient paints its alpha; stops of multi-color gradients stay opaque.
 DeviceCMYK does not embed an ICC profile or establish PDF/A conformance.
-Upstream's unusual `isLight`/`isDark` threshold and harmony offsets are retained;
-`shade` and `monochromatic` return opaque colors as upstream does.
+Upstream's `isLight`/`isDark` threshold and harmony offsets are retained, with
+the swapped getters corrected (white is light). `shade` and `monochromatic`
+return opaque colors as upstream does.
 See the [color gallery](examples/colors-phase-6.7.mjs).
 
 ## Layout performance
@@ -766,9 +801,12 @@ recompressed, and the XMP metadata packet is always left plain.
 - Widget layout uses top-left coordinates with the y-axis pointing down.
   Low-level `PdfCanvas` operations, including `drawForm`, use PDF user
   coordinates (bottom-left, y-up); respect transforms installed by widgets.
-- Directional geometry, RTL Flex/table layout and baseline alignment are not
-  implemented. Existing text bidi/Arabic shaping and icon mirroring do not
-  imply support for those layout features.
+- Text uses UAX #9 bidi per line and shapes Arabic through the font's
+  presentation-form code points; OpenType GSUB/GPOS tables are not read, so
+  fonts that join only through GSUB are unsupported.
+- Progress indicators on an unbounded axis need `fallbackWidth` (and
+  `fallbackHeight` for the circular one) or they throw a `RangeError`
+  (*1.0 series*).
 - PDF/A integration and output intents are not implemented. Supplying XMP or
   using CMYK does not establish PDF/A conformance.
 - Reading or rasterizing existing PDFs is not supported.

@@ -1,0 +1,25 @@
+{
+  "node": "v26.8.1",
+  "gzipLevel": 9,
+  "brotliQuality": 11,
+  "bundles": [
+    {
+      "ref": "961db0d",
+      "rawBytes": 450928,
+      "gzipBytes": 138393,
+      "brotliBytes": 111811
+    },
+    {
+      "ref": "9cb031c",
+      "rawBytes": 422764,
+      "gzipBytes": 135763,
+      "brotliBytes": 110972
+    },
+    {
+      "ref": "working-tree",
+      "rawBytes": 434364,
+      "gzipBytes": 140884,
+      "brotliBytes": 115362
+    }
+  ]
+}

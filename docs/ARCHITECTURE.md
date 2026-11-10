@@ -130,8 +130,10 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   components (`rg`/`RG`, `g`/`G`, `k`/`K`); legacy strings/tuples stay RGB.
   `normalizePaintColor` retains values, while `normalizeColor` explicitly
   converts to RGB for gradients, SVG filters, luminance and outline metadata.
-  Form and geometric annotation arrays use `PdfArray.fromColor`. Alpha is
-  value metadata: callers use `Opacity` or `flatten` for visible transparency.
+  Form and geometric annotation arrays use `PdfArray.fromColor`. Colour alpha
+  is painted through constant-alpha `/ExtGState` entries that `PdfGraphics`
+  tracks per saved state and multiplies by the inherited opacity; the
+  `colorAlpha` setting turns it off.
 - **`page_format.ts`** — upstream paper presets, margins and public physical-unit constants in PDF points.
 - **`font/font_metrics.ts`** — glyph and string bounding metrics, including
   ascent, descent, bearings and advance width.

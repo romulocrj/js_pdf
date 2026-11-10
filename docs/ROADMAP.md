@@ -4,7 +4,7 @@ Ordered plan for the port dart_pdf-master. Current coverage is in
 [PORTING-STATUS.md](PORTING-STATUS.md); conventions are in
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**Last updated:** 2026-09-29
+**Last updated:** 2026-11-10
 
 
 **Important** if you find an issue in the original code, correct it in the port and document it in [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md) with brief instructions for reproducing and correcting it.
@@ -256,13 +256,73 @@ The remaining notes were reclassified explicitly as upstream parity,
 compatibility behaviour, serialization choices, deliberate divergences,
 runtime scope or format limits; no unresolved port-gap marker remains.
 
+**1.0 series — on branch `release/1.0`, 2026-11-10.** Phases 7.0–7.7 fix the
+defects found by comparing the port with open upstream pull requests and add
+packed static tables; phase 6.9 adds directional layout. See
+[Phase 7](#phase-7--10-series-upstream-audit-fixes) below.
+
 ## Next step
 
-> **Next implementation phase: 6.9 — directional layout, RTL Flex/tables and baseline alignment.**
-> Phases 6.1–6.7 merged in PRs #5–#11; 6.8 + 6.10 + 6.12 merged together in
-> PR #12. Prepare the next npm release before resuming implementation; 6.11
-> (PDF/A) follows 6.9. Use the updated main branch; do not stack PRs or merge
-> automatically.
+> **Next: 1.0 size and scope review, then the 1.0 release.**
+> Phases 7.0–7.7 and 6.9 are implemented on branch `release/1.0`, which is not
+> yet merged to `main`. The minified bundle is 434,364 bytes (−3.67% against
+> 0.2.0; see [BUNDLE-SIZE.md](BUNDLE-SIZE.md)). Review the size, decide what
+> else enters 1.0, choose how to split the branch into reviewable PRs, then
+> freeze the public API. PDF/A (6.11) and GSUB-only Arabic fonts are deferred
+> until after 1.0. Do not merge automatically.
+
+## Phase 7 — 1.0 series: upstream audit fixes
+
+Audit of 2026-11-10: upstream master moved from `b97c4a63dc` only to
+`277b367` (README), and the three upstream PRs merged since the previous audit
+(#1977–#1979) were already ported in 6.6, 6.2 and 6.7. The open pull requests
+filed since then — chiefly the bug sweep #1980 by Baghdady92, plus #1716,
+#2005, #2009, #2011, #2029 and issues #1989, #2000 and #2028 — were checked
+item by item against the port. About sixty defects affected it, plus several
+port regressions. The user approved fixing every pertinent item for 1.0,
+including painted colour alpha and the chart axis correction, and excluded
+GSUB-only Arabic fonts and PDF/A.
+
+Every item has a regression test that failed first. Upstream defects are in
+[ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md#phase-7-audit-defects-also-reported-in-open-upstream-pull-requests);
+port regressions and behaviour changes are in the CHANGELOG. Translated
+pull-request code is credited in NOTICE.
+
+| Order | Domain | State |
+|---|---|---|
+| 7.0 | Size headroom: pack the palette, PDF417 codewords and Type1 widths (−28,164 bytes, output identical) | On branch `release/1.0` |
+| 7.1 | Serialization and PDF objects: numbers, text strings, names, destinations, outlines, page labels, shared fields, TOC replay | On branch `release/1.0` |
+| 7.2 | Fonts: cmap ranking and formats, glyph clamping, hinting tables, sfnt header, ToUnicode, WinAnsi coverage | On branch `release/1.0` |
+| 7.3 | Text: logical-order breaking with per-line bidi, ignorables, soft hyphen, ZWSP, NBSP, separators, letter spacing | On branch `release/1.0` |
+| 7.4 | SVG: crash fixes, display/visibility, percentages, viewports and preserveAspectRatio, tspan runs, alpha | On branch `release/1.0` |
+| 7.5 | Graphics: painted colour alpha with `colorAlpha`, composed opacity, `isDark`/`isLight`, arcs, Adobe CMYK | On branch `release/1.0` |
+| 7.6 | Layout: linear table pagination, min-content columns, rotateBox, axis labels, infinity guards | On branch `release/1.0` |
+| 7.7 | Follow-ups: `Container.color`, split tails, tight tables, axis modulo, SVG robustness, translucent tracks | On branch `release/1.0` |
+
+**Example gate:** all eight upstream examples generate. Byte counts change
+for the documented reasons: hinting tables (all examples with TrueType), the
+chart axis (report, server), hyphen breaks (document, server), letter-spacing
+centring (certificate), `Container.color` (resume) and tight tables (server).
+Each domain adds one proof, registered after phase 6.12 in `Browser.html`
+and `run-phase-examples.mjs`: `serialization-phase-7.1`, `fonts-phase-7.2`,
+`text-bidi-phase-7.3` (with a Noto Sans Arabic subset under the OFL),
+`svg-phase-7.4`, `graphics-phase-7.5` and `layout-phase-7.6`, which 7.7
+extends.
+
+**6.9 directional layout** landed on the same branch: `EdgeInsetsDirectional`,
+`AlignmentDirectional`, `PositionedDirectional`, `resolveInsets`,
+`resolveAlignment`, RTL Flex/Wrap/Stack/GridView/Table, directional page
+margins and `MultiPage.crossAxisAlignment`, with #1980's L74/L81/L83/L85
+corrections applied from the start. Upstream has no baseline cross-axis
+alignment, so that item was dropped rather than invented. Left-to-right output
+of all 48 example PDFs is unchanged; `directional-layout-phase-6.9` is
+registered between 6.8 and 6.10.
+
+**Open decisions before 1.0:** keep or narrow the hyphen-break rule (the port
+breaks after any hyphen during wrapping; upstream only cuts an overflowing
+word at a hyphen), keep hinting tables in subsets (correct but larger PDFs),
+further packing (barcode maps, SVG colours), and how to split `release/1.0`
+into reviewable PRs.
 
 ## Phase 6 — remaining compatibility and upstream follow-up
 
@@ -292,9 +352,9 @@ credits and licenses alongside the example.
 | 6.6 | Performance: unchanged `BoxConstraints` reuse, Flex copies, ASCII single-word path; benchmark in V8 | Merged in PR #10 |
 | 6.7 | Colors: color value types, named constants, DeviceGray, CMYK and upstream color conversions | Merged in PR #11 |
 | 6.8 | Fonts: simple TrueType compatibility mode and CFF/PostScript support | Merged together in PR #12 |
-| 6.9 | Layout: directional geometry, RTL Flex/tables, baseline alignment | Pending |
+| 6.9 | Layout: directional geometry, RTL Flex/tables (baseline alignment dropped: upstream has none) | On branch `release/1.0` |
 | 6.10 | PDF objects: text-note annotations, complete annotation borders and public generic form XObjects | Merged together in PR #12 |
-| 6.11 | PDF/A: output intents and required conformance integration over the font/color work | Pending |
+| 6.11 | PDF/A: output intents and required conformance integration over the font/color work | Deferred until after 1.0 |
 | 6.12 | API conveniences: `DefaultTextStyle.merge` and the remaining listed compatibility aliases | Merged together in PR #12 |
 
 The boundaries may be split into smaller PRs within the same domain where
@@ -658,6 +718,9 @@ visual PDF. Metadata, XMP and viewer page labels from 5.6 are object-level
 features, so focused serialization tests cover them; only the form controls add
 a visual proof there. Phase 5.7 adds both the three-page remaining-widget
 gallery and the retained production pagination regression.
+Phases 6.1–6.12 and 7.1–7.6 each have a proof as well; 7.0 changes no output
+and is covered by the table fingerprints and byte-identical example PDFs,
+and 7.7 extends the 7.5 and 7.6 proofs.
 
 ---
 

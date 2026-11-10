@@ -29,20 +29,35 @@ Read the full history: [I ported dart_pdf to pure JavaScript](https://daily.dev/
 ## Status
 
 The base port is complete through phase 5.7. Compatibility work from phases
-6.1–6.8, 6.10 and 6.12 has also landed. Directional layout, RTL Flex/tables,
-baseline alignment (6.9) and PDF/A integration (6.11) remain unimplemented.
+6.1–6.8, 6.10 and 6.12 is released in 0.2.0. The unreleased 1.0 series on
+branch `release/1.0` adds directional layout (6.9) and the phase-7 fixes from
+the 2026-11-10 upstream audit. PDF/A integration (6.11) is deferred until
+after 1.0.
 
 The library includes the PDF object model, standard Type1 fonts, embedded
 TrueType and OpenType CFF1 fonts, declarative layout and pagination, SVG,
 raster images, tables, charts, barcodes, annotations, forms, reusable form
 XObjects, page labels and metadata/XMP. All eight retained upstream examples
 generate end to end; the base port was also exercised under bare ClearScript
-V8. The current repository passes 561 tests and generates 31 phase examples
+V8. The `release/1.0` branch passes 727 tests and generates 38 phase examples
 under Node.js.
 
 Version 0.1.6 was the first release candidate and the first version published
 to npm. Version 0.2.0 includes the additions listed below; installing 0.1.6
 does not include them. The public API is not frozen until 1.0.0.
+
+### In the unreleased 1.0 series
+
+- Directional layout: `EdgeInsetsDirectional`, `AlignmentDirectional`,
+  `PositionedDirectional`, right-to-left Flex, Wrap, Stack, GridView and Table,
+  directional page margins and `MultiPage.crossAxisAlignment`.
+- About sixty fixes found by comparing the port with open upstream pull
+  requests, plus several port regressions — among them wrapped right-to-left
+  paragraphs emitted in reverse line order. See the
+  [CHANGELOG](CHANGELOG.md#unreleased).
+- Color alpha is now painted, with a `colorAlpha: false` opt-out.
+- The minified bundle is **434,364 bytes**, 3.67% smaller than 0.2.0, because
+  three literal tables are packed into strings.
 
 ### New in 0.2.0
 
@@ -63,7 +78,7 @@ does not include them. The public API is not frozen until 1.0.0.
 - API conveniences: `DefaultTextStyle.merge`, `PdfPageFormat`,
   `ChartValue`/`LineChartValue`, `PdfDict.merge` and `PdfArray.uniq`.
 
-The current minified bundle is **450,928 bytes**, compared with **405,510
+The 0.2.0 minified bundle is **450,928 bytes**, compared with **405,510
 bytes** in 0.1.6 (+11.20%). Example fonts remain external assets. See the
 [bundle measurements](https://github.com/romulocrj/js_pdf/blob/main/docs/BUNDLE-SIZE.md)
 for compressed sizes, methodology and tradeoffs.
@@ -220,10 +235,13 @@ covers, in [AI_USAGE.md](AI_USAGE.md).
 
 - Reading existing PDFs, rasterizing PDFs, encryption and digital signatures
   are out of scope.
-- Directional layout geometry, right-to-left (RTL) layout for Flex and tables,
-  and baseline alignment are not implemented (phase 6.9).
 - PDF/A integration, including output intents and the required conformance
-  handling, is not implemented (phase 6.11).
+  handling, is not implemented (phase 6.11, deferred until after 1.0).
+- OpenType layout tables (GSUB/GPOS) are not read. Arabic shaping uses the
+  font's presentation-form code points, so fonts that join only through GSUB
+  are not supported.
+- Stops of multi-color gradients are opaque; a color's alpha applies to solid
+  paint and one-color gradients.
 - CFF1 fonts are embedded in full and their ink bounds are approximate.
   CFF subsetting, CFF2, variable-font instancing and raw Type1/PFB font
   embedding are not implemented. Simple TrueType also embeds the full font.
@@ -319,8 +337,8 @@ The **Color values & device spaces** card demonstrates the Material palette,
 RGB/gray/CMYK painting, HSV/HSL/RYB conversions and flattened alpha. Its
 [shared generator](examples/colors-phase-6.7.mjs) follows phase 6.6 in the browser;
 `npm run phase-examples` writes `examples/out/colors-phase-6.7.pdf`.
-See [color usage](AI_USAGE.md#color-values-and-device-spaces) for constructors
-and the distinction between color alpha and painting opacity.
+See [color usage](AI_USAGE.md#color-values-and-device-spaces) for constructors,
+painted color alpha and the `colorAlpha: false` opt-out.
 
 
 Phases **6.8 / 6.10 / 6.12** add three ordered gallery cards:
@@ -330,3 +348,20 @@ They share [one generator module](examples/fonts-objects-api-phases.mjs) with
 complete SIL OFL; they are external assets, not part of dist. See
 [usage and limitations](AI_USAGE.md#font-compatibility-and-cff) and the
 [release-to-current bundle comparison](docs/BUNDLE-SIZE.md).
+
+
+Phase **6.9** adds the **Directional layout** card between 6.8 and 6.10:
+right-to-left rows, tables, grids and wraps, directional insets and alignment,
+and `MultiPage.crossAxisAlignment`
+([generator](examples/directional-layout-phase-6.9.mjs)). See
+[directional layout usage](AI_USAGE.md#directional-layout).
+
+The **1.0 series** adds one proof per phase-7 domain after phase 6.12, each
+shared by the browser gallery and `npm run phase-examples`:
+[strings, names and navigation](examples/serialization-phase-7.1.mjs) (7.1),
+[font tables and coverage](examples/fonts-phase-7.2.mjs) (7.2),
+[bidi lines and break rules](examples/text-bidi-phase-7.3.mjs) (7.3, with a
+Noto Sans Arabic subset under the SIL OFL),
+[SVG viewports and robustness](examples/svg-phase-7.4.mjs) (7.4),
+[colour alpha and arcs](examples/graphics-phase-7.5.mjs) (7.5) and
+[tables and layout guards](examples/layout-phase-7.6.mjs) (7.6, extended by 7.7).

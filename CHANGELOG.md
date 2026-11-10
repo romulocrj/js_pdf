@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Version numbers below 1.0.0 do not guarantee a stable public API.
 
+## [Unreleased]
+
+The 1.0 series. A comparison with upstream master `277b367` and with the open
+upstream pull requests filed after the previous audit (chiefly
+DavBfr/dart_pdf#1980) found about sixty defects that also affect this port,
+plus several of the port's own. Upstream defects are listed in
+[ORIGINAL-ISSUES.md](ORIGINAL-ISSUES.md); every fix has a regression test.
+
+### Added
+
+- `colorAlpha` option on `Document`, `createPdf` and `PdfDocument` (default
+  `true`); see Changed.
+- `Container({ color })`, upstream's option name; `background` remains an alias.
+- `fallbackWidth` on both progress indicators and `fallbackHeight` on
+  `CircularProgressIndicator`, used on unbounded axes.
+- Directional layout (phase 6.9): `EdgeInsetsDirectional`, `AlignmentDirectional`
+  (also as names such as `'topStart'`), `PositionedDirectional`,
+  `resolveInsets` and `resolveAlignment`; right-to-left `Row`/`Flex`, `Wrap`,
+  `Stack`, `GridView` and `Table` under the ambient direction; `textDirection`
+  on `PageTheme`, `Page`, `MultiPage` and `Table`; directional page margins;
+  `MultiPage.crossAxisAlignment`.
+
+### Fixed
+
+- **Text:** wrapped right-to-left paragraphs were emitted with their lines in
+  reverse order, and justified or fallback-font runs inside them were mirrored
+  (a port regression). RTL fragments inside LTR paragraphs are now shaped and
+  reordered. Invisible format characters are no longer drawn; soft hyphens and
+  U+200B are break opportunities; no-break spaces no longer break; CR/CRLF line
+  endings, separators missing from a font, hyphenated words, letter spacing at
+  span boundaries, whitespace-only text and two Arabic isolated-form aliases are
+  corrected. A lam + haraka + alef sequence no longer drops its mark.
+- **Strings and objects:** text strings use PDFDocEncoding-safe literals or
+  UTF-16BE, so `€ — ’ “ ”` in titles, bookmarks and field values read back
+  correctly. Names escape UTF-8 bytes. Non-finite and huge numbers are never
+  written. `/Dests` keys are unique and byte-ordered rather than
+  locale-ordered, outline `/Count` and page-label defaults follow ISO 32000-1,
+  form widgets sharing a name become one field, and a table of contents in
+  the same flow as its content shows the final page numbers.
+- **Fonts:** cmap subtables are ranked and read correctly (formats 0 and 4,
+  symbol and Mac subtables, glyph 0, malformed tables); subsets keep their
+  hinting tables and spec-valid sfnt headers; ToUnicode handles supplementary
+  characters in sections of at most 100; the standard fonts report WinAnsi
+  coverage, so en dash, curly quotes and euro no longer fall back.
+- **SVG:** cyclic `<use>` and gradient references, undecodable images,
+  malformed transforms, colours, numbers and masks no longer abort the
+  document. Hidden layers, percentage lengths, nested viewports, `<symbol>`
+  and `<use>` sizing, `preserveAspectRatio`, tspan ordering, zero stroke
+  widths, colour alpha, paint fallbacks, `hsl()` hues and transformed clips and
+  masks are corrected.
+- **Graphics and images:** arcs reach their end point, including rotated
+  ellipses; `isLight`/`isDark` were swapped; nested opacity composes; Adobe
+  CMYK JPEGs are inverted exactly when an Adobe marker is present;
+  `RawImage` no longer copies its input.
+- **Layout:** MultiPage tables are linear rather than quadratic in their row
+  count; overflowing and tightly constrained tables keep words whole and
+  proportional columns; `Transform.rotateBox` lays out against rotated
+  constraints; a vertical chart axis reserves its labels' height; unbounded
+  `Stack` and progress indicators no longer write `Infinity`; non-finite pie
+  values are rejected; an oversized GridView cell is drawn; a split widget's
+  last fragment no longer fills its page; `Header` no longer splits and
+  duplicates its bookmark; negative axis label angles pick upstream's side.
+  `Container({ color })` was silently ignored.
+
+### Changed
+
+- **Colour alpha is painted.** A `PdfColor` with alpha below 1 now paints
+  translucent fills and strokes, multiplied by any enclosing `Opacity`, and
+  nested `Opacity` widgets multiply. Opaque documents are byte-identical.
+  Pass `colorAlpha: false` for the previous behaviour.
+- `isLight`/`isDark` now return the documented answer; callers that inverted
+  them must stop.
+- The default `textAlign` is `start`, as upstream; an explicit `left` in an
+  RTL paragraph is now left-aligned.
+- Lines may break after a hyphen during normal wrapping.
+- Generated destination names changed from `outline-N` to `__dest<n>`.
+- Embedded TrueType subsets are a few kilobytes larger because they keep their
+  hinting tables; ToUnicode streams use `Adobe-Identity-UCS` on every path.
+- Cartesian charts with a vertical axis, overflowing tables and tables under a
+  tight width change layout. One-colour gradients are flat fills.
+- Progress indicators on an unbounded axis without a fallback size throw a
+  `RangeError` instead of writing a broken PDF.
+- The minified bundle is smaller: the Material palette, PDF417 codewords and
+  Type1 widths are packed into strings: 434,364 bytes against 450,928 in 0.2.0
+  (−3.67%); gzip grows 1.80%. See [BUNDLE-SIZE.md](docs/BUNDLE-SIZE.md).
+- Under `textDirection: 'rtl'`, tables run right to left; pass
+  `textDirection: 'ltr'` to keep a table's column order. `PositionedDirectional`
+  defaults to the ambient direction instead of left-to-right.
+
 ## [0.2.0] - 2026-09-29
 
 ### Added

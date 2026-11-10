@@ -192,3 +192,37 @@ The complete license accompanies the fonts in
 examples/assets/licenses/SourceSans3-OFL.txt. The source hash and reproduction
 recipe are in examples/assets/THIRD-PARTY-NOTICES.md. These assets are not
 included in the library runtime bundle.
+
+--------------------------------------------------------------------------
+
+The phase-7.3 example font examples/assets/JsPdfArabicExample.ttf is a modified,
+renamed subset of Noto Sans Arabic, distributed under the SIL Open Font License
+1.1.
+
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)
+
+Source: google/fonts@8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5,
+        ofl/notosansarabic/NotoSansArabic[wdth,wght].ttf
+
+The complete license and original copyright notice accompany the font in
+examples/assets/licenses/NotoSansArabic-OFL.txt. The reproduction recipe and
+source hash are recorded in examples/assets/THIRD-PARTY-NOTICES.md. This example
+asset is not part of the library runtime.
+
+--------------------------------------------------------------------------
+
+Phase 7 corrections incorporate approaches and code from pull requests opened
+against DavBfr/dart_pdf, contributed to that Apache-2.0 project by their
+authors. None was merged upstream when it was consulted (2026-11-10):
+
+  - #1980 "a 182-defect bug sweep across pdf, printing and pdf_widget_wrapper",
+    by Baghdady92 — head 7375694
+  - #1716 "Fix Mid-word line break inside table", by MathanM
+  - #2009 "write valid sfnt searchRange, entrySelector and rangeShift" and
+    #2011 "spec-compliant ToUnicode CMap for large character sets and emoji",
+    by palmoni5
+  - #2029 "ToUnicode encodes code points above U+FFFF as UTF-16BE surrogate
+    pairs", by Rupali59
+
+The affected modules keep the dart_pdf attribution header; the corrections are
+listed in ORIGINAL-ISSUES.md.
