@@ -240,8 +240,6 @@ covers, in [AI_USAGE.md](AI_USAGE.md).
 - OpenType layout tables (GSUB/GPOS) are not read. Arabic shaping uses the
   font's presentation-form code points, so fonts that join only through GSUB
   are not supported.
-- Stops of multi-color gradients are opaque; a color's alpha applies to solid
-  paint and one-color gradients.
 - CFF1 fonts are embedded in full and their ink bounds are approximate.
   CFF subsetting, CFF2, variable-font instancing and raw Type1/PFB font
   embedding are not implemented. Simple TrueType also embeds the full font.

@@ -2777,6 +2777,1023 @@ class VerticalDivider extends Widget {
   }
 }
 
+class PdfFontMetrics {
+  constructor({left, top, right, bottom, ascent = bottom, descent = top, advanceWidth = right - left, leftBearing = left}) {
+    this.left = left;
+    this.top = top;
+    this.right = right;
+    this.bottom = bottom;
+    this.ascent = ascent;
+    this.descent = descent;
+    this.advanceWidth = advanceWidth;
+    this.leftBearing = leftBearing;
+  }
+  static append(metrics, letterSpacing = 0) {
+    let left;
+    let top;
+    let bottom;
+    let ascent;
+    let descent;
+    let advanceWidth = 0;
+    let firstBearing;
+    let lastBearing = 0;
+    let lastSpacing = 0;
+    for (const metric of metrics) {
+      left ?? (left = metric.left);
+      top = Math.min(top ?? metric.top, metric.top);
+      bottom = Math.max(bottom ?? metric.bottom, metric.bottom);
+      ascent = Math.max(ascent ?? metric.ascent, metric.ascent);
+      descent = Math.min(descent ?? metric.descent, metric.descent);
+      firstBearing ?? (firstBearing = metric.leftBearing);
+      lastBearing = metric.rightBearing;
+      lastSpacing = metric.advanceWidth > 0 ? letterSpacing : 0;
+      advanceWidth += metric.advanceWidth + lastSpacing;
+    }
+    if (left === undefined || top === undefined || bottom === undefined || ascent === undefined || descent === undefined || firstBearing === undefined) {
+      return PdfFontMetrics.zero;
+    }
+    return new PdfFontMetrics({
+      left,
+      top,
+      right: advanceWidth - lastBearing - lastSpacing,
+      bottom,
+      ascent,
+      descent,
+      advanceWidth: advanceWidth - lastSpacing,
+      leftBearing: firstBearing
+    });
+  }
+  get width() {
+    return this.right - this.left;
+  }
+  get height() {
+    return this.bottom - this.top;
+  }
+  get maxWidth() {
+    return Math.max(this.advanceWidth, this.right) + Math.max(-this.leftBearing, 0);
+  }
+  get maxHeight() {
+    return this.ascent - this.descent;
+  }
+  get effectiveLeft() {
+    return Math.min(this.leftBearing, 0);
+  }
+  get rightBearing() {
+    return this.advanceWidth - this.right;
+  }
+  scale(factor) {
+    return new PdfFontMetrics({
+      left: this.left * factor,
+      top: this.top * factor,
+      right: this.right * factor,
+      bottom: this.bottom * factor,
+      ascent: this.ascent * factor,
+      descent: this.descent * factor,
+      advanceWidth: this.advanceWidth * factor,
+      leftBearing: this.leftBearing * factor
+    });
+  }
+}
+
+PdfFontMetrics.zero = new PdfFontMetrics({
+  left: 0,
+  top: 0,
+  right: 0,
+  bottom: 0
+});
+
+const CP1252 = Object.freeze({
+  8364: 128,
+  8218: 130,
+  402: 131,
+  8222: 132,
+  8230: 133,
+  8224: 134,
+  8225: 135,
+  710: 136,
+  8240: 137,
+  352: 138,
+  8249: 139,
+  338: 140,
+  381: 142,
+  8216: 145,
+  8217: 146,
+  8220: 147,
+  8221: 148,
+  8226: 149,
+  8211: 150,
+  8212: 151,
+  732: 152,
+  8482: 153,
+  353: 154,
+  8250: 155,
+  339: 156,
+  382: 158,
+  376: 159
+});
+
+function toWinAnsiByte(codePoint) {
+  if (codePoint <= 255 && (codePoint & 224) !== 128) return codePoint;
+  return CP1252[codePoint] ?? 63;
+}
+
+const WIN_ANSI_RUNES = Array.from({
+  length: 256
+}, (_, byte) => (byte & 224) === 128 ? 63 : byte);
+
+for (const [rune, byte] of Object.entries(CP1252)) WIN_ANSI_RUNES[byte] = Number(rune);
+
+function winAnsiRune(byte) {
+  return WIN_ANSI_RUNES[byte] ?? 63;
+}
+
+function isWinAnsiRune(codePoint) {
+  return winAnsiRune(toWinAnsiByte(codePoint)) === codePoint;
+}
+
+function pdfLiteral(value) {
+  let output = "";
+  for (const character of String(value)) {
+    const byte = toWinAnsiByte(character.codePointAt(0) ?? 63);
+    if (byte === 40 || byte === 41 || byte === 92) {
+      output += `\\${String.fromCharCode(byte)}`;
+    } else if (byte === 10) {
+      output += "\\n";
+    } else if (byte === 13) {
+      output += "\\r";
+    } else if (byte < 32 || byte > 126) {
+      output += `\\${byte.toString(8).padStart(3, "0")}`;
+    } else {
+      output += String.fromCharCode(byte);
+    }
+  }
+  return `(${output})`;
+}
+
+function pdfHexString(values, digits = 4) {
+  let output = "";
+  for (const value of values) {
+    output += value.toString(16).padStart(digits, "0");
+  }
+  return `<${output}>`;
+}
+
+function fitsPdfDocEncoding(value) {
+  for (let index = 0; index < value.length; index++) {
+    const unit = value.charCodeAt(index);
+    if (unit < 32 ? unit !== 9 && unit !== 10 && unit !== 13 : unit > 126 && unit < 161 || unit === 173 || unit > 255) return false;
+  }
+  return true;
+}
+
+function pdfTextBytes(value) {
+  if (fitsPdfDocEncoding(value)) return value;
+  let bytes = "þÿ";
+  for (let index = 0; index < value.length; index++) {
+    const unit = value.charCodeAt(index);
+    bytes += String.fromCharCode(unit >> 8, unit & 255);
+  }
+  return bytes;
+}
+
+function pdfUnicodeString(value) {
+  let output = "feff";
+  for (let index = 0; index < value.length; index++) {
+    output += value.charCodeAt(index).toString(16).padStart(4, "0");
+  }
+  return `<${output}>`;
+}
+
+class PdfString extends PdfDataType {
+  constructor(value) {
+    super();
+    this.value = value;
+  }
+  static fromDate(date) {
+    if (!Number.isFinite(date.getTime())) {
+      throw new RangeError("PDF date must be valid");
+    }
+    const year = String(date.getUTCFullYear()).padStart(4, "0");
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    const hour = String(date.getUTCHours()).padStart(2, "0");
+    const minute = String(date.getUTCMinutes()).padStart(2, "0");
+    const second = String(date.getUTCSeconds()).padStart(2, "0");
+    return new PdfString(`D:${year}${month}${day}${hour}${minute}${second}Z`);
+  }
+  output(s) {
+    s.putString(fitsPdfDocEncoding(this.value) ? pdfLiteral(this.value) : pdfUnicodeString(this.value));
+  }
+}
+
+const widthDigits = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function unpackWidths(packed) {
+  const widths = [];
+  for (let index = 0; index < packed.length; index += 2) {
+    widths.push((widthDigits.indexOf(packed[index]) << 6 | widthDigits.indexOf(packed[index + 1])) / 1e3);
+  }
+  return Object.freeze(widths);
+}
+
+const helveticaWidths = unpackWidths("H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0EWEWFjIsIsN5KbC/FNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsEWEWJIJIJIIsP3KbKbLSLSKbJjMKLSEWH0KbIsNBLSMKKbMKLSKbJjLSKbOwKbKbJjEWEWEVHVIsFNIsIsH0IsIsEWIsIsDeDeH0DeNBIsIsIsIsFNH0EWIsH0LSH0H0H0FOEEFOJIH0KPH0DeEWFNPoIsIsFNPoKbD6PoH0JjH0H0DeDdFNFNFeIsPoFNPoH0D6OqH0H0KbEWEWIsIsIsIsEEIsFNLhFyHAJIFNLhFNJeJIFeFeFNIsIZEWFNFeFtHANlNlNvIsKbKbKbKbKbKbPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKaJjIsIsIsIsIsIsOAH0IsIsIsIsD7D7D7D7IsIsIsIsIsIsIsJIJjIsIsIsIsH0IrH0");
+
+const helveticaBoldWidths = unpackWidths("EWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWFNHaIsIsN5LSDuFNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsFNFNJIJIJIJjPPLSLSLSLSKbJjMKLSEWIsLSJjNBLSMKKbMKLSKbJjLSKbOwKbKbJjFNEWFNJIIsFNIsJjIsJjIsFNJjJjEWEWIsEWN5JjJjJjJjGFIsFNJjIsMKIsIsH0GFEYGFJIFeIsFeEWIsH0PoIsIsFNPoKbFNPoFeJjFeFeEWEWH0H0FeIsPoFNPoIsFNOwFeH0KbEWFNIsIsIsIsEYIsFNLhFyIsJIFNLhFNGQJIFNFNFNJjIsEWFNFNFtIsNCNCNCJjLSLSLSLSLSLSPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKbJjIsIsIsIsIsIsN5IsIsIsIsIsEWEWEWEWJjJjJjJjJjJjJjJIJjJjJjJjJjIsJjIs");
+
+const helveticaBoldObliqueWidths = unpackWidths("EWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWFNHaIsIsN5LSDuFNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsFNFNJIJIJIJjPPLSLSLSLSKbJjMKLSEWIsLSJjNBLSMKKbMKLSKbJjLSKbOwKbKbJjFNEWFNJIIsFNIsJjIsJjIsFNJjJjEWEWIsEWN5JjJjJjJjGFIsFNJjIsMKIsIsH0GFEYGFJIFeIsFeEWIsH0PoIsIsFNPoKbFNPoFeJjFeFeEWEWH0H0FeIsPoFNPoIsFNOwFeH0KbEWFNIsIsIsIsEYIsFNLhFyIsJIFNLhFNGQJIFNFNFNJjIsEWFNFNFtIsNCNCNCJjLSLSLSLSLSLSPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKbJjIsIsIsIsIsIsN5IsIsIsIsIsEWEWEWEWJjJjJjJjJjJjJjJIJjJjJjJjJjIsJjIs");
+
+const helveticaObliqueWidths = unpackWidths("EWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWFjIsIsN5KbC/FNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsEWEWJIJIJIIsP3KbKbLSLSKbJjMKLSEWH0KbIsNBLSMKKbMKLSKbJjLSKbOwKbKbJjEWEWEWHVIsFNIsIsH0IsIsEWIsIsDeDeH0DeNBIsIsIsIsFNH0EWIsH0LSH0H0H0FOEEFOJIFeIsFeDeIsFNPoIsIsFNPoKbFNPoFeJjFeFeDeDeFNFNFeIsPoFNPoH0FNOwFeH0KbEWFNIsIsIsIsEEIsFNLhFyIsJIFNLhFNGQJIFNFNFNIsIZEWFNFNFtIsNCNCNCJjKbKbKbKbKbKbPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKbJjIsIsIsIsIsIsN5H0IsIsIsIsEWEWEWEWIsIsIsIsIsIsIsJIJjIsIsIsIsH0IsH0");
+
+const timesWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6FNGYH0H0NBMKC0FNFNH0I0D6FND6EWH0H0H0H0H0H0H0H0H0H0EWEWI0I0I0G8OZLSKbKbLSJjIsLSLSFNGFLSJjN5LSLSIsLSKbIsJjLSLSOwLSLSJjFNEWFNHVH0FNG8H0G8H0G8FNH0H0EWEWH0EWMKH0H0H0H0FNGFEWH0H0LSH0H0G8HgDIHgIdFeH0FeFNH0G8PoH0H0FNPoIsFNN5FeJjFeFeFNFNG8G8FeH0PoFNPUGFFNLSFeG8LSD6FNH0H0H0H0DIH0FNL4EUH0I0FNL4FNGQI0EsEsFNH0HFD6FNEsE2H0LuLuLuG8LSLSLSLSLSLSN5KbJjJjJjJjFNFNFNFNLSLSLSLSLSLSLSI0LSLSLSLSLSLSIsH0G8G8G8G8G8G8KbG8G8G8G8G8EWEWEWEWH0H0H0H0H0H0H0I0H0H0H0H0H0H0H0H0");
+
+const timesBoldWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6FNIrH0H0PoNBEWFNFNH0I6D6FND6EWH0H0H0H0H0H0H0H0H0H0FNFNI6I6I6H0OiLSKbLSLSKbJjMKMKGFH0MKKbOwLSMKJjMKLSIsKbLSLSPoLSLSKbFNEWFNJFH0FNH0IsG8IsG8FNH0IsEWFNIsEWNBIsH0IsIsG8GFFNIsH0LSH0H0G8GKDcGKIIFeH0FeFNH0H0PoH0H0FNPoIsFNPoFeKbFeFeFNFNH0H0FeH0PoFNPoGFFNLSFeG8LSD6FNH0H0H0H0DcH0FNLrEsH0I6FNLrFNGQI6EsEsFNIsIcD6FNEsFKH0LuLuLuH0LSLSLSLSLSLSPoLSKbKbKbKbGFGFGFGFLSLSMKMKMKMKMKI6MKLSLSLSLSLSJjIsH0H0H0H0H0H0LSG8G8G8G8G8EWEWEWEWH0IsH0H0H0H0H0I6H0IsIsIsIsH0IsH0");
+
+const timesBoldItalicWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6GFIrH0H0NBMKEWFNFNH0I6D6FND6EWH0H0H0H0H0H0H0H0H0H0FNFNI6I6I6H0NAKbKbKbLSKbKbLSMKGFH0KbJjN5LSLSJjLSKbIsJjLSKbN5KbJjJjFNEWFNI6H0FNH0H0G8H0G8FNH0IsEWEWH0EWMKIsH0H0H0GFGFEWIsG8KbH0G8GFFcDcFcI6FeH0FeFNH0H0PoH0H0FNPoIsFNOwFeJjFeFeFNFNH0H0FeH0PoFNPoGFFNLSFeGFJjD6GFH0H0H0H0DcH0FNLrEKH0JeFNLrFNGQI6EsEsFNJAH0D6FNEsEsH0LuLuLuH0KbKbKbKbKbKbOwKbKbKbKbKbGFGFGFGFLSLSLSLSLSLSLSI6LSLSLSLSLSJjJjH0H0H0H0H0H0H0LSG8G8G8G8G8EWEWEWEWH0IsH0H0H0H0H0I6H0IsIsIsIsG8H0G8");
+
+const timesItalicWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6FNGkH0H0NBMKDWFNFNH0KjD6FND6EWH0H0H0H0H0H0H0H0H0H0FNFNKjKjKjH0OYJjJjKbLSJjJjLSLSFNG8KbIsNBKbLSJjLSJjH0IsLSJjNBJjIsIsGFEWGFGmH0FNH0H0G8H0G8EWH0H0EWEWG8EWLSH0H0H0H0GFGFEWH0G8KbG8G8GFGQETGQIdFeH0FeFNH0IsN5H0H0FNPoH0FNOwFeIsFeFeFNFNIsIsFeH0N5FNPUGFFNKbFeGFIsD6GFH0H0H0H0ETH0FNL4EUH0KjFNL4FNGQKjEsEsFNH0ILD6FNEsE2H0LuLuLuH0JjJjJjJjJjJjN5KbJjJjJjJjFNFNFNFNLSKbLSLSLSLSLSKjLSLSLSLSLSIsJjH0H0H0H0H0H0H0KbG8G8G8G8G8EWEWEWEWH0H0H0H0H0H0H0KjH0H0H0H0H0G8H0G8");
+
+const symbolWidths = unpackWidths("JLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLD6FNLJH0IlNBMKG3FNFNH0IlD6IlD6EWH0H0H0H0H0H0H0H0H0H0EWEWIlIlIlG8IlLSKbLSJkJjL7JbLSFNJ3LSKuN5LSLSMALlIsJQJjKyG3MAKFMbJjFNNfFNKSH0H0J3IlIlHuG3IJGbJbFJJbIlIlJAIJIlIlIJIlJbG3JALJKuHtKuHuHgDIHgIlJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLLuJsD3IlCnLJH0LxLxLxLxQSPbJbPbJbGQIlGbIlIlLJHuHMIlIlIlIlPoJbPoKSM3KuMbPbMAMAM3MAMALJLJLJLJLJLJLJMALJMWMWN6M3IlD6LJJbJbQSPbJbPbJbHuFJMWMWMSLJGAGAGAGAGAGAHuHuHuHuJLFJESKuKuKuGAGAGAGAGAGAHuHuHuJL");
+
+const zapfDingbatsWidths = unpackWidths("LqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqEWPOPBPOPULPMVMWMXKyPAOrIlNXOPOlOPOxPOLzNOL6L5I7KlL7L4L3LyHuIoIZJBK0MSMUMUMWMZMaMwM3MVNJM3NBMwM/ObLoLTLtMWMYK3MIMAMYL3LDLEKqK9M6MvMVMVLDKvK4KxMSMTLJMXMRMXNpL5L6L6L3L3N8N8MUMQG2CKEVGfGIGIKcKcLqGGGGE9E9EUEUH9H9GaGaDqDqFOFOLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLcIgIgOOKbL4L4MIJTK2JyMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUN+NGP4HKLsOcLsOWOfOgOgNCNpM8OcOcOVOiOjHPNzNENENjNjK4K4NqLqNqL4OyMDNhMDN4PHN4M/NpOfPKOWLq");
+
+class PdfType1Font {
+  constructor({fontName, ascent, descent, widths = [], missingWidth = .6}) {
+    this.fontName = fontName;
+    this.ascent = ascent;
+    this.descent = descent;
+    this.widths = widths;
+    this.missingWidth = missingWidth;
+  }
+  static courier() {
+    return new PdfType1Font({
+      fontName: "Courier",
+      ascent: .91,
+      descent: -.22
+    });
+  }
+  static courierBold() {
+    return new PdfType1Font({
+      fontName: "Courier-Bold",
+      ascent: .91,
+      descent: -.22
+    });
+  }
+  static courierBoldOblique() {
+    return new PdfType1Font({
+      fontName: "Courier-BoldOblique",
+      ascent: .91,
+      descent: -.22
+    });
+  }
+  static courierOblique() {
+    return new PdfType1Font({
+      fontName: "Courier-Oblique",
+      ascent: .91,
+      descent: -.22
+    });
+  }
+  static helvetica() {
+    return new PdfType1Font({
+      fontName: "Helvetica",
+      ascent: .931,
+      descent: -.225,
+      widths: helveticaWidths
+    });
+  }
+  static helveticaBold() {
+    return new PdfType1Font({
+      fontName: "Helvetica-Bold",
+      ascent: .962,
+      descent: -.228,
+      widths: helveticaBoldWidths
+    });
+  }
+  static helveticaBoldOblique() {
+    return new PdfType1Font({
+      fontName: "Helvetica-BoldOblique",
+      ascent: .962,
+      descent: -.228,
+      widths: helveticaBoldObliqueWidths
+    });
+  }
+  static helveticaOblique() {
+    return new PdfType1Font({
+      fontName: "Helvetica-Oblique",
+      ascent: .931,
+      descent: -.225,
+      widths: helveticaObliqueWidths
+    });
+  }
+  static times() {
+    return new PdfType1Font({
+      fontName: "Times-Roman",
+      ascent: .898,
+      descent: -.218,
+      widths: timesWidths
+    });
+  }
+  static timesBold() {
+    return new PdfType1Font({
+      fontName: "Times-Bold",
+      ascent: .935,
+      descent: -.218,
+      widths: timesBoldWidths
+    });
+  }
+  static timesBoldItalic() {
+    return new PdfType1Font({
+      fontName: "Times-BoldItalic",
+      ascent: .921,
+      descent: -.218,
+      widths: timesBoldItalicWidths
+    });
+  }
+  static timesItalic() {
+    return new PdfType1Font({
+      fontName: "Times-Italic",
+      ascent: .883,
+      descent: -.217,
+      widths: timesItalicWidths
+    });
+  }
+  static symbol() {
+    return new PdfType1Font({
+      fontName: "Symbol",
+      ascent: 1.01,
+      descent: -.293,
+      widths: symbolWidths
+    });
+  }
+  static zapfDingbats() {
+    return new PdfType1Font({
+      fontName: "ZapfDingbats",
+      ascent: .82,
+      descent: -.143,
+      widths: zapfDingbatsWidths
+    });
+  }
+  isRuneSupported(rune) {
+    return isWinAnsiRune(rune);
+  }
+  glyphMetrics(charCode) {
+    const advanceWidth = this.widths[charCode] ?? this.missingWidth;
+    return new PdfFontMetrics({
+      left: 0,
+      top: this.descent,
+      right: advanceWidth,
+      bottom: this.ascent
+    });
+  }
+  stringMetrics(text, size, letterSpacing = 0) {
+    const metrics = [];
+    for (const character of String(text)) {
+      metrics.push(this.glyphMetrics(toWinAnsiByte(character.codePointAt(0) ?? 63)).scale(size));
+    }
+    return PdfFontMetrics.append(metrics, letterSpacing);
+  }
+  encodeText(text) {
+    return pdfLiteral(text);
+  }
+  resourceDict() {
+    return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/Type1") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfName("/WinAnsiEncoding") ] ]);
+  }
+}
+
+const defaultPdfFont = PdfType1Font.helvetica();
+
+class PdfSoftMaskReference extends PdfDataType {
+  constructor(mask) {
+    super();
+    this.mask = mask;
+  }
+  output(_stream) {
+    throw new Error("A PDF soft mask must be resolved by PdfDocument before output");
+  }
+}
+
+const LINE_CAP_OPERAND = Object.freeze({
+  butt: 0,
+  round: 1,
+  square: 2
+});
+
+const LINE_JOIN_OPERAND = Object.freeze({
+  miter: 0,
+  round: 1,
+  bevel: 2
+});
+
+const M4 = .551784;
+
+function operands(values) {
+  return values.map(formatNumber).join(" ");
+}
+
+function compositeTextOperand(font, text, wordSpacing, fontSize) {
+  const parts = [];
+  let run = "";
+  const adjustment = formatNumber(-wordSpacing * 1e3 / fontSize);
+  for (const character of String(text)) {
+    run += character;
+    if (character === " ") {
+      parts.push(font.encodeText(run), adjustment);
+      run = "";
+    }
+  }
+  if (run !== "" || parts.length === 0) {
+    parts.push(font.encodeText(run));
+  }
+  return `[${parts.join(" ")}]`;
+}
+
+class PdfCanvas {
+  constructor(pageHeight, {colorAlpha = true} = {}) {
+    this.content = new PdfStream;
+    this.formNames = new Map;
+    this.commandCount = 0;
+    this.fontNames = new Map;
+    this.stateNames = new Map;
+    this.stateDicts = new Map;
+    this.patternNames = new Map;
+    this.patternDicts = new Map;
+    this.shadingNames = new Map;
+    this.shadingDicts = new Map;
+    this.imageNames = new Map;
+    this.softMaskNames = new Map;
+    this.pageAnnotations = [];
+    this.currentSoftMask = null;
+    this.softMaskStack = [];
+    this.currentTransform = identityMatrix;
+    this.transformStack = [];
+    this.currentLetterSpacing = 0;
+    this.currentWordSpacing = 0;
+    this.textSpacingStack = [];
+    this.textSpacingDirty = false;
+    this.alphas = [ 1, 1, 1, 1 ];
+    this.alphaStack = [];
+    this.pageHeight = pageHeight;
+    this.colorAlpha = colorAlpha;
+  }
+  push(command) {
+    if (this.commandCount > 0) {
+      this.content.putByte(10);
+    }
+    this.content.putString(command);
+    this.commandCount++;
+  }
+  toPdfY(top) {
+    return this.pageHeight - top;
+  }
+  transformWidgetPoint(x, top) {
+    return transformPoint(this.currentTransform, x, this.toPdfY(top));
+  }
+  addFont(font) {
+    const existing = this.fontNames.get(font);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const name = `/F${this.fontNames.size + 1}`;
+    this.fontNames.set(font, name);
+    return name;
+  }
+  get fonts() {
+    return this.fontNames;
+  }
+  get graphicStates() {
+    return this.stateDicts;
+  }
+  get patterns() {
+    return this.patternDicts;
+  }
+  get shadings() {
+    return this.shadingDicts;
+  }
+  get forms() {
+    return this.formNames;
+  }
+  drawForm(form, x, y, width = form.width, height = form.height) {
+    if (![ x, y, width, height ].every(Number.isFinite) || width <= 0 || height <= 0) throw new RangeError("Invalid form placement");
+    let name = this.formNames.get(form);
+    if (name === undefined) {
+      name = `/Xf${this.formNames.size + 1}`;
+      this.formNames.set(form, name);
+    }
+    this.push(`q ${formatNumber(width / form.width)} 0 0 ${formatNumber(height / form.height)} ${formatNumber(x)} ${formatNumber(y)} cm ${name} Do Q`);
+  }
+  get images() {
+    return this.imageNames;
+  }
+  get annotations() {
+    return this.pageAnnotations;
+  }
+  addAnnotation(annotation) {
+    this.pageAnnotations.push(annotation);
+  }
+  addUrlLink(destination, x, top, width, height, border) {
+    this.addLink("url", destination, x, top, width, height, border);
+  }
+  addNamedLink(destination, x, top, width, height, border) {
+    this.addLink("destination", destination, x, top, width, height, border);
+  }
+  addLink(kind, destination, x, top, width, height, border) {
+    if (width <= 0 || height <= 0) return;
+    const points = [ this.transformWidgetPoint(x, top), this.transformWidgetPoint(x + width, top), this.transformWidgetPoint(x, top + height), this.transformWidgetPoint(x + width, top + height) ];
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    this.pageAnnotations.push({
+      kind,
+      destination,
+      border,
+      rect: {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
+      }
+    });
+  }
+  addFormField(field, x, top, width, height) {
+    if (width <= 0 || height <= 0) return;
+    const points = [ this.transformWidgetPoint(x, top), this.transformWidgetPoint(x + width, top), this.transformWidgetPoint(x, top + height), this.transformWidgetPoint(x + width, top + height) ];
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    this.pageAnnotations.push({
+      ...field,
+      rect: {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
+      }
+    });
+  }
+  addImage(image) {
+    const existing = this.imageNames.get(image);
+    if (existing !== undefined) return existing;
+    const name = `/I${this.imageNames.size + 1}`;
+    this.imageNames.set(image, name);
+    return name;
+  }
+  saveContext() {
+    this.push("q");
+    this.transformStack.push(this.currentTransform);
+    this.textSpacingStack.push([ this.currentLetterSpacing, this.currentWordSpacing ]);
+    this.softMaskStack.push(this.currentSoftMask);
+    this.alphaStack.push(this.alphas.slice());
+  }
+  restoreContext() {
+    const restored = this.transformStack.pop();
+    const spacing = this.textSpacingStack.pop();
+    const softMask = this.softMaskStack.pop();
+    const alphas = this.alphaStack.pop();
+    if (restored === undefined) {
+      return;
+    }
+    this.push("Q");
+    this.currentTransform = restored;
+    this.alphas = alphas;
+    if (spacing !== undefined) {
+      this.currentLetterSpacing = spacing[0];
+      this.currentWordSpacing = spacing[1];
+    }
+    this.currentSoftMask = softMask ?? null;
+  }
+  save() {
+    this.saveContext();
+  }
+  restore() {
+    this.restoreContext();
+  }
+  setTransform(matrix) {
+    this.push(`${operands(matrix)} cm`);
+    this.currentTransform = multiplyMatrix(this.currentTransform, matrix);
+  }
+  getTransform() {
+    return this.currentTransform;
+  }
+  setGraphicState(state) {
+    if (state.isEmpty) {
+      return null;
+    }
+    const alphas = this.alphas;
+    const fill = state.fillOpacity === null ? null : alphas[0] * state.fillOpacity;
+    const stroke = state.strokeOpacity === null ? null : alphas[1] * state.strokeOpacity;
+    const name = this.emitGraphicState(fill === state.fillOpacity && stroke === state.strokeOpacity ? state : new PdfGraphicState({
+      fillOpacity: fill,
+      strokeOpacity: stroke,
+      blendMode: state.blendMode
+    }));
+    if (fill !== null) alphas[0] = alphas[2] = fill;
+    if (stroke !== null) alphas[1] = alphas[3] = stroke;
+    return name;
+  }
+  setColorAlpha(color, stroke) {
+    if (!this.colorAlpha) return;
+    const alphas = this.alphas;
+    const index = stroke ? 1 : 0;
+    const alpha = alphas[index] * (color instanceof PdfColor ? color.alpha : 1);
+    if (Math.abs(alpha - alphas[index + 2]) < 1e-9) return;
+    this.emitGraphicState(new PdfGraphicState(stroke ? {
+      strokeOpacity: alpha
+    } : {
+      fillOpacity: alpha
+    }));
+    alphas[index + 2] = alpha;
+  }
+  emitGraphicState(state) {
+    const existing = this.stateNames.get(state.key);
+    if (existing !== undefined) {
+      this.push(`${existing} gs`);
+      return existing;
+    }
+    const name = `/g${this.stateDicts.size + 1}`;
+    this.stateNames.set(state.key, name);
+    this.stateDicts.set(name, state.output());
+    this.push(`${name} gs`);
+    return name;
+  }
+  setSoftMask(mask) {
+    this.currentSoftMask = mask;
+    const existing = this.softMaskNames.get(mask);
+    if (existing !== undefined) {
+      this.push(`${existing} gs`);
+      return existing;
+    }
+    const name = `/g${this.stateDicts.size + 1}`;
+    const state = new PdfDict;
+    state.set("/SMask", new PdfSoftMaskReference(mask));
+    this.softMaskNames.set(mask, name);
+    this.stateDicts.set(name, state);
+    this.push(`${name} gs`);
+    return name;
+  }
+  getSoftMask() {
+    return this.currentSoftMask;
+  }
+  addPattern(pattern) {
+    const existing = this.patternNames.get(pattern.key);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const name = `/p${this.patternDicts.size + 1}`;
+    this.patternNames.set(pattern.key, name);
+    this.patternDicts.set(name, pattern.output());
+    return name;
+  }
+  setFillPattern(pattern) {
+    const name = this.addPattern(pattern);
+    this.push(`/Pattern cs ${name} scn`);
+    return name;
+  }
+  setStrokePattern(pattern) {
+    const name = this.addPattern(pattern);
+    this.push(`/Pattern CS ${name} SCN`);
+    return name;
+  }
+  drawShading(shading) {
+    const dict = shading.output();
+    const key = dict.toString();
+    let name = this.shadingNames.get(key);
+    if (name === undefined) {
+      name = `/s${this.shadingDicts.size + 1}`;
+      this.shadingNames.set(key, name);
+      this.shadingDicts.set(name, dict);
+    }
+    this.push(`${name} sh`);
+    return name;
+  }
+  drawImage(image, x, y, width = image.width, height) {
+    const resolvedHeight = height ?? image.height * width / image.width;
+    const name = this.addImage(image);
+    let matrix;
+    switch (image.orientation) {
+     case "topRight":
+      matrix = [ -width, 0, 0, resolvedHeight, width + x, y ];
+      break;
+
+     case "bottomRight":
+      matrix = [ -width, 0, 0, -resolvedHeight, width + x, resolvedHeight + y ];
+      break;
+
+     case "bottomLeft":
+      matrix = [ width, 0, 0, -resolvedHeight, x, resolvedHeight + y ];
+      break;
+
+     case "leftTop":
+      matrix = [ 0, -resolvedHeight, -width, 0, width + x, resolvedHeight + y ];
+      break;
+
+     case "rightTop":
+      matrix = [ 0, -resolvedHeight, width, 0, x, resolvedHeight + y ];
+      break;
+
+     case "rightBottom":
+      matrix = [ 0, resolvedHeight, width, 0, x, y ];
+      break;
+
+     case "leftBottom":
+      matrix = [ 0, resolvedHeight, -width, 0, width + x, y ];
+      break;
+
+     default:
+      matrix = [ width, 0, 0, resolvedHeight, x, y ];
+      break;
+    }
+    this.push("q");
+    this.push(`${operands(matrix)} cm`);
+    this.push(`${name} Do`);
+    this.push("Q");
+  }
+  moveTo(x, y) {
+    this.push(`${operands([ x, y ])} m`);
+  }
+  lineTo(x, y) {
+    this.push(`${operands([ x, y ])} l`);
+  }
+  curveTo(x1, y1, x2, y2, x3, y3) {
+    this.push(`${operands([ x1, y1, x2, y2, x3, y3 ])} c`);
+  }
+  closePath() {
+    this.push("h");
+  }
+  drawLine(x1, y1, x2, y2) {
+    this.moveTo(x1, y1);
+    this.lineTo(x2, y2);
+  }
+  drawRect(x, y, width, height) {
+    this.push(`${operands([ x, y, width, height ])} re`);
+  }
+  drawBox(box) {
+    this.drawRect(box.x, box.y, box.width, box.height);
+  }
+  drawRRect(x, y, width, height, rv, rh) {
+    this.moveTo(x, y + rv);
+    this.curveTo(x, y - M4 * rv + rv, x - M4 * rh + rh, y, x + rh, y);
+    this.lineTo(x + width - rh, y);
+    this.curveTo(x + M4 * rh + width - rh, y, x + width, y - M4 * rv + rv, x + width, y + rv);
+    this.lineTo(x + width, y + height - rv);
+    this.curveTo(x + width, y + M4 * rv + height - rv, x + M4 * rh + width - rh, y + height, x + width - rh, y + height);
+    this.lineTo(x + rh, y + height);
+    this.curveTo(x - M4 * rh + rh, y + height, x, y + M4 * rv + height - rv, x, y + height - rv);
+    this.lineTo(x, y + rv);
+  }
+  drawEllipse(x, y, r1, r2, clockwise = true) {
+    this.moveTo(x, y - r2);
+    if (clockwise) {
+      this.curveTo(x + M4 * r1, y - r2, x + r1, y - M4 * r2, x + r1, y);
+      this.curveTo(x + r1, y + M4 * r2, x + M4 * r1, y + r2, x, y + r2);
+      this.curveTo(x - M4 * r1, y + r2, x - r1, y + M4 * r2, x - r1, y);
+      this.curveTo(x - r1, y - M4 * r2, x - M4 * r1, y - r2, x, y - r2);
+    } else {
+      this.curveTo(x - M4 * r1, y - r2, x - r1, y - M4 * r2, x - r1, y);
+      this.curveTo(x - r1, y + M4 * r2, x - M4 * r1, y + r2, x, y + r2);
+      this.curveTo(x + M4 * r1, y + r2, x + r1, y + M4 * r2, x + r1, y);
+      this.curveTo(x + r1, y - M4 * r2, x + M4 * r1, y - r2, x, y - r2);
+    }
+  }
+  bezierArc(x1, y1, rx, ry, x2, y2, {large = false, sweep = false, phi = 0} = {}) {
+    if (x1 === x2 && y1 === y2) {
+      return;
+    }
+    if (Math.abs(rx) <= 1e-10 || Math.abs(ry) <= 1e-10) {
+      this.lineTo(x2, y2);
+      return;
+    }
+    if (phi !== 0) {
+      const cos = Math.cos(phi);
+      const sin = Math.sin(phi);
+      this.endToCenterParameters(cos * x1 + sin * y1, cos * y1 - sin * x1, cos * x2 + sin * y2, cos * y2 - sin * x2, large, sweep, rx, ry, [ cos, sin, -sin, cos, 0, 0 ]);
+    } else {
+      this.endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry);
+    }
+  }
+  vectorAngle(ux, uy, vx, vy) {
+    const d = Math.sqrt(ux * ux + uy * uy) * Math.sqrt(vx * vx + vy * vy);
+    if (d === 0) {
+      return 0;
+    }
+    let c = (ux * vx + uy * vy) / d;
+    if (c < -1) c = -1; else if (c > 1) c = 1;
+    const s = ux * vy - uy * vx;
+    c = Math.acos(c);
+    return Math.sign(c) === Math.sign(s) ? c : -c;
+  }
+  endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry, rotation) {
+    rx = Math.abs(rx);
+    ry = Math.abs(ry);
+    const x1d = .5 * (x1 - x2);
+    const y1d = .5 * (y1 - y2);
+    let r = x1d * x1d / (rx * rx) + y1d * y1d / (ry * ry);
+    if (r > 1) {
+      const rr = Math.sqrt(r);
+      rx *= rr;
+      ry *= rr;
+      r = 0;
+    } else if (r !== 0) {
+      r = 1 / r - 1;
+    }
+    if (r > -1e-10 && r < 0) {
+      r = 0;
+    }
+    r = Math.sqrt(r);
+    if (large === sweep) {
+      r = -r;
+    }
+    const cxd = r * rx * y1d / ry;
+    const cyd = -(r * ry * x1d) / rx;
+    const cx = cxd + .5 * (x1 + x2);
+    const cy = cyd + .5 * (y1 + y2);
+    const theta = this.vectorAngle(1, 0, (x1d - cxd) / rx, (y1d - cyd) / ry);
+    const tau = Math.PI * 2;
+    let dTheta = this.vectorAngle((x1d - cxd) / rx, (y1d - cyd) / ry, (-x1d - cxd) / rx, (-y1d - cyd) / ry) % tau;
+    if (dTheta < 0) {
+      dTheta += tau;
+    }
+    if (!sweep && dTheta > 0) {
+      dTheta -= tau;
+    } else if (sweep && dTheta < 0) {
+      dTheta += tau;
+    }
+    this.bezierArcFromCentre(cx, cy, rx, ry, -theta, -dTheta, rotation);
+  }
+  bezierArcFromCentre(cx, cy, rx, ry, startAngle, extent, rotation) {
+    let fragmentsCount;
+    let fragmentsAngle;
+    if (Math.abs(extent) <= Math.PI / 2) {
+      fragmentsCount = 1;
+      fragmentsAngle = extent;
+    } else {
+      fragmentsCount = Math.ceil(Math.abs(extent) / (Math.PI / 2));
+      fragmentsAngle = extent / fragmentsCount;
+    }
+    if (fragmentsAngle === 0) {
+      return;
+    }
+    const halfFragment = fragmentsAngle * .5;
+    let kappa = Math.abs(4 / 3 * (1 - Math.cos(halfFragment)) / Math.sin(halfFragment));
+    if (fragmentsAngle < 0) {
+      kappa = -kappa;
+    }
+    let theta = startAngle;
+    const startFragment = theta + fragmentsAngle;
+    let c1 = Math.cos(theta);
+    let s1 = Math.sin(theta);
+    for (let i = 0; i < fragmentsCount; i++) {
+      const c0 = c1;
+      const s0 = s1;
+      theta = startFragment + i * fragmentsAngle;
+      c1 = Math.cos(theta);
+      s1 = Math.sin(theta);
+      const points = [ cx + rx * (c0 - kappa * s0), cy - ry * (s0 + kappa * c0), cx + rx * (c1 + kappa * s1), cy - ry * (s1 - kappa * c1), cx + rx * c1, cy - ry * s1 ];
+      if (rotation !== undefined) {
+        for (let j = 0; j < 6; j += 2) {
+          const point = transformPoint(rotation, points[j], points[j + 1]);
+          points[j] = point.x;
+          points[j + 1] = point.y;
+        }
+      }
+      this.push(`${operands(points)} c`);
+    }
+  }
+  fillPath({evenOdd = false} = {}) {
+    this.push(evenOdd ? "f*" : "f");
+  }
+  strokePath({close = false} = {}) {
+    this.push(close ? "s" : "S");
+  }
+  fillAndStrokePath({evenOdd = false, close = false} = {}) {
+    this.push(`${close ? "b" : "B"}${evenOdd ? "*" : ""}`);
+  }
+  clipPath({evenOdd = false, end = true} = {}) {
+    this.push(`W${evenOdd ? "*" : ""}${end ? " n" : ""}`);
+  }
+  setLineWidth(width) {
+    this.push(`${formatNumber(width)} w`);
+  }
+  setLineCap(cap) {
+    this.push(`${LINE_CAP_OPERAND[cap]} J`);
+  }
+  setLineJoin(join) {
+    this.push(`${LINE_JOIN_OPERAND[join]} j`);
+  }
+  setMiterLimit(limit) {
+    if (limit < 1) {
+      throw new RangeError("miter limit must be at least 1");
+    }
+    this.push(`${formatNumber(limit)} M`);
+  }
+  setLineDashPattern(array = [], phase = 0) {
+    this.push(`[${operands(array)}] ${formatNumber(phase)} d`);
+  }
+  setFillColor(color) {
+    this.push(colorOperator(color));
+    this.setColorAlpha(color, false);
+  }
+  setStrokeColor(color) {
+    this.push(colorOperator(color, true));
+    this.setColorAlpha(color, true);
+  }
+  setColor(color) {
+    this.setFillColor(color);
+    this.setStrokeColor(color);
+  }
+  fillRect(x, top, width, height, color) {
+    const bottom = this.pageHeight - top - height;
+    this.setColorAlpha(color, false);
+    this.push(`${colorOperator(color)} ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re f`);
+  }
+  strokeRect(x, top, width, height, color, lineWidth = 1) {
+    const bottom = this.pageHeight - top - height;
+    this.setColorAlpha(color, true);
+    this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re S`);
+  }
+  text(text, x, baselineFromTop, style) {
+    const baseline = this.pageHeight - baselineFromTop;
+    const fontSize = style.fontSize;
+    const font = style.font ?? defaultPdfFont;
+    const letterSpacing = style.letterSpacing ?? 0;
+    const wordSpacing = style.wordSpacing ?? 0;
+    const operatorWordSpacing = font.isComposite === true ? 0 : wordSpacing;
+    const spacingOperators = [];
+    if (letterSpacing === 0 && operatorWordSpacing === 0 && this.textSpacingDirty) {
+      spacingOperators.push("0", "Tc", "0", "Tw");
+      this.currentLetterSpacing = 0;
+      this.currentWordSpacing = 0;
+      this.textSpacingDirty = false;
+    } else {
+      if (letterSpacing !== this.currentLetterSpacing) {
+        spacingOperators.push(formatNumber(letterSpacing), "Tc");
+        this.currentLetterSpacing = letterSpacing;
+      }
+      if (operatorWordSpacing !== this.currentWordSpacing) {
+        spacingOperators.push(formatNumber(operatorWordSpacing), "Tw");
+        this.currentWordSpacing = operatorWordSpacing;
+      }
+      if (letterSpacing !== 0 || operatorWordSpacing !== 0) {
+        this.textSpacingDirty = true;
+      }
+    }
+    const usesTextArray = font.isComposite === true && wordSpacing !== 0;
+    const textOperand = usesTextArray ? compositeTextOperand(font, text, wordSpacing, fontSize) : font.encodeText(text);
+    this.setColorAlpha(style.color, false);
+    const command = [ "BT", this.addFont(font), formatNumber(fontSize), "Tf", colorOperator(style.color), ...spacingOperators, "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", textOperand, usesTextArray ? "TJ" : "Tj", "ET" ].join(" ");
+    this.push(command);
+  }
+  drawString(font, fontSize, text, x, y, renderingMode = 0) {
+    const mode = renderingMode === 0 ? [] : [ String(renderingMode), "Tr" ];
+    this.push([ "BT", this.addFont(font), formatNumber(fontSize), "Tf", ...mode, "1 0 0 -1", formatNumber(x), formatNumber(y), "Tm", font.encodeText(text), "Tj", "ET" ].join(" "));
+  }
+  line(x1, top1, x2, top2, color = "#000000", lineWidth = 1) {
+    const y1 = this.pageHeight - top1;
+    const y2 = this.pageHeight - top2;
+    this.setColorAlpha(color, true);
+    this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x1)} ${formatNumber(y1)} m ${formatNumber(x2)} ${formatNumber(y2)} l S`);
+  }
+  circle(cx, topCenter, radius, {fill = null, stroke = null, lineWidth = 1} = {}) {
+    const cy = this.pageHeight - topCenter;
+    const k = .5522847498;
+    const ox = radius * k;
+    const oy = radius * k;
+    const path = [ `${formatNumber(cx + radius)} ${formatNumber(cy)} m`, `${formatNumber(cx + radius)} ${formatNumber(cy + oy)} ${formatNumber(cx + ox)} ${formatNumber(cy + radius)} ${formatNumber(cx)} ${formatNumber(cy + radius)} c`, `${formatNumber(cx - ox)} ${formatNumber(cy + radius)} ${formatNumber(cx - radius)} ${formatNumber(cy + oy)} ${formatNumber(cx - radius)} ${formatNumber(cy)} c`, `${formatNumber(cx - radius)} ${formatNumber(cy - oy)} ${formatNumber(cx - ox)} ${formatNumber(cy - radius)} ${formatNumber(cx)} ${formatNumber(cy - radius)} c`, `${formatNumber(cx + ox)} ${formatNumber(cy - radius)} ${formatNumber(cx + radius)} ${formatNumber(cy - oy)} ${formatNumber(cx + radius)} ${formatNumber(cy)} c` ].join(" ");
+    if (fill) this.setColorAlpha(fill, false);
+    if (stroke || !fill) this.setColorAlpha(stroke, true);
+    if (fill && stroke) {
+      this.push(`${colorOperator(fill)} ${colorOperator(stroke, true)} ${formatNumber(lineWidth)} w ${path} B`);
+    } else if (fill) {
+      this.push(`${colorOperator(fill)} ${path} f`);
+    } else {
+      this.push(`${colorOperator(stroke ?? "#000000", true)} ${formatNumber(lineWidth)} w ${path} S`);
+    }
+  }
+  output() {
+    const bytes = this.content.view();
+    let result = "";
+    const chunkSize = 8192;
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      result += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+    }
+    return `${result}\n`;
+  }
+  outputBytes() {
+    const bytes = this.content.view();
+    const result = new Uint8Array(bytes.length + 1);
+    result.set(bytes);
+    result[bytes.length] = 10;
+    return result;
+  }
+  takeOutputBytes() {
+    return this.content.take(10);
+  }
+}
+
 function interpolation(start, end) {
   return new PdfDict([ [ "/FunctionType", new PdfNum(2) ], [ "/Domain", PdfArray.fromNum([ 0, 1 ]) ], [ "/C0", PdfArray.fromNum(start) ], [ "/C1", PdfArray.fromNum(end) ], [ "/N", new PdfNum(1) ] ]);
 }
@@ -2971,13 +3988,39 @@ class Gradient {
     this.colors = colors.map(color => normalizeColor(color));
     this.stops = stops === null ? [] : stops.map(value => Math.min(1, Math.max(0, Number(value))));
     this.solid = colors.length === 1 ? normalizePaintColor(colors[0]) : null;
+    const alphas = colors.map(color => color instanceof PdfColor ? color.alpha : 1);
+    this.alphas = alphas.some(alpha => alpha < 1) ? alphas : null;
   }
-  paintSolid(context, box) {
-    if (this.solid === null) return false;
-    context.canvas.setFillColor(this.solid);
-    context.canvas.drawBox(box);
-    context.canvas.fillPath();
-    return true;
+  paint(context, box) {
+    const {canvas} = context;
+    if (this.solid !== null) {
+      canvas.setFillColor(this.solid);
+    } else {
+      if (this.alphas !== null && canvas.colorAlpha) {
+        const mask = new PdfCanvas(canvas.pageHeight);
+        const existing = canvas.getSoftMask();
+        if (existing !== null) mask.setSoftMask(existing);
+        mask.setFillPattern(new PdfShadingPattern({
+          shading: this.shading(context, box, this.alphas.map(alpha => [ alpha, alpha, alpha ]))
+        }));
+        mask.drawBox(box);
+        mask.fillPath();
+        canvas.setSoftMask({
+          content: mask.takeOutputBytes(),
+          boundingBox: box,
+          fonts: mask.fonts,
+          graphicStates: mask.graphicStates,
+          patterns: mask.patterns,
+          shadings: mask.shadings,
+          images: mask.images
+        });
+      }
+      canvas.setFillPattern(new PdfShadingPattern({
+        shading: this.shading(context, box, this.colors)
+      }));
+    }
+    canvas.drawBox(box);
+    canvas.fillPath();
   }
 }
 
@@ -2991,22 +4034,16 @@ class LinearGradient extends Gradient {
     this.end = end;
     this.tileMode = tileMode;
   }
-  paint(context, box) {
-    if (this.paintSolid(context, box)) return;
-    const pattern = new PdfShadingPattern({
-      shading: new PdfShading({
-        type: "axial",
-        boundingBox: box,
-        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: alignmentPoint(context, this.begin, box),
-        end: alignmentPoint(context, this.end, box),
-        extendStart: true,
-        extendEnd: true
-      })
+  shading(context, box, colors) {
+    return new PdfShading({
+      type: "axial",
+      boundingBox: box,
+      fn: PdfBaseFunction.colorsAndStops(colors, this.stops),
+      start: alignmentPoint(context, this.begin, box),
+      end: alignmentPoint(context, this.end, box),
+      extendStart: true,
+      extendEnd: true
     });
-    context.canvas.setFillPattern(pattern);
-    context.canvas.drawBox(box);
-    context.canvas.fillPath();
   }
 }
 
@@ -3022,25 +4059,19 @@ class RadialGradient extends Gradient {
     this.focal = focal;
     this.focalRadius = Math.max(0, Number(focalRadius));
   }
-  paint(context, box) {
-    if (this.paintSolid(context, box)) return;
+  shading(context, box, colors) {
     const scale = Math.min(box.width, box.height);
-    const pattern = new PdfShadingPattern({
-      shading: new PdfShading({
-        type: "radial",
-        boundingBox: box,
-        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: alignmentPoint(context, this.focal ?? this.center, box),
-        end: alignmentPoint(context, this.center, box),
-        radius0: this.focalRadius * scale,
-        radius1: this.radius * scale,
-        extendStart: true,
-        extendEnd: true
-      })
+    return new PdfShading({
+      type: "radial",
+      boundingBox: box,
+      fn: PdfBaseFunction.colorsAndStops(colors, this.stops),
+      start: alignmentPoint(context, this.focal ?? this.center, box),
+      end: alignmentPoint(context, this.center, box),
+      radius0: this.focalRadius * scale,
+      radius1: this.radius * scale,
+      extendStart: true,
+      extendEnd: true
     });
-    context.canvas.setFillPattern(pattern);
-    context.canvas.drawBox(box);
-    context.canvas.fillPath();
   }
 }
 
@@ -4468,1023 +5499,6 @@ class PdfBorder {
     const result = new PdfDict([ [ "/W", new PdfNum(this.width) ], [ "/S", new PdfName(styles[this.style]) ] ]);
     if (this.dash !== null) result.set("/D", PdfArray.fromNum(this.dash));
     return result;
-  }
-}
-
-class PdfFontMetrics {
-  constructor({left, top, right, bottom, ascent = bottom, descent = top, advanceWidth = right - left, leftBearing = left}) {
-    this.left = left;
-    this.top = top;
-    this.right = right;
-    this.bottom = bottom;
-    this.ascent = ascent;
-    this.descent = descent;
-    this.advanceWidth = advanceWidth;
-    this.leftBearing = leftBearing;
-  }
-  static append(metrics, letterSpacing = 0) {
-    let left;
-    let top;
-    let bottom;
-    let ascent;
-    let descent;
-    let advanceWidth = 0;
-    let firstBearing;
-    let lastBearing = 0;
-    let lastSpacing = 0;
-    for (const metric of metrics) {
-      left ?? (left = metric.left);
-      top = Math.min(top ?? metric.top, metric.top);
-      bottom = Math.max(bottom ?? metric.bottom, metric.bottom);
-      ascent = Math.max(ascent ?? metric.ascent, metric.ascent);
-      descent = Math.min(descent ?? metric.descent, metric.descent);
-      firstBearing ?? (firstBearing = metric.leftBearing);
-      lastBearing = metric.rightBearing;
-      lastSpacing = metric.advanceWidth > 0 ? letterSpacing : 0;
-      advanceWidth += metric.advanceWidth + lastSpacing;
-    }
-    if (left === undefined || top === undefined || bottom === undefined || ascent === undefined || descent === undefined || firstBearing === undefined) {
-      return PdfFontMetrics.zero;
-    }
-    return new PdfFontMetrics({
-      left,
-      top,
-      right: advanceWidth - lastBearing - lastSpacing,
-      bottom,
-      ascent,
-      descent,
-      advanceWidth: advanceWidth - lastSpacing,
-      leftBearing: firstBearing
-    });
-  }
-  get width() {
-    return this.right - this.left;
-  }
-  get height() {
-    return this.bottom - this.top;
-  }
-  get maxWidth() {
-    return Math.max(this.advanceWidth, this.right) + Math.max(-this.leftBearing, 0);
-  }
-  get maxHeight() {
-    return this.ascent - this.descent;
-  }
-  get effectiveLeft() {
-    return Math.min(this.leftBearing, 0);
-  }
-  get rightBearing() {
-    return this.advanceWidth - this.right;
-  }
-  scale(factor) {
-    return new PdfFontMetrics({
-      left: this.left * factor,
-      top: this.top * factor,
-      right: this.right * factor,
-      bottom: this.bottom * factor,
-      ascent: this.ascent * factor,
-      descent: this.descent * factor,
-      advanceWidth: this.advanceWidth * factor,
-      leftBearing: this.leftBearing * factor
-    });
-  }
-}
-
-PdfFontMetrics.zero = new PdfFontMetrics({
-  left: 0,
-  top: 0,
-  right: 0,
-  bottom: 0
-});
-
-const CP1252 = Object.freeze({
-  8364: 128,
-  8218: 130,
-  402: 131,
-  8222: 132,
-  8230: 133,
-  8224: 134,
-  8225: 135,
-  710: 136,
-  8240: 137,
-  352: 138,
-  8249: 139,
-  338: 140,
-  381: 142,
-  8216: 145,
-  8217: 146,
-  8220: 147,
-  8221: 148,
-  8226: 149,
-  8211: 150,
-  8212: 151,
-  732: 152,
-  8482: 153,
-  353: 154,
-  8250: 155,
-  339: 156,
-  382: 158,
-  376: 159
-});
-
-function toWinAnsiByte(codePoint) {
-  if (codePoint <= 255 && (codePoint & 224) !== 128) return codePoint;
-  return CP1252[codePoint] ?? 63;
-}
-
-const WIN_ANSI_RUNES = Array.from({
-  length: 256
-}, (_, byte) => (byte & 224) === 128 ? 63 : byte);
-
-for (const [rune, byte] of Object.entries(CP1252)) WIN_ANSI_RUNES[byte] = Number(rune);
-
-function winAnsiRune(byte) {
-  return WIN_ANSI_RUNES[byte] ?? 63;
-}
-
-function isWinAnsiRune(codePoint) {
-  return winAnsiRune(toWinAnsiByte(codePoint)) === codePoint;
-}
-
-function pdfLiteral(value) {
-  let output = "";
-  for (const character of String(value)) {
-    const byte = toWinAnsiByte(character.codePointAt(0) ?? 63);
-    if (byte === 40 || byte === 41 || byte === 92) {
-      output += `\\${String.fromCharCode(byte)}`;
-    } else if (byte === 10) {
-      output += "\\n";
-    } else if (byte === 13) {
-      output += "\\r";
-    } else if (byte < 32 || byte > 126) {
-      output += `\\${byte.toString(8).padStart(3, "0")}`;
-    } else {
-      output += String.fromCharCode(byte);
-    }
-  }
-  return `(${output})`;
-}
-
-function pdfHexString(values, digits = 4) {
-  let output = "";
-  for (const value of values) {
-    output += value.toString(16).padStart(digits, "0");
-  }
-  return `<${output}>`;
-}
-
-function fitsPdfDocEncoding(value) {
-  for (let index = 0; index < value.length; index++) {
-    const unit = value.charCodeAt(index);
-    if (unit < 32 ? unit !== 9 && unit !== 10 && unit !== 13 : unit > 126 && unit < 161 || unit === 173 || unit > 255) return false;
-  }
-  return true;
-}
-
-function pdfTextBytes(value) {
-  if (fitsPdfDocEncoding(value)) return value;
-  let bytes = "þÿ";
-  for (let index = 0; index < value.length; index++) {
-    const unit = value.charCodeAt(index);
-    bytes += String.fromCharCode(unit >> 8, unit & 255);
-  }
-  return bytes;
-}
-
-function pdfUnicodeString(value) {
-  let output = "feff";
-  for (let index = 0; index < value.length; index++) {
-    output += value.charCodeAt(index).toString(16).padStart(4, "0");
-  }
-  return `<${output}>`;
-}
-
-class PdfString extends PdfDataType {
-  constructor(value) {
-    super();
-    this.value = value;
-  }
-  static fromDate(date) {
-    if (!Number.isFinite(date.getTime())) {
-      throw new RangeError("PDF date must be valid");
-    }
-    const year = String(date.getUTCFullYear()).padStart(4, "0");
-    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-    const day = String(date.getUTCDate()).padStart(2, "0");
-    const hour = String(date.getUTCHours()).padStart(2, "0");
-    const minute = String(date.getUTCMinutes()).padStart(2, "0");
-    const second = String(date.getUTCSeconds()).padStart(2, "0");
-    return new PdfString(`D:${year}${month}${day}${hour}${minute}${second}Z`);
-  }
-  output(s) {
-    s.putString(fitsPdfDocEncoding(this.value) ? pdfLiteral(this.value) : pdfUnicodeString(this.value));
-  }
-}
-
-const widthDigits = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-function unpackWidths(packed) {
-  const widths = [];
-  for (let index = 0; index < packed.length; index += 2) {
-    widths.push((widthDigits.indexOf(packed[index]) << 6 | widthDigits.indexOf(packed[index + 1])) / 1e3);
-  }
-  return Object.freeze(widths);
-}
-
-const helveticaWidths = unpackWidths("H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0EWEWFjIsIsN5KbC/FNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsEWEWJIJIJIIsP3KbKbLSLSKbJjMKLSEWH0KbIsNBLSMKKbMKLSKbJjLSKbOwKbKbJjEWEWEVHVIsFNIsIsH0IsIsEWIsIsDeDeH0DeNBIsIsIsIsFNH0EWIsH0LSH0H0H0FOEEFOJIH0KPH0DeEWFNPoIsIsFNPoKbD6PoH0JjH0H0DeDdFNFNFeIsPoFNPoH0D6OqH0H0KbEWEWIsIsIsIsEEIsFNLhFyHAJIFNLhFNJeJIFeFeFNIsIZEWFNFeFtHANlNlNvIsKbKbKbKbKbKbPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKaJjIsIsIsIsIsIsOAH0IsIsIsIsD7D7D7D7IsIsIsIsIsIsIsJIJjIsIsIsIsH0IrH0");
-
-const helveticaBoldWidths = unpackWidths("EWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWFNHaIsIsN5LSDuFNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsFNFNJIJIJIJjPPLSLSLSLSKbJjMKLSEWIsLSJjNBLSMKKbMKLSKbJjLSKbOwKbKbJjFNEWFNJIIsFNIsJjIsJjIsFNJjJjEWEWIsEWN5JjJjJjJjGFIsFNJjIsMKIsIsH0GFEYGFJIFeIsFeEWIsH0PoIsIsFNPoKbFNPoFeJjFeFeEWEWH0H0FeIsPoFNPoIsFNOwFeH0KbEWFNIsIsIsIsEYIsFNLhFyIsJIFNLhFNGQJIFNFNFNJjIsEWFNFNFtIsNCNCNCJjLSLSLSLSLSLSPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKbJjIsIsIsIsIsIsN5IsIsIsIsIsEWEWEWEWJjJjJjJjJjJjJjJIJjJjJjJjJjIsJjIs");
-
-const helveticaBoldObliqueWidths = unpackWidths("EWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWFNHaIsIsN5LSDuFNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsFNFNJIJIJIJjPPLSLSLSLSKbJjMKLSEWIsLSJjNBLSMKKbMKLSKbJjLSKbOwKbKbJjFNEWFNJIIsFNIsJjIsJjIsFNJjJjEWEWIsEWN5JjJjJjJjGFIsFNJjIsMKIsIsH0GFEYGFJIFeIsFeEWIsH0PoIsIsFNPoKbFNPoFeJjFeFeEWEWH0H0FeIsPoFNPoIsFNOwFeH0KbEWFNIsIsIsIsEYIsFNLhFyIsJIFNLhFNGQJIFNFNFNJjIsEWFNFNFtIsNCNCNCJjLSLSLSLSLSLSPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKbJjIsIsIsIsIsIsN5IsIsIsIsIsEWEWEWEWJjJjJjJjJjJjJjJIJjJjJjJjJjIsJjIs");
-
-const helveticaObliqueWidths = unpackWidths("EWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWFjIsIsN5KbC/FNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsEWEWJIJIJIIsP3KbKbLSLSKbJjMKLSEWH0KbIsNBLSMKKbMKLSKbJjLSKbOwKbKbJjEWEWEWHVIsFNIsIsH0IsIsEWIsIsDeDeH0DeNBIsIsIsIsFNH0EWIsH0LSH0H0H0FOEEFOJIFeIsFeDeIsFNPoIsIsFNPoKbFNPoFeJjFeFeDeDeFNFNFeIsPoFNPoH0FNOwFeH0KbEWFNIsIsIsIsEEIsFNLhFyIsJIFNLhFNGQJIFNFNFNIsIZEWFNFNFtIsNCNCNCJjKbKbKbKbKbKbPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKbJjIsIsIsIsIsIsN5H0IsIsIsIsEWEWEWEWIsIsIsIsIsIsIsJIJjIsIsIsIsH0IsH0");
-
-const timesWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6FNGYH0H0NBMKC0FNFNH0I0D6FND6EWH0H0H0H0H0H0H0H0H0H0EWEWI0I0I0G8OZLSKbKbLSJjIsLSLSFNGFLSJjN5LSLSIsLSKbIsJjLSLSOwLSLSJjFNEWFNHVH0FNG8H0G8H0G8FNH0H0EWEWH0EWMKH0H0H0H0FNGFEWH0H0LSH0H0G8HgDIHgIdFeH0FeFNH0G8PoH0H0FNPoIsFNN5FeJjFeFeFNFNG8G8FeH0PoFNPUGFFNLSFeG8LSD6FNH0H0H0H0DIH0FNL4EUH0I0FNL4FNGQI0EsEsFNH0HFD6FNEsE2H0LuLuLuG8LSLSLSLSLSLSN5KbJjJjJjJjFNFNFNFNLSLSLSLSLSLSLSI0LSLSLSLSLSLSIsH0G8G8G8G8G8G8KbG8G8G8G8G8EWEWEWEWH0H0H0H0H0H0H0I0H0H0H0H0H0H0H0H0");
-
-const timesBoldWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6FNIrH0H0PoNBEWFNFNH0I6D6FND6EWH0H0H0H0H0H0H0H0H0H0FNFNI6I6I6H0OiLSKbLSLSKbJjMKMKGFH0MKKbOwLSMKJjMKLSIsKbLSLSPoLSLSKbFNEWFNJFH0FNH0IsG8IsG8FNH0IsEWFNIsEWNBIsH0IsIsG8GFFNIsH0LSH0H0G8GKDcGKIIFeH0FeFNH0H0PoH0H0FNPoIsFNPoFeKbFeFeFNFNH0H0FeH0PoFNPoGFFNLSFeG8LSD6FNH0H0H0H0DcH0FNLrEsH0I6FNLrFNGQI6EsEsFNIsIcD6FNEsFKH0LuLuLuH0LSLSLSLSLSLSPoLSKbKbKbKbGFGFGFGFLSLSMKMKMKMKMKI6MKLSLSLSLSLSJjIsH0H0H0H0H0H0LSG8G8G8G8G8EWEWEWEWH0IsH0H0H0H0H0I6H0IsIsIsIsH0IsH0");
-
-const timesBoldItalicWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6GFIrH0H0NBMKEWFNFNH0I6D6FND6EWH0H0H0H0H0H0H0H0H0H0FNFNI6I6I6H0NAKbKbKbLSKbKbLSMKGFH0KbJjN5LSLSJjLSKbIsJjLSKbN5KbJjJjFNEWFNI6H0FNH0H0G8H0G8FNH0IsEWEWH0EWMKIsH0H0H0GFGFEWIsG8KbH0G8GFFcDcFcI6FeH0FeFNH0H0PoH0H0FNPoIsFNOwFeJjFeFeFNFNH0H0FeH0PoFNPoGFFNLSFeGFJjD6GFH0H0H0H0DcH0FNLrEKH0JeFNLrFNGQI6EsEsFNJAH0D6FNEsEsH0LuLuLuH0KbKbKbKbKbKbOwKbKbKbKbKbGFGFGFGFLSLSLSLSLSLSLSI6LSLSLSLSLSJjJjH0H0H0H0H0H0H0LSG8G8G8G8G8EWEWEWEWH0IsH0H0H0H0H0I6H0IsIsIsIsG8H0G8");
-
-const timesItalicWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6FNGkH0H0NBMKDWFNFNH0KjD6FND6EWH0H0H0H0H0H0H0H0H0H0FNFNKjKjKjH0OYJjJjKbLSJjJjLSLSFNG8KbIsNBKbLSJjLSJjH0IsLSJjNBJjIsIsGFEWGFGmH0FNH0H0G8H0G8EWH0H0EWEWG8EWLSH0H0H0H0GFGFEWH0G8KbG8G8GFGQETGQIdFeH0FeFNH0IsN5H0H0FNPoH0FNOwFeIsFeFeFNFNIsIsFeH0N5FNPUGFFNKbFeGFIsD6GFH0H0H0H0ETH0FNL4EUH0KjFNL4FNGQKjEsEsFNH0ILD6FNEsE2H0LuLuLuH0JjJjJjJjJjJjN5KbJjJjJjJjFNFNFNFNLSKbLSLSLSLSLSKjLSLSLSLSLSIsJjH0H0H0H0H0H0H0KbG8G8G8G8G8EWEWEWEWH0H0H0H0H0H0H0KjH0H0H0H0H0G8H0G8");
-
-const symbolWidths = unpackWidths("JLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLD6FNLJH0IlNBMKG3FNFNH0IlD6IlD6EWH0H0H0H0H0H0H0H0H0H0EWEWIlIlIlG8IlLSKbLSJkJjL7JbLSFNJ3LSKuN5LSLSMALlIsJQJjKyG3MAKFMbJjFNNfFNKSH0H0J3IlIlHuG3IJGbJbFJJbIlIlJAIJIlIlIJIlJbG3JALJKuHtKuHuHgDIHgIlJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLLuJsD3IlCnLJH0LxLxLxLxQSPbJbPbJbGQIlGbIlIlLJHuHMIlIlIlIlPoJbPoKSM3KuMbPbMAMAM3MAMALJLJLJLJLJLJLJMALJMWMWN6M3IlD6LJJbJbQSPbJbPbJbHuFJMWMWMSLJGAGAGAGAGAGAHuHuHuHuJLFJESKuKuKuGAGAGAGAGAGAHuHuHuJL");
-
-const zapfDingbatsWidths = unpackWidths("LqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqEWPOPBPOPULPMVMWMXKyPAOrIlNXOPOlOPOxPOLzNOL6L5I7KlL7L4L3LyHuIoIZJBK0MSMUMUMWMZMaMwM3MVNJM3NBMwM/ObLoLTLtMWMYK3MIMAMYL3LDLEKqK9M6MvMVMVLDKvK4KxMSMTLJMXMRMXNpL5L6L6L3L3N8N8MUMQG2CKEVGfGIGIKcKcLqGGGGE9E9EUEUH9H9GaGaDqDqFOFOLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLcIgIgOOKbL4L4MIJTK2JyMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUN+NGP4HKLsOcLsOWOfOgOgNCNpM8OcOcOVOiOjHPNzNENENjNjK4K4NqLqNqL4OyMDNhMDN4PHN4M/NpOfPKOWLq");
-
-class PdfType1Font {
-  constructor({fontName, ascent, descent, widths = [], missingWidth = .6}) {
-    this.fontName = fontName;
-    this.ascent = ascent;
-    this.descent = descent;
-    this.widths = widths;
-    this.missingWidth = missingWidth;
-  }
-  static courier() {
-    return new PdfType1Font({
-      fontName: "Courier",
-      ascent: .91,
-      descent: -.22
-    });
-  }
-  static courierBold() {
-    return new PdfType1Font({
-      fontName: "Courier-Bold",
-      ascent: .91,
-      descent: -.22
-    });
-  }
-  static courierBoldOblique() {
-    return new PdfType1Font({
-      fontName: "Courier-BoldOblique",
-      ascent: .91,
-      descent: -.22
-    });
-  }
-  static courierOblique() {
-    return new PdfType1Font({
-      fontName: "Courier-Oblique",
-      ascent: .91,
-      descent: -.22
-    });
-  }
-  static helvetica() {
-    return new PdfType1Font({
-      fontName: "Helvetica",
-      ascent: .931,
-      descent: -.225,
-      widths: helveticaWidths
-    });
-  }
-  static helveticaBold() {
-    return new PdfType1Font({
-      fontName: "Helvetica-Bold",
-      ascent: .962,
-      descent: -.228,
-      widths: helveticaBoldWidths
-    });
-  }
-  static helveticaBoldOblique() {
-    return new PdfType1Font({
-      fontName: "Helvetica-BoldOblique",
-      ascent: .962,
-      descent: -.228,
-      widths: helveticaBoldObliqueWidths
-    });
-  }
-  static helveticaOblique() {
-    return new PdfType1Font({
-      fontName: "Helvetica-Oblique",
-      ascent: .931,
-      descent: -.225,
-      widths: helveticaObliqueWidths
-    });
-  }
-  static times() {
-    return new PdfType1Font({
-      fontName: "Times-Roman",
-      ascent: .898,
-      descent: -.218,
-      widths: timesWidths
-    });
-  }
-  static timesBold() {
-    return new PdfType1Font({
-      fontName: "Times-Bold",
-      ascent: .935,
-      descent: -.218,
-      widths: timesBoldWidths
-    });
-  }
-  static timesBoldItalic() {
-    return new PdfType1Font({
-      fontName: "Times-BoldItalic",
-      ascent: .921,
-      descent: -.218,
-      widths: timesBoldItalicWidths
-    });
-  }
-  static timesItalic() {
-    return new PdfType1Font({
-      fontName: "Times-Italic",
-      ascent: .883,
-      descent: -.217,
-      widths: timesItalicWidths
-    });
-  }
-  static symbol() {
-    return new PdfType1Font({
-      fontName: "Symbol",
-      ascent: 1.01,
-      descent: -.293,
-      widths: symbolWidths
-    });
-  }
-  static zapfDingbats() {
-    return new PdfType1Font({
-      fontName: "ZapfDingbats",
-      ascent: .82,
-      descent: -.143,
-      widths: zapfDingbatsWidths
-    });
-  }
-  isRuneSupported(rune) {
-    return isWinAnsiRune(rune);
-  }
-  glyphMetrics(charCode) {
-    const advanceWidth = this.widths[charCode] ?? this.missingWidth;
-    return new PdfFontMetrics({
-      left: 0,
-      top: this.descent,
-      right: advanceWidth,
-      bottom: this.ascent
-    });
-  }
-  stringMetrics(text, size, letterSpacing = 0) {
-    const metrics = [];
-    for (const character of String(text)) {
-      metrics.push(this.glyphMetrics(toWinAnsiByte(character.codePointAt(0) ?? 63)).scale(size));
-    }
-    return PdfFontMetrics.append(metrics, letterSpacing);
-  }
-  encodeText(text) {
-    return pdfLiteral(text);
-  }
-  resourceDict() {
-    return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/Type1") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfName("/WinAnsiEncoding") ] ]);
-  }
-}
-
-const defaultPdfFont = PdfType1Font.helvetica();
-
-class PdfSoftMaskReference extends PdfDataType {
-  constructor(mask) {
-    super();
-    this.mask = mask;
-  }
-  output(_stream) {
-    throw new Error("A PDF soft mask must be resolved by PdfDocument before output");
-  }
-}
-
-const LINE_CAP_OPERAND = Object.freeze({
-  butt: 0,
-  round: 1,
-  square: 2
-});
-
-const LINE_JOIN_OPERAND = Object.freeze({
-  miter: 0,
-  round: 1,
-  bevel: 2
-});
-
-const M4 = .551784;
-
-function operands(values) {
-  return values.map(formatNumber).join(" ");
-}
-
-function compositeTextOperand(font, text, wordSpacing, fontSize) {
-  const parts = [];
-  let run = "";
-  const adjustment = formatNumber(-wordSpacing * 1e3 / fontSize);
-  for (const character of String(text)) {
-    run += character;
-    if (character === " ") {
-      parts.push(font.encodeText(run), adjustment);
-      run = "";
-    }
-  }
-  if (run !== "" || parts.length === 0) {
-    parts.push(font.encodeText(run));
-  }
-  return `[${parts.join(" ")}]`;
-}
-
-class PdfCanvas {
-  constructor(pageHeight, {colorAlpha = true} = {}) {
-    this.content = new PdfStream;
-    this.formNames = new Map;
-    this.commandCount = 0;
-    this.fontNames = new Map;
-    this.stateNames = new Map;
-    this.stateDicts = new Map;
-    this.patternNames = new Map;
-    this.patternDicts = new Map;
-    this.shadingNames = new Map;
-    this.shadingDicts = new Map;
-    this.imageNames = new Map;
-    this.softMaskNames = new Map;
-    this.pageAnnotations = [];
-    this.currentSoftMask = null;
-    this.softMaskStack = [];
-    this.currentTransform = identityMatrix;
-    this.transformStack = [];
-    this.currentLetterSpacing = 0;
-    this.currentWordSpacing = 0;
-    this.textSpacingStack = [];
-    this.textSpacingDirty = false;
-    this.alphas = [ 1, 1, 1, 1 ];
-    this.alphaStack = [];
-    this.pageHeight = pageHeight;
-    this.colorAlpha = colorAlpha;
-  }
-  push(command) {
-    if (this.commandCount > 0) {
-      this.content.putByte(10);
-    }
-    this.content.putString(command);
-    this.commandCount++;
-  }
-  toPdfY(top) {
-    return this.pageHeight - top;
-  }
-  transformWidgetPoint(x, top) {
-    return transformPoint(this.currentTransform, x, this.toPdfY(top));
-  }
-  addFont(font) {
-    const existing = this.fontNames.get(font);
-    if (existing !== undefined) {
-      return existing;
-    }
-    const name = `/F${this.fontNames.size + 1}`;
-    this.fontNames.set(font, name);
-    return name;
-  }
-  get fonts() {
-    return this.fontNames;
-  }
-  get graphicStates() {
-    return this.stateDicts;
-  }
-  get patterns() {
-    return this.patternDicts;
-  }
-  get shadings() {
-    return this.shadingDicts;
-  }
-  get forms() {
-    return this.formNames;
-  }
-  drawForm(form, x, y, width = form.width, height = form.height) {
-    if (![ x, y, width, height ].every(Number.isFinite) || width <= 0 || height <= 0) throw new RangeError("Invalid form placement");
-    let name = this.formNames.get(form);
-    if (name === undefined) {
-      name = `/Xf${this.formNames.size + 1}`;
-      this.formNames.set(form, name);
-    }
-    this.push(`q ${formatNumber(width / form.width)} 0 0 ${formatNumber(height / form.height)} ${formatNumber(x)} ${formatNumber(y)} cm ${name} Do Q`);
-  }
-  get images() {
-    return this.imageNames;
-  }
-  get annotations() {
-    return this.pageAnnotations;
-  }
-  addAnnotation(annotation) {
-    this.pageAnnotations.push(annotation);
-  }
-  addUrlLink(destination, x, top, width, height, border) {
-    this.addLink("url", destination, x, top, width, height, border);
-  }
-  addNamedLink(destination, x, top, width, height, border) {
-    this.addLink("destination", destination, x, top, width, height, border);
-  }
-  addLink(kind, destination, x, top, width, height, border) {
-    if (width <= 0 || height <= 0) return;
-    const points = [ this.transformWidgetPoint(x, top), this.transformWidgetPoint(x + width, top), this.transformWidgetPoint(x, top + height), this.transformWidgetPoint(x + width, top + height) ];
-    const xs = points.map(point => point.x);
-    const ys = points.map(point => point.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    this.pageAnnotations.push({
-      kind,
-      destination,
-      border,
-      rect: {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY
-      }
-    });
-  }
-  addFormField(field, x, top, width, height) {
-    if (width <= 0 || height <= 0) return;
-    const points = [ this.transformWidgetPoint(x, top), this.transformWidgetPoint(x + width, top), this.transformWidgetPoint(x, top + height), this.transformWidgetPoint(x + width, top + height) ];
-    const xs = points.map(point => point.x);
-    const ys = points.map(point => point.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    this.pageAnnotations.push({
-      ...field,
-      rect: {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY
-      }
-    });
-  }
-  addImage(image) {
-    const existing = this.imageNames.get(image);
-    if (existing !== undefined) return existing;
-    const name = `/I${this.imageNames.size + 1}`;
-    this.imageNames.set(image, name);
-    return name;
-  }
-  saveContext() {
-    this.push("q");
-    this.transformStack.push(this.currentTransform);
-    this.textSpacingStack.push([ this.currentLetterSpacing, this.currentWordSpacing ]);
-    this.softMaskStack.push(this.currentSoftMask);
-    this.alphaStack.push(this.alphas.slice());
-  }
-  restoreContext() {
-    const restored = this.transformStack.pop();
-    const spacing = this.textSpacingStack.pop();
-    const softMask = this.softMaskStack.pop();
-    const alphas = this.alphaStack.pop();
-    if (restored === undefined) {
-      return;
-    }
-    this.push("Q");
-    this.currentTransform = restored;
-    this.alphas = alphas;
-    if (spacing !== undefined) {
-      this.currentLetterSpacing = spacing[0];
-      this.currentWordSpacing = spacing[1];
-    }
-    this.currentSoftMask = softMask ?? null;
-  }
-  save() {
-    this.saveContext();
-  }
-  restore() {
-    this.restoreContext();
-  }
-  setTransform(matrix) {
-    this.push(`${operands(matrix)} cm`);
-    this.currentTransform = multiplyMatrix(this.currentTransform, matrix);
-  }
-  getTransform() {
-    return this.currentTransform;
-  }
-  setGraphicState(state) {
-    if (state.isEmpty) {
-      return null;
-    }
-    const alphas = this.alphas;
-    const fill = state.fillOpacity === null ? null : alphas[0] * state.fillOpacity;
-    const stroke = state.strokeOpacity === null ? null : alphas[1] * state.strokeOpacity;
-    const name = this.emitGraphicState(fill === state.fillOpacity && stroke === state.strokeOpacity ? state : new PdfGraphicState({
-      fillOpacity: fill,
-      strokeOpacity: stroke,
-      blendMode: state.blendMode
-    }));
-    if (fill !== null) alphas[0] = alphas[2] = fill;
-    if (stroke !== null) alphas[1] = alphas[3] = stroke;
-    return name;
-  }
-  setColorAlpha(color, stroke) {
-    if (!this.colorAlpha) return;
-    const alphas = this.alphas;
-    const index = stroke ? 1 : 0;
-    const alpha = alphas[index] * (color instanceof PdfColor ? color.alpha : 1);
-    if (Math.abs(alpha - alphas[index + 2]) < 1e-9) return;
-    this.emitGraphicState(new PdfGraphicState(stroke ? {
-      strokeOpacity: alpha
-    } : {
-      fillOpacity: alpha
-    }));
-    alphas[index + 2] = alpha;
-  }
-  emitGraphicState(state) {
-    const existing = this.stateNames.get(state.key);
-    if (existing !== undefined) {
-      this.push(`${existing} gs`);
-      return existing;
-    }
-    const name = `/g${this.stateDicts.size + 1}`;
-    this.stateNames.set(state.key, name);
-    this.stateDicts.set(name, state.output());
-    this.push(`${name} gs`);
-    return name;
-  }
-  setSoftMask(mask) {
-    this.currentSoftMask = mask;
-    const existing = this.softMaskNames.get(mask);
-    if (existing !== undefined) {
-      this.push(`${existing} gs`);
-      return existing;
-    }
-    const name = `/g${this.stateDicts.size + 1}`;
-    const state = new PdfDict;
-    state.set("/SMask", new PdfSoftMaskReference(mask));
-    this.softMaskNames.set(mask, name);
-    this.stateDicts.set(name, state);
-    this.push(`${name} gs`);
-    return name;
-  }
-  getSoftMask() {
-    return this.currentSoftMask;
-  }
-  addPattern(pattern) {
-    const existing = this.patternNames.get(pattern.key);
-    if (existing !== undefined) {
-      return existing;
-    }
-    const name = `/p${this.patternDicts.size + 1}`;
-    this.patternNames.set(pattern.key, name);
-    this.patternDicts.set(name, pattern.output());
-    return name;
-  }
-  setFillPattern(pattern) {
-    const name = this.addPattern(pattern);
-    this.push(`/Pattern cs ${name} scn`);
-    return name;
-  }
-  setStrokePattern(pattern) {
-    const name = this.addPattern(pattern);
-    this.push(`/Pattern CS ${name} SCN`);
-    return name;
-  }
-  drawShading(shading) {
-    const dict = shading.output();
-    const key = dict.toString();
-    let name = this.shadingNames.get(key);
-    if (name === undefined) {
-      name = `/s${this.shadingDicts.size + 1}`;
-      this.shadingNames.set(key, name);
-      this.shadingDicts.set(name, dict);
-    }
-    this.push(`${name} sh`);
-    return name;
-  }
-  drawImage(image, x, y, width = image.width, height) {
-    const resolvedHeight = height ?? image.height * width / image.width;
-    const name = this.addImage(image);
-    let matrix;
-    switch (image.orientation) {
-     case "topRight":
-      matrix = [ -width, 0, 0, resolvedHeight, width + x, y ];
-      break;
-
-     case "bottomRight":
-      matrix = [ -width, 0, 0, -resolvedHeight, width + x, resolvedHeight + y ];
-      break;
-
-     case "bottomLeft":
-      matrix = [ width, 0, 0, -resolvedHeight, x, resolvedHeight + y ];
-      break;
-
-     case "leftTop":
-      matrix = [ 0, -resolvedHeight, -width, 0, width + x, resolvedHeight + y ];
-      break;
-
-     case "rightTop":
-      matrix = [ 0, -resolvedHeight, width, 0, x, resolvedHeight + y ];
-      break;
-
-     case "rightBottom":
-      matrix = [ 0, resolvedHeight, width, 0, x, y ];
-      break;
-
-     case "leftBottom":
-      matrix = [ 0, resolvedHeight, -width, 0, width + x, y ];
-      break;
-
-     default:
-      matrix = [ width, 0, 0, resolvedHeight, x, y ];
-      break;
-    }
-    this.push("q");
-    this.push(`${operands(matrix)} cm`);
-    this.push(`${name} Do`);
-    this.push("Q");
-  }
-  moveTo(x, y) {
-    this.push(`${operands([ x, y ])} m`);
-  }
-  lineTo(x, y) {
-    this.push(`${operands([ x, y ])} l`);
-  }
-  curveTo(x1, y1, x2, y2, x3, y3) {
-    this.push(`${operands([ x1, y1, x2, y2, x3, y3 ])} c`);
-  }
-  closePath() {
-    this.push("h");
-  }
-  drawLine(x1, y1, x2, y2) {
-    this.moveTo(x1, y1);
-    this.lineTo(x2, y2);
-  }
-  drawRect(x, y, width, height) {
-    this.push(`${operands([ x, y, width, height ])} re`);
-  }
-  drawBox(box) {
-    this.drawRect(box.x, box.y, box.width, box.height);
-  }
-  drawRRect(x, y, width, height, rv, rh) {
-    this.moveTo(x, y + rv);
-    this.curveTo(x, y - M4 * rv + rv, x - M4 * rh + rh, y, x + rh, y);
-    this.lineTo(x + width - rh, y);
-    this.curveTo(x + M4 * rh + width - rh, y, x + width, y - M4 * rv + rv, x + width, y + rv);
-    this.lineTo(x + width, y + height - rv);
-    this.curveTo(x + width, y + M4 * rv + height - rv, x + M4 * rh + width - rh, y + height, x + width - rh, y + height);
-    this.lineTo(x + rh, y + height);
-    this.curveTo(x - M4 * rh + rh, y + height, x, y + M4 * rv + height - rv, x, y + height - rv);
-    this.lineTo(x, y + rv);
-  }
-  drawEllipse(x, y, r1, r2, clockwise = true) {
-    this.moveTo(x, y - r2);
-    if (clockwise) {
-      this.curveTo(x + M4 * r1, y - r2, x + r1, y - M4 * r2, x + r1, y);
-      this.curveTo(x + r1, y + M4 * r2, x + M4 * r1, y + r2, x, y + r2);
-      this.curveTo(x - M4 * r1, y + r2, x - r1, y + M4 * r2, x - r1, y);
-      this.curveTo(x - r1, y - M4 * r2, x - M4 * r1, y - r2, x, y - r2);
-    } else {
-      this.curveTo(x - M4 * r1, y - r2, x - r1, y - M4 * r2, x - r1, y);
-      this.curveTo(x - r1, y + M4 * r2, x - M4 * r1, y + r2, x, y + r2);
-      this.curveTo(x + M4 * r1, y + r2, x + r1, y + M4 * r2, x + r1, y);
-      this.curveTo(x + r1, y - M4 * r2, x + M4 * r1, y - r2, x, y - r2);
-    }
-  }
-  bezierArc(x1, y1, rx, ry, x2, y2, {large = false, sweep = false, phi = 0} = {}) {
-    if (x1 === x2 && y1 === y2) {
-      return;
-    }
-    if (Math.abs(rx) <= 1e-10 || Math.abs(ry) <= 1e-10) {
-      this.lineTo(x2, y2);
-      return;
-    }
-    if (phi !== 0) {
-      const cos = Math.cos(phi);
-      const sin = Math.sin(phi);
-      this.endToCenterParameters(cos * x1 + sin * y1, cos * y1 - sin * x1, cos * x2 + sin * y2, cos * y2 - sin * x2, large, sweep, rx, ry, [ cos, sin, -sin, cos, 0, 0 ]);
-    } else {
-      this.endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry);
-    }
-  }
-  vectorAngle(ux, uy, vx, vy) {
-    const d = Math.sqrt(ux * ux + uy * uy) * Math.sqrt(vx * vx + vy * vy);
-    if (d === 0) {
-      return 0;
-    }
-    let c = (ux * vx + uy * vy) / d;
-    if (c < -1) c = -1; else if (c > 1) c = 1;
-    const s = ux * vy - uy * vx;
-    c = Math.acos(c);
-    return Math.sign(c) === Math.sign(s) ? c : -c;
-  }
-  endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry, rotation) {
-    rx = Math.abs(rx);
-    ry = Math.abs(ry);
-    const x1d = .5 * (x1 - x2);
-    const y1d = .5 * (y1 - y2);
-    let r = x1d * x1d / (rx * rx) + y1d * y1d / (ry * ry);
-    if (r > 1) {
-      const rr = Math.sqrt(r);
-      rx *= rr;
-      ry *= rr;
-      r = 0;
-    } else if (r !== 0) {
-      r = 1 / r - 1;
-    }
-    if (r > -1e-10 && r < 0) {
-      r = 0;
-    }
-    r = Math.sqrt(r);
-    if (large === sweep) {
-      r = -r;
-    }
-    const cxd = r * rx * y1d / ry;
-    const cyd = -(r * ry * x1d) / rx;
-    const cx = cxd + .5 * (x1 + x2);
-    const cy = cyd + .5 * (y1 + y2);
-    const theta = this.vectorAngle(1, 0, (x1d - cxd) / rx, (y1d - cyd) / ry);
-    const tau = Math.PI * 2;
-    let dTheta = this.vectorAngle((x1d - cxd) / rx, (y1d - cyd) / ry, (-x1d - cxd) / rx, (-y1d - cyd) / ry) % tau;
-    if (dTheta < 0) {
-      dTheta += tau;
-    }
-    if (!sweep && dTheta > 0) {
-      dTheta -= tau;
-    } else if (sweep && dTheta < 0) {
-      dTheta += tau;
-    }
-    this.bezierArcFromCentre(cx, cy, rx, ry, -theta, -dTheta, rotation);
-  }
-  bezierArcFromCentre(cx, cy, rx, ry, startAngle, extent, rotation) {
-    let fragmentsCount;
-    let fragmentsAngle;
-    if (Math.abs(extent) <= Math.PI / 2) {
-      fragmentsCount = 1;
-      fragmentsAngle = extent;
-    } else {
-      fragmentsCount = Math.ceil(Math.abs(extent) / (Math.PI / 2));
-      fragmentsAngle = extent / fragmentsCount;
-    }
-    if (fragmentsAngle === 0) {
-      return;
-    }
-    const halfFragment = fragmentsAngle * .5;
-    let kappa = Math.abs(4 / 3 * (1 - Math.cos(halfFragment)) / Math.sin(halfFragment));
-    if (fragmentsAngle < 0) {
-      kappa = -kappa;
-    }
-    let theta = startAngle;
-    const startFragment = theta + fragmentsAngle;
-    let c1 = Math.cos(theta);
-    let s1 = Math.sin(theta);
-    for (let i = 0; i < fragmentsCount; i++) {
-      const c0 = c1;
-      const s0 = s1;
-      theta = startFragment + i * fragmentsAngle;
-      c1 = Math.cos(theta);
-      s1 = Math.sin(theta);
-      const points = [ cx + rx * (c0 - kappa * s0), cy - ry * (s0 + kappa * c0), cx + rx * (c1 + kappa * s1), cy - ry * (s1 - kappa * c1), cx + rx * c1, cy - ry * s1 ];
-      if (rotation !== undefined) {
-        for (let j = 0; j < 6; j += 2) {
-          const point = transformPoint(rotation, points[j], points[j + 1]);
-          points[j] = point.x;
-          points[j + 1] = point.y;
-        }
-      }
-      this.push(`${operands(points)} c`);
-    }
-  }
-  fillPath({evenOdd = false} = {}) {
-    this.push(evenOdd ? "f*" : "f");
-  }
-  strokePath({close = false} = {}) {
-    this.push(close ? "s" : "S");
-  }
-  fillAndStrokePath({evenOdd = false, close = false} = {}) {
-    this.push(`${close ? "b" : "B"}${evenOdd ? "*" : ""}`);
-  }
-  clipPath({evenOdd = false, end = true} = {}) {
-    this.push(`W${evenOdd ? "*" : ""}${end ? " n" : ""}`);
-  }
-  setLineWidth(width) {
-    this.push(`${formatNumber(width)} w`);
-  }
-  setLineCap(cap) {
-    this.push(`${LINE_CAP_OPERAND[cap]} J`);
-  }
-  setLineJoin(join) {
-    this.push(`${LINE_JOIN_OPERAND[join]} j`);
-  }
-  setMiterLimit(limit) {
-    if (limit < 1) {
-      throw new RangeError("miter limit must be at least 1");
-    }
-    this.push(`${formatNumber(limit)} M`);
-  }
-  setLineDashPattern(array = [], phase = 0) {
-    this.push(`[${operands(array)}] ${formatNumber(phase)} d`);
-  }
-  setFillColor(color) {
-    this.push(colorOperator(color));
-    this.setColorAlpha(color, false);
-  }
-  setStrokeColor(color) {
-    this.push(colorOperator(color, true));
-    this.setColorAlpha(color, true);
-  }
-  setColor(color) {
-    this.setFillColor(color);
-    this.setStrokeColor(color);
-  }
-  fillRect(x, top, width, height, color) {
-    const bottom = this.pageHeight - top - height;
-    this.setColorAlpha(color, false);
-    this.push(`${colorOperator(color)} ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re f`);
-  }
-  strokeRect(x, top, width, height, color, lineWidth = 1) {
-    const bottom = this.pageHeight - top - height;
-    this.setColorAlpha(color, true);
-    this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re S`);
-  }
-  text(text, x, baselineFromTop, style) {
-    const baseline = this.pageHeight - baselineFromTop;
-    const fontSize = style.fontSize;
-    const font = style.font ?? defaultPdfFont;
-    const letterSpacing = style.letterSpacing ?? 0;
-    const wordSpacing = style.wordSpacing ?? 0;
-    const operatorWordSpacing = font.isComposite === true ? 0 : wordSpacing;
-    const spacingOperators = [];
-    if (letterSpacing === 0 && operatorWordSpacing === 0 && this.textSpacingDirty) {
-      spacingOperators.push("0", "Tc", "0", "Tw");
-      this.currentLetterSpacing = 0;
-      this.currentWordSpacing = 0;
-      this.textSpacingDirty = false;
-    } else {
-      if (letterSpacing !== this.currentLetterSpacing) {
-        spacingOperators.push(formatNumber(letterSpacing), "Tc");
-        this.currentLetterSpacing = letterSpacing;
-      }
-      if (operatorWordSpacing !== this.currentWordSpacing) {
-        spacingOperators.push(formatNumber(operatorWordSpacing), "Tw");
-        this.currentWordSpacing = operatorWordSpacing;
-      }
-      if (letterSpacing !== 0 || operatorWordSpacing !== 0) {
-        this.textSpacingDirty = true;
-      }
-    }
-    const usesTextArray = font.isComposite === true && wordSpacing !== 0;
-    const textOperand = usesTextArray ? compositeTextOperand(font, text, wordSpacing, fontSize) : font.encodeText(text);
-    this.setColorAlpha(style.color, false);
-    const command = [ "BT", this.addFont(font), formatNumber(fontSize), "Tf", colorOperator(style.color), ...spacingOperators, "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", textOperand, usesTextArray ? "TJ" : "Tj", "ET" ].join(" ");
-    this.push(command);
-  }
-  drawString(font, fontSize, text, x, y, renderingMode = 0) {
-    const mode = renderingMode === 0 ? [] : [ String(renderingMode), "Tr" ];
-    this.push([ "BT", this.addFont(font), formatNumber(fontSize), "Tf", ...mode, "1 0 0 -1", formatNumber(x), formatNumber(y), "Tm", font.encodeText(text), "Tj", "ET" ].join(" "));
-  }
-  line(x1, top1, x2, top2, color = "#000000", lineWidth = 1) {
-    const y1 = this.pageHeight - top1;
-    const y2 = this.pageHeight - top2;
-    this.setColorAlpha(color, true);
-    this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x1)} ${formatNumber(y1)} m ${formatNumber(x2)} ${formatNumber(y2)} l S`);
-  }
-  circle(cx, topCenter, radius, {fill = null, stroke = null, lineWidth = 1} = {}) {
-    const cy = this.pageHeight - topCenter;
-    const k = .5522847498;
-    const ox = radius * k;
-    const oy = radius * k;
-    const path = [ `${formatNumber(cx + radius)} ${formatNumber(cy)} m`, `${formatNumber(cx + radius)} ${formatNumber(cy + oy)} ${formatNumber(cx + ox)} ${formatNumber(cy + radius)} ${formatNumber(cx)} ${formatNumber(cy + radius)} c`, `${formatNumber(cx - ox)} ${formatNumber(cy + radius)} ${formatNumber(cx - radius)} ${formatNumber(cy + oy)} ${formatNumber(cx - radius)} ${formatNumber(cy)} c`, `${formatNumber(cx - radius)} ${formatNumber(cy - oy)} ${formatNumber(cx - ox)} ${formatNumber(cy - radius)} ${formatNumber(cx)} ${formatNumber(cy - radius)} c`, `${formatNumber(cx + ox)} ${formatNumber(cy - radius)} ${formatNumber(cx + radius)} ${formatNumber(cy - oy)} ${formatNumber(cx + radius)} ${formatNumber(cy)} c` ].join(" ");
-    if (fill) this.setColorAlpha(fill, false);
-    if (stroke || !fill) this.setColorAlpha(stroke, true);
-    if (fill && stroke) {
-      this.push(`${colorOperator(fill)} ${colorOperator(stroke, true)} ${formatNumber(lineWidth)} w ${path} B`);
-    } else if (fill) {
-      this.push(`${colorOperator(fill)} ${path} f`);
-    } else {
-      this.push(`${colorOperator(stroke ?? "#000000", true)} ${formatNumber(lineWidth)} w ${path} S`);
-    }
-  }
-  output() {
-    const bytes = this.content.view();
-    let result = "";
-    const chunkSize = 8192;
-    for (let index = 0; index < bytes.length; index += chunkSize) {
-      result += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-    }
-    return `${result}\n`;
-  }
-  outputBytes() {
-    const bytes = this.content.view();
-    const result = new Uint8Array(bytes.length + 1);
-    result.set(bytes);
-    result[bytes.length] = 10;
-    return result;
-  }
-  takeOutputBytes() {
-    return this.content.take(10);
   }
 }
 

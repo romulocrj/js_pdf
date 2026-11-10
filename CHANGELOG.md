@@ -79,7 +79,8 @@ plus several of the port's own. Upstream defects are listed in
 - **Colour alpha is painted.** A `PdfColor` with alpha below 1 now paints
   translucent fills and strokes, multiplied by any enclosing `Opacity`, and
   nested `Opacity` widgets multiply. Opaque documents are byte-identical.
-  Pass `colorAlpha: false` for the previous behaviour.
+  Gradient stops paint their alpha through a luminosity soft mask. Pass
+  `colorAlpha: false` for the previous behaviour.
 - `isLight`/`isDark` now return the documented answer; callers that inverted
   them must stop.
 - The default `textAlign` is `start`, as upstream; an explicit `left` in an

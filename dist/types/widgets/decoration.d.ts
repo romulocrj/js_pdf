@@ -1,5 +1,6 @@
 import type { ColorInput, PaintColor, Rgb } from '../pdf/color.ts';
 import type { PdfPoint, PdfRect } from '../pdf/rect.ts';
+import { PdfShading } from '../pdf/obj/shading.ts';
 import { BorderRadiusGeometry } from './border_radius.ts';
 import type { RadiusValue, TextDirection } from './border_radius.ts';
 import { BoxBorder } from './box_border.ts';
@@ -42,9 +43,12 @@ export declare abstract class Gradient {
     readonly stops: readonly number[];
     /** The colour of a one-colour gradient, alpha and colour space kept. */
     protected readonly solid: PaintColor | null;
+    /** Each stop's alpha, or null when every stop is opaque. */
+    protected readonly alphas: readonly number[] | null;
     constructor({ colors, stops }: GradientOptions);
-    protected paintSolid(context: RenderContext, box: PdfRect): boolean;
-    abstract paint(context: RenderContext, box: PdfRect): void;
+    /** The shading of this gradient over `box`, ramping through `colors`. */
+    protected abstract shading(context: RenderContext, box: PdfRect, colors: readonly Rgb[]): PdfShading;
+    paint(context: RenderContext, box: PdfRect): void;
 }
 export interface LinearGradientOptions extends GradientOptions {
     readonly begin?: AlignmentGeometry;
@@ -57,7 +61,7 @@ export declare class LinearGradient extends Gradient {
     readonly end: AlignmentGeometry;
     readonly tileMode: TileMode;
     constructor({ colors, stops, begin, end, tileMode }: LinearGradientOptions);
-    paint(context: RenderContext, box: PdfRect): void;
+    protected shading(context: RenderContext, box: PdfRect, colors: readonly Rgb[]): PdfShading;
 }
 export interface RadialGradientOptions extends GradientOptions {
     readonly center?: AlignmentGeometry;
@@ -74,7 +78,7 @@ export declare class RadialGradient extends Gradient {
     readonly focal: AlignmentGeometry | null;
     readonly focalRadius: number;
     constructor({ colors, stops, center, radius, tileMode, focal, focalRadius }: RadialGradientOptions);
-    paint(context: RenderContext, box: PdfRect): void;
+    protected shading(context: RenderContext, box: PdfRect, colors: readonly Rgb[]): PdfShading;
 }
 export interface BoxShadowOptions {
     readonly color?: ColorInput;

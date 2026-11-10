@@ -737,8 +737,8 @@ SVG filters and outline metadata use RGB. Since phase 7.5 a color's alpha is
 painted: fills and strokes emit a constant-alpha `/ExtGState`, multiplied by any
 enclosing `Opacity`, and nested `Opacity` widgets multiply. Pass
 `colorAlpha: false` to `Document`/`createPdf` (or `PdfDocument`) to ignore color
-alpha, for example for PDF/A-1, where transparency is forbidden. A one-color
-gradient paints its alpha; stops of multi-color gradients stay opaque.
+alpha, for example for PDF/A-1, where transparency is forbidden. Gradient
+stops paint their alpha too, through a luminosity soft mask.
 DeviceCMYK does not embed an ICC profile or establish PDF/A conformance.
 Upstream's `isLight`/`isDark` threshold and harmony offsets are retained, with
 the swapped getters corrected (white is light). `shade` and `monochromatic`

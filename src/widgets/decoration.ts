@@ -19,7 +19,8 @@
  * while preserving offset, spread, blur extent, colour and opacity.
  */
 
-import { normalizeColor, normalizePaintColor } from '../pdf/color.ts';
+import { normalizeColor, normalizePaintColor, PdfColor } from '../pdf/color.ts';
+import { PdfCanvas } from '../pdf/graphics.ts';
 import type { ColorInput, PaintColor, Rgb } from '../pdf/color.ts';
 import { PdfGraphicState } from '../pdf/graphic_state.ts';
 import type { PdfPoint, PdfRect } from '../pdf/rect.ts';
@@ -149,6 +150,8 @@ export abstract class Gradient {
   readonly stops: readonly number[];
   /** The colour of a one-colour gradient, alpha and colour space kept. */
   protected readonly solid: PaintColor | null;
+  /** Each stop's alpha, or null when every stop is opaque. */
+  protected readonly alphas: readonly number[] | null;
 
   constructor({ colors, stops = null }: GradientOptions) {
     if (colors.length === 0) throw new RangeError('A gradient needs at least one colour');
@@ -158,22 +161,44 @@ export abstract class Gradient {
     this.colors = colors.map(color => normalizeColor(color));
     this.stops = stops === null ? [] : stops.map(value => Math.min(1, Math.max(0, Number(value))));
     this.solid = colors.length === 1 ? normalizePaintColor(colors[0]) : null;
+    const alphas = colors.map(color => (color instanceof PdfColor ? color.alpha : 1));
+    this.alphas = alphas.some(alpha => alpha < 1) ? alphas : null;
   }
+
+  /** The shading of this gradient over `box`, ramping through `colors`. */
+  protected abstract shading(context: RenderContext, box: PdfRect, colors: readonly Rgb[]): PdfShading;
 
   /*
    * One colour is a flat fill, as in upstream PR #1980: no shading object, and
-   * the colour's alpha is painted. A shading function carries no alpha, so the
-   * stops of a gradient of two or more colours still paint opaque.
+   * the colour's alpha is painted. A shading function carries no alpha, so
+   * translucent stops of a longer ramp go into a luminosity soft mask that
+   * repeats the shading in gray, as the SVG painter does for stop-opacity.
+   * Callers scope the mask with save/restore.
    */
-  protected paintSolid(context: RenderContext, box: PdfRect): boolean {
-    if (this.solid === null) return false;
-    context.canvas.setFillColor(this.solid);
-    context.canvas.drawBox(box);
-    context.canvas.fillPath();
-    return true;
+  paint(context: RenderContext, box: PdfRect): void {
+    const { canvas } = context;
+    if (this.solid !== null) {
+      canvas.setFillColor(this.solid);
+    } else {
+      if (this.alphas !== null && canvas.colorAlpha) {
+        const mask = new PdfCanvas(canvas.pageHeight);
+        const existing = canvas.getSoftMask();
+        if (existing !== null) mask.setSoftMask(existing);
+        mask.setFillPattern(new PdfShadingPattern({
+          shading: this.shading(context, box, this.alphas.map(alpha => [alpha, alpha, alpha]))
+        }));
+        mask.drawBox(box);
+        mask.fillPath();
+        canvas.setSoftMask({
+          content: mask.takeOutputBytes(), boundingBox: box, fonts: mask.fonts, graphicStates: mask.graphicStates,
+          patterns: mask.patterns, shadings: mask.shadings, images: mask.images
+        });
+      }
+      canvas.setFillPattern(new PdfShadingPattern({ shading: this.shading(context, box, this.colors) }));
+    }
+    canvas.drawBox(box);
+    canvas.fillPath();
   }
-
-  abstract paint(context: RenderContext, box: PdfRect): void;
 }
 
 export interface LinearGradientOptions extends GradientOptions {
@@ -201,22 +226,16 @@ export class LinearGradient extends Gradient {
     this.tileMode = tileMode;
   }
 
-  override paint(context: RenderContext, box: PdfRect): void {
-    if (this.paintSolid(context, box)) return;
-    const pattern = new PdfShadingPattern({
-      shading: new PdfShading({
-        type: 'axial',
-        boundingBox: box,
-        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: alignmentPoint(context, this.begin, box),
-        end: alignmentPoint(context, this.end, box),
-        extendStart: true,
-        extendEnd: true
-      })
+  protected override shading(context: RenderContext, box: PdfRect, colors: readonly Rgb[]): PdfShading {
+    return new PdfShading({
+      type: 'axial',
+      boundingBox: box,
+      fn: PdfBaseFunction.colorsAndStops(colors, this.stops),
+      start: alignmentPoint(context, this.begin, box),
+      end: alignmentPoint(context, this.end, box),
+      extendStart: true,
+      extendEnd: true
     });
-    context.canvas.setFillPattern(pattern);
-    context.canvas.drawBox(box);
-    context.canvas.fillPath();
   }
 }
 
@@ -253,25 +272,19 @@ export class RadialGradient extends Gradient {
     this.focalRadius = Math.max(0, Number(focalRadius));
   }
 
-  override paint(context: RenderContext, box: PdfRect): void {
-    if (this.paintSolid(context, box)) return;
+  protected override shading(context: RenderContext, box: PdfRect, colors: readonly Rgb[]): PdfShading {
     const scale = Math.min(box.width, box.height);
-    const pattern = new PdfShadingPattern({
-      shading: new PdfShading({
-        type: 'radial',
-        boundingBox: box,
-        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: alignmentPoint(context, this.focal ?? this.center, box),
-        end: alignmentPoint(context, this.center, box),
-        radius0: this.focalRadius * scale,
-        radius1: this.radius * scale,
-        extendStart: true,
-        extendEnd: true
-      })
+    return new PdfShading({
+      type: 'radial',
+      boundingBox: box,
+      fn: PdfBaseFunction.colorsAndStops(colors, this.stops),
+      start: alignmentPoint(context, this.focal ?? this.center, box),
+      end: alignmentPoint(context, this.center, box),
+      radius0: this.focalRadius * scale,
+      radius1: this.radius * scale,
+      extendStart: true,
+      extendEnd: true
     });
-    context.canvas.setFillPattern(pattern);
-    context.canvas.drawBox(box);
-    context.canvas.fillPath();
   }
 }
 

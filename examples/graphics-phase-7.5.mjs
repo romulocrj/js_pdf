@@ -154,14 +154,16 @@ export function generateGraphicsPhase75(api = defaultApi, compress = true) {
     ] }),
     text('Both must show the same gradient: dark top left, green bottom left. The viewer converts the DeviceCMYK copy with its own profile, so its tones are softer. Without the inverting /Decode array it printed as a near-black negative.'),
 
-    heading('A translucent progress bar and a one-colour gradient (phase 7.7)'),
+    heading('Translucent progress and gradients (phases 7.7 and 1.0)'),
     new Row({ gap: 16, children: [
       tile(overChecker(new SizedBox({ width: 150, child: new LinearProgressIndicator({ value: 0.6, minHeight: 16,
         valueColor: PdfColors.indigo.withAlpha(0.5) }) })), 'valueColor alpha 0.5, default track', 160),
       tile(overChecker(new Container({ width: 72, height: 36, decoration: new BoxDecoration({
-        gradient: new LinearGradient({ colors: [PdfColors.red.withAlpha(0.4)] }) }) })), 'one-colour gradient, alpha 0.4', 90)
+        gradient: new LinearGradient({ colors: [PdfColors.red.withAlpha(0.4)] }) }) })), 'one-colour gradient, alpha 0.4', 90),
+      tile(overChecker(new Container({ width: 120, height: 36, decoration: new BoxDecoration({
+        gradient: new LinearGradient({ colors: [PdfColors.red.withAlpha(0), PdfColors.blue] }) }) })), 'red alpha 0 to opaque blue', 130)
     ] }),
-    text('The checkerboard must show through both. The track derived from a translucent value colour used to be opaque, and a one-colour gradient became an opaque shading.')
+    text('The checkerboard must show through all three, and fade in from the left of the two-colour ramp. A translucent value colour used to give an opaque track, a one-colour gradient an opaque shading, and multi-colour stops lost their alpha.')
   ] }) }));
   return document.save();
 }
