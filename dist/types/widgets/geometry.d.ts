@@ -1,3 +1,4 @@
+import type { TextDirection } from './border_radius.ts';
 /** Structural input accepted wherever callers historically supplied maxima. */
 export interface BoxConstraintsInput {
     readonly minWidth?: number;
@@ -73,8 +74,38 @@ export type InsetsInput = number | (Partial<Insets> & {
     readonly all?: number;
     readonly vertical?: number;
     readonly horizontal?: number;
+    /** Directional sides, upstream's `EdgeInsetsDirectional`; see `InsetsDirectional`. */
+    readonly start?: number;
+    readonly end?: number;
 });
+/**
+ * Upstream's `EdgeInsetsDirectional`: `start` is the side text starts on, the
+ * left under ltr and the right under rtl. `left` and `right` may ride along,
+ * which is upstream's `_MixedEdgeInsets`; `resolveInsets` adds them.
+ */
+export interface InsetsDirectional {
+    readonly top: number;
+    readonly start: number;
+    readonly end: number;
+    readonly bottom: number;
+    readonly left?: number;
+    readonly right?: number;
+}
+/** Upstream's `EdgeInsetsGeometry`: physical or directional insets. */
+export type InsetsGeometry = Insets | InsetsDirectional;
 export declare function normalizeInsets(value?: InsetsInput): Insets;
+/**
+ * Normalise insets without choosing a direction: physical input gives `Insets`
+ * exactly as `normalizeInsets` does, and input naming `start` or `end` keeps
+ * them for `resolveInsets` to place once the direction is known.
+ */
+export declare function normalizeInsetsGeometry(value?: InsetsInput): InsetsGeometry;
+/**
+ * Upstream's `EdgeInsetsGeometry.resolve`, as a function because the port's
+ * insets are plain objects. Physical insets are returned as they are; with no
+ * direction this resolves as ltr, the fallback of `Directionality.of`.
+ */
+export declare function resolveInsets(value: InsetsGeometry, direction?: TextDirection | null): Insets;
 /**
  * Upstream's `EdgeInsets` named constructors, as a frozen object of factories.
  *
@@ -95,6 +126,17 @@ export interface EdgeInsetsConstructor {
     fromLTRB(left: number, top: number, right: number, bottom: number): Insets;
 }
 export declare const EdgeInsets: EdgeInsetsConstructor;
+/** Upstream's `EdgeInsetsDirectional` named constructors, shaped like `EdgeInsets`. */
+export declare const EdgeInsetsDirectional: Readonly<{
+    zero: InsetsDirectional;
+    all(value: number): InsetsDirectional;
+    symmetric({ vertical, horizontal }?: {
+        vertical?: number;
+        horizontal?: number;
+    }): InsetsDirectional;
+    only({ start, top, end, bottom }?: Partial<InsetsDirectional>): InsetsDirectional;
+    fromSTEB(start: number, top: number, end: number, bottom: number): InsetsDirectional;
+}>;
 /** Total inset along each axis, upstream's `horizontal` / `vertical` getters. */
 export declare function insetsHorizontal(insets: Insets): number;
 export declare function insetsVertical(insets: Insets): number;
@@ -122,6 +164,31 @@ export declare const Alignment: Readonly<{
     bottomCenter: Alignment;
     bottomRight: Alignment;
 }>;
+/**
+ * Upstream's `AlignmentDirectional`: `start` is -1 on the side text starts on.
+ *
+ * Its `y` follows `Alignment`, **y up**, so `topStart` is `(-1, 1)` and each
+ * constant resolves to the physical one of the same name. Upstream copied
+ * Flutter's y-down constants beside its own y-up `Alignment`, which put
+ * `topStart` at the bottom of the box until PR #1980 (CHANGELOG L85).
+ */
+export interface AlignmentDirectional {
+    readonly start: number;
+    readonly y: number;
+}
+/** Upstream's `AlignmentGeometry`: a physical or a directional alignment. */
+export type AlignmentGeometry = Alignment | AlignmentDirectional;
+export type AlignmentDirectionalName = 'topStart' | 'topCenter' | 'topEnd' | 'centerStart' | 'center' | 'centerEnd' | 'bottomStart' | 'bottomCenter' | 'bottomEnd';
+/**
+ * Derived from `Alignment` rather than spelled out: left becomes start and
+ * right becomes end, so the two tables cannot disagree about `y`.
+ */
+export declare const AlignmentDirectional: Readonly<Record<AlignmentDirectionalName, AlignmentDirectional>>;
+/**
+ * Upstream's `AlignmentGeometry.resolve`; a physical alignment is returned as
+ * it is. `0 - start` rather than `-start`, so a centred one stays `+0`.
+ */
+export declare function resolveAlignment(value: AlignmentGeometry, direction?: TextDirection | null): Alignment;
 /** A top-left offset, the widget layer's placement unit. */
 export interface Offset {
     readonly dx: number;

@@ -126,16 +126,11 @@ export function isArabicCodePoint(codePoint: number): boolean {
   );
 }
 
-function previousLetter(codePoints: readonly number[], index: number): number {
-  for (let cursor = index - 1; cursor >= 0; cursor--) {
-    if (!isArabicDiacritic(codePoints[cursor]!)) return codePoints[cursor]!;
-  }
-  return 0;
-}
-
-function nextLetter(codePoints: readonly number[], index: number): number {
-  for (let cursor = index + 1; cursor < codePoints.length; cursor++) {
-    if (!isArabicDiacritic(codePoints[cursor]!)) return codePoints[cursor]!;
+/** The nearest non-diacritic UTF-16 unit before (`step` -1) or after (+1) `index`. */
+function letterAt(text: string, index: number, step: number): number {
+  for (let cursor = index + step; cursor >= 0 && cursor < text.length; cursor += step) {
+    const code = text.charCodeAt(cursor);
+    if (!isArabicDiacritic(code)) return code;
   }
   return 0;
 }
@@ -158,59 +153,47 @@ const LAM_ALEF: Readonly<Record<number, readonly [number, number]>> = Object.fre
   0x0627: [0xfefb, 0xfefc]
 });
 
-interface ArabicCluster {
-  readonly base: number;
-  readonly marks: readonly number[];
-}
-
-function shapeArabic(input: string, visualOrder: boolean): string {
-  const logical = Array.from(input, character => character.codePointAt(0)!);
-  const clusters: ArabicCluster[] = [];
-  for (let index = 0; index < logical.length; index++) {
-    const codePoint = logical[index]!;
-    if (isArabicDiacritic(codePoint) && clusters.length > 0) {
-      const last = clusters[clusters.length - 1]!;
-      clusters[clusters.length - 1] = { base: last.base, marks: [...last.marks, codePoint] };
-      continue;
-    }
-    const next = nextLetter(logical, index);
-    if (codePoint === 0x0644 && LAM_ALEF[next] !== undefined) {
-      const before = previousLetter(logical, index);
-      const joinsBefore = ARABIC_FORMS[before]?.length === 4;
-      const ligature = LAM_ALEF[next]![joinsBefore ? 1 : 0];
-      const marks: number[] = [];
-      let cursor = index + 2;
-      while (cursor < logical.length && isArabicDiacritic(logical[cursor]!)) {
-        marks.push(logical[cursor++]!);
-      }
-      index = cursor - 1;
-      clusters.push({ base: ligature, marks });
-      continue;
-    }
-    clusters.push({
-      base: formFor(codePoint, previousLetter(logical, index), next),
-      marks: []
-    });
+/**
+ * Shape `text.slice(start, end)` into presentation forms, in logical order.
+ *
+ * The letters around the range still decide the joining, so a word split
+ * over two styled spans keeps its connected forms. Every Arabic letter is a
+ * BMP unit, so this walks UTF-16 units and leaves anything else untouched. A
+ * lam-alef pair becomes one ligature on the lam and its alef produces
+ * nothing; diacritics stay where they were. The cluster rewrite this replaces
+ * assumed the alef directly followed the lam, so a mark between the two was
+ * lost and the alef drawn a second time.
+ */
+export function shapeArabicRange(text: string, start = 0, end = text.length): string {
+  let shaped = '';
+  for (let index = start; index < end; index++) {
+    const code = text.charCodeAt(index);
+    const before = letterAt(text, index, -1);
+    if (before === 0x0644 && LAM_ALEF[code] !== undefined) continue;
+    const after = letterAt(text, index, 1);
+    const ligature = code === 0x0644 ? LAM_ALEF[after] : undefined;
+    shaped += String.fromCharCode(ligature === undefined
+      ? formFor(code, before, after)
+      : ligature[ARABIC_FORMS[before]?.length === 4 ? 1 : 0]);
   }
-
-  const visual: number[] = [];
-  if (visualOrder) {
-    for (let index = clusters.length - 1; index >= 0; index--) {
-      const cluster = clusters[index]!;
-      visual.push(cluster.base, ...cluster.marks);
-    }
-  } else {
-    for (const cluster of clusters) visual.push(cluster.base, ...cluster.marks);
-  }
-  return String.fromCodePoint(...visual);
+  return shaped;
 }
 
 /** Shape Arabic presentation forms while preserving logical character order. */
 export function shapeArabicLogical(input: string): string {
-  return shapeArabic(input, false);
+  return shapeArabicRange(input);
 }
 
 /** Shape one logical Arabic run and return its visual presentation forms. */
 export function shapeArabicVisual(input: string): string {
-  return shapeArabic(input, true);
+  let visual = '';
+  let cluster = '';
+  for (const character of shapeArabicRange(input)) {
+    if (cluster !== '' && !isArabicDiacritic(character.charCodeAt(0))) {
+      visual = cluster + visual;
+      cluster = '';
+    }
+    cluster += character;
+  }
+  return cluster + visual;
 }

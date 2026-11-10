@@ -28,6 +28,10 @@
  *     `color` blend mode.
  *
  * A `mask` attribute is resolved by `SvgPainter` into a PDF luminosity form.
+ *
+ * Two internal inherited fields carry what upstream PR #1980 keeps elsewhere:
+ * `viewport`, the basis for percentage lengths (set by the painter at the root
+ * and by nested viewports), and `preserveSpace`, from `xml:space`.
  */
 
 import type { PdfBlendMode } from '../pdf/graphic_state.ts';
@@ -35,7 +39,7 @@ import type { PdfLineCap, PdfLineJoin } from '../pdf/graphics.ts';
 import { SvgColor } from './color.ts';
 import { SvgGradient } from './gradient.ts';
 import { SvgNumeric, convertStyle, getDouble, getNumeric, splitNumeric } from './parser.ts';
-import type { SvgParser } from './parser.ts';
+import type { SvgParser, SvgSize } from './parser.ts';
 import type { XmlElement } from './xml.ts';
 
 export type SvgTextAnchor = 'start' | 'middle' | 'end';
@@ -65,8 +69,12 @@ const LINE_CAPS: Readonly<Record<string, PdfLineCap>> = Object.freeze({
   square: 'square'
 });
 
+// SVG 2's `miter-clip` and `arcs` have no PDF join; a miter is the closest,
+// and an unmatched value would silently inherit the parent's join instead.
 const LINE_JOINS: Readonly<Record<string, PdfLineJoin>> = Object.freeze({
   miter: 'miter',
+  'miter-clip': 'miter',
+  arcs: 'miter',
   bevel: 'bevel',
   round: 'round'
 });
@@ -76,6 +84,20 @@ const TEXT_ANCHORS: Readonly<Record<string, SvgTextAnchor>> = Object.freeze({
   middle: 'middle',
   end: 'end'
 });
+
+/*
+ * A dash list with a malformed entry is invalid as a whole and counts as
+ * absent, so the stroke stays solid; upstream threw out of the document.
+ */
+function dashArray(value: string | null, brush: SvgBrush): readonly number[] | null {
+  if (value === null) return null;
+  if (value === 'none') return [];
+  try {
+    return splitNumeric(value, brush).map(n => n.value);
+  } catch {
+    return null;
+  }
+}
 
 export interface SvgBrushFields {
   readonly color: SvgColor | null;
@@ -97,6 +119,10 @@ export interface SvgBrushFields {
   readonly fontWeight: string | null;
   readonly textAnchor: SvgTextAnchor | null;
   readonly blendMode: PdfBlendMode | null;
+  /** The nearest viewport, which a percentage geometry length is a fraction of. */
+  readonly viewport: SvgSize | null;
+  /** `xml:space="preserve"` in force: text white space is kept. */
+  readonly preserveSpace: boolean | null;
 }
 
 export class SvgBrush implements SvgBrushFields {
@@ -119,6 +145,8 @@ export class SvgBrush implements SvgBrushFields {
   readonly fontWeight: string | null;
   readonly textAnchor: SvgTextAnchor | null;
   readonly blendMode: PdfBlendMode | null;
+  readonly viewport: SvgSize | null;
+  readonly preserveSpace: boolean | null;
 
   constructor(fields: SvgBrushFields) {
     this.color = fields.color;
@@ -140,6 +168,8 @@ export class SvgBrush implements SvgBrushFields {
     this.fontWeight = fields.fontWeight;
     this.textAnchor = fields.textAnchor;
     this.blendMode = fields.blendMode;
+    this.viewport = fields.viewport;
+    this.preserveSpace = fields.preserveSpace;
   }
 
   /** What an SVG paints with before any attribute is read. */
@@ -162,7 +192,9 @@ export class SvgBrush implements SvgBrushFields {
     fontFamily: 'sans-serif',
     fontWeight: 'normal',
     fontStyle: 'normal',
-    textAnchor: 'start'
+    textAnchor: 'start',
+    viewport: null,
+    preserveSpace: false
   });
 
   /**
@@ -210,7 +242,9 @@ export class SvgBrush implements SvgBrushFields {
       textAnchor: other.textAnchor ?? this.textAnchor,
       strokeLineCap: other.strokeLineCap ?? this.strokeLineCap,
       strokeLineJoin: other.strokeLineJoin ?? this.strokeLineJoin,
-      strokeMiterLimit: other.strokeMiterLimit ?? this.strokeMiterLimit
+      strokeMiterLimit: other.strokeMiterLimit ?? this.strokeMiterLimit,
+      viewport: other.viewport ?? this.viewport,
+      preserveSpace: other.preserveSpace ?? this.preserveSpace
     });
   }
 
@@ -234,7 +268,9 @@ export class SvgBrush implements SvgBrushFields {
       fontStyle: fields.fontStyle ?? this.fontStyle,
       fontWeight: fields.fontWeight ?? this.fontWeight,
       textAnchor: fields.textAnchor ?? this.textAnchor,
-      blendMode: fields.blendMode ?? this.blendMode
+      blendMode: fields.blendMode ?? this.blendMode,
+      viewport: fields.viewport ?? this.viewport,
+      preserveSpace: fields.preserveSpace ?? this.preserveSpace
     });
   }
 
@@ -250,7 +286,8 @@ export class SvgBrush implements SvgBrushFields {
     const strokeDashArray = element.getAttribute('stroke-dasharray');
     const fillRule = element.getAttribute('fill-rule');
     const strokeLineCap = element.getAttribute('stroke-linecap');
-    const strokeLineJoin = element.getAttribute('stroke-linejoin');
+    const strokeLineJoin = element.getAttribute('stroke-linejoin')?.trim() ?? null;
+    const space = element.getAttribute('xml:space');
     const blendMode = element.getAttribute('mix-blend-mode');
 
     const color = SvgColor.fromXml(element.getAttribute('color'), parser, parent.color ?? SvgColor.defaultColor);
@@ -278,15 +315,15 @@ export class SvgBrush implements SvgBrushFields {
       fillEvenOdd: fillRule === null ? null : fillRule === 'evenodd',
       stroke: paint(element.getAttribute('stroke')),
       strokeWidth: getNumeric(element, 'stroke-width', parent),
-      strokeDashArray: strokeDashArray === null
-        ? null
-        : (strokeDashArray === 'none' ? [] : splitNumeric(strokeDashArray, parent).map(n => n.value)),
-      strokeDashOffset: getNumeric(element, 'stroke-dashoffset', parent)?.sizeValue ?? null,
+      strokeDashArray: dashArray(strokeDashArray, parent),
+      strokeDashOffset: getNumeric(element, 'stroke-dashoffset', parent)?.lengthIn() ?? null,
       fontSize: getNumeric(element, 'font-size', parent),
       fontFamily: element.getAttribute('font-family'),
       fontStyle: element.getAttribute('font-style'),
       fontWeight: element.getAttribute('font-weight'),
-      textAnchor: TEXT_ANCHORS[element.getAttribute('text-anchor') ?? ''] ?? null
+      textAnchor: TEXT_ANCHORS[element.getAttribute('text-anchor') ?? ''] ?? null,
+      viewport: null,
+      preserveSpace: space === 'preserve' ? true : space === 'default' ? false : null
     }));
   }
 }

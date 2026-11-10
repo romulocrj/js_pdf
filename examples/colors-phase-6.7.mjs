@@ -32,7 +32,7 @@ export function generateColorsPhase67(api = defaultApi, compress = true) {
         swatch(PdfColor.fromHex('#369').toCmyk(), 'RGB to CMYK'), swatch(new PdfColor(0,0,0).toHsl(), 'Black to HSL')]),
       section('Alpha flattened over white', [0.2,0.4,0.6,0.8,1].map(alpha =>
         swatch(PdfColors.red.withAlpha(alpha).flatten(), `alpha ${alpha}`))),
-      label('Color alpha is a value. Use flatten() or an Opacity widget for painting.'),
+      label('Color alpha is painted as constant alpha. flatten() bakes it into an opaque color over a background.'),
       new Text('RGB gradient from color values', { style: new TextStyle({ fontSize: 14 }) }),
       new Container({ height: 45, decoration: new BoxDecoration({
         gradient: new LinearGradient({ colors: [PdfColors.indigo, PdfColors.cyan, PdfColors.lime] })

@@ -16,6 +16,9 @@
  *
  * `/Producer` follows upstream: the port URL is the default, and is appended in
  * parentheses when the caller supplies an application name.
+ *
+ * Port additions: `creationDate` replaces the clock read, and a PDF/A document
+ * also writes `/ModDate`, equal to it, so the XMP packet can state both.
  */
 
 import { PdfDict } from '../format/dict.ts';
@@ -33,16 +36,21 @@ export interface DocumentMetadata {
   readonly producer?: string | null;
   readonly keywords?: string | null;
   readonly xmpMetadata?: string | null;
+  /** `/CreationDate`; the time of `save()` when omitted. */
+  readonly creationDate?: Date | null;
+}
+
+/** The `/Producer` value written for `producer`. */
+export function pdfProducer(producer: string | null | undefined): string {
+  return producer == null ? LIBRARY_NAME : `${producer} (${LIBRARY_NAME})`;
 }
 
 /** The `/Info` dictionary the trailer points at. */
 export class PdfInfo extends PdfObject<PdfDict> {
-  constructor(document: PdfObjectRegistry, metadata: DocumentMetadata) {
+  constructor(document: PdfObjectRegistry, metadata: DocumentMetadata, modDate = false) {
     super(document, new PdfDict());
 
-    const producer = metadata.producer == null
-      ? LIBRARY_NAME
-      : `${metadata.producer} (${LIBRARY_NAME})`;
+    const producer = pdfProducer(metadata.producer);
 
     // Insertion order is emission order. Empty values are omitted rather than
     // written as empty strings, so an unset field is absent from the file.
@@ -61,6 +69,8 @@ export class PdfInfo extends PdfObject<PdfDict> {
       }
     }
 
-    this.params.set('/CreationDate', PdfString.fromDate(new Date()));
+    const date = PdfString.fromDate(metadata.creationDate ?? new Date());
+    this.params.set('/CreationDate', date);
+    if (modDate) this.params.set('/ModDate', date);
   }
 }

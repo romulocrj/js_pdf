@@ -45,13 +45,13 @@ import { PdfArray } from '../format/array.ts';
 import { PdfDict } from '../format/dict.ts';
 import { PdfName } from '../format/name.ts';
 import { PdfNum } from '../format/num.ts';
-import { pdfHexString, pdfLiteral, PdfString, toWinAnsiByte } from '../format/string.ts';
+import { isWinAnsiRune, pdfHexString, pdfLiteral, PdfString, toWinAnsiByte, winAnsiRune } from '../format/string.ts';
 import { encodeLatin1 } from '../format/stream.ts';
 import { PdfFontDescriptor } from './font_descriptor.ts';
 import { PdfObject } from './object.ts';
 import type { PdfObjectRegistry } from './object.ts';
 import { PdfObjectStream } from './object_stream.ts';
-import { PdfUnicodeCmap } from './unicode_cmap.ts';
+import { fontCmap, PdfUnicodeCmap } from './unicode_cmap.ts';
 
 export interface PdfTtfFontOptions {
   /**
@@ -108,7 +108,7 @@ export class PdfTtfFont implements PdfFont {
 
   /** Whether this font can draw `codePoint` at all. */
   isRuneSupported(codePoint: number): boolean {
-    return (this.isComposite || winAnsiRune(toWinAnsiByte(codePoint)) === codePoint)
+    return (this.isComposite || isWinAnsiRune(codePoint))
       && this.font.charToGlyphIndexMap.has(codePoint);
   }
 
@@ -253,7 +253,7 @@ export class PdfTtfFont implements PdfFont {
         ['/BaseFont', new PdfName(`/${this.fontName}`)], ['/Encoding', new PdfName('/WinAnsiEncoding')],
         ['/FontDescriptor', descriptor.ref()], ['/FirstChar', new PdfNum(32)], ['/LastChar', new PdfNum(255)],
         ['/Widths', PdfArray.fromNum(widths)],
-        ['/ToUnicode', new PdfObjectStream(document, encodeLatin1(fontCmap(Array.from({ length: 256 }, (_, i) => winAnsiRune(i)), this.protect, false, true))).ref()]
+        ['/ToUnicode', new PdfUnicodeCmap(document, Array.from({ length: 256 }, (_, i) => winAnsiRune(i)), this.protect, true).ref()]
       ]);
     }
     const { registry, ordering, supplement } = this.cffMetadata!;
@@ -266,47 +266,26 @@ export class PdfTtfFont implements PdfFont {
       seen.add(cid);
       widths.add(new PdfNum(cid)); widths.add(PdfArray.fromNum([Math.trunc(this.glyphMetrics(rune).advanceWidth * 1000)]));
     }
+    const systemInfo = new PdfDict([['/Registry', new PdfString(registry)], ['/Ordering', new PdfString(ordering)], ['/Supplement', new PdfNum(supplement)]]);
     const descendant = new PdfDict([
       ['/Type', new PdfName('/Font')], ['/Subtype', new PdfName('/CIDFontType0')],
       ['/BaseFont', new PdfName(`/${this.fontName}`)], ['/FontDescriptor', descriptor.ref()], ['/W', widths],
-      ['/CIDSystemInfo', new PdfDict([['/Registry', new PdfString(registry)], ['/Ordering', new PdfString(ordering)], ['/Supplement', new PdfNum(supplement)]])]
+      ['/CIDSystemInfo', systemInfo]
     ]);
+    const cmap = new PdfObjectStream(document, encodeLatin1(encoding));
+    // ISO 32000-1 Table 120 requires these keys, and PDF/A validators compare
+    // the CIDSystemInfo with the CIDFont's (ISO 19005-2 6.2.11.3.1). Written
+    // under PDF/A only, which keeps every other file byte for byte as before.
+    if (document.settings.pdfa !== undefined) {
+      cmap.params.set('/Type', new PdfName('/CMap'));
+      cmap.params.set('/CMapName', new PdfName('/JsPdfEncoding'));
+      cmap.params.set('/CIDSystemInfo', systemInfo);
+    }
     return new PdfDict([
       ['/Type', new PdfName('/Font')], ['/Subtype', new PdfName('/Type0')], ['/BaseFont', new PdfName(`/${this.fontName}`)],
-      ['/Encoding', new PdfObjectStream(document, encodeLatin1(encoding)).ref()],
+      ['/Encoding', cmap.ref()],
       ['/DescendantFonts', new PdfArray([descendant])],
-      ['/ToUnicode', new PdfObjectStream(document, encodeLatin1(fontCmap(this.cmap, this.protect))).ref()]
+      ['/ToUnicode', new PdfUnicodeCmap(document, this.cmap, this.protect).ref()]
     ]);
   }
-}
-
-/** CP1252 decoding is derived from the existing encoder rather than a second table. */
-function winAnsiRune(byte: number): number {
-  return WIN_ANSI_RUNES[byte] ?? 0x3f;
-}
-const WIN_ANSI_RUNES = Array.from({ length: 256 }, (_, byte) => byte);
-for (let rune = 256; rune <= 0x2122; rune++) {
-  const byte = toWinAnsiByte(rune);
-  if (byte !== 0x3f) WIN_ANSI_RUNES[byte] = rune;
-}
-
-/** CMaps for full-program paths, with bounded blocks and UTF-16BE destinations. */
-function fontCmap(values: readonly number[], protect = false, cid = false, simple = false, ros = { registry: 'Adobe', ordering: 'Identity', supplement: 0 }): string {
-  const hex = (n: number): string => n.toString(16).toUpperCase().padStart(4, '0');
-  let result = '/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n'
-    + `/CIDSystemInfo << /Registry ${pdfLiteral(ros.registry)} /Ordering ${pdfLiteral(ros.ordering)} /Supplement ${ros.supplement} >> def\n`
-    + `/CMapName /JsPdf${cid ? 'Encoding' : 'Unicode'} def\n/CMapType ${cid ? 1 : 2} def\n`
-    + (cid ? '/WMode 0 def\n' : '')
-    + `1 begincodespacerange\n<${simple ? '00> <FF' : '0000> <FFFF'}>\nendcodespacerange\n`;
-  for (let start = 0; start < values.length; start += 100) {
-    const end = Math.min(start + 100, values.length);
-    result += `${end - start} begin${cid ? 'cid' : 'bf'}char\n`;
-    for (let index = start; index < end; index++) {
-      const rune = protect && index !== 0 ? 32 : values[index]!;
-      const destination = rune <= 0xffff ? hex(rune) : hex(0xd800 + ((rune - 0x10000) >> 10)) + hex(0xdc00 + ((rune - 0x10000) & 1023));
-      result += `<${simple ? index.toString(16).padStart(2, '0') : hex(index)}> ${cid ? rune : '<' + destination + '>'}\n`;
-    }
-    result += `end${cid ? 'cid' : 'bf'}char\n`;
-  }
-  return result + 'endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend';
 }

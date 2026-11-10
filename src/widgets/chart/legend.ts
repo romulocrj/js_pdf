@@ -22,8 +22,8 @@ import { BoxDecoration, normalizeBoxDecoration } from '../decoration.ts';
 import type { BoxDecorationInput } from '../decoration.ts';
 import { Row } from '../flex.ts';
 import type { Axis } from '../flex.ts';
-import { Alignment, EdgeInsets, normalizeInsets } from '../geometry.ts';
-import type { Insets, InsetsInput } from '../geometry.ts';
+import { Alignment, EdgeInsets, normalizeInsetsGeometry } from '../geometry.ts';
+import type { AlignmentGeometry, InsetsGeometry, InsetsInput } from '../geometry.ts';
 import { Text } from '../text.ts';
 import type { TextStyle } from '../text_style.ts';
 import { StatelessWidget } from '../widget.ts';
@@ -35,7 +35,7 @@ import { Wrap } from '../wrap.ts';
 /** Upstream takes an `AlignmentGeometry`; a raw `[x, y]` pair is accepted too. */
 export type LegendPosition = BasicAlignmentInput | readonly [number, number];
 
-function resolveLegendPosition(value: LegendPosition): Alignment {
+function resolveLegendPosition(value: LegendPosition): AlignmentGeometry {
   if (Array.isArray(value)) return { x: Number(value[0]), y: Number(value[1]) };
   return resolveBasicAlignment(value as BasicAlignmentInput);
 }
@@ -51,10 +51,10 @@ export interface ChartLegendOptions {
 /** The colour swatches and labels of a chart's data sets. */
 export class ChartLegend extends StatelessWidget {
   readonly textStyle: TextStyle | null;
-  readonly position: Alignment;
+  readonly position: AlignmentGeometry;
   readonly direction: Axis;
   readonly decoration: BoxDecoration | null;
-  readonly padding: Insets;
+  readonly padding: InsetsGeometry;
 
   constructor({
     textStyle = null,
@@ -68,7 +68,7 @@ export class ChartLegend extends StatelessWidget {
     this.position = resolveLegendPosition(position);
     this.direction = direction;
     this.decoration = normalizeBoxDecoration(decoration);
-    this.padding = normalizeInsets(padding);
+    this.padding = normalizeInsetsGeometry(padding);
   }
 
   private buildLegend(context: RenderContext, dataset: AnyDataset): AnyWidget {

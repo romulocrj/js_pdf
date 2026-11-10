@@ -47,10 +47,10 @@ test('Header writes named destinations and a hierarchical PDF outline', () => {
   assert.match(pdf, /\/Names \d+ 0 R/);
   assert.match(pdf, /\/Outlines \d+ 0 R/);
   assert.match(pdf, /\/PageMode \/UseOutlines/);
-  assert.match(pdf, /\/Dests << \/Names \[\(outline-1\)/);
-  assert.match(pdf, /\/Title \(Root chapter\).*\/Dest \(outline-1\)/s);
-  assert.match(pdf, /\/Title \(Nested chapter\).*\/Dest \(outline-2\)/s);
-  assert.match(pdf, /\/Title \(Root chapter\).*\/Dest \(outline-3\)/s);
+  assert.match(pdf, /\/Dests << \/Names \[\(__dest0\)/);
+  assert.match(pdf, /\/Title \(Root chapter\).*\/Dest \(__dest0\)/s);
+  assert.match(pdf, /\/Title \(Nested chapter\).*\/Dest \(__dest1\)/s);
+  assert.match(pdf, /\/Title \(Root chapter\).*\/Dest \(__dest2\)/s);
   assert.match(pdf, /\/F 2/);
   assert.match(pdf, /\/C \[1 0 0\]/);
 });
@@ -85,8 +85,8 @@ test('TableOfContent replays only when needed and sees later headings', () => {
   assert.ok((pdf.match(/\(First topic\) Tj/g) ?? []).length >= 2);
   assert.ok((pdf.match(/\(Second topic\) Tj/g) ?? []).length >= 2);
   assert.ok((pdf.match(/\(2\) Tj/g) ?? []).length >= 2, 'both headings are on physical page two');
-  assert.match(pdf, /\/A << \/S \/GoTo \/D \(outline-1\) >>/);
-  assert.match(pdf, /\/A << \/S \/GoTo \/D \(outline-2\) >>/);
+  assert.match(pdf, /\/A << \/S \/GoTo \/D \(__dest0\) >>/);
+  assert.match(pdf, /\/A << \/S \/GoTo \/D \(__dest1\) >>/);
 });
 
 test('a document without TableOfContent stays single-pass', () => {

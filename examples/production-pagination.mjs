@@ -47,7 +47,7 @@ function buildImageCard(title, caption, imageBytes, accentColor) {
             })
           }),
           new pw.SizedBox({ height: 7 }),
-          new pw.Text(title, { fontSize: 11, fontWeight: 'bold', color: '#0f172a' }),
+          new pw.Text(title, { style: new pw.TextStyle({ fontSize: 11, fontWeight: 'bold', color: '#0f172a' }) }),
           new pw.SizedBox({ height: 3 }),
           new pw.Text(caption, { fontSize: 8, color: '#64748b' })
         ]
@@ -63,7 +63,7 @@ function buildProgress(label, value, color) {
       new pw.Row({
         children: [
           new pw.Expanded({ child: new pw.Text(label, { fontSize: 9, color: '#334155' }) }),
-          new pw.Text(`${value}%`, { fontSize: 9, fontWeight: 'bold', color })
+          new pw.Text(`${value}%`, { style: new pw.TextStyle({ fontSize: 9, fontWeight: 'bold', color }) })
         ]
       }),
       new pw.SizedBox({ height: 4 }),
@@ -218,7 +218,7 @@ function buildReferenceCard(title, description, color) {
       decoration: { color: '#ffffff', border: { color, width: 1 } },
       child: new pw.Column({
         children: [
-          new pw.Text(title, { fontSize: 10, fontWeight: 'bold', color: '#0f172a' }),
+          new pw.Text(title, { style: new pw.TextStyle({ fontSize: 10, fontWeight: 'bold', color: '#0f172a' }) }),
           new pw.SizedBox({ height: 4 }),
           new pw.Text(description, { fontSize: 8, color: '#64748b' })
         ]
@@ -282,7 +282,7 @@ function buildInteractiveExample() {
     decoration: { color: '#eff6ff', border: { color: '#bfdbfe', width: 1 } },
     child: new pw.Column({
       children: [
-        new pw.Text('Interactive fields', { fontSize: 13, fontWeight: 'bold', color: '#1e3a8a' }),
+        new pw.Text('Interactive fields', { style: new pw.TextStyle({ fontSize: 13, fontWeight: 'bold', color: '#1e3a8a' }) }),
         new pw.SizedBox({ height: 4 }),
         new pw.Text(
           'AcroForm field examples that can be edited in compatible PDF readers.',
@@ -294,7 +294,7 @@ function buildInteractiveExample() {
             new pw.Expanded({
               child: new pw.Column({
                 children: [
-                  new pw.Text('Approver name', { fontSize: 9, fontWeight: 'bold', color: '#0f172a' }),
+                  new pw.Text('Approver name', { style: new pw.TextStyle({ fontSize: 9, fontWeight: 'bold', color: '#0f172a' }) }),
                   new pw.SizedBox({ height: 4 }),
                   new pw.TextField({ name: 'approver-name', value: 'Marcos Oliveira', width: 210, height: 25 })
                 ]
@@ -304,7 +304,7 @@ function buildInteractiveExample() {
             new pw.Expanded({
               child: new pw.Column({
                 children: [
-                  new pw.Text('Priority', { fontSize: 9, fontWeight: 'bold', color: '#0f172a' }),
+                  new pw.Text('Priority', { style: new pw.TextStyle({ fontSize: 9, fontWeight: 'bold', color: '#0f172a' }) }),
                   new pw.SizedBox({ height: 4 }),
                   new pw.ChoiceField({
                     name: 'priority',
@@ -357,7 +357,7 @@ export function generateProductionPaginationExample(profileImageBytes, galleryIm
           new pw.Column({
             crossAxisAlignment: 'end',
             children: [
-              new pw.Text('DEMO EDITION', { fontSize: 9, fontWeight: 'bold', color: '#7c3aed' }),
+              new pw.Text('DEMO EDITION', { style: new pw.TextStyle({ fontSize: 9, fontWeight: 'bold', color: '#7c3aed' }) }),
               new pw.SizedBox({ height: 4 }),
               new pw.Text('Aug 6, 2026', { fontSize: 9, color: '#64748b' })
             ]
@@ -393,12 +393,10 @@ export function generateProductionPaginationExample(profileImageBytes, galleryIm
             new pw.Expanded({
               child: new pw.Column({
                 children: [
-                  new pw.Text('Report owner profile', { fontSize: 12, fontWeight: 'bold', color: '#4c1d95' }),
+                  new pw.Text('Report owner profile', { style: new pw.TextStyle({ fontSize: 12, fontWeight: 'bold', color: '#4c1d95' }) }),
                   new pw.SizedBox({ height: 5 }),
                   new pw.Text('Marcos Oliveira · Operations director', {
-                    fontSize: 10,
-                    fontWeight: 'bold',
-                    color: '#0f172a'
+                    style: new pw.TextStyle({ fontSize: 10, fontWeight: 'bold', color: '#0f172a' })
                   }),
                   new pw.SizedBox({ height: 4 }),
                   new pw.Text(
@@ -422,9 +420,7 @@ export function generateProductionPaginationExample(profileImageBytes, galleryIm
                 children: [
                   new pw.Text('Total revenue', { fontSize: 10, color: '#475569' }),
                   new pw.Text(`$ ${totalRevenue.toLocaleString('en-US')}`, {
-                    fontSize: 16,
-                    fontWeight: 'bold',
-                    color: '#1d4ed8'
+                    style: new pw.TextStyle({ fontSize: 16, fontWeight: 'bold', color: '#1d4ed8' })
                   })
                 ]
               })
@@ -439,9 +435,7 @@ export function generateProductionPaginationExample(profileImageBytes, galleryIm
                 children: [
                   new pw.Text('Total expenses', { fontSize: 10, color: '#475569' }),
                   new pw.Text(`$ ${totalExpenses.toLocaleString('en-US')}`, {
-                    fontSize: 16,
-                    fontWeight: 'bold',
-                    color: '#b91c1c'
+                    style: new pw.TextStyle({ fontSize: 16, fontWeight: 'bold', color: '#b91c1c' })
                   })
                 ]
               })
@@ -450,11 +444,11 @@ export function generateProductionPaginationExample(profileImageBytes, galleryIm
         ]
       }),
       new pw.SizedBox({ height: 18 }),
-      new pw.Text('Monthly evolution', { fontSize: 16, fontWeight: 'bold', color: '#0f172a' }),
+      new pw.Text('Monthly evolution', { style: new pw.TextStyle({ fontSize: 16, fontWeight: 'bold', color: '#0f172a' }) }),
       new pw.SizedBox({ height: 8 }),
       new pw.Container({ height: 230, child: buildChart(rows) }),
       new pw.SizedBox({ height: 18 }),
-      new pw.Text('Status distribution (Separated)', { fontSize: 16, fontWeight: 'bold', color: '#0f172a' }),
+      new pw.Text('Status distribution (Separated)', { style: new pw.TextStyle({ fontSize: 16, fontWeight: 'bold', color: '#0f172a' }) }),
       new pw.SizedBox({ height: 8 }),
       new pw.Container({
         height: 190,
@@ -463,7 +457,7 @@ export function generateProductionPaginationExample(profileImageBytes, galleryIm
         child: buildStatusChart(statusRows)
       }),
       new pw.SizedBox({ height: 18 }),
-      new pw.Text('Gallery and embedded media', { fontSize: 16, fontWeight: 'bold', color: '#0f172a' }),
+      new pw.Text('Gallery and embedded media', { style: new pw.TextStyle({ fontSize: 16, fontWeight: 'bold', color: '#0f172a' }) }),
       new pw.SizedBox({ height: 8 }),
       new pw.Row({
         crossAxisAlignment: 'start',
@@ -484,7 +478,7 @@ export function generateProductionPaginationExample(profileImageBytes, galleryIm
         ]
       }),
       new pw.SizedBox({ height: 18 }),
-      new pw.Text('Execution indicators', { fontSize: 16, fontWeight: 'bold', color: '#0f172a' }),
+      new pw.Text('Execution indicators', { style: new pw.TextStyle({ fontSize: 16, fontWeight: 'bold', color: '#0f172a' }) }),
       new pw.SizedBox({ height: 8 }),
       new pw.Container({
         padding: 10,
@@ -507,7 +501,7 @@ export function generateProductionPaginationExample(profileImageBytes, galleryIm
           padding: { top: 14, bottom: 0 },
           child: new pw.Column({
             children: [
-              new pw.Text('Area chart (Inseparable)', { fontSize: 16, fontWeight: 'bold', color: '#0f172a' }),
+              new pw.Text('Area chart (Inseparable)', { style: new pw.TextStyle({ fontSize: 16, fontWeight: 'bold', color: '#0f172a' }) }),
               new pw.SizedBox({ height: 8 }),
               new pw.Container({
                 height: 210,
@@ -522,7 +516,7 @@ export function generateProductionPaginationExample(profileImageBytes, galleryIm
       new pw.SizedBox({ height: 14 }),
       buildInteractiveExample(),
       new pw.SizedBox({ height: 18 }),
-      new pw.Text('Results table', { fontSize: 16, fontWeight: 'bold', color: '#0f172a' }),
+      new pw.Text('Results table', { style: new pw.TextStyle({ fontSize: 16, fontWeight: 'bold', color: '#0f172a' }) }),
       new pw.SizedBox({ height: 8 }),
       buildTable(rows),
       new pw.SizedBox({ height: 22 }),
@@ -533,9 +527,7 @@ export function generateProductionPaginationExample(profileImageBytes, galleryIm
             child: new pw.Column({
               children: [
                 new pw.Text('Open the demonstration address', {
-                  fontSize: 14,
-                  fontWeight: 'bold',
-                  color: '#0f172a'
+                  style: new pw.TextStyle({ fontSize: 14, fontWeight: 'bold', color: '#0f172a' })
                 }),
                 new pw.SizedBox({ height: 6 }),
                 new pw.Text(QR_URL, { fontSize: 10, color: '#475569' }),
@@ -557,9 +549,7 @@ export function generateProductionPaginationExample(profileImageBytes, galleryIm
     build: () => new pw.Column({
       children: [
         new pw.Text('Available elements guide', {
-          fontSize: 24,
-          fontWeight: 'bold',
-          color: '#1d4ed8'
+          style: new pw.TextStyle({ fontSize: 24, fontWeight: 'bold', color: '#1d4ed8' })
         }),
         new pw.SizedBox({ height: 16 }),
         buildReferenceGuide()

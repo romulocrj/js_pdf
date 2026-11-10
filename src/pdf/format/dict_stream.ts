@@ -50,14 +50,23 @@ export class PdfDictStream extends PdfDict {
    */
   readonly compress: boolean;
 
+  /**
+   * Always write a line feed before `endstream`, outside `/Length`. PDF/A
+   * requires that marker (ISO 19005-2 6.1.7.1); otherwise data that already
+   * ends in a line feed lets it stand in, which keeps the output unchanged.
+   */
+  readonly eol: boolean;
+
   constructor(
     data: Uint8Array = new Uint8Array(0),
     values?: Iterable<readonly [string, PdfDataType]>,
-    compress = false
+    compress = false,
+    eol = false
   ) {
     super(values);
     this.data = data;
     this.compress = compress;
+    this.eol = eol;
   }
 
   override output(s: PdfStream): void {
@@ -81,7 +90,7 @@ export class PdfDictStream extends PdfDict {
     params.output(s);
     s.putString('\nstream\n');
     s.putBytes(data);
-    if (data.length === 0 || data[data.length - 1] !== 0x0a) {
+    if (this.eol || data.length === 0 || data[data.length - 1] !== 0x0a) {
       s.putByte(0x0a);
     }
     s.putString('endstream');

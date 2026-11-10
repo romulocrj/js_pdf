@@ -117,8 +117,15 @@ sees the later APP14 marker. Without that value, it assumes the components are
 inverted and emits a `/Decode` entry that changes the colors of direct CMYK.
 
 **Correction in the port:** `parseJpeg` retains the SOF data and continues
-examining segments until SOS/EOI. The Adobe transform is therefore honored in
-every valid position before the compressed data.
+examining segments until SOS/EOI, so an Adobe marker is found in every valid
+position before the compressed data.
+
+**Revised in phase 7.5:** the original note assumed that transform 0 means
+direct CMYK. Adobe writers store four-component samples inverted whatever the
+transform byte, and only the absence of an Adobe marker means straight
+samples. The port now emits the inverting `/Decode` exactly when an Adobe
+APP14 marker is present, which also matches its own decoder. Upstream PR #1980
+proposes the same rule.
 
 ## A two-point open polygon paints nothing (`shape.dart`)
 
@@ -202,3 +209,78 @@ components for black; it now delegates to the corrected public conversion.
 A regression test renders a black `LinearProgressIndicator` and checks that
 no non-finite number reaches the PDF. Upstream issues were confirmed by source
 inspection; no Dart runtime reproduction was run in this change.
+
+
+## Phase 7 audit: defects also reported in open upstream pull requests
+
+**Context:** on 2026-11-10 the port was compared with upstream master
+`277b367` and with the open pull requests filed after the previous audit,
+chiefly the bug sweep [DavBfr/dart_pdf#1980](https://github.com/DavBfr/dart_pdf/pull/1980)
+by Baghdady92, plus #1716, #2005, #2009, #2011, #2029 and issues #1989, #2000
+and #2028. Unlike the entries above, most of these defects are already public
+upstream; none of those pull requests was merged at the time. Rows marked †
+were found while porting and are not described in those pull requests. Each
+was checked against the port before it was fixed, and each fix has a
+regression test that failed first. Defects that existed only in the port are recorded in CHANGELOG.md, not
+here. "Upstream" below means master at `277b367`.
+
+| Area | Upstream behaviour | Port correction (phase) |
+|---|---|---|
+| `format/num.dart` | `NaN`, `Infinity` and exponent notation reach the file; readers drop the whole operator | `0` for non-finite values, plain digits clamped to ±3.403e38 (7.1) |
+| `format/name.dart` | escapes UTF-16 code units, so `/中` becomes `/#4e2d` | escapes UTF-8 bytes (7.1) |
+| `format/string.dart` | text strings are written as Latin-1 literals, which PDFDocEncoding reads differently in 0x80–0xA0 | literals only for PDFDocEncoding-safe characters, UTF-16BE otherwise (7.1) |
+| `obj/outline.dart` | a closed item's `/Count` counts its whole subtree | immediate children, per ISO 32000-1 Table 153 (7.1) |
+| `obj/page_label.dart` | no `/Nums` entry for page 0 when the first label starts later | `0 << /S /D >>` is written first (7.1) |
+| `document.dart` | widgets sharing a field name become separate root fields | one parent field with kids (7.1) |
+| `font/ttf_parser.dart` | cmap format 0 is read two bytes early | read at subtable offset 6 (7.2) |
+| `font/ttf_parser.dart` | Mac Roman and symbol subtables are merged as Unicode; symbol fonts miss their low-byte codes | subtables ranked, symbol low bytes aliased, Mac Roman only as an ASCII fallback (7.2) |
+| `font/ttf_parser.dart` | format 4 ignores `idDelta` with a glyph-id array; glyph 0 counts as coverage | delta applied; glyph 0 skipped so fallback fonts are reached (7.2) |
+| `font/ttf_parser.dart` | a malformed subtable throws; glyph bytes are not clamped to `loca` | bad subtables skipped; glyphs clamped (7.2) |
+| `font/ttf_writer.dart` | subsets drop `cvt `, `fpgm`, `prep` and `gasp`, which the copied glyph programs call | hinting tables copied (7.2) |
+| `font/ttf_writer.dart` | sfnt search fields written as 256/2/96; directory in layout order | spec values; records sorted by tag (7.2, #2009) |
+| `obj/unicode_cmap.dart` | non-BMP code points written as five or six hex digits; one section over 100 entries | UTF-16BE surrogates; sections of at most 100 (7.2, #2011, #2029) |
+| `font/type1_font.dart` | rune support follows Latin-1, so en dash, curly quotes and euro go to the fallback font (#1989) | WinAnsi coverage (7.2) |
+| `widgets/text.dart` | format characters drawn; soft hyphen drawn and never breaks; no break at U+200B; NBSP breaks | ignorables stripped; soft hyphen and ZWSP are break opportunities; no-break spaces kept (7.3) |
+| `widgets/text.dart` | CR/CRLF lines, letter spacing at span boundaries, whitespace-only text, hyphenated-word breaks | corrected (7.3) |
+| `font/bidi_utils.dart` | isolated yeh aliased to U+FEEF; U+0649 missing (#2000) | U+064A→U+FEF1, U+0649→U+FEEF (7.3) |
+| `widgets/text.dart` | an RTL fragment inside an LTR paragraph is neither shaped nor reordered | bidi runs whenever strong RTL characters are present (7.3) |
+| `svg/use.dart` | a cyclic `<use>` overflows the stack | cycles skipped (7.4) |
+| `svg/*` | undecodable `<image>`, malformed `transform`, unparsable functional colours and unresolved masks abort the document | the offending element or value is ignored (7.4) |
+| `svg/painter.dart` | `style="display:none"` / `visibility:hidden` ignored | style flattened before the test (7.4) |
+| `svg/parser.dart` | percentages divided by 100 instead of resolved | resolved against the viewport; root percentages leave sizing to the widget (7.4) |
+| `svg/*` | nested `<svg>` viewport, `<symbol viewBox>`, `<use width/height>` and `preserveAspectRatio` ignored | one viewport-fit helper (7.4) |
+| `svg/text.dart` | tspan runs drawn out of order, anchors per run by ink width | runs in document order on one pen; chunk anchors by advance (7.4) |
+| `svg/*` | zero stroke width paints a hairline; `transparent` and colour alpha ignored; `url(#id) fallback` unmatched | corrected (7.4) |
+| `svg/color.dart` † | `hsl()` hue divided by 255 instead of 360, which #1980 keeps | divided by 360 (7.4) |
+| `svg/operation.dart` † | clip-path applied before the element's own transform, which #1980 keeps | applied in the element's user space (7.4) |
+| `pdf/graphics.dart` | a colour's alpha is discarded by fill and stroke | constant alpha through `/ExtGState`, with a `colorAlpha: false` opt-out (7.5) |
+| `pdf/graphics.dart` | `setGraphicState` replaces the opacity, so nested `Opacity` does not compose | opacities multiply (7.5) |
+| `pdf/color.dart` | `isLight` and `isDark` are swapped | corrected (7.5) |
+| `pdf/graphics.dart` | `bezierArc` keeps a radius ratio of 1 after scaling the radii, so the arc misses its end point | ratio 0 (7.5) |
+| `pdf/graphics.dart` † | `bezierArc` with a rotation is solved at the origin and never rotated back, which #1980 keeps | solved in the ellipse's axes and rotated (7.5) |
+| `widgets/table.dart` | MultiPage tables re-measure widths and all remaining rows on every page | widths carried in the span state; rows stop at the page end (7.6) |
+| `widgets/table.dart` | an overflowing table scales every column, splitting words (#1716) | min-content floors per column (7.6) |
+| `widgets/basic.dart` | `Transform.rotateBox` lays its child out against unrotated constraints | quarter turns swap constraints; overflow rescales (7.6) |
+| `chart/grid_axis.dart` | a vertical axis reserves its labels' width where it needs their height | height (7.6) |
+| `widgets/stack.dart`, `progress.dart` | unbounded axes write `Infinity` | bounded axes only; progress fallbacks (7.6) |
+| `chart/pie_chart.dart` | a NaN value writes `NaN` coordinates | rejected with a `RangeError` (7.6) |
+| `widgets/grid_view.dart` | a cell taller than a single page draws nothing | one overflowing run (7.6) |
+| `widgets/stack.dart` † | `PositionedDirectional` sets its edges only inside its own layout, after `Stack` has read them, so the first layout sees null edges and later ones reuse stale values | edges resolved from the ambient direction before layout (6.9) |
+| `widgets/table_helper.dart` † | a directional cell alignment resolves as left-to-right when no context is passed | resolved by the cell text at layout as `start`/`end` (6.9) |
+| `svg/gradient.dart` † | a gradient `href` cycle recurses until the stack overflows, which #1980 keeps | the cycle is treated as unresolved (7.7) |
+| `svg/parser.dart` | a malformed number such as `opacity="abc"` throws out of `save()` | the attribute counts as absent (7.7) |
+| `widgets/progress.dart` | the default track is a `shade` of the value colour, which drops alpha, so a translucent bar gets an opaque track | the track keeps the value colour's alpha (7.7) |
+| `obj/pdfa/pdfa_attached_files.dart` | `/Params /Size` is the UTF-16 code-unit count of a UTF-8 payload, so an accented Factur-X file declares fewer bytes than it holds | the byte count of the encoded payload (6.11) |
+| `obj/pdfa/pdfa_attached_files.dart` | the `/EmbeddedFiles` name tree is in caller order, and its keys, `/F` and `/UF` are written unescaped and truncated to one byte per code unit | sorted by the bytes written; every key and name through the text-string writer (6.11) |
+| `obj/pdfa/pdfa_rdf.dart` | caller values are interpolated into the XMP template, so markup rewrites the packet, the `pdfaid` claim included | values escaped, characters XML forbids dropped (6.11) |
+| `obj/pdfa/pdfa_rdf.dart` | every unset field writes the literal `null` | unset elements, and empty descriptions, omitted (6.11) |
+| `obj/pdfa/pdfa_rdf.dart` † | `/Info /Producer` always carries the library URL and `pdf:Producer` never does, so the two disagree, which PDF/A forbids | both written from one `/Producer` string (6.11) |
+| `obj/pdfa/pdfa_rdf.dart` † | `xmp:CreateDate` and `/Info /CreationDate` come from two clock reads, so they can differ by a second, and always differ when `creationDate` is passed | one instant for both, plus `/ModDate` and `xmp:ModifyDate` (6.11) |
+| `obj/pdfa/pdfa_attached_files.dart` † | `/ModDate` is the local wall-clock time labelled `+00'00'`, so it is off by the zone offset | UTC (6.11) |
+| `obj/pdfa/pdfa_color_profile.dart` † | `/N` is always 3 and every profile is named `sRGB2014.icc`, so a CMYK profile is declared with three components | `/N` and the colour space read from the ICC header, which is validated; the caller's output condition (6.11) |
+| `obj/pdfa/pdfa_facturx_rdf.dart` † | the file name, version and level are interpolated unescaped | escaped (6.11) |
+
+Upstream behaviour was confirmed by source inspection at `277b367` and, where
+the pull request includes them, by its tests. No Dart runtime reproduction was
+run.
+

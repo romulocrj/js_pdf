@@ -1,4 +1,69 @@
-# Bundle size — phases 6.8, 6.10 and 6.12
+# Bundle size
+
+## 1.0.0 — phases 7.0–7.7, 6.9 and 6.11
+
+Measured 2026-11-10 against **v0.2.0** (`961db0d`). Values are bytes of the
+canonical `dist/js_pdf.min.mjs`.
+
+| Revision | Minified, uncompressed | gzip level 9 | Brotli quality 11 |
+|---|---:|---:|---:|
+| v0.2.0 | 450,928 | 138,393 | 111,811 |
+| After phase 7.0 (table packing) | 422,764 | 135,763 | 110,972 |
+| Before PDF/A (`c0a913f`) | 435,345 | 141,519 | 115,631 |
+| Before PR #15 review (`b20c924`) | 449,820 | 146,910 | 119,904 |
+| **1.0.0 with PR #15 review fixes** | **450,154** | **147,061** | **119,979** |
+
+1.0.0 is **774 bytes smaller (−0.17%)** than v0.2.0 when minified, and
+**8,668 bytes (+6.26%)** larger under gzip. The target agreed for 1.0 was at
+most about +5% minified; the user then chose to include every pertinent fix
+and PDF/A whatever the size, and to review the result afterwards.
+
+Phase 7.0 packs three literal tables into strings with no behaviour change —
+the Material palette (~10.6 KB), the PDF417 codeword clusters (~9.7 KB) and the
+standard Type1 widths (~6.4 KB). Packed tables compress less well than the
+repetitive literals they replace, which is why the compressed sizes shrink by
+less. `test/static_tables.test.mjs` fingerprints the decoded tables against
+the original literals, and example PDFs from both bundles are byte-identical.
+
+Integration order and running minified size:
+
+| Step | Minified | Δ |
+|---|---:|---:|
+| 7.0 table packing | 422,764 | −28,164 |
+| 7.2 fonts | 422,503 | −261 |
+| 7.1 serialization and PDF objects | 423,476 | +973 |
+| 7.5 graphics, colour alpha and images | 424,561 | +1,085 |
+| 7.6 layout and tables + 7.4 SVG | 429,339 | +4,778 |
+| 7.3 text, bidi and Arabic | 431,690 | +2,351 |
+| 7.7 follow-ups | 432,112 | +422 |
+| 6.9 directional layout | 434,364 | +2,252 |
+| Hyphen cuts as upstream | 435,077 | +713 |
+| Translucent gradient stops | 435,345 | +268 |
+| 6.11 PDF/A | 449,820 | +14,475 |
+| PR #15 review: alpha isolation, tspan opacity, directional margins | 450,154 | +334 |
+
+The font fixes are net negative because ToUnicode generation was unified.
+PDF/A is the largest single addition: five ported modules, the validation that
+rejects non-conforming fonts, colours and profiles, the deterministic `/ID`
+hash and their error messages. Remaining packing candidates, not applied by
+decision: the barcode lookup maps (~7 KB minified) and the SVG named colours.
+
+Output size also changes: embedded TrueType subsets now keep their hinting
+tables (`cvt `, `fpgm`, `prep`, `gasp`), adding roughly 1–6 KB per embedded
+font before compression (e.g. the upstream `report` example grows from 14,739
+to 20,729 bytes).
+
+Reproduce with:
+
+```sh
+npm run build
+node examples/measure-bundle-size.mjs 961db0d 9cb031c c0a913f
+```
+
+The retained report is
+[`examples/benchmarks/bundle-1.0-series.json`](../examples/benchmarks/bundle-1.0-series.json).
+
+## Phases 6.8, 6.10 and 6.12
 
 Measured 2026-09-29 against the latest published release, **v0.1.6**
 (2026-08-07), and the PR #11 merge `68d5b1b`. Values are bytes of the canonical
@@ -16,7 +81,7 @@ Relative to v0.1.6, the complete minified bundle is **45,418 bytes larger
 **14,546 bytes (+11.75%)**.
 The canonical unminified module is 820,719 bytes.
 
-## What contributes to the growth
+### What contributes to the growth
 
 The new code includes full-program WinAnsi/CFF1 embedding, CFF charset/ROS and
 standard SID data, annotation borders/notes, reusable form resources and the
@@ -35,7 +100,7 @@ not measure parse time, execution time or runtime heap. ClearScript hosts still
 load the decompressed JavaScript; font assets contribute separately when used.
 No public features were removed to achieve these figures.
 
-## Reproduce
+### Reproduce
 
 ```sh
 npm run build

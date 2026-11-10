@@ -14,8 +14,12 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/pdf/format/string.dart
  *
- * Strings outside WinAnsi are emitted as UTF-16BE with a byte-order marker,
- * matching the representation PDF readers expect for document-level text.
+ * Text strings are written as a literal only where PDFDocEncoding agrees with
+ * Unicode, and as UTF-16BE with a byte-order marker everywhere else. Upstream
+ * tries Latin-1; the port used to try CP1252. Both are wrong for a text string:
+ * ISO 32000-1 7.9.2.2 reads its bytes as PDFDocEncoding, which puts other
+ * characters at 0x80..0xA0 (`€—` written as CP1252 read back as `•Š`).
+ * Content-stream text is a different thing and stays WinAnsi: `pdfLiteral`.
  */
 
 import { PdfDataType } from './base.ts';
@@ -35,9 +39,27 @@ const CP1252: Readonly<Record<number, number>> = Object.freeze({
   0x0153: 0x9c, 0x017e: 0x9e, 0x0178: 0x9f
 });
 
+/**
+ * Code point to WinAnsi byte, `?` when the encoding has no glyph for it. The
+ * C1 controls U+0080..U+009F are among those: their bytes hold CP1252's
+ * typographic glyphs, so writing them through would draw a euro for U+0080.
+ */
 export function toWinAnsiByte(codePoint: number): number {
-  if (codePoint <= 0xff) return codePoint;
+  if (codePoint <= 0xff && (codePoint & 0xe0) !== 0x80) return codePoint;
   return CP1252[codePoint] ?? 0x3f;
+}
+
+/** WinAnsi byte to code point, `?` for the five bytes CP1252 leaves undefined. */
+const WIN_ANSI_RUNES = Array.from({ length: 256 }, (_, byte) => ((byte & 0xe0) === 0x80 ? 0x3f : byte));
+for (const [rune, byte] of Object.entries(CP1252)) WIN_ANSI_RUNES[byte] = Number(rune);
+
+export function winAnsiRune(byte: number): number {
+  return WIN_ANSI_RUNES[byte] ?? 0x3f;
+}
+
+/** Whether `/WinAnsiEncoding` has a glyph for `codePoint`. */
+export function isWinAnsiRune(codePoint: number): boolean {
+  return winAnsiRune(toWinAnsiByte(codePoint)) === codePoint;
 }
 
 /**
@@ -85,12 +107,35 @@ export function pdfHexString(values: readonly number[], digits = 4): string {
   return `<${output}>`;
 }
 
-function fitsWinAnsi(value: string): boolean {
-  for (const character of value) {
-    const codePoint = character.codePointAt(0)!;
-    if (codePoint > 0xff && CP1252[codePoint] === undefined) return false;
+/**
+ * Whether every code unit is one PDFDocEncoding (ISO 32000-1 Annex D) gives the
+ * same meaning as Unicode: tab, line feed, carriage return, 0x20..0x7E, and
+ * 0xA1..0xFF except 0xAD. Everything else is either undefined there or a
+ * different character - 0x18..0x1F and 0x80..0x9F are other glyphs, and 0xA0
+ * is the euro sign - so a literal would read back as something else.
+ */
+function fitsPdfDocEncoding(value: string): boolean {
+  for (let index = 0; index < value.length; index++) {
+    const unit = value.charCodeAt(index);
+    if (unit < 0x20
+      ? unit !== 0x09 && unit !== 0x0a && unit !== 0x0d
+      : (unit > 0x7e && unit < 0xa1) || unit === 0xad || unit > 0xff) return false;
   }
   return true;
+}
+
+/**
+ * The bytes `PdfString` writes for `value`, one character per byte. Name-tree
+ * keys are ordered by these (ISO 32000-1 7.9.6), not by locale collation.
+ */
+export function pdfTextBytes(value: string): string {
+  if (fitsPdfDocEncoding(value)) return value;
+  let bytes = '\u00fe\u00ff';
+  for (let index = 0; index < value.length; index++) {
+    const unit = value.charCodeAt(index);
+    bytes += String.fromCharCode(unit >> 8, unit & 0xff);
+  }
+  return bytes;
 }
 
 /** PDF text string encoded as UTF-16BE, including its required marker. */
@@ -128,6 +173,6 @@ export class PdfString extends PdfDataType {
   }
 
   override output(s: PdfStream): void {
-    s.putString(fitsWinAnsi(this.value) ? pdfLiteral(this.value) : pdfUnicodeString(this.value));
+    s.putString(fitsPdfDocEncoding(this.value) ? pdfLiteral(this.value) : pdfUnicodeString(this.value));
   }
 }

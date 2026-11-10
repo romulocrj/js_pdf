@@ -99,6 +99,17 @@ export class Header extends StatelessWidget {
     this.outlineStyle = outlineStyle;
   }
 
+  /**
+   * A heading moves to the next page whole, as upstream's does: there it is an
+   * `Outline`, which never spans. Split, its filling Container painted an
+   * empty fragment at the foot of the page, spent a whole page on its one
+   * line, and registered its outline once per fragment, so the bookmark and
+   * its TableOfContent row appeared twice.
+   */
+  override get canSpan(): boolean {
+    return false;
+  }
+
   override build(context: RenderContext): AnyWidget {
     const millimeter = PageUnit.mm;
     let margin = this.margin;

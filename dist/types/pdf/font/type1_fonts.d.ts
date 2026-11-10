@@ -38,6 +38,12 @@ export declare class PdfType1Font implements PdfFont {
     static timesItalic(): PdfType1Font;
     static symbol(): PdfType1Font;
     static zapfDingbats(): PdfType1Font;
+    /**
+     * Whether `/WinAnsiEncoding`, which every standard font here declares, has a
+     * glyph for `rune`. Upstream tests Latin-1, so an en dash or a curly quote went
+     * to the fallback font while U+0080..U+009F drew CP1252's glyphs (issue #1989).
+     */
+    isRuneSupported(rune: number): boolean;
     glyphMetrics(charCode: number): PdfFontMetrics;
     stringMetrics(text: string, size: number, letterSpacing?: number): PdfFontMetrics;
     encodeText(text: string): string;

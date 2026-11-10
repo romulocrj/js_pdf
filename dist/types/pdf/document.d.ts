@@ -1,4 +1,4 @@
-import type { PdfDataType } from './format/base.ts';
+import { PdfDataType } from './format/base.ts';
 import type { PdfObjectBase, PdfSettings } from './format/object_base.ts';
 import { PdfDict } from './format/dict.ts';
 import { PdfStream } from './format/stream.ts';
@@ -92,6 +92,7 @@ export declare class PdfDocument {
     private readonly formObjects;
     private readonly softMaskObjects;
     private readonly formFontNames;
+    private readonly formFieldKids;
     readonly settings: PdfSettings;
     constructor(metadata: DocumentMetadata, settings?: PdfSettings);
     get objects(): readonly PdfObjectBase<PdfDataType>[];
@@ -121,11 +122,40 @@ export declare class PdfDocument {
      * passes nothing and gets no `/Resources` at all, as upstream does.
      */
     addPage(format: PageSize, content: string | Uint8Array, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>, shadings?: ReadonlyMap<string, PdfDict>, images?: ReadonlyMap<PdfImage, string>, annotations?: readonly PdfAnnotationSpec[], forms?: ReadonlyMap<PdfFormXObject, string>): PdfPage;
+    private emptyForm;
+    /**
+     * One shared, empty appearance stream. A viewer scales its box onto each
+     * annotation's `/Rect`, so a unit box serves every size.
+     */
+    private emptyAppearance;
+    /**
+     * List a widget in `/AcroForm`, grouping widgets that share a field name.
+     *
+     * Each widget used to be its own merged field-and-widget dictionary, so a
+     * `TextField` in a `MultiPage` header became one root field per page, all
+     * named alike with values of their own. ISO 32000-1 12.7.3.1 allows the
+     * merged form only for a single widget, so from the second widget on the
+     * name gets one parent field with the widgets as `/Kids` - upstream #1980's
+     * `prepareAcroForm`, done as pages arrive. A name used once is unchanged.
+     */
+    private addFormField;
     addNavigation(outlines: readonly SerializedOutline[], pageMode: PdfPageMode, destinations?: readonly SerializedDestination[]): void;
     addPageLabels(labels: readonly SerializedPageLabel[]): void;
     save(): Uint8Array;
     /** Serialize directly to a caller-owned synchronous destination. */
     write(stream: PdfStream): void;
+    /**
+     * The PDF/A rules that are cheap to check on finished objects: device colour
+     * against the output intent (ISO 19005-2 6.2.4.3) and annotation colours
+     * (6.3.3), page size and `q` nesting limits (6.1.13).
+     */
+    private checkPdfa;
+    /**
+     * The trailer `/ID`: 16 bytes hashed from every object's dictionary and
+     * uncompressed data. It need not be cryptographic, only deterministic, so
+     * that `save()` stays repeatable, and distinct for distinct documents.
+     */
+    private documentId;
 }
 /** Build a document from already-rendered pages and collect its bytes. */
 export declare function serializePdf(pages: readonly SerializedPage[], metadata: DocumentMetadata, outlines?: readonly SerializedOutline[], pageMode?: PdfPageMode, destinations?: readonly SerializedDestination[], pageLabels?: readonly SerializedPageLabel[], settings?: PdfSettings): Uint8Array;

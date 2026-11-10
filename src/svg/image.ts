@@ -92,22 +92,34 @@ export class SvgImageOperation extends SvgOperation {
     this.image = image;
   }
 
-  static fromXml(element: XmlElement, painter: SvgPainter, parent: SvgBrush): SvgImageOperation {
+  /**
+   * Null when the image cannot be used: an external href, a payload that is
+   * not base64, or one that is not a decodable PNG or JPEG (a nested SVG, a
+   * GIF, a WebP, a truncated file). That costs this element only; upstream and
+   * the port used to abort the whole document.
+   */
+  static fromXml(element: XmlElement, painter: SvgPainter, parent: SvgBrush): SvgImageOperation | null {
     const brush = SvgBrush.fromXml(element, parent, painter.parser);
-    const width = getNumeric(element, 'width', brush, { defaultValue: 0 })!.sizeValue;
-    const height = getNumeric(element, 'height', brush, { defaultValue: 0 })!.sizeValue;
-    const x = getNumeric(element, 'x', brush, { defaultValue: 0 })!.sizeValue;
-    const y = getNumeric(element, 'y', brush, { defaultValue: 0 })!.sizeValue;
+    const length = (name: string, axis: 'x' | 'y'): number => getNumeric(element, name, brush)?.lengthIn(axis) ?? 0;
     const href = element.getAttribute('href') ?? element.getAttribute(
       'href', 'http://www.w3.org/1999/xlink'
     );
     if (href === null || !href.startsWith('data:') || !href.includes(';base64,')) {
-      throw new TypeError('SVG image href must be a base64 data URL');
+      return null;
     }
-    const bytes = decodeBase64(href.slice(href.indexOf(';base64,') + 8));
-    const image = bytes[0] === 0xff && bytes[1] === 0xd8
-      ? PdfImage.fromJpeg(bytes)
-      : PdfImage.fromPng(bytes);
+    let image: PdfImage;
+    try {
+      const bytes = decodeBase64(href.slice(href.indexOf(';base64,') + 8));
+      image = bytes[0] === 0xff && bytes[1] === 0xd8
+        ? PdfImage.fromJpeg(bytes)
+        : PdfImage.fromPng(bytes);
+    } catch {
+      return null;
+    }
+    const width = length('width', 'x');
+    const height = length('height', 'y');
+    const x = length('x', 'x');
+    const y = length('y', 'y');
     return new SvgImageOperation(
       x, y, width, height, image, brush,
       SvgClipPath.fromXml(element, painter, brush),

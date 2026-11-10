@@ -9,11 +9,11 @@ below.
 
 ## Version scope
 
-This guide describes version 0.2.0, including phases 6.1–6.8, 6.10
-and 6.12. Those additions are not available in version 0.1.6. Check the
-installed package version and declarations before using the newer APIs.
-The remaining phase-6 gaps are directional geometry, RTL Flex/table layout
-and baseline alignment (6.9), and PDF/A integration (6.11).
+This guide describes version 1.0.0: phases 6.1–6.8, 6.10 and 6.12 (released
+in 0.2.0), directional layout (6.9), PDF/A output (6.11) and the phase-7 fixes.
+Additions marked *1.0.0* are not in 0.2.0 or earlier; check the installed
+package version and declarations before using them. From 1.0.0 the exports of
+the package entry point follow semantic versioning; deep imports are internal.
 
 ## Install and import specifier
 
@@ -33,9 +33,9 @@ Use the specifier that matches the host, and do not mix them up:
 | Node, or any bundler | `import * as pw from '@romulocrj/js_pdf';` |
 | Minified build | `import * as pw from '@romulocrj/js_pdf/min';` |
 | Browser importmap | whatever the importmap maps — the examples map `@romulocrj/js_pdf` |
-| Browser, no install | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs';` |
-| ClearScript | the module file resolved from `SearchPath` or customLoader with `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs';` |
-| Deno | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs';` |
+| Browser, no install | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs';` |
+| ClearScript | the module file resolved from `SearchPath` or customLoader with `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs';` |
+| Deno | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs';` |
 
 A bare `'js_pdf'` only resolves where a host maps it. For an installed package
 it is always the scoped name.
@@ -280,6 +280,37 @@ Prefer the same composition strategy used by [dart_pdf](https://github.com/DavBf
 Insets accept a single number or a structural object such as
 `{ top: 8, right: 12, bottom: 8, left: 12 }`. Colors accept hexadecimal strings
 or normalized RGB arrays.
+
+`Container` takes upstream's `color` for a solid background (*1.0.0*;
+`background` is the older alias and still works). Do not combine either with
+`decoration`.
+
+## Directional layout
+
+*1.0.0.* Layout follows the ambient text direction, as in dart_pdf.
+Set it with `Directionality`, or with `textDirection` on `PageTheme`, `Page`
+or `MultiPage`; it defaults to left-to-right.
+
+- `EdgeInsetsDirectional.only({ start, top, end, bottom })`, `.all`,
+  `.symmetric`, `.fromSTEB(start, top, end, bottom)` and `.zero` are accepted
+  by widget insets: `Padding`, `Container` margin/padding, `Text`/`RichText`
+  and `Row`/`Column`/`Flex` margins, `GridView` padding, page margins and more.
+  Raw `BoxConstraints.deflate` takes physical insets; use `resolveInsets` first.
+- `AlignmentDirectional.topStart` … `bottomEnd` (or the names `'topStart'`,
+  `'centerEnd'`, …) are accepted wherever alignments are, including gradients
+  and images.
+- `PositionedDirectional({ start, end, top, bottom })` places a `Stack` child
+  by start/end edges.
+- `Row`/`Flex`, `Wrap`, `GridView` and `Table` run right to left under RTL.
+  `Table` also takes its own `textDirection`; pass `'ltr'` to keep a table's
+  column order on an RTL page.
+- `MultiPage({ crossAxisAlignment })` accepts `'start'`, `'end'`, `'center'`
+  and `'stretch'`.
+- `resolveInsets(value, direction)` and `resolveAlignment(value, direction)`
+  turn directional values into physical ones in custom widgets.
+
+There is no baseline cross-axis alignment, as in dart_pdf. See the
+[directional example](examples/directional-layout-phase-6.9.mjs).
 
 ## Text and fonts
 
@@ -703,11 +734,19 @@ Inherited RGB copy methods return an RGB value even for gray/CMYK inputs;
 construct a new gray/CMYK value to preserve that device space.
 
 Solid paints and form/annotation arrays preserve gray and CMYK. Gradients,
-SVG filters and outline metadata use RGB. Color alpha alone does not emit a
-transparency state: use `Opacity` or `flatten({ background })` explicitly.
-DeviceCMYK does not embed an ICC profile or establish PDF/A conformance.
-Upstream's unusual `isLight`/`isDark` threshold and harmony offsets are retained;
-`shade` and `monochromatic` return opaque colors as upstream does.
+SVG filters and outline metadata use RGB. Since phase 7.5 a color's alpha is
+painted: fills and strokes emit a constant-alpha `/ExtGState`, multiplied by any
+enclosing `Opacity`, and nested `Opacity` widgets multiply. Pass
+`colorAlpha: false` to `Document`/`createPdf` (or `PdfDocument`) to ignore color
+alpha. Gradient stops paint their alpha too, through a luminosity soft mask.
+An image, pattern, direct shading or reusable form keeps its enclosing opacity
+without inheriting the previous solid colour's alpha. Nested SVG `tspan`
+opacity multiplies once with its text/group and fill/stroke opacity.
+DeviceCMYK paint embeds no ICC profile; under [PDF/A](#pdfa) it needs a CMYK
+output intent profile.
+Upstream's `isLight`/`isDark` threshold and harmony offsets are retained, with
+the swapped getters corrected (white is light). `shade` and `monochromatic`
+return opaque colors as upstream does.
 See the [color gallery](examples/colors-phase-6.7.mjs).
 
 ## Layout performance
@@ -740,7 +779,7 @@ features, while checking the TypeScript declarations for exact constructors:
   vector shadows.
 - Utility widgets: icons, progress indicators, placeholders, logos,
   `Watermark`, `Footer`, `GridPaper`, shapes and geometric annotations.
-- Metadata: title, author, subject, keywords, caller-supplied XMP and page labels.
+- Metadata: title, author, subject, keywords, `creationDate`, caller-supplied XMP and page labels.
 
 ### Stream compression
 
@@ -759,6 +798,63 @@ is JavaScript, so a document dominated by large images spends real milliseconds
 in it. Data that already carries its own filter, such as a JPEG, is never
 recompressed, and the XMP metadata packet is always left plain.
 
+## PDF/A
+
+*1.0.0.* Pass `pdfa` to `Document` (or to `createPdf`'s options) to write
+PDF/A-2 or PDF/A-3, level B or U:
+
+```js
+const doc = new pw.Document({
+  title: 'Invoice 2026-001', author: 'Acme', creationDate: new Date(),
+  // PDF/A forbids fonts that are not embedded: never leave the Helvetica default.
+  theme: pw.ThemeData.withFont({
+    base: pw.Font.ttf(regularBytes), bold: pw.Font.ttf(boldBytes),
+    italic: pw.Font.ttf(italicBytes), boldItalic: pw.Font.ttf(boldItalicBytes)
+  }),
+  pdfa: {
+    part: 3,                      // 2 or 3 (default 3)
+    conformance: 'B',             // 'B' (default) or 'U'
+    colorProfile: iccBytes,       // required: the caller's ICC profile, e.g. sRGB2014.icc
+    outputCondition: 'sRGB IEC61966-2.1',
+    attachments: [{               // PDF/A-3 only
+      name: 'factur-x.xml', data: invoiceXml, mimeType: 'text/xml',
+      relationship: 'Alternative', description: 'Factur-X invoice'
+    }],
+    extensionRdf: new pw.PdfaFacturxRdf().create({ conformanceLevel: 'EN 16931' })
+  }
+});
+```
+
+- The library writes the `/GTS_PDFA1` output intent (`/N` from the profile),
+  an XMP packet generated from the document metadata that agrees with `/Info`,
+  a trailer `/ID` derived from the content (so `save()` is repeatable for a
+  fixed `creationDate`), PDF/A-3 `/EmbeddedFiles` with `/AF`, and a normal
+  appearance on every annotation except links.
+- Supply a real ICC profile as bytes; the library ships none.
+  `examples/assets/JsPdfSrgbExample.icc` is a port-authored test profile, not
+  for production. RGB, CMYK and gray monitor or output profiles are accepted.
+- Do not pass `xmpMetadata` with `pdfa`; it throws. Add custom XMP properties
+  through `extensionRdf`, which must be valid RDF that declares any
+  non-standard schema with a PDF/A extension schema, as `PdfaFacturxRdf` does.
+- `new Document()` throws for `part: 1` (it forbids transparency), level `'A'`,
+  a malformed or unsuitable ICC profile, and attachments outside part 3.
+  `save()` throws for a standard Type1 font anywhere (theme defaults, a
+  `Font.helvetica()`, a `Font.zapfDingbats()`), `PdfColorCmyk` or CMYK JPEGs
+  under an RGB profile (and RGB paint, images, gradients or soft masks under a
+  CMYK or gray profile), annotation colours without an RGB profile, a font
+  with `protect: true` under level U, pages outside 3–14,400 points and `q`
+  nesting deeper than 28. Gray paint is always allowed.
+- Not checked: characters a font cannot draw (they reference `.notdef`; give
+  `fontFallback` fonts that cover the text), Arabic marks with zero advance,
+  simple-TrueType `cmap` requirements and the content of `extensionRdf`.
+- The PDF/A-3B example passed veraPDF 1.30.4 during PR #15 review; see the
+  [sample validation record](examples/benchmarks/pdfa-review-pr15.json).
+  This covers that sample. Validate production output with a PDF/A validator.
+
+`PdfaRdf({ title, …, part, conformance }).create()` returns an XMP packet
+string and `PdfaFacturxRdf().create()` the Factur-X RDF; both escape their
+values. See the [PDF/A example](examples/pdfa-phase-6.11.mjs).
+
 ## Important differences and limits
 
 - Library code is synchronous and host-neutral.
@@ -766,11 +862,15 @@ recompressed, and the XMP metadata packet is always left plain.
 - Widget layout uses top-left coordinates with the y-axis pointing down.
   Low-level `PdfCanvas` operations, including `drawForm`, use PDF user
   coordinates (bottom-left, y-up); respect transforms installed by widgets.
-- Directional geometry, RTL Flex/table layout and baseline alignment are not
-  implemented. Existing text bidi/Arabic shaping and icon mirroring do not
-  imply support for those layout features.
-- PDF/A integration and output intents are not implemented. Supplying XMP or
-  using CMYK does not establish PDF/A conformance.
+- Text uses UAX #9 bidi per line and shapes Arabic through the font's
+  presentation-form code points; OpenType GSUB/GPOS tables are not read, so
+  fonts that join only through GSUB are unsupported.
+- Progress indicators on an unbounded axis need `fallbackWidth` (and
+  `fallbackHeight` for the circular one) or they throw a `RangeError`
+  (*1.0.0*).
+- PDF/A output is limited to parts 2 and 3, levels B and U; the PDF/A-3B
+  example passed veraPDF 1.30.4. Supplying your own XMP or using CMYK without `pdfa`
+  does not establish conformance. See [PDF/A](#pdfa).
 - Reading or rasterizing existing PDFs is not supported.
 - Encryption, digital signatures and `Signature` are out of scope.
 - An indivisible widget or table row taller than a complete page cannot paginate.

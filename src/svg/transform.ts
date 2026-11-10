@@ -17,16 +17,15 @@
  * The `transform` attribute: `matrix translate scale rotate skewX skewY`,
  * composed left to right into one `cm` operand.
  *
- * UPSTREAM PARITY: no `preserveAspectRatio`. Upstream has none either — `SvgImage`
- * fits the viewBox into the widget's box with `BoxFit` and `Alignment` instead,
- * which covers every alignment `preserveAspectRatio` can express but is stated
- * by the caller rather than read from the document. `SvgImage` has provided
- * that fitting since phase 2.7.
+ * `preserveAspectRatio` is read for nested viewports (`<svg>`, `<symbol>` via
+ * `<use>`) by `viewBoxTransform` in `group.ts`. The root's is not: `SvgImage`
+ * fits the root viewBox into the widget's box with `BoxFit` and `Alignment`,
+ * stated by the caller, as upstream does.
  */
 
 import { identityMatrix, multiplyMatrix, rotationMatrix, scaleMatrix, skewMatrix, translationMatrix } from '../pdf/matrix.ts';
 import type { PdfMatrix } from '../pdf/matrix.ts';
-import { splitDoubles } from './parser.ts';
+import { parseNumbers } from './parser.ts';
 import type { XmlElement } from './xml.ts';
 
 const TRANSFORM = /(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/g;
@@ -72,58 +71,36 @@ export class SvgTransform {
 
     for (const match of transform.matchAll(TRANSFORM)) {
       const name = match[1]!;
-      const parameters = splitDoubles(match[2]!);
+      // Each function must match its SVG 1.1 7.6 signature, or it is skipped
+      // and the valid ones around it still apply — upstream PR #1980's rule.
+      // Before, a non-number threw out of the document and a short `matrix()`
+      // was zero-padded into a singular `cm` that collapsed everything after.
+      const p = parseNumbers(match[2]!) ?? [];
+      const [a = 0, b, c = 0] = p;
+      const one = p.length === 1;
+      const upToTwo = p.length === 1 || p.length === 2;
+      let step: PdfMatrix | null = null;
 
-      switch (name) {
-        case 'matrix': {
-          // Missing operands are zero, which is what upstream pads with. A
-          // short `matrix()` is malformed SVG; padding renders it rather than
-          // rejecting the whole file for one bad attribute.
-          const m = [...parameters, 0, 0, 0, 0, 0, 0].slice(0, 6) as unknown as PdfMatrix;
-          matrix = multiplyMatrix(matrix, m);
-          break;
-        }
+      if (name === 'matrix') {
+        step = p.length === 6 ? p as unknown as PdfMatrix : null;
+      } else if (name === 'translate') {
+        step = upToTwo ? translationMatrix(a, b ?? 0) : null;
+      } else if (name === 'scale') {
+        // A single operand scales both axes.
+        step = upToTwo ? scaleMatrix(a, b ?? a) : null;
+      } else if (name === 'rotate') {
+        step = one || p.length === 3
+          ? multiplyMatrix(
+            multiplyMatrix(translationMatrix(b ?? 0, c), rotationMatrix(toRadians(a))),
+            translationMatrix(-(b ?? 0), -c)
+          )
+          : null;
+      } else {
+        step = one ? skewMatrix(name === 'skewX' ? toRadians(a) : 0, name === 'skewY' ? toRadians(a) : 0) : null;
+      }
 
-        case 'translate': {
-          const dx = parameters[0] ?? 0;
-          const dy = parameters[1] ?? 0;
-          matrix = multiplyMatrix(matrix, translationMatrix(dx, dy));
-          break;
-        }
-
-        case 'scale': {
-          const sx = parameters[0] ?? 1;
-          // A single operand scales both axes, which is why this is not `?? 1`.
-          const sy = parameters[1] ?? sx;
-          matrix = multiplyMatrix(matrix, scaleMatrix(sx, sy));
-          break;
-        }
-
-        case 'rotate': {
-          const degrees = parameters[0] ?? 0;
-          const ox = parameters[1] ?? 0;
-          const oy = parameters[2] ?? 0;
-
-          if (parameters.length > 1) {
-            matrix = multiplyMatrix(matrix, translationMatrix(ox, oy));
-          }
-          matrix = multiplyMatrix(matrix, rotationMatrix(toRadians(degrees)));
-          if (ox !== 0 || oy !== 0) {
-            matrix = multiplyMatrix(matrix, translationMatrix(-ox, -oy));
-          }
-          break;
-        }
-
-        case 'skewX':
-          matrix = multiplyMatrix(matrix, skewMatrix(toRadians(parameters[0] ?? 0), 0));
-          break;
-
-        case 'skewY':
-          matrix = multiplyMatrix(matrix, skewMatrix(0, toRadians(parameters[0] ?? 0)));
-          break;
-
-        default:
-          break;
+      if (step !== null) {
+        matrix = multiplyMatrix(matrix, step);
       }
     }
 

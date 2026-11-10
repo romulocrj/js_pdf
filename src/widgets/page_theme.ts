@@ -21,8 +21,9 @@
 
 import { DEFAULT_MARGIN, formatMargin, PageFormat } from '../pdf/page_format.ts';
 import type { PageSize } from '../pdf/page_format.ts';
-import { normalizeInsets } from './geometry.ts';
-import type { Insets, InsetsInput } from './geometry.ts';
+import type { TextDirection } from './border_radius.ts';
+import { normalizeInsets, normalizeInsetsGeometry, resolveInsets } from './geometry.ts';
+import type { Insets, InsetsGeometry, InsetsInput } from './geometry.ts';
 import type { ThemeData } from './theme.ts';
 import type { AnyWidget, RenderContext } from './widget.ts';
 
@@ -40,6 +41,13 @@ export interface PageThemeOptions {
 
   /** Clip painted page layers and content to the resolved margin rectangle. */
   readonly clip?: boolean;
+
+  /**
+   * The page's text direction: what `Directionality.of` returns on it, the
+   * side a directional margin starts on, and the side narrower page children
+   * are placed against.
+   */
+  readonly textDirection?: TextDirection | null;
 }
 
 export class PageTheme {
@@ -49,8 +57,9 @@ export class PageTheme {
   readonly buildForeground: BuildCallback | null;
   readonly theme: ThemeData | null;
   readonly clip: boolean;
+  readonly textDirection: TextDirection | null;
 
-  private readonly declaredMargin: Insets | null;
+  private readonly declaredMargin: InsetsGeometry | null;
 
   constructor({
     pageFormat = PageFormat.A4,
@@ -59,7 +68,8 @@ export class PageTheme {
     theme = null,
     orientation = 'natural',
     margin = null,
-    clip = false
+    clip = false,
+    textDirection = null
   }: PageThemeOptions = {}) {
     // The margin fields ride along: a page with none of its own takes the
     // format's, the way `PdfPageFormat` carries them upstream.
@@ -76,7 +86,8 @@ export class PageTheme {
     this.buildForeground = buildForeground;
     this.theme = theme;
     this.clip = clip;
-    this.declaredMargin = margin == null ? null : normalizeInsets(margin);
+    this.textDirection = textDirection;
+    this.declaredMargin = margin == null ? null : normalizeInsetsGeometry(margin);
   }
 
   /** Whether the requested orientation disagrees with the paper's own. */
@@ -105,11 +116,18 @@ export class PageTheme {
    * A page states its own, or inherits the format's — `PageFormat.A4` carries
    * upstream's 2 cm, the same as `PdfPageFormat.a4`. The flat fallback is for
    * a bare `{ width, height }` format, which upstream cannot express.
+   *
+   * A directional margin resolves against `textDirection`, and as ltr when
+   * there is none, the fallback of `Directionality.of`. Upstream resolved it
+   * before testing for rotation, which threw for a theme with no direction
+   * (PR #1980, CHANGELOG L74); the port always returns physical edges, so it
+   * resolves whenever it has to, with the same ltr default.
    */
   get margin(): Insets {
     const fromFormat = formatMargin(this.pageFormat);
     const declared = this.declaredMargin
-      ?? (fromFormat === null ? normalizeInsets(DEFAULT_MARGIN) : fromFormat);
+      ? resolveInsets(this.declaredMargin, this.textDirection)
+      : fromFormat === null ? normalizeInsets(DEFAULT_MARGIN) : fromFormat;
 
     return this.mustRotate
       ? {
@@ -129,7 +147,8 @@ export class PageTheme {
       theme: options.theme ?? this.theme,
       orientation: options.orientation ?? this.orientation,
       margin: options.margin ?? this.declaredMargin,
-      clip: options.clip ?? this.clip
+      clip: options.clip ?? this.clip,
+      textDirection: options.textDirection ?? this.textDirection
     });
   }
 }

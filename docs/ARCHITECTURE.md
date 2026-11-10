@@ -130,8 +130,12 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   components (`rg`/`RG`, `g`/`G`, `k`/`K`); legacy strings/tuples stay RGB.
   `normalizePaintColor` retains values, while `normalizeColor` explicitly
   converts to RGB for gradients, SVG filters, luminance and outline metadata.
-  Form and geometric annotation arrays use `PdfArray.fromColor`. Alpha is
-  value metadata: callers use `Opacity` or `flatten` for visible transparency.
+  Form and geometric annotation arrays use `PdfArray.fromColor`. Colour alpha
+  is painted through constant-alpha `/ExtGState` entries that `PdfGraphics`
+  tracks per saved state and multiplies by the inherited opacity; the
+  `colorAlpha` setting turns it off. Patterns select the enclosing opacity;
+  images, direct shadings and reusable forms scope that selection so a prior
+  solid colour's alpha cannot hide them or change their caller's paint state.
 - **`page_format.ts`** — upstream paper presets, margins and public physical-unit constants in PDF points.
 - **`font/font_metrics.ts`** — glyph and string bounding metrics, including
   ascent, descent, bearings and advance width.
@@ -155,6 +159,10 @@ licensed Dart `qr` implementation is neither ported nor distributed.
 - **`document.ts`** — the object registry, xref table and trailer. Produces the
   final `Uint8Array` through `save()`, or writes directly to a supplied
   `PdfStream` through `write(output)`.
+- **`obj/pdfa/`** — PDF/A objects: the ICC output intent, the XMP packet,
+  Factur-X RDF and PDF/A-3 attachments. `document.ts` creates them from
+  `PdfSettings.pdfa` and, under PDF/A only, checks fonts and device colour
+  against the output intent and writes the trailer `/ID`.
 
 ### `src/widgets/` — the layout tree
 
@@ -164,7 +172,8 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   when clamping changes none of its values.
 - **`text.ts`** — greedy line breaker, custom segment/hyphenation callbacks,
   `Text` and `RichText` with immutable measured runs. Printable ASCII words
-  bypass splitting when no custom splitter is supplied.
+  bypass splitting when no custom splitter is supplied. Text and flex margins
+  keep directional values until layout/paint resolves the ambient direction.
 - **`text_style.ts` / `theme.ts` / `font.ts`** — `TextStyle` and its four font
   slots, `ThemeData` and the widgets that scope it, and the lazy `Font`
   declaration a style names.
@@ -295,6 +304,7 @@ divergences or narrower compatibility gaps between the port and upstream.
 | Page clipping | `Page.paint` scopes a margin clip; `MultiPage._paintChild` omits it | Both section types clip every widget/layer paint when `PageTheme.clip` is true; layer layout remains full-page |
 | Pagination | `SpanningWidget` saves mutable widget context between pages | Direct spanning children return immutable continuation state; indivisible widgets or rows taller than a full content area still throw `RangeError` |
 | Decoration shadows | Temporary raster images produced by the raster subsystem | Concentric vector fills with scoped opacity; other decoration features are direct ports |
+| PDF/A | `PdfaColorProfile`/`PdfaAttachedFiles` attached to `pdf.document`, caller-built `PdfaRdf` metadata, random trailer `/ID` on every file | `Document({ pdfa })`, because each save builds a fresh `PdfDocument`; generated XMP agreeing with `/Info`; content-derived `/ID` under PDF/A only; early checks (fonts, device colour, annotations, limits) |
 | Async | `save()` returns a `Future` | `save()` returns `Uint8Array` |
 
 Two rows left this table rather than moving: font metrics and text encoding.

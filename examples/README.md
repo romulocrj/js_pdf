@@ -55,8 +55,26 @@ atomic pagination, lists, shape/path widgets, grid-paper presets, inherited and
 delayed builds, directionality, watermarks, footers, outlines and native
 geometric annotations. `production-pagination.mjs` is the English production
 case proving that `Inseparable` moves a chart title and chart together.
+`directional-layout-phase-6.9.mjs` shows right-to-left rows, tables, grids and
+wraps with directional insets and alignment. `pdfa-phase-6.11.mjs` is a
+PDF/A-3B invoice with an embedded Factur-X XML and the documents PDF/A refuses;
+it needs `assets/OpenSans-*.ttf` and `assets/JsPdfSrgbExample.icc`, a
+port-authored test profile (not for production, not verified with veraPDF).
+The 1.0-series proofs are
+`serialization-phase-7.1.mjs` (text strings, names, outlines, page labels,
+shared fields, TOC), `fonts-phase-7.2.mjs` (ToUnicode, WinAnsi coverage,
+hinting), `text-bidi-phase-7.3.mjs` (wrapped Arabic in reading order and break
+rules; it needs `assets/JsPdfArabicExample.ttf`), `svg-phase-7.4.mjs`
+(viewports, hidden layers, tspan runs, alpha, malformed input),
+`graphics-phase-7.5.mjs` (colour alpha, nested opacity, arcs) and
+`layout-phase-7.6.mjs` (tables, rotated boxes, chart axes, unbounded guards and
+split containers).
 
 `npm run examples` now generates the complete 8/8 upstream set.
+
+`review-pr15.mjs`, also in the browser gallery and `npm run phase-examples`,
+reproduces the release review corrections: transparent backgrounds before
+images/gradients, nested tspan opacity, and directional text/flex margins.
 
 ## Roadmap gates
 

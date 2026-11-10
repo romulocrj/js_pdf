@@ -887,8 +887,8 @@ export class SvgPath extends SvgOperation {
         break;
 
       case 'circle': {
-        const cx = SvgPath.numeric(element, 'cx', brush);
-        const cy = SvgPath.numeric(element, 'cy', brush);
+        const cx = SvgPath.numeric(element, 'cx', brush, 'x');
+        const cy = SvgPath.numeric(element, 'cy', brush, 'y');
         const r = SvgPath.numeric(element, 'r', brush);
         d = `M${cx - r},${cy}A${r},${r} 0,0,0 ${cx + r},${cy}`
           + `A${r},${r} 0,0,0 ${cx - r},${cy}z`;
@@ -896,20 +896,20 @@ export class SvgPath extends SvgOperation {
       }
 
       case 'ellipse': {
-        const cx = SvgPath.numeric(element, 'cx', brush);
-        const cy = SvgPath.numeric(element, 'cy', brush);
-        const rx = SvgPath.numeric(element, 'rx', brush);
-        const ry = SvgPath.numeric(element, 'ry', brush);
+        const cx = SvgPath.numeric(element, 'cx', brush, 'x');
+        const cy = SvgPath.numeric(element, 'cy', brush, 'y');
+        const rx = SvgPath.numeric(element, 'rx', brush, 'x');
+        const ry = SvgPath.numeric(element, 'ry', brush, 'y');
         d = `M${cx - rx},${cy}A${rx},${ry} 0,0,0 ${cx + rx},${cy}`
           + `A${rx},${ry} 0,0,0 ${cx - rx},${cy}z`;
         break;
       }
 
       case 'line': {
-        const x1 = SvgPath.numeric(element, 'x1', brush);
-        const y1 = SvgPath.numeric(element, 'y1', brush);
-        const x2 = SvgPath.numeric(element, 'x2', brush);
-        const y2 = SvgPath.numeric(element, 'y2', brush);
+        const x1 = SvgPath.numeric(element, 'x1', brush, 'x');
+        const y1 = SvgPath.numeric(element, 'y1', brush, 'y');
+        const x2 = SvgPath.numeric(element, 'x2', brush, 'x');
+        const y2 = SvgPath.numeric(element, 'y2', brush, 'y');
         d = `M${x1} ${y1} ${x2} ${y2}`;
         break;
       }
@@ -935,18 +935,19 @@ export class SvgPath extends SvgOperation {
     );
   }
 
-  private static numeric(element: XmlElement, name: string, brush: SvgBrush): number {
-    return getNumeric(element, name, brush, { defaultValue: 0 })!.sizeValue;
+  /** A geometry attribute, a percentage resolving against the viewport along `axis`. */
+  private static numeric(element: XmlElement, name: string, brush: SvgBrush, axis?: 'x' | 'y'): number {
+    return getNumeric(element, name, brush)?.lengthIn(axis) ?? 0;
   }
 
   private static rectData(element: XmlElement, brush: SvgBrush): string {
-    const x = SvgPath.numeric(element, 'x', brush);
-    const y = SvgPath.numeric(element, 'y', brush);
-    const width = SvgPath.numeric(element, 'width', brush);
-    const height = SvgPath.numeric(element, 'height', brush);
+    const x = SvgPath.numeric(element, 'x', brush, 'x');
+    const y = SvgPath.numeric(element, 'y', brush, 'y');
+    const width = SvgPath.numeric(element, 'width', brush, 'x');
+    const height = SvgPath.numeric(element, 'height', brush, 'y');
 
-    let rx = getNumeric(element, 'rx', brush)?.sizeValue ?? null;
-    let ry = getNumeric(element, 'ry', brush)?.sizeValue ?? null;
+    let rx = getNumeric(element, 'rx', brush)?.lengthIn('x') ?? null;
+    let ry = getNumeric(element, 'ry', brush)?.lengthIn('y') ?? null;
     ry = ry ?? rx ?? 0;
     rx = rx ?? ry;
 
@@ -962,24 +963,29 @@ export class SvgPath extends SvgOperation {
   }
 
   protected paintShape(canvas: PdfCanvas): void {
+    // A colour's own alpha (`rgba()`, `#rrggbbaa`, `transparent`) is folded
+    // into the opacity here, and nothing at zero alpha is painted.
     const fill = this.brush.fill;
-    if (fill?.isNotEmpty === true) {
+    const fillOpacity = (this.brush.fillOpacity ?? 1) * (fill?.opacity ?? 1);
+    if (fill?.isNotEmpty === true && fillOpacity > 0) {
       canvas.saveContext();
       fill.setFillColor(this, canvas);
-      const opacity = (this.brush.fillOpacity ?? 1) * fill.opacity;
-      if (opacity < 1) {
-        canvas.setGraphicState(new PdfGraphicState({ opacity }));
+      if (fillOpacity < 1) {
+        canvas.setGraphicState(new PdfGraphicState({ opacity: fillOpacity }));
       }
       drawShape(canvas, this.d);
       canvas.fillPath({ evenOdd: this.brush.fillEvenOdd ?? false });
       canvas.restoreContext();
     }
 
+    // PDF reads `0 w` as the thinnest device line; SVG's zero or negative
+    // stroke-width means no stroke at all. Upstream painted a hairline.
     const stroke = this.brush.stroke;
-    if (stroke?.isNotEmpty === true) {
+    const width = this.brush.strokeWidth?.lengthIn() ?? 1;
+    const opacity = (this.brush.strokeOpacity ?? 1) * (stroke?.opacity ?? 1);
+    if (stroke?.isNotEmpty === true && width > 0 && opacity > 0) {
       canvas.saveContext();
       stroke.setStrokeColor(this, canvas);
-      const opacity = (this.brush.strokeOpacity ?? 1) * stroke.opacity;
       if (opacity < 1) {
         canvas.setGraphicState(new PdfGraphicState({ opacity }));
       }
@@ -991,7 +997,7 @@ export class SvgPath extends SvgOperation {
         this.brush.strokeDashArray ?? [],
         this.brush.strokeDashOffset ?? 0
       );
-      canvas.setLineWidth(this.brush.strokeWidth?.sizeValue ?? 1);
+      canvas.setLineWidth(width);
       canvas.strokePath();
       canvas.restoreContext();
     }

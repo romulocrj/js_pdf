@@ -17,14 +17,25 @@
  * Table continuation uses the port's immutable spanning state rather than
  * upstream's mutable `TableContext`; repeated layout of one state is therefore
  * deterministic and cannot overwrite a fragment already assigned to a page.
+ * The state also carries the resolved column widths, which upstream memoizes
+ * on the widget (PR #1980), so a long MultiPage table is no longer quadratic.
+ *
+ * Overflowing columns shrink as CSS automatic table layout does (upstream
+ * PR #1716, reworked in #1980): no column goes below its min-content width
+ * unless even the min-content total overflows. Min-content is measured by an
+ * ordinary layout pass with the context's `minContent` flag set, instead of
+ * upstream's `MinContentWidth` inherited marker and `PdfRect.minWidth`.
  */
 
 import { assertFiniteNumber } from '../base/assert.ts';
 import { normalizePaintColor } from '../pdf/color.ts';
 import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import { BoxConstraints } from './geometry.ts';
+import type { TextDirection } from './border_radius.ts';
 import { normalizeBoxDecoration } from './decoration.ts';
+import { Directionality } from './directionality.ts';
 import type { BoxDecorationInput } from './decoration.ts';
+import type { ThemeData } from './theme.ts';
 import { SpanningWidget } from './widget.ts';
 import type {
   AnyLayoutBox,
@@ -246,11 +257,17 @@ export class IntrinsicColumnWidth extends TableColumnWidth {
       : Math.max(0, assertFiniteNumber(Number(flex), 'intrinsic column flex'));
   }
 
-  override layout(child: AnyWidget, context: RenderContext, constraints: Constraints): ColumnLayout {
+  /*
+   * Measured unbounded, as upstream does (`const BoxConstraints()`). The table's
+   * own constraints used to be passed down, so under a tight width - inside a
+   * `SizedBox(width:)`, an `Expanded` or a stretched `Column` - every cell came
+   * back as wide as the table and the columns all turned out equal.
+   */
+  override layout(child: AnyWidget, context: RenderContext, _constraints: Constraints): ColumnLayout {
     if (this.flex !== null) {
       return { width: 0, flex: this.flex };
     }
-    const box = child.layout(context, constraints);
+    const box = child.layout(context, new BoxConstraints());
     return {
       width: Number.isFinite(box.width) ? Math.max(0, box.width) : 0,
       flex: Number.isFinite(box.width) ? 0 : 1
@@ -331,6 +348,12 @@ export interface TableLayoutData {
 
 export interface TableSpanState {
   readonly nextRow: number;
+  /** Column widths resolved by an earlier fragment, and what they were resolved for. */
+  readonly widths?: {
+    readonly key: string;
+    readonly theme: ThemeData;
+    readonly columns: readonly number[];
+  };
 }
 
 export interface TableOptions {
@@ -340,6 +363,11 @@ export interface TableOptions {
   readonly columnWidths?: TableColumnWidthMap | null;
   readonly defaultColumnWidth?: TableColumnWidth;
   readonly tableWidth?: TableWidth;
+  /**
+   * The order the columns are laid out in; the ambient `Directionality` when
+   * null. Pass `'ltr'` to keep a table left to right inside an rtl subtree.
+   */
+  readonly textDirection?: TextDirection | null;
 }
 
 /** A grid whose rows share one set of computed column tracks. */
@@ -350,6 +378,7 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
   readonly columnWidths: TableColumnWidthMap | null;
   readonly defaultColumnWidth: TableColumnWidth;
   readonly tableWidth: TableWidth;
+  readonly textDirection: TextDirection | null;
 
   constructor({
     children = [],
@@ -357,7 +386,8 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
     defaultVerticalAlignment = 'top',
     columnWidths = null,
     defaultColumnWidth = new IntrinsicColumnWidth(),
-    tableWidth = 'max'
+    tableWidth = 'max',
+    textDirection = null
   }: TableOptions = {}) {
     super();
     if (!['bottom', 'middle', 'top', 'full'].includes(defaultVerticalAlignment)) {
@@ -372,6 +402,12 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
     this.columnWidths = columnWidths;
     this.defaultColumnWidth = defaultColumnWidth;
     this.tableWidth = tableWidth;
+    this.textDirection = textDirection;
+  }
+
+  /** Whether the columns run right to left; upstream PR #1980 (CHANGELOG L81). */
+  private rtl(context: RenderContext): boolean {
+    return (this.textDirection ?? Directionality.of(context)) === 'rtl';
   }
 
   private resolveWidths(context: RenderContext, constraints: Constraints): number[] {
@@ -403,16 +439,18 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
         0
       );
       if (fixedSpace > maximum && fixedSpace > 0) {
-        const scale = maximum / fixedSpace;
-        for (let index = 0; index < count; index++) {
-          if (flex[index]! === 0) widths[index] = widths[index]! * scale;
-        }
+        this.fitColumns(context, widths, flex, maximum);
         fixedSpace = maximum;
       }
       const remaining = Math.max(0, maximum - fixedSpace);
       for (let index = 0; index < count; index++) {
         if (flex[index]! > 0) widths[index] = remaining * flex[index]! / totalFlex;
       }
+      return widths;
+    }
+
+    if (intrinsicTotal > maximum && intrinsicTotal > 0) {
+      this.fitColumns(context, widths, flex, maximum);
       return widths;
     }
 
@@ -423,19 +461,71 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
       const scale = maximum / intrinsicTotal;
       return widths.map(value => value * scale);
     }
-
-    if (intrinsicTotal > maximum && intrinsicTotal > 0) {
-      const scale = maximum / intrinsicTotal;
-      return widths.map(value => value * scale);
-    }
     return widths;
   }
 
+  /**
+   * Shrinks the inflexible columns, which together overflow `maximum`, in place.
+   *
+   * Every column used to be scaled by one factor, so a short column went below
+   * the width of one word and its cell hard-split it: `ATLANTICA` became
+   * `ATLANTI` / `CA`. Each column now keeps its min-content width, and the
+   * space left over is shared in proportion to how much more each wanted. Only
+   * when even the min-content total overflows are the minimums scaled together
+   * — which is the old uniform scaling whenever no column could shrink.
+   */
+  private fitColumns(
+    context: RenderContext,
+    widths: number[],
+    flex: readonly number[],
+    maximum: number
+  ): void {
+    const minContext: RenderContext = { ...context, minContent: true };
+    const mins = widths.map(() => 0);
+    for (const row of this.children) {
+      for (let index = 0; index < row.children.length; index++) {
+        if (flex[index]! !== 0) continue;
+        const width = widths[index]!;
+        const columnWidth = mappedWidth(this.columnWidths, index) ?? this.defaultColumnWidth;
+        // Only intrinsic columns measure content; any other kind is as unbreakable as it is wide.
+        let minimum = width;
+        if (columnWidth instanceof IntrinsicColumnWidth && columnWidth.flex === null) {
+          const box = row.children[index]!.layout(minContext, new BoxConstraints());
+          if (Number.isFinite(box.width)) minimum = Math.min(width, Math.max(0, box.width));
+        }
+        mins[index] = Math.max(mins[index]!, minimum);
+      }
+    }
+
+    let totalMin = 0;
+    let totalMax = 0;
+    for (let index = 0; index < widths.length; index++) {
+      if (flex[index]! !== 0) continue;
+      totalMin += mins[index]!;
+      totalMax += widths[index]!;
+    }
+    const share = (maximum - totalMin) / (totalMax - totalMin);
+    const scale = maximum / totalMin;
+    for (let index = 0; index < widths.length; index++) {
+      if (flex[index]! !== 0) continue;
+      widths[index] = totalMin <= maximum
+        ? mins[index]! + (widths[index]! - mins[index]!) * share
+        : mins[index]! * scale;
+    }
+  }
+
+  /**
+   * Lays out `headers`, then this table's rows from `start`, stopping before the
+   * first row that would end below `maxHeight`. The rows after it are never
+   * measured: a MultiPage fragment used to lay out every remaining row and then
+   * keep a page's worth, which made a long table quadratic.
+   */
   private layoutRows(
     context: RenderContext,
-    _constraints: Constraints,
     columnWidths: readonly number[],
-    selectedRows: readonly TableRow[]
+    headers: readonly TableRow[],
+    start: number,
+    maxHeight: number
   ): LayoutBox<TableLayoutData> {
     if (columnWidths.length === 0) {
       return { widget: this, width: 0, height: 0, data: { columnWidths, rowHeights: [], rows: [] } };
@@ -444,24 +534,32 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
     const rows: TableRowLayout[] = [];
     const rowHeights: number[] = [];
     let rowY = 0;
+    const total = headers.length + this.children.length - start;
+    const width = columnWidths.reduce((sum, value) => sum + value, 0);
+    // `columnWidths` stays in logical order, so column i is still the i-th child.
+    const rtl = this.rtl(context);
 
-    for (const row of selectedRows) {
+    for (let position = 0; position < total; position++) {
+      const row = position < headers.length
+        ? headers[position]!
+        : this.children[start + position - headers.length]!;
       const measured: { readonly box: AnyLayoutBox; readonly column: number; readonly x: number; }[] = [];
       let x = 0;
       let rowHeight = 0;
 
       for (let column = 0; column < row.children.length; column++) {
         const child = row.children[column]!;
-        const width = columnWidths[column] ?? 0;
+        const columnWidth = columnWidths[column] ?? 0;
         const box = child.layout(context, new BoxConstraints({
-          minWidth: width,
-          maxWidth: width,
+          minWidth: columnWidth,
+          maxWidth: columnWidth,
           maxHeight: Infinity
         }));
-        measured.push({ box, column, x });
+        measured.push({ box, column, x: rtl ? width - x - columnWidth : x });
         rowHeight = Math.max(rowHeight, box.height);
-        x += width;
+        x += columnWidth;
       }
+      if (rowY + rowHeight > maxHeight + 0.001) break;
 
       const alignment = row.verticalAlignment ?? this.defaultVerticalAlignment;
       const cells: TableCellLayout[] = measured.map(cell => {
@@ -486,7 +584,7 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
 
     return {
       widget: this,
-      width: columnWidths.reduce((sum, value) => sum + value, 0),
+      width,
       height: rowY,
       data: { columnWidths, rowHeights, rows }
     };
@@ -494,7 +592,7 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<TableLayoutData> {
     const columnWidths = this.resolveWidths(context, constraints);
-    return this.layoutRows(context, constraints, columnWidths, this.children);
+    return this.layoutRows(context, columnWidths, [], 0, Infinity);
   }
 
   override initialSpanState(): TableSpanState {
@@ -511,37 +609,32 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
       throw new RangeError('Invalid table continuation state');
     }
 
-    const columnWidths = this.resolveWidths(context, constraints);
-    const candidates: { readonly row: TableRow; readonly index: number }[] = [];
-    for (let index = 0; index < this.children.length; index++) {
-      const row = this.children[index]!;
-      if (index >= nextRow || row.repeat) {
-        candidates.push({ row, index });
-      }
+    /*
+     * Column widths depend on the width constraints and the theme, so they are
+     * reused only for the same pair; intrinsic cells are measured unbounded, so
+     * the height plays no part. Every page has the same width, and the measure
+     * pass then runs once instead of once per page - and not again when
+     * MultiPage lays the last fragment out unbounded.
+     */
+    const parent = BoxConstraints.from(constraints);
+    const key = `${parent.minWidth},${parent.maxWidth}`;
+    let widths = state.widths;
+    if (widths === undefined || widths.key !== key || widths.theme !== context.theme) {
+      widths = Object.freeze({
+        key,
+        theme: context.theme,
+        columns: Object.freeze(this.resolveWidths(context, constraints))
+      });
     }
+    const columnWidths = widths.columns;
 
-    const measured = this.layoutRows(
-      context,
-      constraints,
-      columnWidths,
-      candidates.map(candidate => candidate.row)
-    );
-    let height = 0;
-    let count = 0;
-    let followingRow = nextRow;
-
-    for (let index = 0; index < measured.data.rows.length; index++) {
-      const rowHeight = measured.data.rowHeights[index] ?? 0;
-      if (height + rowHeight > constraints.maxHeight + 0.001) {
-        break;
-      }
-      height += rowHeight;
-      count++;
-      const originalIndex = candidates[index]!.index;
-      if (originalIndex >= followingRow) {
-        followingRow = originalIndex + 1;
-      }
+    // Rows already placed that repeat at the top of every later fragment.
+    const headers: TableRow[] = [];
+    for (let index = 0; index < nextRow; index++) {
+      if (this.children[index]!.repeat) headers.push(this.children[index]!);
     }
+    const box = this.layoutRows(context, columnWidths, headers, nextRow, constraints.maxHeight);
+    const followingRow = nextRow + Math.max(0, box.data.rows.length - headers.length);
 
     const hasMore = followingRow < this.children.length;
     if (hasMore && followingRow === nextRow) {
@@ -551,20 +644,12 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
         height: 0,
         data: { columnWidths, rowHeights: [], rows: [] }
       };
-      return { box: emptyBox, nextState: state, hasMore: true };
+      return { box: emptyBox, nextState: Object.freeze({ nextRow, widths }), hasMore: true };
     }
 
-    const rows = measured.data.rows.slice(0, count);
-    const rowHeights = measured.data.rowHeights.slice(0, count);
-    const box: LayoutBox<TableLayoutData> = {
-      widget: this,
-      width: measured.width,
-      height,
-      data: { columnWidths, rowHeights, rows }
-    };
     return {
       box,
-      nextState: Object.freeze({ nextRow: followingRow }),
+      nextState: Object.freeze({ nextRow: followingRow, widths }),
       hasMore
     };
   }
@@ -613,13 +698,14 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
       );
     }
 
+    // The inside rules are drawn from the left, so they take the columns as placed.
     this.border?.paint(
       context,
       box.x,
       box.y,
       box.width,
       box.height,
-      box.data.columnWidths,
+      this.rtl(context) ? [...box.data.columnWidths].reverse() : box.data.columnWidths,
       box.data.rowHeights
     );
   }

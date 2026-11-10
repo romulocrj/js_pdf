@@ -19,9 +19,12 @@
  * table directory with a data view and slices glyph programs as subarrays.
  *
  * Upstream asserts its way through malformed input, which is a no-op in a Dart
- * release build. The port throws instead — a font that fails these checks is one
- * the rest of phase 1 cannot subset or embed, so failing at parse time is where
- * the error is cheapest to understand.
+ * release build. The port throws instead when a required table is missing or
+ * the table directory is unreadable — a font like that is one the rest of
+ * phase 1 cannot subset or embed, so failing at parse time is where the error
+ * is cheapest to understand. A malformed or truncated `cmap` subtable is the
+ * exception: it is skipped, because the font's other subtables usually cover
+ * the same characters and the fallback font covers the rest.
  *
  * Arabic isolated presentation forms are aliased to the basic glyph when a
  * font omits the duplicate cmap entries, matching upstream's bidi coupling.
@@ -142,7 +145,7 @@ export class TtfParser {
   readonly tableOffsets = new Map<string, number>();
   readonly tableSize = new Map<string, number>();
 
-  /** Codepoint to glyph index, built from every `cmap` subtable understood. */
+  /** Unicode code point to glyph index, from the ranked `cmap` subtables. */
   readonly charToGlyphIndexMap = new Map<number, number>();
 
   readonly glyphOffsets: number[] = [];
@@ -310,122 +313,141 @@ export class TtfParser {
     return macintoshName;
   }
 
+  /**
+   * The character map, from the subtables whose keys are Unicode.
+   *
+   * Upstream merged every subtable it understood, in record order, but a Mac
+   * Roman (1,0) subtable is keyed by Mac Roman bytes and a symbol (3,0) one by
+   * 0xF0xx codes, while everything downstream reads the map as Unicode. Each
+   * subtable is ranked instead. The Unicode ones are merged weakest first, so
+   * the strongest wins a conflict and a weaker one only adds coverage; a symbol
+   * or Mac Roman subtable is read only when the font has no Unicode one.
+   * PR #1980 picks the single best subtable; merging the Unicode ones keeps any
+   * coverage a font splits across them.
+   */
   private parseCMap(): void {
-    const basePosition = this.tableOffset(TtfTable.cmap);
-    const numSubTables = this.view.getUint16(basePosition + 2);
+    const base = this.tableOffset(TtfTable.cmap);
+    const map = this.charToGlyphIndexMap;
+    const records = Math.min(this.view.getUint16(base + 2), (this.bytes.length - base - 4) >> 3);
+    const subtables: [rank: number, start: number][] = [];
 
-    for (let i = 0; i < numSubTables; i++) {
-      const offset = this.view.getUint32(basePosition + i * 8 + 8);
-      const format = this.view.getUint16(basePosition + offset);
+    for (let i = 0; i < records; i++) {
+      const record = base + 4 + i * 8;
+      const start = base + this.view.getUint32(record + 4);
+      const rank = start + 2 <= this.bytes.length
+        ? cmapRank(this.view.getUint16(record), this.view.getUint16(record + 2), this.view.getUint16(start))
+        : 0;
+      if (rank > 0) subtables.push([rank, start]);
+    }
 
-      switch (format) {
-        case 0:
-          this.parseCMapFormat0(basePosition + offset + 2);
-          break;
-        case 4:
-          this.parseCMapFormat4(basePosition + offset + 2);
-          break;
-        case 6:
-          this.parseCMapFormat6(basePosition + offset + 2);
-          break;
-        case 12:
-          this.parseCMapFormat12(basePosition + offset + 2);
-          break;
-        default:
-          // Formats 2, 8, 10, 13 and 14 are not understood. Skipping a subtable
-          // is safe: another one in the same table normally covers the range.
-          break;
+    const best = Math.max(0, ...subtables.map(([rank]) => rank));
+    // Array sort is stable, so equally ranked subtables keep record order.
+    for (const [, start] of subtables.filter(([rank]) => (best > 2 ? rank > 2 : rank === best))
+      .sort((a, b) => a[0] - b[0])) {
+      this.parseCMapSubtable(start);
+    }
+
+    if (best === 2) {
+      // A symbol font keys its glyphs at 0xF000 plus the byte; the bare byte is
+      // registered too, so `drawString('A')` finds U+F041. A real entry wins.
+      for (const [code, glyph] of map) {
+        if (code >= 0xf000 && code <= 0xf0ff && !map.has(code & 0xff)) map.set(code & 0xff, glyph);
       }
+    } else if (best === 1) {
+      // The low half of Mac Roman is ASCII; the high half is not Unicode, and
+      // upstream's remapping table is not worth carrying for a last resort.
+      for (const code of map.keys()) if (code >= 0x80) map.delete(code);
     }
 
     for (const [basic, isolated] of basicToIsolatedMappings) {
-      const glyph = this.charToGlyphIndexMap.get(basic);
-      if (glyph !== undefined && !this.charToGlyphIndexMap.has(isolated)) {
-        this.charToGlyphIndexMap.set(isolated, glyph);
+      const glyph = map.get(basic);
+      if (glyph !== undefined && !map.has(isolated)) {
+        map.set(isolated, glyph);
       }
     }
   }
 
-  private parseCMapFormat0(basePosition: number): void {
-    for (let i = 0; i < 256; i++) {
-      const glyphIndex = this.view.getUint8(basePosition + i + 2);
-      if (glyphIndex > 0) {
-        this.charToGlyphIndexMap.set(i, glyphIndex);
-      }
-    }
-  }
+  /**
+   * One subtable, `start` pointing at its format field. Every array is
+   * bounds-checked against the file before it is read, so a truncated subtable
+   * is skipped whole rather than throwing; upstream asserts, or reads past the
+   * table. Glyph 0 is `.notdef`, never coverage, in every format: recording it
+   * would make `isRuneSupported` true and skip the fallback font.
+   */
+  private parseCMapSubtable(start: number): void {
+    const view = this.view;
+    const map = this.charToGlyphIndexMap;
+    const length = this.bytes.length;
+    const fits = (end: number): boolean => end <= length;
 
-  private parseCMapFormat4(basePosition: number): void {
-    const segCount = Math.floor(this.view.getUint16(basePosition + 4) / 2);
-
-    const endCodes: number[] = [];
-    for (let i = 0; i < segCount; i++) {
-      endCodes.push(this.view.getUint16(basePosition + i * 2 + 12));
-    }
-
-    const startCodes: number[] = [];
-    for (let i = 0; i < segCount; i++) {
-      startCodes.push(this.view.getUint16(basePosition + (segCount + i) * 2 + 14));
-    }
-
-    const idDeltas: number[] = [];
-    for (let i = 0; i < segCount; i++) {
-      idDeltas.push(this.view.getUint16(basePosition + (segCount * 2 + i) * 2 + 14));
-    }
-
-    const idRangeOffsetBasePos = basePosition + segCount * 6 + 14;
-    const idRangeOffsets: number[] = [];
-    for (let i = 0; i < segCount; i++) {
-      idRangeOffsets.push(this.view.getUint16(idRangeOffsetBasePos + i * 2));
-    }
-
-    for (let s = 0; s < segCount - 1; s++) {
-      const startCode = startCodes[s] as number;
-      const endCode = endCodes[s] as number;
-      const idDelta = idDeltas[s] as number;
-      const idRangeOffset = idRangeOffsets[s] as number;
-      const idRangeOffsetAddress = idRangeOffsetBasePos + s * 2;
-
-      for (let c = startCode; c <= endCode; c++) {
-        let glyphIndex: number;
-
-        if (idRangeOffset === 0) {
-          glyphIndex = (idDelta + c) % 65536;
-        } else {
-          const glyphIndexAddress = idRangeOffset + 2 * (c - startCode) + idRangeOffsetAddress;
-          if (glyphIndexAddress + 1 >= this.bytes.length) {
-            continue;
-          }
-          glyphIndex = this.view.getUint16(glyphIndexAddress);
+    switch (view.getUint16(start)) {
+      case 0:
+        // format, length and language precede the array, so it starts at +6.
+        // Upstream read it at +4, which put each code on the glyph of the code
+        // two after it.
+        if (!fits(start + 262)) return;
+        for (let code = 0; code < 256; code++) {
+          const glyph = view.getUint8(start + 6 + code);
+          if (glyph > 0) map.set(code, glyph);
         }
+        return;
+      case 4: {
+        if (!fits(start + 14)) return;
+        const segments = view.getUint16(start + 6) >> 1;
+        const ends = start + 14;
+        const starts = ends + segments * 2 + 2;
+        const deltas = starts + segments * 2;
+        const ranges = deltas + segments * 2;
+        if (!fits(ranges + segments * 2)) return;
 
-        this.charToGlyphIndexMap.set(c, glyphIndex);
+        // The last segment is the mandatory 0xFFFF terminator.
+        for (let s = 0; s < segments - 1; s++) {
+          const end = view.getUint16(ends + s * 2);
+          const first = view.getUint16(starts + s * 2);
+          const delta = view.getUint16(deltas + s * 2);
+          const range = view.getUint16(ranges + s * 2);
+
+          for (let code = first; code <= end; code++) {
+            let glyph = (code + delta) & 0xffff;
+            if (range !== 0) {
+              const address = ranges + s * 2 + range + 2 * (code - first);
+              if (!fits(address + 2)) continue;
+              glyph = view.getUint16(address);
+              // idDelta applies to an array lookup too; upstream ignored it.
+              if (glyph !== 0) glyph = (glyph + delta) & 0xffff;
+            }
+            if (glyph !== 0) map.set(code, glyph);
+          }
+        }
+        return;
       }
-    }
-  }
-
-  private parseCMapFormat6(basePosition: number): void {
-    const firstCode = this.view.getUint16(basePosition + 4);
-    const entryCount = this.view.getUint16(basePosition + 6);
-
-    for (let i = 0; i < entryCount; i++) {
-      const glyphIndex = this.view.getUint16(basePosition + i * 2 + 8);
-      if (glyphIndex > 0) {
-        this.charToGlyphIndexMap.set(firstCode + i, glyphIndex);
+      case 6: {
+        if (!fits(start + 10)) return;
+        const first = view.getUint16(start + 6);
+        const count = view.getUint16(start + 8);
+        if (!fits(start + 10 + count * 2)) return;
+        for (let i = 0; i < count; i++) {
+          const glyph = view.getUint16(start + 10 + i * 2);
+          if (glyph > 0) map.set(first + i, glyph);
+        }
+        return;
       }
-    }
-  }
-
-  private parseCMapFormat12(basePosition: number): void {
-    const numGroups = this.view.getUint32(basePosition + 10);
-
-    for (let i = 0; i < numGroups; i++) {
-      const startCharCode = this.view.getUint32(basePosition + i * 12 + 14);
-      const endCharCode = this.view.getUint32(basePosition + i * 12 + 18);
-      const startGlyphID = this.view.getUint32(basePosition + i * 12 + 22);
-
-      for (let j = startCharCode; j <= endCharCode; j++) {
-        this.charToGlyphIndexMap.set(j, startGlyphID + j - startCharCode);
+      case 12: {
+        if (!fits(start + 16)) return;
+        const groups = view.getUint32(start + 12);
+        if (!fits(start + 16 + groups * 12)) return;
+        for (let i = 0; i < groups; i++) {
+          const group = start + 16 + i * 12;
+          const first = view.getUint32(group);
+          const end = view.getUint32(group + 4);
+          const glyph = view.getUint32(group + 8) - first;
+          // A group past the last code point is corrupt, and could run for 2^32
+          // iterations.
+          if (end > 0x10ffff) continue;
+          for (let code = first; code <= end; code++) {
+            if (glyph + code !== 0) map.set(code, glyph + code);
+          }
+        }
       }
     }
   }
@@ -543,7 +565,8 @@ export class TtfParser {
     const start = glyfOffset + (this.glyphOffsets[index] as number);
     const glyfEnd = glyfOffset + (this.tableSize.get(TtfTable.glyf) ?? 0);
 
-    if (start >= glyfEnd || start === 0 || this.glyphSizes[index] === 0) {
+    // A negative size is a malformed `loca`; read it as empty, like a blank.
+    if (start >= glyfEnd || start === 0 || (this.glyphSizes[index] as number) <= 0) {
       return { index, data: new Uint8Array(0), compounds: [] };
     }
 
@@ -552,6 +575,14 @@ export class TtfParser {
     return numberOfContours === -1
       ? this.readCompoundGlyph(index, start, start + 10)
       : this.readSimpleGlyph(index, start, start + 10, numberOfContours);
+  }
+
+  /**
+   * A glyph's bytes, never more than `loca` declares for it, so a malformed
+   * `loca` cannot hand back the start of the neighbouring outline.
+   */
+  private glyphBytes(glyph: number, start: number, end: number): Uint8Array {
+    return this.bytes.subarray(start, Math.min(end, start + (this.glyphSizes[glyph] as number)));
   }
 
   private readSimpleGlyph(
@@ -576,7 +607,7 @@ export class TtfParser {
     offset += this.view.getUint16(offset) + 2;
 
     if (numberOfContours === 0) {
-      return { index: glyph, data: this.bytes.subarray(start, offset), compounds: [] };
+      return { index: glyph, data: this.glyphBytes(glyph, start, offset), compounds: [] };
     }
 
     const flags: number[] = [];
@@ -610,7 +641,7 @@ export class TtfParser {
       deltaFlag = yDelta;
     }
 
-    return { index: glyph, data: this.bytes.subarray(start, offset), compounds: [] };
+    return { index: glyph, data: this.glyphBytes(glyph, start, offset), compounds: [] };
   }
 
   private readCompoundGlyph(glyph: number, start: number, offset: number): TtfGlyphInfo {
@@ -647,7 +678,7 @@ export class TtfParser {
       offset += this.view.getUint16(offset) + 2;
     }
 
-    return { index: glyph, data: this.bytes.subarray(start, offset), compounds: components };
+    return { index: glyph, data: this.glyphBytes(glyph, start, offset), compounds: components };
   }
 
   /** Parse PNG-backed bitmap strikes, matching upstream's CBLC format-1 path. */
@@ -705,6 +736,19 @@ export class TtfParser {
       sizeOffset += 48;
     }
   }
+}
+
+/**
+ * How much a cmap subtable is preferred; 0 means it is not read. Above 2 the
+ * keys are Unicode: (3,10) full repertoire, then (0,4) and (0,6), then (3,1)
+ * BMP, then any other (0,x). 2 is Windows symbol and 1 is Mac Roman. Formats 2,
+ * 8, 10, 13 and 14 are not understood.
+ */
+function cmapRank(platform: number, encoding: number, format: number): number {
+  if (format !== 0 && format !== 4 && format !== 6 && format !== 12) return 0;
+  if (platform === 0) return encoding === 4 || encoding === 6 ? 5 : 3;
+  if (platform === 3) return encoding === 10 ? 6 : encoding === 1 ? 4 : encoding === 0 ? 2 : 0;
+  return platform === 1 && encoding === 0 ? 1 : 0;
 }
 
 /** UTF-16BE, the `name` table's Windows encoding. No host decoder exists. */

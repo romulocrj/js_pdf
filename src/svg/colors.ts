@@ -23,10 +23,9 @@
  * way here:
  *
  *   - `transparent` is `PdfColor.fromInt(0xffffff)` upstream — six hex digits
- *     where every other entry has eight, so its alpha reads as zero and its
- *     colour as white. The port has no alpha channel, so it is white here and
- *     paints opaque, which is what upstream does whenever the alpha is dropped.
- *     An SVG relying on `fill="transparent"` should use `fill="none"`.
+ *     where every other entry has eight, so it painted opaque white. The entry
+ *     stays for the table's shape, but `SvgColor.fromXml` reads the keyword
+ *     first as black at alpha 0, which paints nothing.
  *   - `rebeccapurple` is absent from both, though SVG 2 defines it.
  */
 

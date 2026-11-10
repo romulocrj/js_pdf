@@ -9,6 +9,12 @@ export type SvgUnit = 'pixels' | 'millimeters' | 'centimeters' | 'inch' | 'em' |
  */
 export interface SvgFontSizeContext {
     readonly fontSize: SvgNumeric | null;
+    /** The viewport a percentage geometry length is a fraction of. */
+    readonly viewport?: SvgSize | null;
+}
+export interface SvgSize {
+    readonly width: number;
+    readonly height: number;
 }
 /** A length or a colour component, with the unit it was written in. */
 export declare class SvgNumeric {
@@ -20,10 +26,24 @@ export declare class SvgNumeric {
     static parse(text: string, brush: SvgFontSizeContext | null): SvgNumeric;
     /** A colour component in 0..1: `128` is a byte, `50%` is a half. */
     get colorValue(): number;
-    /** A length in PDF points. */
+    /**
+     * A geometry length: a percentage of the brush's viewport width (`x`),
+     * height (`y`) or normalized diagonal (no axis), per SVG 1.1 7.10.
+     */
+    lengthIn(axis?: 'x' | 'y'): number;
+    /** A length in PDF points; a percentage is a bare fraction here. */
     get sizeValue(): number;
 }
 export declare function splitNumeric(parameters: string, brush: SvgFontSizeContext | null): SvgNumeric[];
+/**
+ * A strict number list (`10-5` is two numbers), or null when anything but
+ * numbers and separators is present. For values that must be skipped when
+ * malformed rather than read as their numeric prefix: transforms, nested
+ * viewBoxes.
+ */
+export declare function parseNumbers(text: string): number[] | null;
+/** A nested element's `viewBox`, or null when absent or unusable. */
+export declare function parseViewBox(value: string | null): PdfRect | null;
 export declare function splitDoubles(parameters: string): number[];
 export interface GetDoubleOptions {
     readonly namespace?: string;

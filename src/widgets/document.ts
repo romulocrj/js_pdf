@@ -18,6 +18,12 @@
  * `save()` is synchronous here. Upstream returns a `Future<Uint8List>` because
  * it may await image decoding and font loading; the port keeps every stage
  * synchronous so a host such as ClearScript can call it without an event loop.
+ *
+ * Port additions: `creationDate`, and `pdfa`, which replaces attaching
+ * `PdfaColorProfile` and `PdfaAttachedFiles` to `pdf.document` as upstream's
+ * PDF/A README does - here every save builds a fresh `PdfDocument`, so there
+ * is nothing long-lived to attach them to. The options are checked here, so a
+ * bad profile or an unsupported part fails at construction.
  */
 
 import { writePdf } from '../pdf/document.ts';
@@ -30,7 +36,10 @@ import type {
   SerializedPage,
   SerializedPageLabel
 } from '../pdf/document.ts';
-import type { PdfSettings } from '../pdf/format/object_base.ts';
+import type { PdfaSettings, PdfSettings } from '../pdf/format/object_base.ts';
+import { iccProfileInfo } from '../pdf/obj/pdfa/pdfa_color_profile.ts';
+import { PdfaAttachedFile } from '../pdf/obj/pdfa/pdfa_attached_files.ts';
+import type { PdfaAttachedFileOptions } from '../pdf/obj/pdfa/pdfa_attached_files.ts';
 import type { Rgb } from '../pdf/color.ts';
 import type { PdfOutlineStyle } from '../pdf/obj/outline.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
@@ -41,6 +50,56 @@ import { Page } from './page.ts';
 import type { Section } from './page.ts';
 import { ThemeData } from './theme.ts';
 
+/** Bounds the `TableOfContent` replays; numbers settle after two in practice. */
+const MAX_OUTLINE_REPLAYS = 4;
+
+/** `Document({ pdfa })`: see AI_USAGE.md, "PDF/A". */
+export interface DocumentPdfaOptions {
+  /** 2 or 3, by default 3. Part 1 forbids transparency and is rejected. */
+  readonly part?: 2 | 3;
+  /** `'B'` (default) or `'U'`; level A needs a structure tree the port does not write. */
+  readonly conformance?: 'B' | 'U';
+  /** The output intent's ICC profile, such as sRGB2014.icc; RGB, CMYK or gray. */
+  readonly colorProfile: Uint8Array;
+  /** `/OutputConditionIdentifier`, by default `Custom`. */
+  readonly outputCondition?: string;
+  /** Embedded files, PDF/A-3 only. */
+  readonly attachments?: readonly PdfaAttachedFileOptions[];
+  /** RDF added to the generated XMP packet, such as `new PdfaFacturxRdf().create()`. */
+  readonly extensionRdf?: string;
+}
+
+function pdfaSettings(
+  { part = 3, conformance = 'B', colorProfile, outputCondition, attachments = [], extensionRdf }: DocumentPdfaOptions,
+  xmpMetadata: string | null
+): PdfaSettings {
+  if (part === (1 as number)) {
+    throw new RangeError('PDF/A-1 is unsupported: it forbids transparency, which js_pdf paints (alpha, soft masks); use part 2 or 3');
+  }
+  if (part !== 2 && part !== 3) throw new RangeError(`PDF/A part must be 2 or 3, not ${String(part)}`);
+  if (conformance === ('A' as string)) {
+    throw new RangeError("PDF/A level A needs a structure tree, which js_pdf does not write; use 'B' or 'U'");
+  }
+  if (conformance !== 'B' && conformance !== 'U') throw new RangeError(`PDF/A conformance must be 'B' or 'U', not ${String(conformance)}`);
+  if (colorProfile === undefined) {
+    throw new TypeError('PDF/A needs pdfa.colorProfile, the ICC profile bytes, e.g. sRGB2014.icc');
+  }
+  if ([outputCondition, extensionRdf].some(value => value !== undefined && typeof value !== 'string')) {
+    throw new TypeError('pdfa.outputCondition and pdfa.extensionRdf must be strings');
+  }
+  iccProfileInfo(colorProfile);
+  if (xmpMetadata) {
+    throw new TypeError('Pass xmpMetadata or pdfa, not both: PDF/A writes its own XMP; add RDF with pdfa.extensionRdf');
+  }
+  if (attachments.length > 0 && part !== 3) {
+    throw new RangeError('PDF/A-2 attachments must be PDF/A files, which js_pdf cannot verify; use part 3');
+  }
+  return {
+    part, conformance, colorProfile, outputCondition, extensionRdf,
+    attachments: attachments.map(file => (file instanceof PdfaAttachedFile ? file : new PdfaAttachedFile(file)))
+  };
+}
+
 export interface DocumentOptions {
   readonly title?: string | null;
   readonly author?: string | null;
@@ -49,8 +108,10 @@ export interface DocumentOptions {
   /** The port URL is used by default and appended to caller-supplied values. */
   readonly producer?: string | null;
   readonly keywords?: string | null;
-  /** Caller-supplied XMP packet, serialized as UTF-8 XML metadata. */
+  /** Caller-supplied XMP packet, serialized as UTF-8 XML metadata. Not with `pdfa`. */
   readonly xmpMetadata?: string | null;
+  /** `/CreationDate` (and, under PDF/A, the XMP dates); the time of `save()` by default. */
+  readonly creationDate?: Date | null;
   readonly pageLabels?: readonly SerializedPageLabel[];
 
   /** The styles pages inherit unless their own `PageTheme` names another. */
@@ -75,6 +136,18 @@ export interface DocumentOptions {
   readonly compress?: boolean;
   /** Select full-program WinAnsi for lazy TrueType declarations. */
   readonly simpleTrueTypeFonts?: boolean;
+  /**
+   * Paint a color's alpha. On by default, as upstream; `false` ignores color
+   * alpha. `Opacity` and other opacity states still paint.
+   */
+  readonly colorAlpha?: boolean;
+  /**
+   * Write PDF/A-2 or PDF/A-3, level B or U: an output intent, an XMP packet
+   * matching `/Info`, a trailer `/ID` and any attachments. `save()` throws on
+   * what PDF/A forbids and the port can see: a standard Type1 font, device
+   * colour the profile does not describe. Not verified with veraPDF.
+   */
+  readonly pdfa?: DocumentPdfaOptions | null;
 }
 
 export interface DocumentOutlineEntry {
@@ -126,15 +199,23 @@ export class Document {
     producer = null,
     keywords = null,
     xmpMetadata = null,
+    creationDate = null,
     pageLabels = [],
     theme = undefined,
     font = undefined,
     pageMode = 'none',
     compress = true,
-    simpleTrueTypeFonts = false
+    simpleTrueTypeFonts = false,
+    colorAlpha = true,
+    pdfa = null
   }: DocumentOptions = {}) {
-    this.metadata = { title, author, subject, creator, producer, keywords, xmpMetadata };
-    this.settings = { compress, simpleTrueTypeFonts };
+    if (creationDate !== null && !(creationDate instanceof Date && Number.isFinite(creationDate.getTime()))) {
+      throw new TypeError('Document creationDate must be a valid Date');
+    }
+    this.metadata = { title, author, subject, creator, producer, keywords, xmpMetadata, creationDate };
+    this.settings = pdfa === null
+      ? { compress, simpleTrueTypeFonts, colorAlpha }
+      : { compress, simpleTrueTypeFonts, colorAlpha, pdfa: pdfaSettings(pdfa, xmpMetadata) };
     for (const { pageIndex, label } of pageLabels) this.setPageLabel(pageIndex, label);
     this.theme = theme
       ?? (font === undefined
@@ -223,30 +304,20 @@ export class Document {
     readonly style?: PdfOutlineStyle;
   }): void {
     const page = pageNumber;
-    if (this.outlineReplay) {
-      const existing = this.outlineEntries[this.outlineCursor];
-      if (existing !== undefined) {
-        existing.page = page;
-        existing.y = y;
-      } else {
-        this.outlineEntries.push({
-          title,
-          level,
-          anchor: anchor ?? `outline-${this.outlineCursor + 1}`,
-          page,
-          y,
-          color,
-          style
-        });
-      }
-      this.outlineCursor++;
+    const index = this.outlineReplay ? this.outlineCursor++ : this.outlineEntries.length;
+    const existing = this.outlineEntries[index];
+    if (this.outlineReplay && existing !== undefined) {
+      existing.page = page;
+      existing.y = y;
       return;
     }
 
     this.outlineEntries.push({
       title,
       level,
-      anchor: anchor ?? `outline-${this.outlineEntries.length + 1}`,
+      // The reserved prefix upstream #1980 gives generated anchors: the old
+      // `outline-N` collided with a user `Anchor` of the same name.
+      anchor: anchor ?? `__dest${index}`,
       page,
       y,
       color,
@@ -274,6 +345,10 @@ export class Document {
       y,
       zoom
     });
+  }
+
+  private outlinePages(): string {
+    return this.outlineEntries.map(entry => entry.page).join();
   }
 
   private renderSections(replay: boolean, expectedPagesCount = 0): SerializedPage[] {
@@ -321,8 +396,16 @@ export class Document {
     this.outlineRerenderRequested = false;
     let pages = this.renderSections(false);
 
-    if (this.outlineRerenderRequested) {
+    // A TableOfContent that shares the flow with what it lists moves that
+    // content by its own height, so the numbers it printed from the previous
+    // pass go stale; one replay left most rows wrong. Replay until a pass
+    // finds every outline where the previous one did, which is when the
+    // printed numbers are the real ones. Usually that is the second replay.
+    for (let replay = 0; this.outlineRerenderRequested && replay < MAX_OUTLINE_REPLAYS; replay++) {
+      const before = this.outlinePages();
       pages = this.renderSections(true, pages.length);
+      this.outlineEntries.length = this.outlineCursor;
+      if (this.outlinePages() === before) break;
     }
 
     if (pages.length === 0) {

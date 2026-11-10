@@ -1,5 +1,5 @@
 import type { Axis } from './flex.ts';
-import type { Insets, InsetsInput } from './geometry.ts';
+import type { InsetsGeometry, InsetsInput } from './geometry.ts';
 import { SpanningWidget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext, SpanLayout } from './widget.ts';
 export interface GridViewOptions {
@@ -31,7 +31,7 @@ export interface GridViewLayoutData {
 /** A fixed-track grid that can continue on later `MultiPage` pages. */
 export declare class GridView extends SpanningWidget<GridViewLayoutData, GridViewState> {
     readonly direction: Axis;
-    readonly padding: Insets;
+    readonly padding: InsetsGeometry;
     readonly crossAxisCount: number;
     readonly mainAxisSpacing: number;
     readonly crossAxisSpacing: number;

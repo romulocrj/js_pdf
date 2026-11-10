@@ -5,6 +5,8 @@ import { PageTheme } from './page_theme.ts';
 import type { PageOrientation } from './page_theme.ts';
 import type { AnyWidget, DocumentContext, PositionedBox, RenderContext } from './widget.ts';
 import type { InsetsInput } from './geometry.ts';
+import type { TextDirection } from './border_radius.ts';
+import type { CrossAxisAlignment } from './flex.ts';
 import type { ThemeData } from './theme.ts';
 /**
  * A `Page` or a `MultiPage`: anything a `Document` can render.
@@ -37,6 +39,8 @@ export interface PageOptions {
      * the note on `Section`.
      */
     readonly orientation?: PageOrientation;
+    /** The page's text direction; see `PageThemeOptions.textDirection`. */
+    readonly textDirection?: TextDirection | null;
     readonly build: (context: RenderContext) => AnyWidget;
     readonly background?: ColorInput | null;
 }
@@ -48,10 +52,18 @@ export declare class Page implements Section {
     readonly pageTheme: PageTheme;
     readonly build: (context: RenderContext) => AnyWidget;
     readonly background: ColorInput | null;
-    constructor({ pageTheme, pageFormat, format, margin, theme, orientation, build, background }: PageOptions);
+    constructor({ pageTheme, pageFormat, format, margin, theme, orientation, textDirection, build, background }: PageOptions);
     get format(): PageSize;
     render(documentContext: DocumentContext): SerializedPage[];
     private paintLayer;
 }
+/**
+ * Where a page child narrower than its area is placed. Upstream puts every
+ * layer of an rtl page against the right edge (`Page.paint`, and the `isRTL`
+ * branches of `MultiPage.postProcess`); `MultiPage` also passes its
+ * `crossAxisAlignment`, whose start and end follow the same direction and
+ * whose `stretch` is placed as `start`.
+ */
+export declare function pageChildX(theme: PageTheme, left: number, available: number, width: number, alignment?: CrossAxisAlignment): number;
 /** Shared page paint scope, translated from Page.paint in the Dart source. */
 export declare function paintPageChild(theme: PageTheme, context: RenderContext, widget: AnyWidget, box: PositionedBox<unknown>): void;

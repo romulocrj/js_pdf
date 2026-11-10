@@ -21,8 +21,10 @@
 
 import { resolveBasicAlignment } from './basic.ts';
 import type { BasicAlignmentInput } from './basic.ts';
-import { Alignment, BoxConstraints, inscribe } from './geometry.ts';
+import { Alignment, BoxConstraints, inscribe, resolveAlignment } from './geometry.ts';
+import type { AlignmentGeometry } from './geometry.ts';
 import type { TextDirection } from './border_radius.ts';
+import { Directionality } from './directionality.ts';
 import { Widget } from './widget.ts';
 import type {
   AnyLayoutBox,
@@ -138,14 +140,20 @@ export interface PositionedDirectionalOptions {
   readonly width?: number | null;
   readonly height?: number | null;
   readonly child: AnyWidget;
-  readonly textDirection?: TextDirection;
+  /** Port extension: resolve against this instead of the ambient direction. */
+  readonly textDirection?: TextDirection | null;
 }
 
-/** Direction-aware positioned child, resolved at construction in this port. */
+/**
+ * A positioned child placed by `start` and `end`. Upstream resolves them with
+ * `Directionality.of` when it is laid out, and so does the port: `left` and
+ * `right` hold the ltr reading, and a `Stack` swaps them under rtl. A given
+ * `textDirection` resolves them once, here, as this port always used to.
+ */
 export class PositionedDirectional extends Positioned {
   readonly start: number | null;
   readonly end: number | null;
-  readonly textDirection: TextDirection;
+  readonly textDirection: TextDirection | null;
 
   constructor({
     start = null,
@@ -155,7 +163,7 @@ export class PositionedDirectional extends Positioned {
     width = null,
     height = null,
     child,
-    textDirection = 'ltr'
+    textDirection = null
   }: PositionedDirectionalOptions) {
     super({
       left: textDirection === 'rtl' ? end : start,
@@ -177,7 +185,7 @@ export class PositionedDirectional extends Positioned {
     end = 0,
     bottom = 0,
     child,
-    textDirection = 'ltr'
+    textDirection = null
   }: Omit<PositionedDirectionalOptions, 'width' | 'height'>): PositionedDirectional {
     return new PositionedDirectional({ start, top, end, bottom, child, textDirection });
   }
@@ -202,7 +210,7 @@ export interface StackLayoutData {
 
 /** Overlays children inside one shared box. */
 export class Stack extends Widget<StackLayoutData> {
-  readonly alignment: Alignment;
+  readonly alignment: AlignmentGeometry;
   readonly fit: StackFit;
   readonly overflow: StackOverflow;
   readonly children: readonly AnyWidget[];
@@ -232,10 +240,20 @@ export class Stack extends Widget<StackLayoutData> {
     let width = constraints.minWidth;
     let height = constraints.minHeight;
     let hasNonPositioned = false;
+    /*
+     * `expand` tightens only the bounded axes, as upstream PR #1980 does: inside
+     * a Row the width is unbounded, and a tight infinite constraint reached the
+     * clip rectangle as `Infinity`.
+     */
     const nonPositionedConstraints = this.fit === 'loose'
       ? constraints.loosen()
       : this.fit === 'expand'
-        ? BoxConstraints.tight(constraints.biggest)
+        ? new BoxConstraints({
+          minWidth: constraints.hasBoundedWidth ? constraints.maxWidth : 0,
+          maxWidth: constraints.maxWidth,
+          minHeight: constraints.hasBoundedHeight ? constraints.maxHeight : 0,
+          maxHeight: constraints.maxHeight
+        })
         : constraints;
 
     for (const child of this.children) {
@@ -254,18 +272,25 @@ export class Stack extends Widget<StackLayoutData> {
         height: constraints.hasBoundedHeight ? constraints.maxHeight : 0
       });
     const placed: StackChildLayout[] = [];
+    const direction = Directionality.of(context);
+    const alignment = resolveAlignment(this.alignment, direction);
 
     for (const child of this.children) {
       if (!(child instanceof Positioned)) {
         const childBox = measured.get(child)!;
-        const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+        const offset = inscribe(alignment, childBox.width, childBox.height, size.width, size.height);
         placed.push({ box: childBox, dx: offset.dx, dy: offset.dy });
         continue;
       }
 
+      // `left` and `right` of an unresolved PositionedDirectional are its ltr reading.
+      const [left, right] = direction === 'rtl' && child instanceof PositionedDirectional
+        && child.textDirection === null
+        ? [child.right, child.left]
+        : [child.left, child.right];
       let positionedConstraints = new BoxConstraints();
-      const tightWidth = child.left !== null && child.right !== null
-        ? Math.max(0, size.width - child.left - child.right)
+      const tightWidth = left !== null && right !== null
+        ? Math.max(0, size.width - left - right)
         : child.width;
       const tightHeight = child.top !== null && child.bottom !== null
         ? Math.max(0, size.height - child.top - child.bottom)
@@ -275,11 +300,11 @@ export class Stack extends Widget<StackLayoutData> {
         height: tightHeight
       });
       const childBox = child.layout(context, positionedConstraints);
-      const aligned = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
-      const dx = child.left !== null
-        ? child.left
-        : child.right !== null
-          ? size.width - child.right - childBox.width
+      const aligned = inscribe(alignment, childBox.width, childBox.height, size.width, size.height);
+      const dx = left !== null
+        ? left
+        : right !== null
+          ? size.width - right - childBox.width
           : aligned.dx;
       const dy = child.top !== null
         ? child.top

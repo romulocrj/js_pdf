@@ -107,7 +107,7 @@ export function parseJpeg(bytes: Uint8Array): JpegInfo {
   let height = 0;
   let bitsPerComponent = 0;
   let components = 0;
-  let adobeTransform: number | null = null;
+  let adobe = false;
   let orientation: JpegOrientation = 'topLeft';
   let foundFrame = false;
 
@@ -141,14 +141,19 @@ export function parseJpeg(bytes: Uint8Array): JpegInfo {
       orientation = exifOrientation(bytes, dataStart, dataEnd) ?? orientation;
     } else if (
       marker === 0xee &&
-      length >= 14 &&
+      length >= 7 &&
       bytes[dataStart] === 0x41 &&
       bytes[dataStart + 1] === 0x64 &&
       bytes[dataStart + 2] === 0x6f &&
       bytes[dataStart + 3] === 0x62 &&
       bytes[dataStart + 4] === 0x65
     ) {
-      adobeTransform = bytes[dataStart + 11]!;
+      // #1980 L66: the APP14 "Adobe" marker's presence is what says CMYK
+      // samples are stored inverted. Its transform byte only says whether they
+      // were colour-transformed, so transform 0 is inverted too, and a segment
+      // too short to hold that byte is still an Adobe file. This is also the
+      // rule the port's own decoder applies.
+      adobe = true;
     }
     offset = dataEnd;
   }
@@ -164,7 +169,7 @@ export function parseJpeg(bytes: Uint8Array): JpegInfo {
     bitsPerComponent,
     components,
     colorSpace,
-    inverted: colorSpace === 'cmyk' && adobeTransform !== 0,
+    inverted: colorSpace === 'cmyk' && adobe,
     orientation
   };
 }

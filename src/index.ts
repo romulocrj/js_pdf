@@ -106,7 +106,15 @@ import {
 import { Document } from './widgets/document.ts';
 import { Column, Expanded, Flex, Flexible, ListView, Row, Spacer } from './widgets/flex.ts';
 import { Font } from './widgets/font.ts';
-import { Alignment, BoxConstraints, EdgeInsets } from './widgets/geometry.ts';
+import {
+  Alignment,
+  AlignmentDirectional,
+  BoxConstraints,
+  EdgeInsets,
+  EdgeInsetsDirectional,
+  resolveAlignment,
+  resolveInsets
+} from './widgets/geometry.ts';
 import { MultiPage, NewPage } from './widgets/multi_page.ts';
 import { GridView } from './widgets/grid_view.ts';
 import { GridPaper } from './widgets/grid_paper.ts';
@@ -153,6 +161,7 @@ import type { DocumentOptions } from './widgets/document.ts';
 export {
   Align,
   Alignment,
+  AlignmentDirectional,
   Anchor,
   Annotation,
   AnnotationBuilder,
@@ -210,6 +219,7 @@ export {
   Directionality,
   Document,
   EdgeInsets,
+  EdgeInsetsDirectional,
   Expanded,
   FixedColumnWidth,
   FlexColumnWidth,
@@ -380,6 +390,14 @@ export type {
 
 export type { ColorInput, PaintColor, Rgb } from './pdf/color.ts';
 export { PdfGraphicState } from './pdf/graphic_state.ts';
+export { PdfaAttachedFile, PdfaAttachedFiles } from './pdf/obj/pdfa/pdfa_attached_files.ts';
+export type { PdfaAttachedFileOptions, PdfaRelationship } from './pdf/obj/pdfa/pdfa_attached_files.ts';
+export { PdfaColorProfile } from './pdf/obj/pdfa/pdfa_color_profile.ts';
+export type { PdfaColorSpace } from './pdf/obj/pdfa/pdfa_color_profile.ts';
+export { PdfaFacturxRdf } from './pdf/obj/pdfa/pdfa_facturx_rdf.ts';
+export { PdfaRdf } from './pdf/obj/pdfa/pdfa_rdf.ts';
+export type { PdfaRdfOptions } from './pdf/obj/pdfa/pdfa_rdf.ts';
+export type { PdfaSettings } from './pdf/format/object_base.ts';
 export type { PdfBlendMode, PdfGraphicStateOptions } from './pdf/graphic_state.ts';
 export { PdfBaseFunction } from './pdf/obj/function.ts';
 export { PdfShading } from './pdf/obj/shading.ts';
@@ -435,11 +453,16 @@ export type {
   PageOrientation,
   PageThemeOptions
 } from './widgets/page_theme.ts';
+export { resolveAlignment, resolveInsets };
 export type {
+  AlignmentDirectionalName,
+  AlignmentGeometry,
   BoxConstraintsInput,
   ConstraintSize,
   EdgeInsetsConstructor,
   Insets,
+  InsetsDirectional,
+  InsetsGeometry,
   InsetsInput,
   Offset
 } from './widgets/geometry.ts';
@@ -711,7 +734,8 @@ export type {
 export type {
   DocumentDestinationEntry,
   DocumentOptions,
-  DocumentOutlineEntry
+  DocumentOutlineEntry,
+  DocumentPdfaOptions
 } from './widgets/document.ts';
 export type {
   PdfPageMode,
@@ -875,8 +899,12 @@ export interface PublicApi {
   readonly Directionality: typeof Directionality;
   readonly InheritedDirectionality: typeof InheritedDirectionality;
   readonly Alignment: typeof Alignment;
+  readonly AlignmentDirectional: typeof AlignmentDirectional;
   readonly BoxConstraints: typeof BoxConstraints;
   readonly EdgeInsets: typeof EdgeInsets;
+  readonly EdgeInsetsDirectional: typeof EdgeInsetsDirectional;
+  readonly resolveAlignment: typeof resolveAlignment;
+  readonly resolveInsets: typeof resolveInsets;
   readonly PdfColor: typeof PdfColor;
   readonly PdfColorGrey: typeof PdfColorGrey;
   readonly PdfColorCmyk: typeof PdfColorCmyk;
@@ -1057,8 +1085,12 @@ const publicApi: PublicApi = Object.freeze({
   Directionality,
   InheritedDirectionality,
   Alignment,
+  AlignmentDirectional,
   BoxConstraints,
   EdgeInsets,
+  EdgeInsetsDirectional,
+  resolveAlignment,
+  resolveInsets,
   PdfColor,
   PdfColorGrey,
   PdfColorCmyk,

@@ -1,5 +1,5 @@
 /*!
- * @license romulocrj/js_pdf v0.2.0
+ * @license romulocrj/js_pdf v1.0.0
  *
  * An independent JavaScript port of DavBfr/dart_pdf.
  *
@@ -106,7 +106,11 @@ class PdfDataType {
   }
 }
 
+const LIMIT = 3403e35;
+
 function formatNumber(value) {
+  if (!Number.isFinite(value)) return "0";
+  if (Math.abs(value) >= 1e21) return BigInt(Math.min(LIMIT, Math.max(-LIMIT, value))).toString();
   const rounded = Math.abs(value) < 1e-6 ? 0 : value;
   return Number(rounded.toFixed(4)).toString();
 }
@@ -149,7 +153,7 @@ function colorLuminance(color) {
 
 function isLightColor(color) {
   const relative = colorLuminance(color) + .05;
-  return !(relative * relative > .15);
+  return relative * relative > .15;
 }
 
 function colorOperator(color, stroke = false) {
@@ -231,10 +235,10 @@ class PdfColor {
     return colorLuminance(this);
   }
   get isLight() {
-    return !this.isDark;
+    return isLightColor(this);
   }
   get isDark() {
-    return (this.luminance + .05) ** 2 > .15;
+    return !this.isLight;
   }
   shade(strength) {
     const hsl = this.toHsl();
@@ -431,591 +435,34 @@ class PdfColors {
   }
 }
 
-PdfColors.red50 = Object.freeze(PdfColor.fromInt(4294962158));
+const families = "red pink purple deepPurple indigo blue lightBlue cyan teal green lightGreen lime yellow amber orange deepOrange brown grey blueGrey".split(" ");
 
-PdfColors.red100 = Object.freeze(PdfColor.fromInt(4294954450));
+const shades = "50 100 200 300 400 500 600 700 800 900 Accent100 Accent200 Accent400 Accent700".split(" ");
 
-PdfColors.red200 = Object.freeze(PdfColor.fromInt(4293892762));
+const packed = "ffebeeffcdd2ef9a9ae57373ef5350f44336e53935d32f2fc62828b71c1cff8a80ff5252ff1744d50000fce4ecf8bbd0f48fb1f06292ec407ae91e63d81b60c2185bad1457880e4fff80abff4081f50057c51162f3e5f5e1bee7ce93d8ba68c8ab47bc9c27b08e24aa7b1fa26a1b9a4a148cea80fce040fbd500f9aa00ffede7f6d1c4e9b39ddb9575cd7e57c2673ab75e35b1512da84527a0311b92b388ff7c4dff651fff6200eae8eaf6c5cae99fa8da7986cb5c6bc03f51b53949ab303f9f2835931a237e8c9eff536dfe3d5afe304ffee3f2fdbbdefb90caf964b5f642a5f52196f31e88e51976d21565c00d47a182b1ff448aff2979ff2962ffe1f5feb3e5fc81d4fa4fc3f729b6f603a9f4039be50288d10277bd01579b80d8ff40c4ff00b0ff0091eae0f7fab2ebf280deea4dd0e126c6da00bcd400acc10097a700838f00606484ffff18ffff00e5ff00b8d4e0f2f1b2dfdb80cbc44db6ac26a69a00968800897b00796b00695c004d40a7ffeb64ffda1de9b600bfa5e8f5e9c8e6c9a5d6a781c78466bb6a4caf5043a047388e3c2e7d321b5e20b9f6ca69f0ae00e67600c853f1f8e9dcedc8c5e1a5aed5819ccc658bc34a7cb342689f38558b2f33691eccff90b2ff5976ff0364dd17f9fbe7f0f4c3e6ee9cdce775d4e157cddc39c0ca33afb42b9e9d24827717f4ff81eeff41c6ff00aeea00fffde7fff9c4fff59dfff176ffee58ffeb3bfdd835fbc02df9a825f57f17ffff8dffff00ffea00ffd600fff8e1ffecb3ffe082ffd54fffca28ffc107ffb300ffa000ff8f00ff6f00ffe57fffd740ffc400ffab00fff3e0ffe0b2ffcc80ffb74dffa726ff9800fb8c00f57c00ef6c00e65100ffd180ffab40ff9100ff6d00fbe9e7ffccbcffab91ff8a65ff7043ff5722f4511ee64a19d84315bf360cff9e80ff6e40ff3d00dd2c00efebe9d7ccc8bcaaa4a1887f8d6e637955486d4c415d40374e342e3e2723fafafaf5f5f5eeeeeee0e0e0bdbdbd9e9e9e757575616161424242212121eceff1cfd8dcb0bec590a4ae78909c607d8b546e7a455a6437474f263238ffffff000000";
 
-PdfColors.red300 = Object.freeze(PdfColor.fromInt(4293227379));
+const palette = PdfColors;
 
-PdfColors.red400 = Object.freeze(PdfColor.fromInt(4293874512));
+let offset = 0;
 
-PdfColors.red500 = Object.freeze(PdfColor.fromInt(4294198070));
+const define = name => {
+  palette[name] = Object.freeze(PdfColor.fromInt(4278190080 + parseInt(packed.slice(offset, offset += 6), 16)));
+};
 
-PdfColors.red600 = Object.freeze(PdfColor.fromInt(4293212469));
+families.forEach((family, index) => (index < 16 ? shades : shades.slice(0, 10)).forEach(shade => define(family + shade)));
 
-PdfColors.red700 = Object.freeze(PdfColor.fromInt(4292030255));
+define("white");
 
-PdfColors.red800 = Object.freeze(PdfColor.fromInt(4291176488));
+define("black");
 
-PdfColors.red900 = Object.freeze(PdfColor.fromInt(4290190364));
+families.forEach((family, index) => {
+  palette[family] = palette[family + "500"];
+  if (index < 16) palette[family + "Accent"] = palette[family + "Accent200"];
+});
 
-PdfColors.redAccent100 = Object.freeze(PdfColor.fromInt(4294937216));
+palette["primaries"] = Object.freeze(families.map(family => palette[family]));
 
-PdfColors.redAccent200 = Object.freeze(PdfColor.fromInt(4294922834));
-
-PdfColors.redAccent400 = Object.freeze(PdfColor.fromInt(4294907716));
-
-PdfColors.redAccent700 = Object.freeze(PdfColor.fromInt(4292149248));
-
-PdfColors.pink50 = Object.freeze(PdfColor.fromInt(4294763756));
-
-PdfColors.pink100 = Object.freeze(PdfColor.fromInt(4294491088));
-
-PdfColors.pink200 = Object.freeze(PdfColor.fromInt(4294217649));
-
-PdfColors.pink300 = Object.freeze(PdfColor.fromInt(4293943954));
-
-PdfColors.pink400 = Object.freeze(PdfColor.fromInt(4293673082));
-
-PdfColors.pink500 = Object.freeze(PdfColor.fromInt(4293467747));
-
-PdfColors.pink600 = Object.freeze(PdfColor.fromInt(4292352864));
-
-PdfColors.pink700 = Object.freeze(PdfColor.fromInt(4290910299));
-
-PdfColors.pink800 = Object.freeze(PdfColor.fromInt(4289533015));
-
-PdfColors.pink900 = Object.freeze(PdfColor.fromInt(4287106639));
-
-PdfColors.pinkAccent100 = Object.freeze(PdfColor.fromInt(4294934699));
-
-PdfColors.pinkAccent200 = Object.freeze(PdfColor.fromInt(4294918273));
-
-PdfColors.pinkAccent400 = Object.freeze(PdfColor.fromInt(4294246487));
-
-PdfColors.pinkAccent700 = Object.freeze(PdfColor.fromInt(4291105122));
-
-PdfColors.purple50 = Object.freeze(PdfColor.fromInt(4294174197));
-
-PdfColors.purple100 = Object.freeze(PdfColor.fromInt(4292984551));
-
-PdfColors.purple200 = Object.freeze(PdfColor.fromInt(4291728344));
-
-PdfColors.purple300 = Object.freeze(PdfColor.fromInt(4290406600));
-
-PdfColors.purple400 = Object.freeze(PdfColor.fromInt(4289415100));
-
-PdfColors.purple500 = Object.freeze(PdfColor.fromInt(4288423856));
-
-PdfColors.purple600 = Object.freeze(PdfColor.fromInt(4287505578));
-
-PdfColors.purple700 = Object.freeze(PdfColor.fromInt(4286259106));
-
-PdfColors.purple800 = Object.freeze(PdfColor.fromInt(4285143962));
-
-PdfColors.purple900 = Object.freeze(PdfColor.fromInt(4283045004));
-
-PdfColors.purpleAccent100 = Object.freeze(PdfColor.fromInt(4293558524));
-
-PdfColors.purpleAccent200 = Object.freeze(PdfColor.fromInt(4292886779));
-
-PdfColors.purpleAccent400 = Object.freeze(PdfColor.fromInt(4292149497));
-
-PdfColors.purpleAccent700 = Object.freeze(PdfColor.fromInt(4289331455));
-
-PdfColors.deepPurple50 = Object.freeze(PdfColor.fromInt(4293781494));
-
-PdfColors.deepPurple100 = Object.freeze(PdfColor.fromInt(4291937513));
-
-PdfColors.deepPurple200 = Object.freeze(PdfColor.fromInt(4289961435));
-
-PdfColors.deepPurple300 = Object.freeze(PdfColor.fromInt(4287985101));
-
-PdfColors.deepPurple400 = Object.freeze(PdfColor.fromInt(4286470082));
-
-PdfColors.deepPurple500 = Object.freeze(PdfColor.fromInt(4284955319));
-
-PdfColors.deepPurple600 = Object.freeze(PdfColor.fromInt(4284364209));
-
-PdfColors.deepPurple700 = Object.freeze(PdfColor.fromInt(4283510184));
-
-PdfColors.deepPurple800 = Object.freeze(PdfColor.fromInt(4282722208));
-
-PdfColors.deepPurple900 = Object.freeze(PdfColor.fromInt(4281408402));
-
-PdfColors.deepPurpleAccent100 = Object.freeze(PdfColor.fromInt(4289956095));
-
-PdfColors.deepPurpleAccent200 = Object.freeze(PdfColor.fromInt(4286336511));
-
-PdfColors.deepPurpleAccent400 = Object.freeze(PdfColor.fromInt(4284817407));
-
-PdfColors.deepPurpleAccent700 = Object.freeze(PdfColor.fromInt(4284612842));
-
-PdfColors.indigo50 = Object.freeze(PdfColor.fromInt(4293454582));
-
-PdfColors.indigo100 = Object.freeze(PdfColor.fromInt(4291152617));
-
-PdfColors.indigo200 = Object.freeze(PdfColor.fromInt(4288653530));
-
-PdfColors.indigo300 = Object.freeze(PdfColor.fromInt(4286154443));
-
-PdfColors.indigo400 = Object.freeze(PdfColor.fromInt(4284246976));
-
-PdfColors.indigo500 = Object.freeze(PdfColor.fromInt(4282339765));
-
-PdfColors.indigo600 = Object.freeze(PdfColor.fromInt(4281944491));
-
-PdfColors.indigo700 = Object.freeze(PdfColor.fromInt(4281352095));
-
-PdfColors.indigo800 = Object.freeze(PdfColor.fromInt(4280825235));
-
-PdfColors.indigo900 = Object.freeze(PdfColor.fromInt(4279903102));
-
-PdfColors.indigoAccent100 = Object.freeze(PdfColor.fromInt(4287405823));
-
-PdfColors.indigoAccent200 = Object.freeze(PdfColor.fromInt(4283657726));
-
-PdfColors.indigoAccent400 = Object.freeze(PdfColor.fromInt(4282211070));
-
-PdfColors.indigoAccent700 = Object.freeze(PdfColor.fromInt(4281356286));
-
-PdfColors.blue50 = Object.freeze(PdfColor.fromInt(4293128957));
-
-PdfColors.blue100 = Object.freeze(PdfColor.fromInt(4290502395));
-
-PdfColors.blue200 = Object.freeze(PdfColor.fromInt(4287679225));
-
-PdfColors.blue300 = Object.freeze(PdfColor.fromInt(4284790262));
-
-PdfColors.blue400 = Object.freeze(PdfColor.fromInt(4282557941));
-
-PdfColors.blue500 = Object.freeze(PdfColor.fromInt(4280391411));
-
-PdfColors.blue600 = Object.freeze(PdfColor.fromInt(4280191205));
-
-PdfColors.blue700 = Object.freeze(PdfColor.fromInt(4279858898));
-
-PdfColors.blue800 = Object.freeze(PdfColor.fromInt(4279592384));
-
-PdfColors.blue900 = Object.freeze(PdfColor.fromInt(4279060385));
-
-PdfColors.blueAccent100 = Object.freeze(PdfColor.fromInt(4286755327));
-
-PdfColors.blueAccent200 = Object.freeze(PdfColor.fromInt(4282682111));
-
-PdfColors.blueAccent400 = Object.freeze(PdfColor.fromInt(4280908287));
-
-PdfColors.blueAccent700 = Object.freeze(PdfColor.fromInt(4280902399));
-
-PdfColors.lightBlue50 = Object.freeze(PdfColor.fromInt(4292998654));
-
-PdfColors.lightBlue100 = Object.freeze(PdfColor.fromInt(4289979900));
-
-PdfColors.lightBlue200 = Object.freeze(PdfColor.fromInt(4286698746));
-
-PdfColors.lightBlue300 = Object.freeze(PdfColor.fromInt(4283417591));
-
-PdfColors.lightBlue400 = Object.freeze(PdfColor.fromInt(4280923894));
-
-PdfColors.lightBlue500 = Object.freeze(PdfColor.fromInt(4278430196));
-
-PdfColors.lightBlue600 = Object.freeze(PdfColor.fromInt(4278426597));
-
-PdfColors.lightBlue700 = Object.freeze(PdfColor.fromInt(4278356177));
-
-PdfColors.lightBlue800 = Object.freeze(PdfColor.fromInt(4278351805));
-
-PdfColors.lightBlue900 = Object.freeze(PdfColor.fromInt(4278278043));
-
-PdfColors.lightBlueAccent100 = Object.freeze(PdfColor.fromInt(4286634239));
-
-PdfColors.lightBlueAccent200 = Object.freeze(PdfColor.fromInt(4282434815));
-
-PdfColors.lightBlueAccent400 = Object.freeze(PdfColor.fromInt(4278235391));
-
-PdfColors.lightBlueAccent700 = Object.freeze(PdfColor.fromInt(4278227434));
-
-PdfColors.cyan50 = Object.freeze(PdfColor.fromInt(4292933626));
-
-PdfColors.cyan100 = Object.freeze(PdfColor.fromInt(4289915890));
-
-PdfColors.cyan200 = Object.freeze(PdfColor.fromInt(4286635754));
-
-PdfColors.cyan300 = Object.freeze(PdfColor.fromInt(4283289825));
-
-PdfColors.cyan400 = Object.freeze(PdfColor.fromInt(4280731354));
-
-PdfColors.cyan500 = Object.freeze(PdfColor.fromInt(4278238420));
-
-PdfColors.cyan600 = Object.freeze(PdfColor.fromInt(4278234305));
-
-PdfColors.cyan700 = Object.freeze(PdfColor.fromInt(4278228903));
-
-PdfColors.cyan800 = Object.freeze(PdfColor.fromInt(4278223759));
-
-PdfColors.cyan900 = Object.freeze(PdfColor.fromInt(4278214756));
-
-PdfColors.cyanAccent100 = Object.freeze(PdfColor.fromInt(4286906367));
-
-PdfColors.cyanAccent200 = Object.freeze(PdfColor.fromInt(4279828479));
-
-PdfColors.cyanAccent400 = Object.freeze(PdfColor.fromInt(4278248959));
-
-PdfColors.cyanAccent700 = Object.freeze(PdfColor.fromInt(4278237396));
-
-PdfColors.teal50 = Object.freeze(PdfColor.fromInt(4292932337));
-
-PdfColors.teal100 = Object.freeze(PdfColor.fromInt(4289912795));
-
-PdfColors.teal200 = Object.freeze(PdfColor.fromInt(4286630852));
-
-PdfColors.teal300 = Object.freeze(PdfColor.fromInt(4283283116));
-
-PdfColors.teal400 = Object.freeze(PdfColor.fromInt(4280723098));
-
-PdfColors.teal500 = Object.freeze(PdfColor.fromInt(4278228616));
-
-PdfColors.teal600 = Object.freeze(PdfColor.fromInt(4278225275));
-
-PdfColors.teal700 = Object.freeze(PdfColor.fromInt(4278221163));
-
-PdfColors.teal800 = Object.freeze(PdfColor.fromInt(4278217052));
-
-PdfColors.teal900 = Object.freeze(PdfColor.fromInt(4278209856));
-
-PdfColors.tealAccent100 = Object.freeze(PdfColor.fromInt(4289200107));
-
-PdfColors.tealAccent200 = Object.freeze(PdfColor.fromInt(4284809178));
-
-PdfColors.tealAccent400 = Object.freeze(PdfColor.fromInt(4280150454));
-
-PdfColors.tealAccent700 = Object.freeze(PdfColor.fromInt(4278239141));
-
-PdfColors.green50 = Object.freeze(PdfColor.fromInt(4293457385));
-
-PdfColors.green100 = Object.freeze(PdfColor.fromInt(4291356361));
-
-PdfColors.green200 = Object.freeze(PdfColor.fromInt(4289058471));
-
-PdfColors.green300 = Object.freeze(PdfColor.fromInt(4286695300));
-
-PdfColors.green400 = Object.freeze(PdfColor.fromInt(4284922730));
-
-PdfColors.green500 = Object.freeze(PdfColor.fromInt(4283215696));
-
-PdfColors.green600 = Object.freeze(PdfColor.fromInt(4282622023));
-
-PdfColors.green700 = Object.freeze(PdfColor.fromInt(4281896508));
-
-PdfColors.green800 = Object.freeze(PdfColor.fromInt(4281236786));
-
-PdfColors.green900 = Object.freeze(PdfColor.fromInt(4279983648));
-
-PdfColors.greenAccent100 = Object.freeze(PdfColor.fromInt(4290377418));
-
-PdfColors.greenAccent200 = Object.freeze(PdfColor.fromInt(4285132974));
-
-PdfColors.greenAccent400 = Object.freeze(PdfColor.fromInt(4278249078));
-
-PdfColors.greenAccent700 = Object.freeze(PdfColor.fromInt(4278241363));
-
-PdfColors.lightGreen50 = Object.freeze(PdfColor.fromInt(4294047977));
-
-PdfColors.lightGreen100 = Object.freeze(PdfColor.fromInt(4292668872));
-
-PdfColors.lightGreen200 = Object.freeze(PdfColor.fromInt(4291158437));
-
-PdfColors.lightGreen300 = Object.freeze(PdfColor.fromInt(4289648001));
-
-PdfColors.lightGreen400 = Object.freeze(PdfColor.fromInt(4288466021));
-
-PdfColors.lightGreen500 = Object.freeze(PdfColor.fromInt(4287349578));
-
-PdfColors.lightGreen600 = Object.freeze(PdfColor.fromInt(4286362434));
-
-PdfColors.lightGreen700 = Object.freeze(PdfColor.fromInt(4285046584));
-
-PdfColors.lightGreen800 = Object.freeze(PdfColor.fromInt(4283796271));
-
-PdfColors.lightGreen900 = Object.freeze(PdfColor.fromInt(4281559326));
-
-PdfColors.lightGreenAccent100 = Object.freeze(PdfColor.fromInt(4291624848));
-
-PdfColors.lightGreenAccent200 = Object.freeze(PdfColor.fromInt(4289920857));
-
-PdfColors.lightGreenAccent400 = Object.freeze(PdfColor.fromInt(4285988611));
-
-PdfColors.lightGreenAccent700 = Object.freeze(PdfColor.fromInt(4284800279));
-
-PdfColors.lime50 = Object.freeze(PdfColor.fromInt(4294573031));
-
-PdfColors.lime100 = Object.freeze(PdfColor.fromInt(4293981379));
-
-PdfColors.lime200 = Object.freeze(PdfColor.fromInt(4293324444));
-
-PdfColors.lime300 = Object.freeze(PdfColor.fromInt(4292667253));
-
-PdfColors.lime400 = Object.freeze(PdfColor.fromInt(4292141399));
-
-PdfColors.lime500 = Object.freeze(PdfColor.fromInt(4291681337));
-
-PdfColors.lime600 = Object.freeze(PdfColor.fromInt(4290824755));
-
-PdfColors.lime700 = Object.freeze(PdfColor.fromInt(4289705003));
-
-PdfColors.lime800 = Object.freeze(PdfColor.fromInt(4288584996));
-
-PdfColors.lime900 = Object.freeze(PdfColor.fromInt(4286740247));
-
-PdfColors.limeAccent100 = Object.freeze(PdfColor.fromInt(4294246273));
-
-PdfColors.limeAccent200 = Object.freeze(PdfColor.fromInt(4293852993));
-
-PdfColors.limeAccent400 = Object.freeze(PdfColor.fromInt(4291231488));
-
-PdfColors.limeAccent700 = Object.freeze(PdfColor.fromInt(4289653248));
-
-PdfColors.yellow50 = Object.freeze(PdfColor.fromInt(4294966759));
-
-PdfColors.yellow100 = Object.freeze(PdfColor.fromInt(4294965700));
-
-PdfColors.yellow200 = Object.freeze(PdfColor.fromInt(4294964637));
-
-PdfColors.yellow300 = Object.freeze(PdfColor.fromInt(4294963574));
-
-PdfColors.yellow400 = Object.freeze(PdfColor.fromInt(4294962776));
-
-PdfColors.yellow500 = Object.freeze(PdfColor.fromInt(4294961979));
-
-PdfColors.yellow600 = Object.freeze(PdfColor.fromInt(4294826037));
-
-PdfColors.yellow700 = Object.freeze(PdfColor.fromInt(4294688813));
-
-PdfColors.yellow800 = Object.freeze(PdfColor.fromInt(4294551589));
-
-PdfColors.yellow900 = Object.freeze(PdfColor.fromInt(4294278935));
-
-PdfColors.yellowAccent100 = Object.freeze(PdfColor.fromInt(4294967181));
-
-PdfColors.yellowAccent200 = Object.freeze(PdfColor.fromInt(4294967040));
-
-PdfColors.yellowAccent400 = Object.freeze(PdfColor.fromInt(4294961664));
-
-PdfColors.yellowAccent700 = Object.freeze(PdfColor.fromInt(4294956544));
-
-PdfColors.amber50 = Object.freeze(PdfColor.fromInt(4294965473));
-
-PdfColors.amber100 = Object.freeze(PdfColor.fromInt(4294962355));
-
-PdfColors.amber200 = Object.freeze(PdfColor.fromInt(4294959234));
-
-PdfColors.amber300 = Object.freeze(PdfColor.fromInt(4294956367));
-
-PdfColors.amber400 = Object.freeze(PdfColor.fromInt(4294953512));
-
-PdfColors.amber500 = Object.freeze(PdfColor.fromInt(4294951175));
-
-PdfColors.amber600 = Object.freeze(PdfColor.fromInt(4294947584));
-
-PdfColors.amber700 = Object.freeze(PdfColor.fromInt(4294942720));
-
-PdfColors.amber800 = Object.freeze(PdfColor.fromInt(4294938368));
-
-PdfColors.amber900 = Object.freeze(PdfColor.fromInt(4294930176));
-
-PdfColors.amberAccent100 = Object.freeze(PdfColor.fromInt(4294960511));
-
-PdfColors.amberAccent200 = Object.freeze(PdfColor.fromInt(4294956864));
-
-PdfColors.amberAccent400 = Object.freeze(PdfColor.fromInt(4294951936));
-
-PdfColors.amberAccent700 = Object.freeze(PdfColor.fromInt(4294945536));
-
-PdfColors.orange50 = Object.freeze(PdfColor.fromInt(4294964192));
-
-PdfColors.orange100 = Object.freeze(PdfColor.fromInt(4294959282));
-
-PdfColors.orange200 = Object.freeze(PdfColor.fromInt(4294954112));
-
-PdfColors.orange300 = Object.freeze(PdfColor.fromInt(4294948685));
-
-PdfColors.orange400 = Object.freeze(PdfColor.fromInt(4294944550));
-
-PdfColors.orange500 = Object.freeze(PdfColor.fromInt(4294940672));
-
-PdfColors.orange600 = Object.freeze(PdfColor.fromInt(4294675456));
-
-PdfColors.orange700 = Object.freeze(PdfColor.fromInt(4294278144));
-
-PdfColors.orange800 = Object.freeze(PdfColor.fromInt(4293880832));
-
-PdfColors.orange900 = Object.freeze(PdfColor.fromInt(4293284096));
-
-PdfColors.orangeAccent100 = Object.freeze(PdfColor.fromInt(4294955392));
-
-PdfColors.orangeAccent200 = Object.freeze(PdfColor.fromInt(4294945600));
-
-PdfColors.orangeAccent400 = Object.freeze(PdfColor.fromInt(4294938880));
-
-PdfColors.orangeAccent700 = Object.freeze(PdfColor.fromInt(4294929664));
-
-PdfColors.deepOrange50 = Object.freeze(PdfColor.fromInt(4294699495));
-
-PdfColors.deepOrange100 = Object.freeze(PdfColor.fromInt(4294954172));
-
-PdfColors.deepOrange200 = Object.freeze(PdfColor.fromInt(4294945681));
-
-PdfColors.deepOrange300 = Object.freeze(PdfColor.fromInt(4294937189));
-
-PdfColors.deepOrange400 = Object.freeze(PdfColor.fromInt(4294930499));
-
-PdfColors.deepOrange500 = Object.freeze(PdfColor.fromInt(4294924066));
-
-PdfColors.deepOrange600 = Object.freeze(PdfColor.fromInt(4294201630));
-
-PdfColors.deepOrange700 = Object.freeze(PdfColor.fromInt(4293282329));
-
-PdfColors.deepOrange800 = Object.freeze(PdfColor.fromInt(4292363029));
-
-PdfColors.deepOrange900 = Object.freeze(PdfColor.fromInt(4290721292));
-
-PdfColors.deepOrangeAccent100 = Object.freeze(PdfColor.fromInt(4294942336));
-
-PdfColors.deepOrangeAccent200 = Object.freeze(PdfColor.fromInt(4294929984));
-
-PdfColors.deepOrangeAccent400 = Object.freeze(PdfColor.fromInt(4294917376));
-
-PdfColors.deepOrangeAccent700 = Object.freeze(PdfColor.fromInt(4292684800));
-
-PdfColors.brown50 = Object.freeze(PdfColor.fromInt(4293913577));
-
-PdfColors.brown100 = Object.freeze(PdfColor.fromInt(4292332744));
-
-PdfColors.brown200 = Object.freeze(PdfColor.fromInt(4290554532));
-
-PdfColors.brown300 = Object.freeze(PdfColor.fromInt(4288776319));
-
-PdfColors.brown400 = Object.freeze(PdfColor.fromInt(4287458915));
-
-PdfColors.brown500 = Object.freeze(PdfColor.fromInt(4286141768));
-
-PdfColors.brown600 = Object.freeze(PdfColor.fromInt(4285353025));
-
-PdfColors.brown700 = Object.freeze(PdfColor.fromInt(4284301367));
-
-PdfColors.brown800 = Object.freeze(PdfColor.fromInt(4283315246));
-
-PdfColors.brown900 = Object.freeze(PdfColor.fromInt(4282263331));
-
-PdfColors.grey50 = Object.freeze(PdfColor.fromInt(4294638330));
-
-PdfColors.grey100 = Object.freeze(PdfColor.fromInt(4294309365));
-
-PdfColors.grey200 = Object.freeze(PdfColor.fromInt(4293848814));
-
-PdfColors.grey300 = Object.freeze(PdfColor.fromInt(4292927712));
-
-PdfColors.grey400 = Object.freeze(PdfColor.fromInt(4290624957));
-
-PdfColors.grey500 = Object.freeze(PdfColor.fromInt(4288585374));
-
-PdfColors.grey600 = Object.freeze(PdfColor.fromInt(4285887861));
-
-PdfColors.grey700 = Object.freeze(PdfColor.fromInt(4284572001));
-
-PdfColors.grey800 = Object.freeze(PdfColor.fromInt(4282532418));
-
-PdfColors.grey900 = Object.freeze(PdfColor.fromInt(4280361249));
-
-PdfColors.blueGrey50 = Object.freeze(PdfColor.fromInt(4293718001));
-
-PdfColors.blueGrey100 = Object.freeze(PdfColor.fromInt(4291811548));
-
-PdfColors.blueGrey200 = Object.freeze(PdfColor.fromInt(4289773253));
-
-PdfColors.blueGrey300 = Object.freeze(PdfColor.fromInt(4287669422));
-
-PdfColors.blueGrey400 = Object.freeze(PdfColor.fromInt(4286091420));
-
-PdfColors.blueGrey500 = Object.freeze(PdfColor.fromInt(4284513675));
-
-PdfColors.blueGrey600 = Object.freeze(PdfColor.fromInt(4283723386));
-
-PdfColors.blueGrey700 = Object.freeze(PdfColor.fromInt(4282735204));
-
-PdfColors.blueGrey800 = Object.freeze(PdfColor.fromInt(4281812815));
-
-PdfColors.blueGrey900 = Object.freeze(PdfColor.fromInt(4280693304));
-
-PdfColors.white = Object.freeze(PdfColor.fromInt(4294967295));
-
-PdfColors.black = Object.freeze(PdfColor.fromInt(4278190080));
-
-PdfColors.red = PdfColors.red500;
-
-PdfColors.redAccent = PdfColors.redAccent200;
-
-PdfColors.pink = PdfColors.pink500;
-
-PdfColors.pinkAccent = PdfColors.pinkAccent200;
-
-PdfColors.purple = PdfColors.purple500;
-
-PdfColors.purpleAccent = PdfColors.purpleAccent200;
-
-PdfColors.deepPurple = PdfColors.deepPurple500;
-
-PdfColors.deepPurpleAccent = PdfColors.deepPurpleAccent200;
-
-PdfColors.indigo = PdfColors.indigo500;
-
-PdfColors.indigoAccent = PdfColors.indigoAccent200;
-
-PdfColors.blue = PdfColors.blue500;
-
-PdfColors.blueAccent = PdfColors.blueAccent200;
-
-PdfColors.lightBlue = PdfColors.lightBlue500;
-
-PdfColors.lightBlueAccent = PdfColors.lightBlueAccent200;
-
-PdfColors.cyan = PdfColors.cyan500;
-
-PdfColors.cyanAccent = PdfColors.cyanAccent200;
-
-PdfColors.teal = PdfColors.teal500;
-
-PdfColors.tealAccent = PdfColors.tealAccent200;
-
-PdfColors.green = PdfColors.green500;
-
-PdfColors.greenAccent = PdfColors.greenAccent200;
-
-PdfColors.lightGreen = PdfColors.lightGreen500;
-
-PdfColors.lightGreenAccent = PdfColors.lightGreenAccent200;
-
-PdfColors.lime = PdfColors.lime500;
-
-PdfColors.limeAccent = PdfColors.limeAccent200;
-
-PdfColors.yellow = PdfColors.yellow500;
-
-PdfColors.yellowAccent = PdfColors.yellowAccent200;
-
-PdfColors.amber = PdfColors.amber500;
-
-PdfColors.amberAccent = PdfColors.amberAccent200;
-
-PdfColors.orange = PdfColors.orange500;
-
-PdfColors.orangeAccent = PdfColors.orangeAccent200;
-
-PdfColors.deepOrange = PdfColors.deepOrange500;
-
-PdfColors.deepOrangeAccent = PdfColors.deepOrangeAccent200;
-
-PdfColors.brown = PdfColors.brown500;
-
-PdfColors.grey = PdfColors.grey500;
-
-PdfColors.blueGrey = PdfColors.blueGrey500;
-
-PdfColors.primaries = Object.freeze([ PdfColors.red, PdfColors.pink, PdfColors.purple, PdfColors.deepPurple, PdfColors.indigo, PdfColors.blue, PdfColors.lightBlue, PdfColors.cyan, PdfColors.teal, PdfColors.green, PdfColors.lightGreen, PdfColors.lime, PdfColors.yellow, PdfColors.amber, PdfColors.orange, PdfColors.deepOrange, PdfColors.brown, PdfColors.grey, PdfColors.blueGrey ]);
-
-PdfColors.accents = Object.freeze([ PdfColors.redAccent, PdfColors.pinkAccent, PdfColors.purpleAccent, PdfColors.deepPurpleAccent, PdfColors.indigoAccent, PdfColors.blueAccent, PdfColors.lightBlueAccent, PdfColors.cyanAccent, PdfColors.tealAccent, PdfColors.greenAccent, PdfColors.lightGreenAccent, PdfColors.limeAccent, PdfColors.yellowAccent, PdfColors.amberAccent, PdfColors.orangeAccent, PdfColors.deepOrangeAccent ]);
+palette["accents"] = Object.freeze(families.slice(0, 16).map(family => palette[family + "Accent"]));
 
 class Radius {
   constructor(x, y = x) {
@@ -1441,6 +888,84 @@ class PdfDict extends PdfDataType {
   }
 }
 
+function codeUnits(text) {
+  const units = new Uint16Array(text.length);
+  for (let i = 0; i < text.length; i++) units[i] = text.charCodeAt(i);
+  return units;
+}
+
+function utf8Encode(text) {
+  const bytes = new Uint8Array(text.length * 3);
+  let length = 0;
+  for (const character of text) {
+    let point = character.codePointAt(0) ?? 65533;
+    if (point >= 55296 && point <= 57343) point = 65533;
+    if (point < 128) {
+      bytes[length++] = point;
+    } else if (point < 2048) {
+      bytes[length++] = 192 | point >> 6;
+      bytes[length++] = 128 | point & 63;
+    } else if (point < 65536) {
+      bytes[length++] = 224 | point >> 12;
+      bytes[length++] = 128 | point >> 6 & 63;
+      bytes[length++] = 128 | point & 63;
+    } else {
+      bytes[length++] = 240 | point >> 18;
+      bytes[length++] = 128 | point >> 12 & 63;
+      bytes[length++] = 128 | point >> 6 & 63;
+      bytes[length++] = 128 | point & 63;
+    }
+  }
+  return bytes.subarray(0, length).slice();
+}
+
+function utf8Decode(bytes) {
+  let text = "";
+  for (let i = 0; i < bytes.length; ) {
+    const first = bytes[i];
+    let point;
+    let length;
+    if (first < 128) {
+      point = first;
+      length = 1;
+    } else if ((first & 224) === 192) {
+      point = first & 31;
+      length = 2;
+    } else if ((first & 240) === 224) {
+      point = first & 15;
+      length = 3;
+    } else if ((first & 248) === 240) {
+      point = first & 7;
+      length = 4;
+    } else {
+      text += "�";
+      i++;
+      continue;
+    }
+    if (i + length > bytes.length) {
+      text += "�";
+      break;
+    }
+    let valid = true;
+    for (let n = 1; n < length; n++) {
+      const byte = bytes[i + n];
+      if ((byte & 192) !== 128) {
+        valid = false;
+        break;
+      }
+      point = point << 6 | byte & 63;
+    }
+    if (!valid || point > 1114111) {
+      text += "�";
+      i++;
+      continue;
+    }
+    text += String.fromCodePoint(point);
+    i += length;
+  }
+  return text;
+}
+
 class PdfName extends PdfDataType {
   constructor(value) {
     super();
@@ -1450,8 +975,10 @@ class PdfName extends PdfDataType {
     this.value = value;
   }
   output(s) {
-    for (let index = 0; index < this.value.length; index++) {
-      const code = this.value.charCodeAt(index);
+    const bytes = /[^\x00-\x7f]/.test(this.value) ? utf8Encode(this.value) : null;
+    const length = bytes === null ? this.value.length : bytes.length;
+    for (let index = 0; index < length; index++) {
+      const code = bytes === null ? this.value.charCodeAt(index) : bytes[index];
       if (code < 33 || code > 126 || code === 35 || code === 47 && index > 0 || code === 91 || code === 93 || code === 40 || code === 41 || code === 60 || code === 62) {
         s.putString(`#${code.toString(16).padStart(2, "0")}`);
       } else {
@@ -1758,6 +1285,31 @@ function normalizeInsets(value = 0) {
   };
 }
 
+function normalizeInsetsGeometry(value = 0) {
+  if (typeof value === "number" || value.start == null && value.end == null) return normalizeInsets(value);
+  const {top, bottom} = normalizeInsets(value);
+  const side = own => Number(own ?? value.horizontal ?? value.all ?? 0);
+  return {
+    top,
+    start: side(value.start),
+    end: side(value.end),
+    bottom,
+    left: Number(value.left ?? 0),
+    right: Number(value.right ?? 0)
+  };
+}
+
+function resolveInsets(value, direction) {
+  if (!("start" in value)) return value;
+  const rtl = direction === "rtl";
+  return {
+    top: value.top,
+    right: (value.right ?? 0) + (rtl ? value.start : value.end),
+    bottom: value.bottom,
+    left: (value.left ?? 0) + (rtl ? value.end : value.start)
+  };
+}
+
 function edgeInsetsConstructor(value = 0) {
   return normalizeInsets(value);
 }
@@ -1802,6 +1354,47 @@ const EdgeInsets = Object.freeze(Object.assign(edgeInsetsConstructor, {
     };
   }
 }));
+
+const EdgeInsetsDirectional = Object.freeze({
+  zero: Object.freeze({
+    top: 0,
+    start: 0,
+    end: 0,
+    bottom: 0
+  }),
+  all(value) {
+    return {
+      top: value,
+      start: value,
+      end: value,
+      bottom: value
+    };
+  },
+  symmetric({vertical = 0, horizontal = 0} = {}) {
+    return {
+      top: vertical,
+      start: horizontal,
+      end: horizontal,
+      bottom: vertical
+    };
+  },
+  only({start = 0, top = 0, end = 0, bottom = 0} = {}) {
+    return {
+      top,
+      start,
+      end,
+      bottom
+    };
+  },
+  fromSTEB(start, top, end, bottom) {
+    return {
+      top,
+      start,
+      end,
+      bottom
+    };
+  }
+});
 
 function insetsHorizontal(insets) {
   return insets.left + insets.right;
@@ -1849,6 +1442,18 @@ const Alignment = Object.freeze({
     y: -1
   })
 });
+
+const AlignmentDirectional = Object.freeze(Object.fromEntries(Object.entries(Alignment).map(([name, {x, y}]) => [ name.replace("Left", "Start").replace("Right", "End"), Object.freeze({
+  start: x,
+  y
+}) ])));
+
+function resolveAlignment$1(value, direction) {
+  return "start" in value ? {
+    x: direction === "rtl" ? 0 - value.start : value.start,
+    y: value.y
+  } : value;
+}
 
 function inscribe(alignment, childWidth, childHeight, boxWidth, boxHeight) {
   const halfWidthDelta = (boxWidth - childWidth) / 2;
@@ -2247,16 +1852,52 @@ class Inseparable extends SpanningWidget {
   }
 }
 
+class InheritedDirectionality extends Inherited {
+  constructor(textDirection) {
+    super();
+    this.textDirection = textDirection;
+  }
+}
+
+class Directionality extends StatelessWidget {
+  constructor({textDirection, child}) {
+    super();
+    if (textDirection !== "ltr" && textDirection !== "rtl") {
+      throw new TypeError(`Unknown text direction: ${String(textDirection)}`);
+    }
+    this.textDirection = textDirection;
+    this.child = child;
+  }
+  static of(context) {
+    return InheritedWidget.of(context, InheritedDirectionality)?.textDirection ?? context.textDirection ?? "ltr";
+  }
+  build(_context) {
+    return new InheritedWidget({
+      inherited: new InheritedDirectionality(this.textDirection),
+      build: () => this.child
+    });
+  }
+}
+
+function insetsIn(context, value) {
+  return resolveInsets(value, Directionality.of(context));
+}
+
+function alignmentIn(context, value) {
+  return resolveAlignment$1(value, Directionality.of(context));
+}
+
 class Padding extends Widget {
   constructor({padding = 0, child = null} = {}) {
     super();
-    this.padding = normalizeInsets(padding);
+    this.padding = normalizeInsetsGeometry(padding);
     this.child = child;
   }
   layout(context, constraints) {
     const parent = BoxConstraints.from(constraints);
-    const horizontal = insetsHorizontal(this.padding);
-    const vertical = insetsVertical(this.padding);
+    const padding = insetsIn(context, this.padding);
+    const horizontal = insetsHorizontal(padding);
+    const vertical = insetsVertical(padding);
     if (this.child === null) {
       const size = parent.constrain({
         width: horizontal,
@@ -2271,7 +1912,7 @@ class Padding extends Widget {
         }
       };
     }
-    const childBox = this.child.layout(context, parent.deflate(this.padding));
+    const childBox = this.child.layout(context, parent.deflate(padding));
     const size = parent.constrain({
       width: childBox.width + horizontal,
       height: childBox.height + vertical
@@ -2288,17 +1929,22 @@ class Padding extends Widget {
   paint(context, box) {
     const {childBox} = box.data;
     if (childBox === null) return;
+    const padding = insetsIn(context, this.padding);
     childBox.widget.paint(context, {
       ...childBox,
-      x: box.x + this.padding.left,
-      y: box.y + this.padding.top
+      x: box.x + padding.left,
+      y: box.y + padding.top
     });
   }
 }
 
+function namedAlignment(name) {
+  return Alignment[name] ?? AlignmentDirectional[name];
+}
+
 function resolveBasicAlignment(value) {
   if (typeof value !== "string") return value;
-  const result = Alignment[value];
+  const result = namedAlignment(value);
   if (result === undefined) throw new TypeError(`Unknown alignment: ${value}`);
   return result;
 }
@@ -2336,7 +1982,7 @@ class Align extends Widget {
       width: shrinkWidth ? childBox.width * (this.widthFactor ?? 1) : Infinity,
       height: shrinkHeight ? childBox.height * (this.heightFactor ?? 1) : Infinity
     });
-    const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+    const offset = inscribe(alignmentIn(context, this.alignment), childBox.width, childBox.height, size.width, size.height);
     return {
       widget: this,
       width: size.width,
@@ -2548,8 +2194,8 @@ class Transform extends Widget {
         }
       };
     }
-    const childBox = this.child.layout(context, this.adjustLayout && this.unconstrained ? new BoxConstraints : parent);
     if (!this.adjustLayout) {
+      const childBox = this.child.layout(context, parent);
       const size = parent.constrain(childBox);
       return {
         widget: this,
@@ -2562,23 +2208,44 @@ class Transform extends Widget {
         }
       };
     }
-    const corners = [ transformPoint(this.transform, 0, 0), transformPoint(this.transform, childBox.width, 0), transformPoint(this.transform, childBox.width, childBox.height), transformPoint(this.transform, 0, childBox.height) ];
-    const minimumX = Math.min(...corners.map(point => point.x));
-    const maximumX = Math.max(...corners.map(point => point.x));
-    const minimumY = Math.min(...corners.map(point => point.y));
-    const maximumY = Math.max(...corners.map(point => point.y));
-    const size = parent.constrain({
-      width: maximumX - minimumX,
-      height: maximumY - minimumY
-    });
+    const [a, b] = this.transform;
+    let childConstraints = this.unconstrained ? new BoxConstraints : Math.abs(a) <= 1e-9 && Math.abs(b) > 1e-9 ? new BoxConstraints({
+      minWidth: parent.minHeight,
+      maxWidth: parent.maxHeight,
+      minHeight: parent.minWidth,
+      maxHeight: parent.maxWidth
+    }) : parent;
+    let childBox = this.child.layout(context, childConstraints);
+    const bounds = () => {
+      const corners = [ transformPoint(this.transform, 0, 0), transformPoint(this.transform, childBox.width, 0), transformPoint(this.transform, childBox.width, childBox.height), transformPoint(this.transform, 0, childBox.height) ];
+      const x = Math.min(...corners.map(point => point.x));
+      const y = Math.min(...corners.map(point => point.y));
+      return {
+        x,
+        y,
+        width: Math.max(...corners.map(point => point.x)) - x,
+        height: Math.max(...corners.map(point => point.y)) - y
+      };
+    };
+    let rotated = bounds();
+    if (!this.unconstrained && (rotated.width > parent.maxWidth || rotated.height > parent.maxHeight)) {
+      const scale = Math.min(rotated.width > parent.maxWidth ? parent.maxWidth / rotated.width : 1, rotated.height > parent.maxHeight ? parent.maxHeight / rotated.height : 1);
+      childConstraints = new BoxConstraints({
+        maxWidth: (childConstraints.hasBoundedWidth ? childConstraints.maxWidth : childBox.width) * scale,
+        maxHeight: (childConstraints.hasBoundedHeight ? childConstraints.maxHeight : childBox.height) * scale
+      });
+      childBox = this.child.layout(context, childConstraints);
+      rotated = bounds();
+    }
+    const size = parent.constrain(rotated);
     return {
       widget: this,
       width: size.width,
       height: size.height,
       data: {
         childBox,
-        layoutDx: -minimumX,
-        layoutDy: -minimumY
+        layoutDx: -rotated.x,
+        layoutDy: -rotated.y
       }
     };
   }
@@ -2589,8 +2256,9 @@ class Transform extends Widget {
     if (this.adjustLayout) {
       widgetMatrix = multiplyMatrix(translationMatrix(box.x + layoutDx, box.y + layoutDy), multiplyMatrix(this.transform, translationMatrix(-box.x, -box.y)));
     } else {
-      const alignedX = this.alignment === null ? 0 : (this.alignment.x + 1) * box.width / 2;
-      const alignedY = this.alignment === null ? 0 : (1 - this.alignment.y) * box.height / 2;
+      const alignment = this.alignment === null ? null : alignmentIn(context, this.alignment);
+      const alignedX = alignment === null ? 0 : (alignment.x + 1) * box.width / 2;
+      const alignedY = alignment === null ? 0 : (1 - alignment.y) * box.height / 2;
       const anchorX = box.x + alignedX + this.origin.x;
       const anchorY = box.y + alignedY + this.origin.y;
       widgetMatrix = multiplyMatrix(translationMatrix(anchorX, anchorY), multiplyMatrix(this.transform, translationMatrix(-anchorX, -anchorY)));
@@ -2778,8 +2446,9 @@ class FittedBox extends Widget {
       height: box.height
     });
     if (fitted.source.width <= 0 || fitted.source.height <= 0) return;
-    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, childBox.width, childBox.height);
-    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, box.width, box.height);
+    const alignment = alignmentIn(context, this.alignment);
+    const sourceOffset = inscribe(alignment, fitted.source.width, fitted.source.height, childBox.width, childBox.height);
+    const destinationOffset = inscribe(alignment, fitted.destination.width, fitted.destination.height, box.width, box.height);
     const scaleX = fitted.destination.width / fitted.source.width;
     const scaleY = fitted.destination.height / fitted.source.height;
     const widgetMatrix = multiplyMatrix(translationMatrix(box.x + destinationOffset.dx, box.y + destinationOffset.dy), multiplyMatrix(scaleMatrix(scaleX, scaleY), translationMatrix(-box.x - sourceOffset.dx, -box.y - sourceOffset.dy)));
@@ -3058,7 +2727,7 @@ class OverflowBox extends Widget {
     const offset = childBox === null ? {
       dx: 0,
       dy: 0
-    } : inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+    } : inscribe(alignmentIn(context, this.alignment), childBox.width, childBox.height, size.width, size.height);
     return {
       widget: this,
       width: size.width,
@@ -3105,6 +2774,1041 @@ class VerticalDivider extends Widget {
     const height = Math.max(0, box.height - this.indent - this.endIndent);
     if (height === 0 || this.thickness === 0) return;
     context.canvas.fillRect(box.x + (box.width - this.thickness) / 2, box.y + this.indent, this.thickness, height, this.color);
+  }
+}
+
+class PdfFontMetrics {
+  constructor({left, top, right, bottom, ascent = bottom, descent = top, advanceWidth = right - left, leftBearing = left}) {
+    this.left = left;
+    this.top = top;
+    this.right = right;
+    this.bottom = bottom;
+    this.ascent = ascent;
+    this.descent = descent;
+    this.advanceWidth = advanceWidth;
+    this.leftBearing = leftBearing;
+  }
+  static append(metrics, letterSpacing = 0) {
+    let left;
+    let top;
+    let bottom;
+    let ascent;
+    let descent;
+    let advanceWidth = 0;
+    let firstBearing;
+    let lastBearing = 0;
+    let lastSpacing = 0;
+    for (const metric of metrics) {
+      left ?? (left = metric.left);
+      top = Math.min(top ?? metric.top, metric.top);
+      bottom = Math.max(bottom ?? metric.bottom, metric.bottom);
+      ascent = Math.max(ascent ?? metric.ascent, metric.ascent);
+      descent = Math.min(descent ?? metric.descent, metric.descent);
+      firstBearing ?? (firstBearing = metric.leftBearing);
+      lastBearing = metric.rightBearing;
+      lastSpacing = metric.advanceWidth > 0 ? letterSpacing : 0;
+      advanceWidth += metric.advanceWidth + lastSpacing;
+    }
+    if (left === undefined || top === undefined || bottom === undefined || ascent === undefined || descent === undefined || firstBearing === undefined) {
+      return PdfFontMetrics.zero;
+    }
+    return new PdfFontMetrics({
+      left,
+      top,
+      right: advanceWidth - lastBearing - lastSpacing,
+      bottom,
+      ascent,
+      descent,
+      advanceWidth: advanceWidth - lastSpacing,
+      leftBearing: firstBearing
+    });
+  }
+  get width() {
+    return this.right - this.left;
+  }
+  get height() {
+    return this.bottom - this.top;
+  }
+  get maxWidth() {
+    return Math.max(this.advanceWidth, this.right) + Math.max(-this.leftBearing, 0);
+  }
+  get maxHeight() {
+    return this.ascent - this.descent;
+  }
+  get effectiveLeft() {
+    return Math.min(this.leftBearing, 0);
+  }
+  get rightBearing() {
+    return this.advanceWidth - this.right;
+  }
+  scale(factor) {
+    return new PdfFontMetrics({
+      left: this.left * factor,
+      top: this.top * factor,
+      right: this.right * factor,
+      bottom: this.bottom * factor,
+      ascent: this.ascent * factor,
+      descent: this.descent * factor,
+      advanceWidth: this.advanceWidth * factor,
+      leftBearing: this.leftBearing * factor
+    });
+  }
+}
+
+PdfFontMetrics.zero = new PdfFontMetrics({
+  left: 0,
+  top: 0,
+  right: 0,
+  bottom: 0
+});
+
+const CP1252 = Object.freeze({
+  8364: 128,
+  8218: 130,
+  402: 131,
+  8222: 132,
+  8230: 133,
+  8224: 134,
+  8225: 135,
+  710: 136,
+  8240: 137,
+  352: 138,
+  8249: 139,
+  338: 140,
+  381: 142,
+  8216: 145,
+  8217: 146,
+  8220: 147,
+  8221: 148,
+  8226: 149,
+  8211: 150,
+  8212: 151,
+  732: 152,
+  8482: 153,
+  353: 154,
+  8250: 155,
+  339: 156,
+  382: 158,
+  376: 159
+});
+
+function toWinAnsiByte(codePoint) {
+  if (codePoint <= 255 && (codePoint & 224) !== 128) return codePoint;
+  return CP1252[codePoint] ?? 63;
+}
+
+const WIN_ANSI_RUNES = Array.from({
+  length: 256
+}, (_, byte) => (byte & 224) === 128 ? 63 : byte);
+
+for (const [rune, byte] of Object.entries(CP1252)) WIN_ANSI_RUNES[byte] = Number(rune);
+
+function winAnsiRune(byte) {
+  return WIN_ANSI_RUNES[byte] ?? 63;
+}
+
+function isWinAnsiRune(codePoint) {
+  return winAnsiRune(toWinAnsiByte(codePoint)) === codePoint;
+}
+
+function pdfLiteral(value) {
+  let output = "";
+  for (const character of String(value)) {
+    const byte = toWinAnsiByte(character.codePointAt(0) ?? 63);
+    if (byte === 40 || byte === 41 || byte === 92) {
+      output += `\\${String.fromCharCode(byte)}`;
+    } else if (byte === 10) {
+      output += "\\n";
+    } else if (byte === 13) {
+      output += "\\r";
+    } else if (byte < 32 || byte > 126) {
+      output += `\\${byte.toString(8).padStart(3, "0")}`;
+    } else {
+      output += String.fromCharCode(byte);
+    }
+  }
+  return `(${output})`;
+}
+
+function pdfHexString(values, digits = 4) {
+  let output = "";
+  for (const value of values) {
+    output += value.toString(16).padStart(digits, "0");
+  }
+  return `<${output}>`;
+}
+
+function fitsPdfDocEncoding(value) {
+  for (let index = 0; index < value.length; index++) {
+    const unit = value.charCodeAt(index);
+    if (unit < 32 ? unit !== 9 && unit !== 10 && unit !== 13 : unit > 126 && unit < 161 || unit === 173 || unit > 255) return false;
+  }
+  return true;
+}
+
+function pdfTextBytes(value) {
+  if (fitsPdfDocEncoding(value)) return value;
+  let bytes = "þÿ";
+  for (let index = 0; index < value.length; index++) {
+    const unit = value.charCodeAt(index);
+    bytes += String.fromCharCode(unit >> 8, unit & 255);
+  }
+  return bytes;
+}
+
+function pdfUnicodeString(value) {
+  let output = "feff";
+  for (let index = 0; index < value.length; index++) {
+    output += value.charCodeAt(index).toString(16).padStart(4, "0");
+  }
+  return `<${output}>`;
+}
+
+class PdfString extends PdfDataType {
+  constructor(value) {
+    super();
+    this.value = value;
+  }
+  static fromDate(date) {
+    if (!Number.isFinite(date.getTime())) {
+      throw new RangeError("PDF date must be valid");
+    }
+    const year = String(date.getUTCFullYear()).padStart(4, "0");
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    const hour = String(date.getUTCHours()).padStart(2, "0");
+    const minute = String(date.getUTCMinutes()).padStart(2, "0");
+    const second = String(date.getUTCSeconds()).padStart(2, "0");
+    return new PdfString(`D:${year}${month}${day}${hour}${minute}${second}Z`);
+  }
+  output(s) {
+    s.putString(fitsPdfDocEncoding(this.value) ? pdfLiteral(this.value) : pdfUnicodeString(this.value));
+  }
+}
+
+const widthDigits = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function unpackWidths(packed) {
+  const widths = [];
+  for (let index = 0; index < packed.length; index += 2) {
+    widths.push((widthDigits.indexOf(packed[index]) << 6 | widthDigits.indexOf(packed[index + 1])) / 1e3);
+  }
+  return Object.freeze(widths);
+}
+
+const helveticaWidths = unpackWidths("H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0EWEWFjIsIsN5KbC/FNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsEWEWJIJIJIIsP3KbKbLSLSKbJjMKLSEWH0KbIsNBLSMKKbMKLSKbJjLSKbOwKbKbJjEWEWEVHVIsFNIsIsH0IsIsEWIsIsDeDeH0DeNBIsIsIsIsFNH0EWIsH0LSH0H0H0FOEEFOJIH0KPH0DeEWFNPoIsIsFNPoKbD6PoH0JjH0H0DeDdFNFNFeIsPoFNPoH0D6OqH0H0KbEWEWIsIsIsIsEEIsFNLhFyHAJIFNLhFNJeJIFeFeFNIsIZEWFNFeFtHANlNlNvIsKbKbKbKbKbKbPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKaJjIsIsIsIsIsIsOAH0IsIsIsIsD7D7D7D7IsIsIsIsIsIsIsJIJjIsIsIsIsH0IrH0");
+
+const helveticaBoldWidths = unpackWidths("EWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWFNHaIsIsN5LSDuFNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsFNFNJIJIJIJjPPLSLSLSLSKbJjMKLSEWIsLSJjNBLSMKKbMKLSKbJjLSKbOwKbKbJjFNEWFNJIIsFNIsJjIsJjIsFNJjJjEWEWIsEWN5JjJjJjJjGFIsFNJjIsMKIsIsH0GFEYGFJIFeIsFeEWIsH0PoIsIsFNPoKbFNPoFeJjFeFeEWEWH0H0FeIsPoFNPoIsFNOwFeH0KbEWFNIsIsIsIsEYIsFNLhFyIsJIFNLhFNGQJIFNFNFNJjIsEWFNFNFtIsNCNCNCJjLSLSLSLSLSLSPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKbJjIsIsIsIsIsIsN5IsIsIsIsIsEWEWEWEWJjJjJjJjJjJjJjJIJjJjJjJjJjIsJjIs");
+
+const helveticaBoldObliqueWidths = unpackWidths("EWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWFNHaIsIsN5LSDuFNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsFNFNJIJIJIJjPPLSLSLSLSKbJjMKLSEWIsLSJjNBLSMKKbMKLSKbJjLSKbOwKbKbJjFNEWFNJIIsFNIsJjIsJjIsFNJjJjEWEWIsEWN5JjJjJjJjGFIsFNJjIsMKIsIsH0GFEYGFJIFeIsFeEWIsH0PoIsIsFNPoKbFNPoFeJjFeFeEWEWH0H0FeIsPoFNPoIsFNOwFeH0KbEWFNIsIsIsIsEYIsFNLhFyIsJIFNLhFNGQJIFNFNFNJjIsEWFNFNFtIsNCNCNCJjLSLSLSLSLSLSPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKbJjIsIsIsIsIsIsN5IsIsIsIsIsEWEWEWEWJjJjJjJjJjJjJjJIJjJjJjJjJjIsJjIs");
+
+const helveticaObliqueWidths = unpackWidths("EWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWFjIsIsN5KbC/FNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsEWEWJIJIJIIsP3KbKbLSLSKbJjMKLSEWH0KbIsNBLSMKKbMKLSKbJjLSKbOwKbKbJjEWEWEWHVIsFNIsIsH0IsIsEWIsIsDeDeH0DeNBIsIsIsIsFNH0EWIsH0LSH0H0H0FOEEFOJIFeIsFeDeIsFNPoIsIsFNPoKbFNPoFeJjFeFeDeDeFNFNFeIsPoFNPoH0FNOwFeH0KbEWFNIsIsIsIsEEIsFNLhFyIsJIFNLhFNGQJIFNFNFNIsIZEWFNFNFtIsNCNCNCJjKbKbKbKbKbKbPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKbJjIsIsIsIsIsIsN5H0IsIsIsIsEWEWEWEWIsIsIsIsIsIsIsJIJjIsIsIsIsH0IsH0");
+
+const timesWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6FNGYH0H0NBMKC0FNFNH0I0D6FND6EWH0H0H0H0H0H0H0H0H0H0EWEWI0I0I0G8OZLSKbKbLSJjIsLSLSFNGFLSJjN5LSLSIsLSKbIsJjLSLSOwLSLSJjFNEWFNHVH0FNG8H0G8H0G8FNH0H0EWEWH0EWMKH0H0H0H0FNGFEWH0H0LSH0H0G8HgDIHgIdFeH0FeFNH0G8PoH0H0FNPoIsFNN5FeJjFeFeFNFNG8G8FeH0PoFNPUGFFNLSFeG8LSD6FNH0H0H0H0DIH0FNL4EUH0I0FNL4FNGQI0EsEsFNH0HFD6FNEsE2H0LuLuLuG8LSLSLSLSLSLSN5KbJjJjJjJjFNFNFNFNLSLSLSLSLSLSLSI0LSLSLSLSLSLSIsH0G8G8G8G8G8G8KbG8G8G8G8G8EWEWEWEWH0H0H0H0H0H0H0I0H0H0H0H0H0H0H0H0");
+
+const timesBoldWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6FNIrH0H0PoNBEWFNFNH0I6D6FND6EWH0H0H0H0H0H0H0H0H0H0FNFNI6I6I6H0OiLSKbLSLSKbJjMKMKGFH0MKKbOwLSMKJjMKLSIsKbLSLSPoLSLSKbFNEWFNJFH0FNH0IsG8IsG8FNH0IsEWFNIsEWNBIsH0IsIsG8GFFNIsH0LSH0H0G8GKDcGKIIFeH0FeFNH0H0PoH0H0FNPoIsFNPoFeKbFeFeFNFNH0H0FeH0PoFNPoGFFNLSFeG8LSD6FNH0H0H0H0DcH0FNLrEsH0I6FNLrFNGQI6EsEsFNIsIcD6FNEsFKH0LuLuLuH0LSLSLSLSLSLSPoLSKbKbKbKbGFGFGFGFLSLSMKMKMKMKMKI6MKLSLSLSLSLSJjIsH0H0H0H0H0H0LSG8G8G8G8G8EWEWEWEWH0IsH0H0H0H0H0I6H0IsIsIsIsH0IsH0");
+
+const timesBoldItalicWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6GFIrH0H0NBMKEWFNFNH0I6D6FND6EWH0H0H0H0H0H0H0H0H0H0FNFNI6I6I6H0NAKbKbKbLSKbKbLSMKGFH0KbJjN5LSLSJjLSKbIsJjLSKbN5KbJjJjFNEWFNI6H0FNH0H0G8H0G8FNH0IsEWEWH0EWMKIsH0H0H0GFGFEWIsG8KbH0G8GFFcDcFcI6FeH0FeFNH0H0PoH0H0FNPoIsFNOwFeJjFeFeFNFNH0H0FeH0PoFNPoGFFNLSFeGFJjD6GFH0H0H0H0DcH0FNLrEKH0JeFNLrFNGQI6EsEsFNJAH0D6FNEsEsH0LuLuLuH0KbKbKbKbKbKbOwKbKbKbKbKbGFGFGFGFLSLSLSLSLSLSLSI6LSLSLSLSLSJjJjH0H0H0H0H0H0H0LSG8G8G8G8G8EWEWEWEWH0IsH0H0H0H0H0I6H0IsIsIsIsG8H0G8");
+
+const timesItalicWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6FNGkH0H0NBMKDWFNFNH0KjD6FND6EWH0H0H0H0H0H0H0H0H0H0FNFNKjKjKjH0OYJjJjKbLSJjJjLSLSFNG8KbIsNBKbLSJjLSJjH0IsLSJjNBJjIsIsGFEWGFGmH0FNH0H0G8H0G8EWH0H0EWEWG8EWLSH0H0H0H0GFGFEWH0G8KbG8G8GFGQETGQIdFeH0FeFNH0IsN5H0H0FNPoH0FNOwFeIsFeFeFNFNIsIsFeH0N5FNPUGFFNKbFeGFIsD6GFH0H0H0H0ETH0FNL4EUH0KjFNL4FNGQKjEsEsFNH0ILD6FNEsE2H0LuLuLuH0JjJjJjJjJjJjN5KbJjJjJjJjFNFNFNFNLSKbLSLSLSLSLSKjLSLSLSLSLSIsJjH0H0H0H0H0H0H0KbG8G8G8G8G8EWEWEWEWH0H0H0H0H0H0H0KjH0H0H0H0H0G8H0G8");
+
+const symbolWidths = unpackWidths("JLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLD6FNLJH0IlNBMKG3FNFNH0IlD6IlD6EWH0H0H0H0H0H0H0H0H0H0EWEWIlIlIlG8IlLSKbLSJkJjL7JbLSFNJ3LSKuN5LSLSMALlIsJQJjKyG3MAKFMbJjFNNfFNKSH0H0J3IlIlHuG3IJGbJbFJJbIlIlJAIJIlIlIJIlJbG3JALJKuHtKuHuHgDIHgIlJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLLuJsD3IlCnLJH0LxLxLxLxQSPbJbPbJbGQIlGbIlIlLJHuHMIlIlIlIlPoJbPoKSM3KuMbPbMAMAM3MAMALJLJLJLJLJLJLJMALJMWMWN6M3IlD6LJJbJbQSPbJbPbJbHuFJMWMWMSLJGAGAGAGAGAGAHuHuHuHuJLFJESKuKuKuGAGAGAGAGAGAHuHuHuJL");
+
+const zapfDingbatsWidths = unpackWidths("LqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqEWPOPBPOPULPMVMWMXKyPAOrIlNXOPOlOPOxPOLzNOL6L5I7KlL7L4L3LyHuIoIZJBK0MSMUMUMWMZMaMwM3MVNJM3NBMwM/ObLoLTLtMWMYK3MIMAMYL3LDLEKqK9M6MvMVMVLDKvK4KxMSMTLJMXMRMXNpL5L6L6L3L3N8N8MUMQG2CKEVGfGIGIKcKcLqGGGGE9E9EUEUH9H9GaGaDqDqFOFOLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLcIgIgOOKbL4L4MIJTK2JyMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUN+NGP4HKLsOcLsOWOfOgOgNCNpM8OcOcOVOiOjHPNzNENENjNjK4K4NqLqNqL4OyMDNhMDN4PHN4M/NpOfPKOWLq");
+
+class PdfType1Font {
+  constructor({fontName, ascent, descent, widths = [], missingWidth = .6}) {
+    this.fontName = fontName;
+    this.ascent = ascent;
+    this.descent = descent;
+    this.widths = widths;
+    this.missingWidth = missingWidth;
+  }
+  static courier() {
+    return new PdfType1Font({
+      fontName: "Courier",
+      ascent: .91,
+      descent: -.22
+    });
+  }
+  static courierBold() {
+    return new PdfType1Font({
+      fontName: "Courier-Bold",
+      ascent: .91,
+      descent: -.22
+    });
+  }
+  static courierBoldOblique() {
+    return new PdfType1Font({
+      fontName: "Courier-BoldOblique",
+      ascent: .91,
+      descent: -.22
+    });
+  }
+  static courierOblique() {
+    return new PdfType1Font({
+      fontName: "Courier-Oblique",
+      ascent: .91,
+      descent: -.22
+    });
+  }
+  static helvetica() {
+    return new PdfType1Font({
+      fontName: "Helvetica",
+      ascent: .931,
+      descent: -.225,
+      widths: helveticaWidths
+    });
+  }
+  static helveticaBold() {
+    return new PdfType1Font({
+      fontName: "Helvetica-Bold",
+      ascent: .962,
+      descent: -.228,
+      widths: helveticaBoldWidths
+    });
+  }
+  static helveticaBoldOblique() {
+    return new PdfType1Font({
+      fontName: "Helvetica-BoldOblique",
+      ascent: .962,
+      descent: -.228,
+      widths: helveticaBoldObliqueWidths
+    });
+  }
+  static helveticaOblique() {
+    return new PdfType1Font({
+      fontName: "Helvetica-Oblique",
+      ascent: .931,
+      descent: -.225,
+      widths: helveticaObliqueWidths
+    });
+  }
+  static times() {
+    return new PdfType1Font({
+      fontName: "Times-Roman",
+      ascent: .898,
+      descent: -.218,
+      widths: timesWidths
+    });
+  }
+  static timesBold() {
+    return new PdfType1Font({
+      fontName: "Times-Bold",
+      ascent: .935,
+      descent: -.218,
+      widths: timesBoldWidths
+    });
+  }
+  static timesBoldItalic() {
+    return new PdfType1Font({
+      fontName: "Times-BoldItalic",
+      ascent: .921,
+      descent: -.218,
+      widths: timesBoldItalicWidths
+    });
+  }
+  static timesItalic() {
+    return new PdfType1Font({
+      fontName: "Times-Italic",
+      ascent: .883,
+      descent: -.217,
+      widths: timesItalicWidths
+    });
+  }
+  static symbol() {
+    return new PdfType1Font({
+      fontName: "Symbol",
+      ascent: 1.01,
+      descent: -.293,
+      widths: symbolWidths
+    });
+  }
+  static zapfDingbats() {
+    return new PdfType1Font({
+      fontName: "ZapfDingbats",
+      ascent: .82,
+      descent: -.143,
+      widths: zapfDingbatsWidths
+    });
+  }
+  isRuneSupported(rune) {
+    return isWinAnsiRune(rune);
+  }
+  glyphMetrics(charCode) {
+    const advanceWidth = this.widths[charCode] ?? this.missingWidth;
+    return new PdfFontMetrics({
+      left: 0,
+      top: this.descent,
+      right: advanceWidth,
+      bottom: this.ascent
+    });
+  }
+  stringMetrics(text, size, letterSpacing = 0) {
+    const metrics = [];
+    for (const character of String(text)) {
+      metrics.push(this.glyphMetrics(toWinAnsiByte(character.codePointAt(0) ?? 63)).scale(size));
+    }
+    return PdfFontMetrics.append(metrics, letterSpacing);
+  }
+  encodeText(text) {
+    return pdfLiteral(text);
+  }
+  resourceDict() {
+    return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/Type1") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfName("/WinAnsiEncoding") ] ]);
+  }
+}
+
+const defaultPdfFont = PdfType1Font.helvetica();
+
+class PdfSoftMaskReference extends PdfDataType {
+  constructor(mask) {
+    super();
+    this.mask = mask;
+  }
+  output(_stream) {
+    throw new Error("A PDF soft mask must be resolved by PdfDocument before output");
+  }
+}
+
+const LINE_CAP_OPERAND = Object.freeze({
+  butt: 0,
+  round: 1,
+  square: 2
+});
+
+const LINE_JOIN_OPERAND = Object.freeze({
+  miter: 0,
+  round: 1,
+  bevel: 2
+});
+
+const M4 = .551784;
+
+function operands(values) {
+  return values.map(formatNumber).join(" ");
+}
+
+function compositeTextOperand(font, text, wordSpacing, fontSize) {
+  const parts = [];
+  let run = "";
+  const adjustment = formatNumber(-wordSpacing * 1e3 / fontSize);
+  for (const character of String(text)) {
+    run += character;
+    if (character === " ") {
+      parts.push(font.encodeText(run), adjustment);
+      run = "";
+    }
+  }
+  if (run !== "" || parts.length === 0) {
+    parts.push(font.encodeText(run));
+  }
+  return `[${parts.join(" ")}]`;
+}
+
+class PdfCanvas {
+  constructor(pageHeight, {colorAlpha = true} = {}) {
+    this.content = new PdfStream;
+    this.formNames = new Map;
+    this.commandCount = 0;
+    this.fontNames = new Map;
+    this.stateNames = new Map;
+    this.stateDicts = new Map;
+    this.patternNames = new Map;
+    this.patternDicts = new Map;
+    this.shadingNames = new Map;
+    this.shadingDicts = new Map;
+    this.imageNames = new Map;
+    this.softMaskNames = new Map;
+    this.pageAnnotations = [];
+    this.currentSoftMask = null;
+    this.softMaskStack = [];
+    this.currentTransform = identityMatrix;
+    this.transformStack = [];
+    this.currentLetterSpacing = 0;
+    this.currentWordSpacing = 0;
+    this.textSpacingStack = [];
+    this.textSpacingDirty = false;
+    this.alphas = [ 1, 1, 1, 1 ];
+    this.alphaStack = [];
+    this.pageHeight = pageHeight;
+    this.colorAlpha = colorAlpha;
+  }
+  push(command) {
+    if (this.commandCount > 0) {
+      this.content.putByte(10);
+    }
+    this.content.putString(command);
+    this.commandCount++;
+  }
+  toPdfY(top) {
+    return this.pageHeight - top;
+  }
+  transformWidgetPoint(x, top) {
+    return transformPoint(this.currentTransform, x, this.toPdfY(top));
+  }
+  addFont(font) {
+    const existing = this.fontNames.get(font);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const name = `/F${this.fontNames.size + 1}`;
+    this.fontNames.set(font, name);
+    return name;
+  }
+  get fonts() {
+    return this.fontNames;
+  }
+  get graphicStates() {
+    return this.stateDicts;
+  }
+  get patterns() {
+    return this.patternDicts;
+  }
+  get shadings() {
+    return this.shadingDicts;
+  }
+  get forms() {
+    return this.formNames;
+  }
+  drawForm(form, x, y, width = form.width, height = form.height) {
+    if (![ x, y, width, height ].every(Number.isFinite) || width <= 0 || height <= 0) throw new RangeError("Invalid form placement");
+    let name = this.formNames.get(form);
+    if (name === undefined) {
+      name = `/Xf${this.formNames.size + 1}`;
+      this.formNames.set(form, name);
+    }
+    const command = `${formatNumber(width / form.width)} 0 0 ${formatNumber(height / form.height)} ${formatNumber(x)} ${formatNumber(y)} cm ${name} Do`;
+    if (this.alphas[2] !== this.alphas[0] || this.alphas[3] !== this.alphas[1]) {
+      this.saveContext();
+      this.setColorAlpha(null, false);
+      this.setColorAlpha(null, true);
+      this.push(command);
+      this.restoreContext();
+    } else {
+      this.push(`q ${command} Q`);
+    }
+  }
+  get images() {
+    return this.imageNames;
+  }
+  get annotations() {
+    return this.pageAnnotations;
+  }
+  addAnnotation(annotation) {
+    this.pageAnnotations.push(annotation);
+  }
+  addUrlLink(destination, x, top, width, height, border) {
+    this.addLink("url", destination, x, top, width, height, border);
+  }
+  addNamedLink(destination, x, top, width, height, border) {
+    this.addLink("destination", destination, x, top, width, height, border);
+  }
+  addLink(kind, destination, x, top, width, height, border) {
+    if (width <= 0 || height <= 0) return;
+    const points = [ this.transformWidgetPoint(x, top), this.transformWidgetPoint(x + width, top), this.transformWidgetPoint(x, top + height), this.transformWidgetPoint(x + width, top + height) ];
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    this.pageAnnotations.push({
+      kind,
+      destination,
+      border,
+      rect: {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
+      }
+    });
+  }
+  addFormField(field, x, top, width, height) {
+    if (width <= 0 || height <= 0) return;
+    const points = [ this.transformWidgetPoint(x, top), this.transformWidgetPoint(x + width, top), this.transformWidgetPoint(x, top + height), this.transformWidgetPoint(x + width, top + height) ];
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    this.pageAnnotations.push({
+      ...field,
+      rect: {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
+      }
+    });
+  }
+  addImage(image) {
+    const existing = this.imageNames.get(image);
+    if (existing !== undefined) return existing;
+    const name = `/I${this.imageNames.size + 1}`;
+    this.imageNames.set(image, name);
+    return name;
+  }
+  saveContext() {
+    this.push("q");
+    this.transformStack.push(this.currentTransform);
+    this.textSpacingStack.push([ this.currentLetterSpacing, this.currentWordSpacing ]);
+    this.softMaskStack.push(this.currentSoftMask);
+    this.alphaStack.push(this.alphas.slice());
+  }
+  restoreContext() {
+    const restored = this.transformStack.pop();
+    const spacing = this.textSpacingStack.pop();
+    const softMask = this.softMaskStack.pop();
+    const alphas = this.alphaStack.pop();
+    if (restored === undefined) {
+      return;
+    }
+    this.push("Q");
+    this.currentTransform = restored;
+    this.alphas = alphas;
+    if (spacing !== undefined) {
+      this.currentLetterSpacing = spacing[0];
+      this.currentWordSpacing = spacing[1];
+    }
+    this.currentSoftMask = softMask ?? null;
+  }
+  save() {
+    this.saveContext();
+  }
+  restore() {
+    this.restoreContext();
+  }
+  setTransform(matrix) {
+    this.push(`${operands(matrix)} cm`);
+    this.currentTransform = multiplyMatrix(this.currentTransform, matrix);
+  }
+  getTransform() {
+    return this.currentTransform;
+  }
+  setGraphicState(state) {
+    if (state.isEmpty) {
+      return null;
+    }
+    const alphas = this.alphas;
+    const fill = state.fillOpacity === null ? null : alphas[0] * state.fillOpacity;
+    const stroke = state.strokeOpacity === null ? null : alphas[1] * state.strokeOpacity;
+    const name = this.emitGraphicState(fill === state.fillOpacity && stroke === state.strokeOpacity ? state : new PdfGraphicState({
+      fillOpacity: fill,
+      strokeOpacity: stroke,
+      blendMode: state.blendMode
+    }));
+    if (fill !== null) alphas[0] = alphas[2] = fill;
+    if (stroke !== null) alphas[1] = alphas[3] = stroke;
+    return name;
+  }
+  setColorAlpha(color, stroke) {
+    if (!this.colorAlpha) return;
+    const alphas = this.alphas;
+    const index = stroke ? 1 : 0;
+    const alpha = alphas[index] * (color instanceof PdfColor ? color.alpha : 1);
+    if (Math.abs(alpha - alphas[index + 2]) < 1e-9) return;
+    this.emitGraphicState(new PdfGraphicState(stroke ? {
+      strokeOpacity: alpha
+    } : {
+      fillOpacity: alpha
+    }));
+    alphas[index + 2] = alpha;
+  }
+  emitGraphicState(state) {
+    const existing = this.stateNames.get(state.key);
+    if (existing !== undefined) {
+      this.push(`${existing} gs`);
+      return existing;
+    }
+    const name = `/g${this.stateDicts.size + 1}`;
+    this.stateNames.set(state.key, name);
+    this.stateDicts.set(name, state.output());
+    this.push(`${name} gs`);
+    return name;
+  }
+  setSoftMask(mask) {
+    this.currentSoftMask = mask;
+    const existing = this.softMaskNames.get(mask);
+    if (existing !== undefined) {
+      this.push(`${existing} gs`);
+      return existing;
+    }
+    const name = `/g${this.stateDicts.size + 1}`;
+    const state = new PdfDict;
+    state.set("/SMask", new PdfSoftMaskReference(mask));
+    this.softMaskNames.set(mask, name);
+    this.stateDicts.set(name, state);
+    this.push(`${name} gs`);
+    return name;
+  }
+  getSoftMask() {
+    return this.currentSoftMask;
+  }
+  addPattern(pattern) {
+    const existing = this.patternNames.get(pattern.key);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const name = `/p${this.patternDicts.size + 1}`;
+    this.patternNames.set(pattern.key, name);
+    this.patternDicts.set(name, pattern.output());
+    return name;
+  }
+  setFillPattern(pattern) {
+    const name = this.addPattern(pattern);
+    this.setColorAlpha(null, false);
+    this.push(`/Pattern cs ${name} scn`);
+    return name;
+  }
+  setStrokePattern(pattern) {
+    const name = this.addPattern(pattern);
+    this.setColorAlpha(null, true);
+    this.push(`/Pattern CS ${name} SCN`);
+    return name;
+  }
+  drawShading(shading) {
+    const dict = shading.output();
+    const key = dict.toString();
+    let name = this.shadingNames.get(key);
+    if (name === undefined) {
+      name = `/s${this.shadingDicts.size + 1}`;
+      this.shadingNames.set(key, name);
+      this.shadingDicts.set(name, dict);
+    }
+    const resetAlpha = this.alphas[2] !== this.alphas[0];
+    if (resetAlpha) {
+      this.saveContext();
+      this.setColorAlpha(null, false);
+    }
+    this.push(`${name} sh`);
+    if (resetAlpha) this.restoreContext();
+    return name;
+  }
+  drawImage(image, x, y, width = image.width, height) {
+    const resolvedHeight = height ?? image.height * width / image.width;
+    const name = this.addImage(image);
+    let matrix;
+    switch (image.orientation) {
+     case "topRight":
+      matrix = [ -width, 0, 0, resolvedHeight, width + x, y ];
+      break;
+
+     case "bottomRight":
+      matrix = [ -width, 0, 0, -resolvedHeight, width + x, resolvedHeight + y ];
+      break;
+
+     case "bottomLeft":
+      matrix = [ width, 0, 0, -resolvedHeight, x, resolvedHeight + y ];
+      break;
+
+     case "leftTop":
+      matrix = [ 0, -resolvedHeight, -width, 0, width + x, resolvedHeight + y ];
+      break;
+
+     case "rightTop":
+      matrix = [ 0, -resolvedHeight, width, 0, x, resolvedHeight + y ];
+      break;
+
+     case "rightBottom":
+      matrix = [ 0, resolvedHeight, width, 0, x, y ];
+      break;
+
+     case "leftBottom":
+      matrix = [ 0, resolvedHeight, -width, 0, width + x, y ];
+      break;
+
+     default:
+      matrix = [ width, 0, 0, resolvedHeight, x, y ];
+      break;
+    }
+    this.saveContext();
+    this.setColorAlpha(null, false);
+    this.push(`${operands(matrix)} cm`);
+    this.push(`${name} Do`);
+    this.restoreContext();
+  }
+  moveTo(x, y) {
+    this.push(`${operands([ x, y ])} m`);
+  }
+  lineTo(x, y) {
+    this.push(`${operands([ x, y ])} l`);
+  }
+  curveTo(x1, y1, x2, y2, x3, y3) {
+    this.push(`${operands([ x1, y1, x2, y2, x3, y3 ])} c`);
+  }
+  closePath() {
+    this.push("h");
+  }
+  drawLine(x1, y1, x2, y2) {
+    this.moveTo(x1, y1);
+    this.lineTo(x2, y2);
+  }
+  drawRect(x, y, width, height) {
+    this.push(`${operands([ x, y, width, height ])} re`);
+  }
+  drawBox(box) {
+    this.drawRect(box.x, box.y, box.width, box.height);
+  }
+  drawRRect(x, y, width, height, rv, rh) {
+    this.moveTo(x, y + rv);
+    this.curveTo(x, y - M4 * rv + rv, x - M4 * rh + rh, y, x + rh, y);
+    this.lineTo(x + width - rh, y);
+    this.curveTo(x + M4 * rh + width - rh, y, x + width, y - M4 * rv + rv, x + width, y + rv);
+    this.lineTo(x + width, y + height - rv);
+    this.curveTo(x + width, y + M4 * rv + height - rv, x + M4 * rh + width - rh, y + height, x + width - rh, y + height);
+    this.lineTo(x + rh, y + height);
+    this.curveTo(x - M4 * rh + rh, y + height, x, y + M4 * rv + height - rv, x, y + height - rv);
+    this.lineTo(x, y + rv);
+  }
+  drawEllipse(x, y, r1, r2, clockwise = true) {
+    this.moveTo(x, y - r2);
+    if (clockwise) {
+      this.curveTo(x + M4 * r1, y - r2, x + r1, y - M4 * r2, x + r1, y);
+      this.curveTo(x + r1, y + M4 * r2, x + M4 * r1, y + r2, x, y + r2);
+      this.curveTo(x - M4 * r1, y + r2, x - r1, y + M4 * r2, x - r1, y);
+      this.curveTo(x - r1, y - M4 * r2, x - M4 * r1, y - r2, x, y - r2);
+    } else {
+      this.curveTo(x - M4 * r1, y - r2, x - r1, y - M4 * r2, x - r1, y);
+      this.curveTo(x - r1, y + M4 * r2, x - M4 * r1, y + r2, x, y + r2);
+      this.curveTo(x + M4 * r1, y + r2, x + r1, y + M4 * r2, x + r1, y);
+      this.curveTo(x + r1, y - M4 * r2, x + M4 * r1, y - r2, x, y - r2);
+    }
+  }
+  bezierArc(x1, y1, rx, ry, x2, y2, {large = false, sweep = false, phi = 0} = {}) {
+    if (x1 === x2 && y1 === y2) {
+      return;
+    }
+    if (Math.abs(rx) <= 1e-10 || Math.abs(ry) <= 1e-10) {
+      this.lineTo(x2, y2);
+      return;
+    }
+    if (phi !== 0) {
+      const cos = Math.cos(phi);
+      const sin = Math.sin(phi);
+      this.endToCenterParameters(cos * x1 + sin * y1, cos * y1 - sin * x1, cos * x2 + sin * y2, cos * y2 - sin * x2, large, sweep, rx, ry, [ cos, sin, -sin, cos, 0, 0 ]);
+    } else {
+      this.endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry);
+    }
+  }
+  vectorAngle(ux, uy, vx, vy) {
+    const d = Math.sqrt(ux * ux + uy * uy) * Math.sqrt(vx * vx + vy * vy);
+    if (d === 0) {
+      return 0;
+    }
+    let c = (ux * vx + uy * vy) / d;
+    if (c < -1) c = -1; else if (c > 1) c = 1;
+    const s = ux * vy - uy * vx;
+    c = Math.acos(c);
+    return Math.sign(c) === Math.sign(s) ? c : -c;
+  }
+  endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry, rotation) {
+    rx = Math.abs(rx);
+    ry = Math.abs(ry);
+    const x1d = .5 * (x1 - x2);
+    const y1d = .5 * (y1 - y2);
+    let r = x1d * x1d / (rx * rx) + y1d * y1d / (ry * ry);
+    if (r > 1) {
+      const rr = Math.sqrt(r);
+      rx *= rr;
+      ry *= rr;
+      r = 0;
+    } else if (r !== 0) {
+      r = 1 / r - 1;
+    }
+    if (r > -1e-10 && r < 0) {
+      r = 0;
+    }
+    r = Math.sqrt(r);
+    if (large === sweep) {
+      r = -r;
+    }
+    const cxd = r * rx * y1d / ry;
+    const cyd = -(r * ry * x1d) / rx;
+    const cx = cxd + .5 * (x1 + x2);
+    const cy = cyd + .5 * (y1 + y2);
+    const theta = this.vectorAngle(1, 0, (x1d - cxd) / rx, (y1d - cyd) / ry);
+    const tau = Math.PI * 2;
+    let dTheta = this.vectorAngle((x1d - cxd) / rx, (y1d - cyd) / ry, (-x1d - cxd) / rx, (-y1d - cyd) / ry) % tau;
+    if (dTheta < 0) {
+      dTheta += tau;
+    }
+    if (!sweep && dTheta > 0) {
+      dTheta -= tau;
+    } else if (sweep && dTheta < 0) {
+      dTheta += tau;
+    }
+    this.bezierArcFromCentre(cx, cy, rx, ry, -theta, -dTheta, rotation);
+  }
+  bezierArcFromCentre(cx, cy, rx, ry, startAngle, extent, rotation) {
+    let fragmentsCount;
+    let fragmentsAngle;
+    if (Math.abs(extent) <= Math.PI / 2) {
+      fragmentsCount = 1;
+      fragmentsAngle = extent;
+    } else {
+      fragmentsCount = Math.ceil(Math.abs(extent) / (Math.PI / 2));
+      fragmentsAngle = extent / fragmentsCount;
+    }
+    if (fragmentsAngle === 0) {
+      return;
+    }
+    const halfFragment = fragmentsAngle * .5;
+    let kappa = Math.abs(4 / 3 * (1 - Math.cos(halfFragment)) / Math.sin(halfFragment));
+    if (fragmentsAngle < 0) {
+      kappa = -kappa;
+    }
+    let theta = startAngle;
+    const startFragment = theta + fragmentsAngle;
+    let c1 = Math.cos(theta);
+    let s1 = Math.sin(theta);
+    for (let i = 0; i < fragmentsCount; i++) {
+      const c0 = c1;
+      const s0 = s1;
+      theta = startFragment + i * fragmentsAngle;
+      c1 = Math.cos(theta);
+      s1 = Math.sin(theta);
+      const points = [ cx + rx * (c0 - kappa * s0), cy - ry * (s0 + kappa * c0), cx + rx * (c1 + kappa * s1), cy - ry * (s1 - kappa * c1), cx + rx * c1, cy - ry * s1 ];
+      if (rotation !== undefined) {
+        for (let j = 0; j < 6; j += 2) {
+          const point = transformPoint(rotation, points[j], points[j + 1]);
+          points[j] = point.x;
+          points[j + 1] = point.y;
+        }
+      }
+      this.push(`${operands(points)} c`);
+    }
+  }
+  fillPath({evenOdd = false} = {}) {
+    this.push(evenOdd ? "f*" : "f");
+  }
+  strokePath({close = false} = {}) {
+    this.push(close ? "s" : "S");
+  }
+  fillAndStrokePath({evenOdd = false, close = false} = {}) {
+    this.push(`${close ? "b" : "B"}${evenOdd ? "*" : ""}`);
+  }
+  clipPath({evenOdd = false, end = true} = {}) {
+    this.push(`W${evenOdd ? "*" : ""}${end ? " n" : ""}`);
+  }
+  setLineWidth(width) {
+    this.push(`${formatNumber(width)} w`);
+  }
+  setLineCap(cap) {
+    this.push(`${LINE_CAP_OPERAND[cap]} J`);
+  }
+  setLineJoin(join) {
+    this.push(`${LINE_JOIN_OPERAND[join]} j`);
+  }
+  setMiterLimit(limit) {
+    if (limit < 1) {
+      throw new RangeError("miter limit must be at least 1");
+    }
+    this.push(`${formatNumber(limit)} M`);
+  }
+  setLineDashPattern(array = [], phase = 0) {
+    this.push(`[${operands(array)}] ${formatNumber(phase)} d`);
+  }
+  setFillColor(color) {
+    this.push(colorOperator(color));
+    this.setColorAlpha(color, false);
+  }
+  setStrokeColor(color) {
+    this.push(colorOperator(color, true));
+    this.setColorAlpha(color, true);
+  }
+  setColor(color) {
+    this.setFillColor(color);
+    this.setStrokeColor(color);
+  }
+  fillRect(x, top, width, height, color) {
+    const bottom = this.pageHeight - top - height;
+    this.setColorAlpha(color, false);
+    this.push(`${colorOperator(color)} ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re f`);
+  }
+  strokeRect(x, top, width, height, color, lineWidth = 1) {
+    const bottom = this.pageHeight - top - height;
+    this.setColorAlpha(color, true);
+    this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re S`);
+  }
+  text(text, x, baselineFromTop, style) {
+    const baseline = this.pageHeight - baselineFromTop;
+    const fontSize = style.fontSize;
+    const font = style.font ?? defaultPdfFont;
+    const letterSpacing = style.letterSpacing ?? 0;
+    const wordSpacing = style.wordSpacing ?? 0;
+    const operatorWordSpacing = font.isComposite === true ? 0 : wordSpacing;
+    const spacingOperators = [];
+    if (letterSpacing === 0 && operatorWordSpacing === 0 && this.textSpacingDirty) {
+      spacingOperators.push("0", "Tc", "0", "Tw");
+      this.currentLetterSpacing = 0;
+      this.currentWordSpacing = 0;
+      this.textSpacingDirty = false;
+    } else {
+      if (letterSpacing !== this.currentLetterSpacing) {
+        spacingOperators.push(formatNumber(letterSpacing), "Tc");
+        this.currentLetterSpacing = letterSpacing;
+      }
+      if (operatorWordSpacing !== this.currentWordSpacing) {
+        spacingOperators.push(formatNumber(operatorWordSpacing), "Tw");
+        this.currentWordSpacing = operatorWordSpacing;
+      }
+      if (letterSpacing !== 0 || operatorWordSpacing !== 0) {
+        this.textSpacingDirty = true;
+      }
+    }
+    const usesTextArray = font.isComposite === true && wordSpacing !== 0;
+    const textOperand = usesTextArray ? compositeTextOperand(font, text, wordSpacing, fontSize) : font.encodeText(text);
+    this.setColorAlpha(style.color, false);
+    const command = [ "BT", this.addFont(font), formatNumber(fontSize), "Tf", colorOperator(style.color), ...spacingOperators, "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", textOperand, usesTextArray ? "TJ" : "Tj", "ET" ].join(" ");
+    this.push(command);
+  }
+  drawString(font, fontSize, text, x, y, renderingMode = 0) {
+    const mode = renderingMode === 0 ? [] : [ String(renderingMode), "Tr" ];
+    this.push([ "BT", this.addFont(font), formatNumber(fontSize), "Tf", ...mode, "1 0 0 -1", formatNumber(x), formatNumber(y), "Tm", font.encodeText(text), "Tj", "ET" ].join(" "));
+  }
+  line(x1, top1, x2, top2, color = "#000000", lineWidth = 1) {
+    const y1 = this.pageHeight - top1;
+    const y2 = this.pageHeight - top2;
+    this.setColorAlpha(color, true);
+    this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x1)} ${formatNumber(y1)} m ${formatNumber(x2)} ${formatNumber(y2)} l S`);
+  }
+  circle(cx, topCenter, radius, {fill = null, stroke = null, lineWidth = 1} = {}) {
+    const cy = this.pageHeight - topCenter;
+    const k = .5522847498;
+    const ox = radius * k;
+    const oy = radius * k;
+    const path = [ `${formatNumber(cx + radius)} ${formatNumber(cy)} m`, `${formatNumber(cx + radius)} ${formatNumber(cy + oy)} ${formatNumber(cx + ox)} ${formatNumber(cy + radius)} ${formatNumber(cx)} ${formatNumber(cy + radius)} c`, `${formatNumber(cx - ox)} ${formatNumber(cy + radius)} ${formatNumber(cx - radius)} ${formatNumber(cy + oy)} ${formatNumber(cx - radius)} ${formatNumber(cy)} c`, `${formatNumber(cx - radius)} ${formatNumber(cy - oy)} ${formatNumber(cx - ox)} ${formatNumber(cy - radius)} ${formatNumber(cx)} ${formatNumber(cy - radius)} c`, `${formatNumber(cx + ox)} ${formatNumber(cy - radius)} ${formatNumber(cx + radius)} ${formatNumber(cy - oy)} ${formatNumber(cx + radius)} ${formatNumber(cy)} c` ].join(" ");
+    if (fill) this.setColorAlpha(fill, false);
+    if (stroke || !fill) this.setColorAlpha(stroke, true);
+    if (fill && stroke) {
+      this.push(`${colorOperator(fill)} ${colorOperator(stroke, true)} ${formatNumber(lineWidth)} w ${path} B`);
+    } else if (fill) {
+      this.push(`${colorOperator(fill)} ${path} f`);
+    } else {
+      this.push(`${colorOperator(stroke ?? "#000000", true)} ${formatNumber(lineWidth)} w ${path} S`);
+    }
+  }
+  output() {
+    const bytes = this.content.view();
+    let result = "";
+    const chunkSize = 8192;
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      result += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+    }
+    return `${result}\n`;
+  }
+  outputBytes() {
+    const bytes = this.content.view();
+    const result = new Uint8Array(bytes.length + 1);
+    result.set(bytes);
+    result[bytes.length] = 10;
+    return result;
+  }
+  takeOutputBytes() {
+    return this.content.take(10);
   }
 }
 
@@ -3265,8 +3969,9 @@ class DecorationImage extends DecorationGraphic {
       height: box.height
     });
     if (fitted.source.width <= 0 || fitted.source.height <= 0) return;
-    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, image.width, image.height);
-    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, box.width, box.height);
+    const alignment = alignmentIn(context, this.alignment);
+    const sourceOffset = inscribe(alignment, fitted.source.width, fitted.source.height, image.width, image.height);
+    const destinationOffset = inscribe(alignment, fitted.destination.width, fitted.destination.height, box.width, box.height);
     const scaleX = fitted.destination.width / fitted.source.width;
     const scaleY = fitted.destination.height / fitted.source.height;
     const boxTop = context.canvas.pageHeight - box.y - box.height;
@@ -3284,7 +3989,8 @@ class DecorationImage extends DecorationGraphic {
   }
 }
 
-function alignmentPoint(alignment, box) {
+function alignmentPoint(context, geometry, box) {
+  const alignment = alignmentIn(context, geometry);
   return {
     x: box.x + (alignment.x + 1) * box.width / 2,
     y: box.y + (alignment.y + 1) * box.height / 2
@@ -3299,6 +4005,40 @@ class Gradient {
     }
     this.colors = colors.map(color => normalizeColor(color));
     this.stops = stops === null ? [] : stops.map(value => Math.min(1, Math.max(0, Number(value))));
+    this.solid = colors.length === 1 ? normalizePaintColor(colors[0]) : null;
+    const alphas = colors.map(color => color instanceof PdfColor ? color.alpha : 1);
+    this.alphas = alphas.some(alpha => alpha < 1) ? alphas : null;
+  }
+  paint(context, box) {
+    const {canvas} = context;
+    if (this.solid !== null) {
+      canvas.setFillColor(this.solid);
+    } else {
+      if (this.alphas !== null && canvas.colorAlpha) {
+        const mask = new PdfCanvas(canvas.pageHeight);
+        const existing = canvas.getSoftMask();
+        if (existing !== null) mask.setSoftMask(existing);
+        mask.setFillPattern(new PdfShadingPattern({
+          shading: this.shading(context, box, this.alphas.map(alpha => [ alpha, alpha, alpha ]))
+        }));
+        mask.drawBox(box);
+        mask.fillPath();
+        canvas.setSoftMask({
+          content: mask.takeOutputBytes(),
+          boundingBox: box,
+          fonts: mask.fonts,
+          graphicStates: mask.graphicStates,
+          patterns: mask.patterns,
+          shadings: mask.shadings,
+          images: mask.images
+        });
+      }
+      canvas.setFillPattern(new PdfShadingPattern({
+        shading: this.shading(context, box, this.colors)
+      }));
+    }
+    canvas.drawBox(box);
+    canvas.fillPath();
   }
 }
 
@@ -3312,21 +4052,16 @@ class LinearGradient extends Gradient {
     this.end = end;
     this.tileMode = tileMode;
   }
-  paint(context, box) {
-    const pattern = new PdfShadingPattern({
-      shading: new PdfShading({
-        type: "axial",
-        boundingBox: box,
-        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: alignmentPoint(this.begin, box),
-        end: alignmentPoint(this.end, box),
-        extendStart: true,
-        extendEnd: true
-      })
+  shading(context, box, colors) {
+    return new PdfShading({
+      type: "axial",
+      boundingBox: box,
+      fn: PdfBaseFunction.colorsAndStops(colors, this.stops),
+      start: alignmentPoint(context, this.begin, box),
+      end: alignmentPoint(context, this.end, box),
+      extendStart: true,
+      extendEnd: true
     });
-    context.canvas.setFillPattern(pattern);
-    context.canvas.drawBox(box);
-    context.canvas.fillPath();
   }
 }
 
@@ -3342,24 +4077,19 @@ class RadialGradient extends Gradient {
     this.focal = focal;
     this.focalRadius = Math.max(0, Number(focalRadius));
   }
-  paint(context, box) {
+  shading(context, box, colors) {
     const scale = Math.min(box.width, box.height);
-    const pattern = new PdfShadingPattern({
-      shading: new PdfShading({
-        type: "radial",
-        boundingBox: box,
-        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: alignmentPoint(this.focal ?? this.center, box),
-        end: alignmentPoint(this.center, box),
-        radius0: this.focalRadius * scale,
-        radius1: this.radius * scale,
-        extendStart: true,
-        extendEnd: true
-      })
+    return new PdfShading({
+      type: "radial",
+      boundingBox: box,
+      fn: PdfBaseFunction.colorsAndStops(colors, this.stops),
+      start: alignmentPoint(context, this.focal ?? this.center, box),
+      end: alignmentPoint(context, this.center, box),
+      radius0: this.focalRadius * scale,
+      radius1: this.radius * scale,
+      extendStart: true,
+      extendEnd: true
     });
-    context.canvas.setFillPattern(pattern);
-    context.canvas.drawBox(box);
-    context.canvas.fillPath();
   }
 }
 
@@ -3421,7 +4151,7 @@ class BoxDecoration {
       throw new Error("A circular BoxDecoration cannot have a border radius");
     }
   }
-  paint(context, x, y, width, height, phase = "all", direction = "ltr") {
+  paint(context, x, y, width, height, phase = "all", direction = Directionality.of(context)) {
     const resolvedRadius = this.borderRadius?.resolve(direction) ?? null;
     const box = {
       x,
@@ -3516,21 +4246,25 @@ class Container extends SpanningWidget {
   get canSpan() {
     return this.height === null && this.child instanceof SpanningWidget && this.child.canSpan;
   }
-  constructor({child = null, width = null, height = null, padding = 0, margin = 0, background = null, borderColor = null, borderWidth = 1, decoration = null, foregroundDecoration = null, alignment = null} = {}) {
+  constructor({child = null, width = null, height = null, padding = 0, margin = 0, color = null, background = null, borderColor = null, borderWidth = 1, decoration = null, foregroundDecoration = null, alignment = null} = {}) {
     super();
     this.child = child;
     this.width = width == null ? null : Number(width);
     this.height = height == null ? null : Number(height);
-    this.padding = normalizeInsets(padding);
-    this.margin = normalizeInsets(margin);
-    this.background = background == null ? null : normalizePaintColor(background);
+    this.padding = normalizeInsetsGeometry(padding);
+    this.margin = normalizeInsetsGeometry(margin);
+    if (color != null && background != null) {
+      throw new Error("Container cannot have both color and background");
+    }
+    const fill = color ?? background;
+    this.background = fill == null ? null : normalizePaintColor(fill);
     this.borderColor = borderColor == null ? null : normalizePaintColor(borderColor);
     this.borderWidth = Number(borderWidth);
     this.decoration = normalizeBoxDecoration(decoration);
     this.foregroundDecoration = normalizeBoxDecoration(foregroundDecoration);
     this.alignment = alignment === null ? null : resolveBasicAlignment(alignment);
     if (this.background !== null && this.decoration !== null) {
-      throw new Error("Container cannot have both background and decoration");
+      throw new Error("Container cannot have both a color and a decoration");
     }
   }
   initialSpanState() {
@@ -3538,26 +4272,30 @@ class Container extends SpanningWidget {
       childState: this.child instanceof SpanningWidget ? this.child.initialSpanState() : null
     };
   }
-  finishLayout(parent, desired, childBox) {
+  edges(context) {
+    return [ insetsIn(context, this.margin), insetsIn(context, this.padding) ];
+  }
+  finishLayout(context, parent, desired, childBox) {
+    const [margin, padding] = this.edges(context);
     const content = childBox ?? {
       width: 0,
       height: 0
     };
     const decorated = desired.constrain({
-      width: content.width + this.padding.left + this.padding.right,
-      height: content.height + this.padding.top + this.padding.bottom
+      width: content.width + padding.left + padding.right,
+      height: content.height + padding.top + padding.bottom
     });
     const boxWidth = decorated.width;
     const boxHeight = decorated.height;
-    const contentWidth = Math.max(0, boxWidth - this.padding.left - this.padding.right);
-    const contentHeight = Math.max(0, boxHeight - this.padding.top - this.padding.bottom);
+    const contentWidth = Math.max(0, boxWidth - padding.left - padding.right);
+    const contentHeight = Math.max(0, boxHeight - padding.top - padding.bottom);
     const childOffset = childBox === null || this.alignment === null ? {
       dx: 0,
       dy: 0
-    } : inscribe(this.alignment, childBox.width, childBox.height, contentWidth, contentHeight);
+    } : inscribe(alignmentIn(context, this.alignment), childBox.width, childBox.height, contentWidth, contentHeight);
     const size = parent.constrain({
-      width: boxWidth + this.margin.left + this.margin.right,
-      height: boxHeight + this.margin.top + this.margin.bottom
+      width: boxWidth + margin.left + margin.right,
+      height: boxHeight + margin.top + margin.bottom
     });
     return {
       widget: this,
@@ -3574,15 +4312,16 @@ class Container extends SpanningWidget {
   }
   layout(context, constraints) {
     const parent = BoxConstraints.from(constraints);
-    const outer = parent.deflate(this.margin);
+    const [margin, padding] = this.edges(context);
+    const outer = parent.deflate(margin);
     const fill = this.alignment !== null || this.child === null;
     const desired = outer.tighten({
       width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
       height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
     });
-    const inner = desired.deflate(this.padding);
+    const inner = desired.deflate(padding);
     const childBox = this.child?.layout(context, this.alignment === null ? inner : inner.loosen()) ?? null;
-    return this.finishLayout(parent, desired, childBox);
+    return this.finishLayout(context, parent, desired, childBox);
   }
   layoutSpan(context, constraints, state) {
     if (!(this.child instanceof SpanningWidget) || !this.canSpan) {
@@ -3593,16 +4332,17 @@ class Container extends SpanningWidget {
       };
     }
     const parent = BoxConstraints.from(constraints);
-    const outer = parent.deflate(this.margin);
+    const [margin, padding] = this.edges(context);
+    const outer = parent.deflate(margin);
     const fill = this.alignment !== null || this.child === null;
     const desired = outer.tighten({
       width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
       height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
     });
-    const inner = desired.deflate(this.padding);
+    const inner = desired.deflate(padding);
     const fragment = this.child.layoutSpan(context, this.alignment === null ? inner : inner.loosen(), state.childState);
     return {
-      box: this.finishLayout(parent, desired, fragment.box),
+      box: this.finishLayout(context, parent, desired, fragment.box),
       nextState: {
         childState: fragment.nextState
       },
@@ -3610,8 +4350,9 @@ class Container extends SpanningWidget {
     };
   }
   paint(context, box) {
-    const x = box.x + this.margin.left;
-    const y = box.y + this.margin.top;
+    const [margin, padding] = this.edges(context);
+    const x = box.x + margin.left;
+    const y = box.y + margin.top;
     const {boxWidth, boxHeight, childBox, childX, childY} = box.data;
     if (this.decoration !== null) {
       this.decoration.paint(context, x, y, boxWidth, boxHeight);
@@ -3624,12 +4365,29 @@ class Container extends SpanningWidget {
     if (childBox) {
       childBox.widget.paint(context, {
         ...childBox,
-        x: x + this.padding.left + childX,
-        y: y + this.padding.top + childY
+        x: x + padding.left + childX,
+        y: y + padding.top + childY
       });
     }
     this.foregroundDecoration?.paint(context, x, y, boxWidth, boxHeight);
   }
+}
+
+function reversedAxes(context, horizontal, verticalDirection) {
+  const up = verticalDirection === "up";
+  const rtl = Directionality.of(context) === "rtl";
+  return horizontal ? [ rtl, up ] : [ up, rtl ];
+}
+
+function crossOffset(alignment, free, flip) {
+  return alignment === "center" ? free / 2 : alignment === "end" !== flip ? free : 0;
+}
+
+function checkCrossAxisAlignment(value) {
+  if (![ "start", "end", "center", "stretch" ].includes(value)) {
+    throw new TypeError(`Unknown CrossAxisAlignment: ${value}`);
+  }
+  return value;
 }
 
 function finiteNonNegative$1(value, name) {
@@ -3740,9 +4498,7 @@ class Flex extends SpanningWidget {
     if (mainAxisSize !== "min" && mainAxisSize !== "max") {
       throw new TypeError(`Unknown MainAxisSize: ${mainAxisSize}`);
     }
-    if (![ "start", "end", "center", "stretch" ].includes(crossAxisAlignment)) {
-      throw new TypeError(`Unknown CrossAxisAlignment: ${crossAxisAlignment}`);
-    }
+    checkCrossAxisAlignment(crossAxisAlignment);
     if (verticalDirection !== "up" && verticalDirection !== "down") {
       throw new TypeError(`Unknown VerticalDirection: ${verticalDirection}`);
     }
@@ -3756,7 +4512,7 @@ class Flex extends SpanningWidget {
     this.crossAxisAlignment = crossAxisAlignment;
     this.verticalDirection = verticalDirection;
     this.gap = finiteNonNegative$1(Number(gap), "gap");
-    this.margin = normalizeInsets(margin);
+    this.margin = normalizeInsetsGeometry(margin);
     this.widths = widths;
   }
   crossConstraints(constraints) {
@@ -3783,7 +4539,7 @@ class Flex extends SpanningWidget {
       };
     }
     const outer = BoxConstraints.from(incoming);
-    const constraints = outer.deflate(this.margin);
+    const constraints = outer.deflate(insetsIn(context, this.margin));
     const [, childMaxCross] = this.crossConstraints(constraints);
     const childMinCross = this.crossAxisAlignment === "stretch" && Number.isFinite(childMaxCross) ? childMaxCross : 0;
     const available = constraints.maxHeight;
@@ -3821,7 +4577,8 @@ class Flex extends SpanningWidget {
   layoutRange(context, incoming, firstChild, lastChild) {
     const count = lastChild - firstChild;
     const outer = BoxConstraints.from(incoming);
-    const constraints = outer.deflate(this.margin);
+    const margin = insetsIn(context, this.margin);
+    const constraints = outer.deflate(margin);
     const horizontal = this.direction === "horizontal";
     const maxMain = horizontal ? constraints.maxWidth : constraints.maxHeight;
     const minMain = horizontal ? constraints.minWidth : constraints.minHeight;
@@ -3913,27 +4670,27 @@ class Flex extends SpanningWidget {
         break;
       }
     }
-    const reverse = this.direction === "vertical" && this.verticalDirection === "up";
+    const [reverse, flipCross] = reversedAxes(context, horizontal, this.verticalDirection);
     let cursor = reverse ? actualMain - leading : leading;
     const children = [];
     for (let index = 0; index < measured.length; index++) {
       const box = measured[index];
       const main = childMain(box, this.direction);
       const cross = childCross(box, this.direction);
-      const crossPosition = this.crossAxisAlignment === "end" ? actualCross - cross : this.crossAxisAlignment === "center" ? (actualCross - cross) / 2 : 0;
+      const crossPosition = this.crossAxisAlignment === "stretch" ? 0 : crossOffset(this.crossAxisAlignment, actualCross - cross, flipCross);
       const mainPosition = reverse ? cursor - main : cursor;
       children.push({
         box,
-        dx: this.margin.left + (horizontal ? mainPosition : crossPosition),
-        dy: this.margin.top + (horizontal ? crossPosition : mainPosition)
+        dx: margin.left + (horizontal ? mainPosition : crossPosition),
+        dy: margin.top + (horizontal ? crossPosition : mainPosition)
       });
       cursor += reverse ? -(main + between) : main + between;
     }
     const innerWidth = horizontal ? actualMain : actualCross;
     const innerHeight = horizontal ? actualCross : actualMain;
     const size = outer.constrain({
-      width: innerWidth + this.margin.left + this.margin.right,
-      height: innerHeight + this.margin.top + this.margin.bottom
+      width: innerWidth + margin.left + margin.right,
+      height: innerHeight + margin.top + margin.bottom
     });
     return {
       widget: this,
@@ -4104,7 +4861,7 @@ class Positioned extends Widget {
 }
 
 class PositionedDirectional extends Positioned {
-  constructor({start = null, top = null, end = null, bottom = null, width = null, height = null, child, textDirection = "ltr"}) {
+  constructor({start = null, top = null, end = null, bottom = null, width = null, height = null, child, textDirection = null}) {
     super({
       left: textDirection === "rtl" ? end : start,
       right: textDirection === "rtl" ? start : end,
@@ -4118,7 +4875,7 @@ class PositionedDirectional extends Positioned {
     this.end = end;
     this.textDirection = textDirection;
   }
-  static fill({start = 0, top = 0, end = 0, bottom = 0, child, textDirection = "ltr"}) {
+  static fill({start = 0, top = 0, end = 0, bottom = 0, child, textDirection = null}) {
     return new PositionedDirectional({
       start,
       top,
@@ -4150,7 +4907,12 @@ class Stack extends Widget {
     let width = constraints.minWidth;
     let height = constraints.minHeight;
     let hasNonPositioned = false;
-    const nonPositionedConstraints = this.fit === "loose" ? constraints.loosen() : this.fit === "expand" ? BoxConstraints.tight(constraints.biggest) : constraints;
+    const nonPositionedConstraints = this.fit === "loose" ? constraints.loosen() : this.fit === "expand" ? new BoxConstraints({
+      minWidth: constraints.hasBoundedWidth ? constraints.maxWidth : 0,
+      maxWidth: constraints.maxWidth,
+      minHeight: constraints.hasBoundedHeight ? constraints.maxHeight : 0,
+      maxHeight: constraints.maxHeight
+    }) : constraints;
     for (const child of this.children) {
       if (child instanceof Positioned) continue;
       hasNonPositioned = true;
@@ -4167,10 +4929,12 @@ class Stack extends Widget {
       height: constraints.hasBoundedHeight ? constraints.maxHeight : 0
     });
     const placed = [];
+    const direction = Directionality.of(context);
+    const alignment = resolveAlignment$1(this.alignment, direction);
     for (const child of this.children) {
       if (!(child instanceof Positioned)) {
         const childBox = measured.get(child);
-        const offset = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
+        const offset = inscribe(alignment, childBox.width, childBox.height, size.width, size.height);
         placed.push({
           box: childBox,
           dx: offset.dx,
@@ -4178,16 +4942,17 @@ class Stack extends Widget {
         });
         continue;
       }
+      const [left, right] = direction === "rtl" && child instanceof PositionedDirectional && child.textDirection === null ? [ child.right, child.left ] : [ child.left, child.right ];
       let positionedConstraints = new BoxConstraints;
-      const tightWidth = child.left !== null && child.right !== null ? Math.max(0, size.width - child.left - child.right) : child.width;
+      const tightWidth = left !== null && right !== null ? Math.max(0, size.width - left - right) : child.width;
       const tightHeight = child.top !== null && child.bottom !== null ? Math.max(0, size.height - child.top - child.bottom) : child.height;
       positionedConstraints = positionedConstraints.tighten({
         width: tightWidth,
         height: tightHeight
       });
       const childBox = child.layout(context, positionedConstraints);
-      const aligned = inscribe(this.alignment, childBox.width, childBox.height, size.width, size.height);
-      const dx = child.left !== null ? child.left : child.right !== null ? size.width - child.right - childBox.width : aligned.dx;
+      const aligned = inscribe(alignment, childBox.width, childBox.height, size.width, size.height);
+      const dx = left !== null ? left : right !== null ? size.width - right - childBox.width : aligned.dx;
       const dy = child.top !== null ? child.top : child.bottom !== null ? size.height - child.bottom - childBox.height : aligned.dy;
       placed.push({
         box: childBox,
@@ -4753,940 +5518,6 @@ class PdfBorder {
     const result = new PdfDict([ [ "/W", new PdfNum(this.width) ], [ "/S", new PdfName(styles[this.style]) ] ]);
     if (this.dash !== null) result.set("/D", PdfArray.fromNum(this.dash));
     return result;
-  }
-}
-
-class PdfFontMetrics {
-  constructor({left, top, right, bottom, ascent = bottom, descent = top, advanceWidth = right - left, leftBearing = left}) {
-    this.left = left;
-    this.top = top;
-    this.right = right;
-    this.bottom = bottom;
-    this.ascent = ascent;
-    this.descent = descent;
-    this.advanceWidth = advanceWidth;
-    this.leftBearing = leftBearing;
-  }
-  static append(metrics, letterSpacing = 0) {
-    let left;
-    let top;
-    let bottom;
-    let ascent;
-    let descent;
-    let advanceWidth = 0;
-    let firstBearing;
-    let lastBearing = 0;
-    let lastSpacing = 0;
-    for (const metric of metrics) {
-      left ?? (left = metric.left);
-      top = Math.min(top ?? metric.top, metric.top);
-      bottom = Math.max(bottom ?? metric.bottom, metric.bottom);
-      ascent = Math.max(ascent ?? metric.ascent, metric.ascent);
-      descent = Math.min(descent ?? metric.descent, metric.descent);
-      firstBearing ?? (firstBearing = metric.leftBearing);
-      lastBearing = metric.rightBearing;
-      lastSpacing = metric.advanceWidth > 0 ? letterSpacing : 0;
-      advanceWidth += metric.advanceWidth + lastSpacing;
-    }
-    if (left === undefined || top === undefined || bottom === undefined || ascent === undefined || descent === undefined || firstBearing === undefined) {
-      return PdfFontMetrics.zero;
-    }
-    return new PdfFontMetrics({
-      left,
-      top,
-      right: advanceWidth - lastBearing - lastSpacing,
-      bottom,
-      ascent,
-      descent,
-      advanceWidth: advanceWidth - lastSpacing,
-      leftBearing: firstBearing
-    });
-  }
-  get width() {
-    return this.right - this.left;
-  }
-  get height() {
-    return this.bottom - this.top;
-  }
-  get maxWidth() {
-    return Math.max(this.advanceWidth, this.right) + Math.max(-this.leftBearing, 0);
-  }
-  get maxHeight() {
-    return this.ascent - this.descent;
-  }
-  get effectiveLeft() {
-    return Math.min(this.leftBearing, 0);
-  }
-  get rightBearing() {
-    return this.advanceWidth - this.right;
-  }
-  scale(factor) {
-    return new PdfFontMetrics({
-      left: this.left * factor,
-      top: this.top * factor,
-      right: this.right * factor,
-      bottom: this.bottom * factor,
-      ascent: this.ascent * factor,
-      descent: this.descent * factor,
-      advanceWidth: this.advanceWidth * factor,
-      leftBearing: this.leftBearing * factor
-    });
-  }
-}
-
-PdfFontMetrics.zero = new PdfFontMetrics({
-  left: 0,
-  top: 0,
-  right: 0,
-  bottom: 0
-});
-
-const CP1252 = Object.freeze({
-  8364: 128,
-  8218: 130,
-  402: 131,
-  8222: 132,
-  8230: 133,
-  8224: 134,
-  8225: 135,
-  710: 136,
-  8240: 137,
-  352: 138,
-  8249: 139,
-  338: 140,
-  381: 142,
-  8216: 145,
-  8217: 146,
-  8220: 147,
-  8221: 148,
-  8226: 149,
-  8211: 150,
-  8212: 151,
-  732: 152,
-  8482: 153,
-  353: 154,
-  8250: 155,
-  339: 156,
-  382: 158,
-  376: 159
-});
-
-function toWinAnsiByte(codePoint) {
-  if (codePoint <= 255) return codePoint;
-  return CP1252[codePoint] ?? 63;
-}
-
-function pdfLiteral(value) {
-  let output = "";
-  for (const character of String(value)) {
-    const byte = toWinAnsiByte(character.codePointAt(0) ?? 63);
-    if (byte === 40 || byte === 41 || byte === 92) {
-      output += `\\${String.fromCharCode(byte)}`;
-    } else if (byte === 10) {
-      output += "\\n";
-    } else if (byte === 13) {
-      output += "\\r";
-    } else if (byte < 32 || byte > 126) {
-      output += `\\${byte.toString(8).padStart(3, "0")}`;
-    } else {
-      output += String.fromCharCode(byte);
-    }
-  }
-  return `(${output})`;
-}
-
-function pdfHexString(values, digits = 4) {
-  let output = "";
-  for (const value of values) {
-    output += value.toString(16).padStart(digits, "0");
-  }
-  return `<${output}>`;
-}
-
-function fitsWinAnsi(value) {
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
-    if (codePoint > 255 && CP1252[codePoint] === undefined) return false;
-  }
-  return true;
-}
-
-function pdfUnicodeString(value) {
-  let output = "feff";
-  for (let index = 0; index < value.length; index++) {
-    output += value.charCodeAt(index).toString(16).padStart(4, "0");
-  }
-  return `<${output}>`;
-}
-
-class PdfString extends PdfDataType {
-  constructor(value) {
-    super();
-    this.value = value;
-  }
-  static fromDate(date) {
-    if (!Number.isFinite(date.getTime())) {
-      throw new RangeError("PDF date must be valid");
-    }
-    const year = String(date.getUTCFullYear()).padStart(4, "0");
-    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-    const day = String(date.getUTCDate()).padStart(2, "0");
-    const hour = String(date.getUTCHours()).padStart(2, "0");
-    const minute = String(date.getUTCMinutes()).padStart(2, "0");
-    const second = String(date.getUTCSeconds()).padStart(2, "0");
-    return new PdfString(`D:${year}${month}${day}${hour}${minute}${second}Z`);
-  }
-  output(s) {
-    s.putString(fitsWinAnsi(this.value) ? pdfLiteral(this.value) : pdfUnicodeString(this.value));
-  }
-}
-
-const helveticaWidths = Object.freeze([ .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .278, .278, .355, .556, .556, .889, .667, .191, .333, .333, .389, .584, .278, .333, .278, .278, .556, .556, .556, .556, .556, .556, .556, .556, .556, .556, .278, .278, .584, .584, .584, .556, 1.015, .667, .667, .722, .722, .667, .611, .778, .722, .278, .5, .667, .556, .833, .722, .778, .667, .778, .722, .667, .611, .722, .667, .944, .667, .667, .611, .278, .278, .277, .469, .556, .333, .556, .556, .5, .556, .556, .278, .556, .556, .222, .222, .5, .222, .833, .556, .556, .556, .556, .333, .5, .278, .556, .5, .722, .5, .5, .5, .334, .26, .334, .584, .5, .655, .5, .222, .278, .333, 1, .556, .556, .333, 1, .667, .25, 1, .5, .611, .5, .5, .222, .221, .333, .333, .35, .556, 1, .333, 1, .5, .25, .938, .5, .5, .667, .278, .278, .556, .556, .556, .556, .26, .556, .333, .737, .37, .448, .584, .333, .737, .333, .606, .584, .35, .35, .333, .556, .537, .278, .333, .35, .365, .448, .869, .869, .879, .556, .667, .667, .667, .667, .667, .667, 1, .722, .667, .667, .667, .667, .278, .278, .278, .278, .722, .722, .778, .778, .778, .778, .778, .584, .778, .722, .722, .722, .722, .667, .666, .611, .556, .556, .556, .556, .556, .556, .896, .5, .556, .556, .556, .556, .251, .251, .251, .251, .556, .556, .556, .556, .556, .556, .556, .584, .611, .556, .556, .556, .556, .5, .555, .5 ]);
-
-const helveticaBoldWidths = Object.freeze([ .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .333, .474, .556, .556, .889, .722, .238, .333, .333, .389, .584, .278, .333, .278, .278, .556, .556, .556, .556, .556, .556, .556, .556, .556, .556, .333, .333, .584, .584, .584, .611, .975, .722, .722, .722, .722, .667, .611, .778, .722, .278, .556, .722, .611, .833, .722, .778, .667, .778, .722, .667, .611, .722, .667, .944, .667, .667, .611, .333, .278, .333, .584, .556, .333, .556, .611, .556, .611, .556, .333, .611, .611, .278, .278, .556, .278, .889, .611, .611, .611, .611, .389, .556, .333, .611, .556, .778, .556, .556, .5, .389, .28, .389, .584, .35, .556, .35, .278, .556, .5, 1, .556, .556, .333, 1, .667, .333, 1, .35, .611, .35, .35, .278, .278, .5, .5, .35, .556, 1, .333, 1, .556, .333, .944, .35, .5, .667, .278, .333, .556, .556, .556, .556, .28, .556, .333, .737, .37, .556, .584, .333, .737, .333, .4, .584, .333, .333, .333, .611, .556, .278, .333, .333, .365, .556, .834, .834, .834, .611, .722, .722, .722, .722, .722, .722, 1, .722, .667, .667, .667, .667, .278, .278, .278, .278, .722, .722, .778, .778, .778, .778, .778, .584, .778, .722, .722, .722, .722, .667, .667, .611, .556, .556, .556, .556, .556, .556, .889, .556, .556, .556, .556, .556, .278, .278, .278, .278, .611, .611, .611, .611, .611, .611, .611, .584, .611, .611, .611, .611, .611, .556, .611, .556 ]);
-
-const helveticaBoldObliqueWidths = Object.freeze([ .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .333, .474, .556, .556, .889, .722, .238, .333, .333, .389, .584, .278, .333, .278, .278, .556, .556, .556, .556, .556, .556, .556, .556, .556, .556, .333, .333, .584, .584, .584, .611, .975, .722, .722, .722, .722, .667, .611, .778, .722, .278, .556, .722, .611, .833, .722, .778, .667, .778, .722, .667, .611, .722, .667, .944, .667, .667, .611, .333, .278, .333, .584, .556, .333, .556, .611, .556, .611, .556, .333, .611, .611, .278, .278, .556, .278, .889, .611, .611, .611, .611, .389, .556, .333, .611, .556, .778, .556, .556, .5, .389, .28, .389, .584, .35, .556, .35, .278, .556, .5, 1, .556, .556, .333, 1, .667, .333, 1, .35, .611, .35, .35, .278, .278, .5, .5, .35, .556, 1, .333, 1, .556, .333, .944, .35, .5, .667, .278, .333, .556, .556, .556, .556, .28, .556, .333, .737, .37, .556, .584, .333, .737, .333, .4, .584, .333, .333, .333, .611, .556, .278, .333, .333, .365, .556, .834, .834, .834, .611, .722, .722, .722, .722, .722, .722, 1, .722, .667, .667, .667, .667, .278, .278, .278, .278, .722, .722, .778, .778, .778, .778, .778, .584, .778, .722, .722, .722, .722, .667, .667, .611, .556, .556, .556, .556, .556, .556, .889, .556, .556, .556, .556, .556, .278, .278, .278, .278, .611, .611, .611, .611, .611, .611, .611, .584, .611, .611, .611, .611, .611, .556, .611, .556 ]);
-
-const helveticaObliqueWidths = Object.freeze([ .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .355, .556, .556, .889, .667, .191, .333, .333, .389, .584, .278, .333, .278, .278, .556, .556, .556, .556, .556, .556, .556, .556, .556, .556, .278, .278, .584, .584, .584, .556, 1.015, .667, .667, .722, .722, .667, .611, .778, .722, .278, .5, .667, .556, .833, .722, .778, .667, .778, .722, .667, .611, .722, .667, .944, .667, .667, .611, .278, .278, .278, .469, .556, .333, .556, .556, .5, .556, .556, .278, .556, .556, .222, .222, .5, .222, .833, .556, .556, .556, .556, .333, .5, .278, .556, .5, .722, .5, .5, .5, .334, .26, .334, .584, .35, .556, .35, .222, .556, .333, 1, .556, .556, .333, 1, .667, .333, 1, .35, .611, .35, .35, .222, .222, .333, .333, .35, .556, 1, .333, 1, .5, .333, .944, .35, .5, .667, .278, .333, .556, .556, .556, .556, .26, .556, .333, .737, .37, .556, .584, .333, .737, .333, .4, .584, .333, .333, .333, .556, .537, .278, .333, .333, .365, .556, .834, .834, .834, .611, .667, .667, .667, .667, .667, .667, 1, .722, .667, .667, .667, .667, .278, .278, .278, .278, .722, .722, .778, .778, .778, .778, .778, .584, .778, .722, .722, .722, .722, .667, .667, .611, .556, .556, .556, .556, .556, .556, .889, .5, .556, .556, .556, .556, .278, .278, .278, .278, .556, .556, .556, .556, .556, .556, .556, .584, .611, .556, .556, .556, .556, .5, .556, .5 ]);
-
-const timesWidths = Object.freeze([ .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .333, .408, .5, .5, .833, .778, .18, .333, .333, .5, .564, .25, .333, .25, .278, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .278, .278, .564, .564, .564, .444, .921, .722, .667, .667, .722, .611, .556, .722, .722, .333, .389, .722, .611, .889, .722, .722, .556, .722, .667, .556, .611, .722, .722, .944, .722, .722, .611, .333, .278, .333, .469, .5, .333, .444, .5, .444, .5, .444, .333, .5, .5, .278, .278, .5, .278, .778, .5, .5, .5, .5, .333, .389, .278, .5, .5, .722, .5, .5, .444, .48, .2, .48, .541, .35, .5, .35, .333, .5, .444, 1, .5, .5, .333, 1, .556, .333, .889, .35, .611, .35, .35, .333, .333, .444, .444, .35, .5, 1, .333, .98, .389, .333, .722, .35, .444, .722, .25, .333, .5, .5, .5, .5, .2, .5, .333, .76, .276, .5, .564, .333, .76, .333, .4, .564, .3, .3, .333, .5, .453, .25, .333, .3, .31, .5, .75, .75, .75, .444, .722, .722, .722, .722, .722, .722, .889, .667, .611, .611, .611, .611, .333, .333, .333, .333, .722, .722, .722, .722, .722, .722, .722, .564, .722, .722, .722, .722, .722, .722, .556, .5, .444, .444, .444, .444, .444, .444, .667, .444, .444, .444, .444, .444, .278, .278, .278, .278, .5, .5, .5, .5, .5, .5, .5, .564, .5, .5, .5, .5, .5, .5, .5, .5 ]);
-
-const timesBoldWidths = Object.freeze([ .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .333, .555, .5, .5, 1, .833, .278, .333, .333, .5, .57, .25, .333, .25, .278, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .333, .333, .57, .57, .57, .5, .93, .722, .667, .722, .722, .667, .611, .778, .778, .389, .5, .778, .667, .944, .722, .778, .611, .778, .722, .556, .667, .722, .722, 1, .722, .722, .667, .333, .278, .333, .581, .5, .333, .5, .556, .444, .556, .444, .333, .5, .556, .278, .333, .556, .278, .833, .556, .5, .556, .556, .444, .389, .333, .556, .5, .722, .5, .5, .444, .394, .22, .394, .52, .35, .5, .35, .333, .5, .5, 1, .5, .5, .333, 1, .556, .333, 1, .35, .667, .35, .35, .333, .333, .5, .5, .35, .5, 1, .333, 1, .389, .333, .722, .35, .444, .722, .25, .333, .5, .5, .5, .5, .22, .5, .333, .747, .3, .5, .57, .333, .747, .333, .4, .57, .3, .3, .333, .556, .54, .25, .333, .3, .33, .5, .75, .75, .75, .5, .722, .722, .722, .722, .722, .722, 1, .722, .667, .667, .667, .667, .389, .389, .389, .389, .722, .722, .778, .778, .778, .778, .778, .57, .778, .722, .722, .722, .722, .722, .611, .556, .5, .5, .5, .5, .5, .5, .722, .444, .444, .444, .444, .444, .278, .278, .278, .278, .5, .556, .5, .5, .5, .5, .5, .57, .5, .556, .556, .556, .556, .5, .556, .5 ]);
-
-const timesBoldItalicWidths = Object.freeze([ .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .389, .555, .5, .5, .833, .778, .278, .333, .333, .5, .57, .25, .333, .25, .278, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .333, .333, .57, .57, .57, .5, .832, .667, .667, .667, .722, .667, .667, .722, .778, .389, .5, .667, .611, .889, .722, .722, .611, .722, .667, .556, .611, .722, .667, .889, .667, .611, .611, .333, .278, .333, .57, .5, .333, .5, .5, .444, .5, .444, .333, .5, .556, .278, .278, .5, .278, .778, .556, .5, .5, .5, .389, .389, .278, .556, .444, .667, .5, .444, .389, .348, .22, .348, .57, .35, .5, .35, .333, .5, .5, 1, .5, .5, .333, 1, .556, .333, .944, .35, .611, .35, .35, .333, .333, .5, .5, .35, .5, 1, .333, 1, .389, .333, .722, .35, .389, .611, .25, .389, .5, .5, .5, .5, .22, .5, .333, .747, .266, .5, .606, .333, .747, .333, .4, .57, .3, .3, .333, .576, .5, .25, .333, .3, .3, .5, .75, .75, .75, .5, .667, .667, .667, .667, .667, .667, .944, .667, .667, .667, .667, .667, .389, .389, .389, .389, .722, .722, .722, .722, .722, .722, .722, .57, .722, .722, .722, .722, .722, .611, .611, .5, .5, .5, .5, .5, .5, .5, .722, .444, .444, .444, .444, .444, .278, .278, .278, .278, .5, .556, .5, .5, .5, .5, .5, .57, .5, .556, .556, .556, .556, .444, .5, .444 ]);
-
-const timesItalicWidths = Object.freeze([ .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .333, .42, .5, .5, .833, .778, .214, .333, .333, .5, .675, .25, .333, .25, .278, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .333, .333, .675, .675, .675, .5, .92, .611, .611, .667, .722, .611, .611, .722, .722, .333, .444, .667, .556, .833, .667, .722, .611, .722, .611, .5, .556, .722, .611, .833, .611, .556, .556, .389, .278, .389, .422, .5, .333, .5, .5, .444, .5, .444, .278, .5, .5, .278, .278, .444, .278, .722, .5, .5, .5, .5, .389, .389, .278, .5, .444, .667, .444, .444, .389, .4, .275, .4, .541, .35, .5, .35, .333, .5, .556, .889, .5, .5, .333, 1, .5, .333, .944, .35, .556, .35, .35, .333, .333, .556, .556, .35, .5, .889, .333, .98, .389, .333, .667, .35, .389, .556, .25, .389, .5, .5, .5, .5, .275, .5, .333, .76, .276, .5, .675, .333, .76, .333, .4, .675, .3, .3, .333, .5, .523, .25, .333, .3, .31, .5, .75, .75, .75, .5, .611, .611, .611, .611, .611, .611, .889, .667, .611, .611, .611, .611, .333, .333, .333, .333, .722, .667, .722, .722, .722, .722, .722, .675, .722, .722, .722, .722, .722, .556, .611, .5, .5, .5, .5, .5, .5, .5, .667, .444, .444, .444, .444, .444, .278, .278, .278, .278, .5, .5, .5, .5, .5, .5, .5, .675, .5, .5, .5, .5, .5, .444, .5, .444 ]);
-
-const symbolWidths = Object.freeze([ .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .25, .333, .713, .5, .549, .833, .778, .439, .333, .333, .5, .549, .25, .549, .25, .278, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .278, .278, .549, .549, .549, .444, .549, .722, .667, .722, .612, .611, .763, .603, .722, .333, .631, .722, .686, .889, .722, .722, .768, .741, .556, .592, .611, .69, .439, .768, .645, .795, .611, .333, .863, .333, .658, .5, .5, .631, .549, .549, .494, .439, .521, .411, .603, .329, .603, .549, .549, .576, .521, .549, .549, .521, .549, .603, .439, .576, .713, .686, .493, .686, .494, .48, .2, .48, .549, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .75, .62, .247, .549, .167, .713, .5, .753, .753, .753, .753, 1.042, .987, .603, .987, .603, .4, .549, .411, .549, .549, .713, .494, .46, .549, .549, .549, .549, 1, .603, 1, .658, .823, .686, .795, .987, .768, .768, .823, .768, .768, .713, .713, .713, .713, .713, .713, .713, .768, .713, .79, .79, .89, .823, .549, .25, .713, .603, .603, 1.042, .987, .603, .987, .603, .494, .329, .79, .79, .786, .713, .384, .384, .384, .384, .384, .384, .494, .494, .494, .494, .587, .329, .274, .686, .686, .686, .384, .384, .384, .384, .384, .384, .494, .494, .494, .587 ]);
-
-const zapfDingbatsWidths = Object.freeze([ .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .278, .974, .961, .974, .98, .719, .789, .79, .791, .69, .96, .939, .549, .855, .911, .933, .911, .945, .974, .755, .846, .762, .761, .571, .677, .763, .76, .759, .754, .494, .552, .537, .577, .692, .786, .788, .788, .79, .793, .794, .816, .823, .789, .841, .823, .833, .816, .831, .923, .744, .723, .749, .79, .792, .695, .776, .768, .792, .759, .707, .708, .682, .701, .826, .815, .789, .789, .707, .687, .696, .689, .786, .787, .713, .791, .785, .791, .873, .761, .762, .762, .759, .759, .892, .892, .788, .784, .438, .138, .277, .415, .392, .392, .668, .668, .746, .39, .39, .317, .317, .276, .276, .509, .509, .41, .41, .234, .234, .334, .334, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .732, .544, .544, .91, .667, .76, .76, .776, .595, .694, .626, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .894, .838, 1.016, .458, .748, .924, .748, .918, .927, .928, .928, .834, .873, .828, .924, .924, .917, .93, .931, .463, .883, .836, .836, .867, .867, .696, .696, .874, .746, .874, .76, .946, .771, .865, .771, .888, .967, .888, .831, .873, .927, .97, .918, .746 ]);
-
-class PdfType1Font {
-  constructor({fontName, ascent, descent, widths = [], missingWidth = .6}) {
-    this.fontName = fontName;
-    this.ascent = ascent;
-    this.descent = descent;
-    this.widths = widths;
-    this.missingWidth = missingWidth;
-  }
-  static courier() {
-    return new PdfType1Font({
-      fontName: "Courier",
-      ascent: .91,
-      descent: -.22
-    });
-  }
-  static courierBold() {
-    return new PdfType1Font({
-      fontName: "Courier-Bold",
-      ascent: .91,
-      descent: -.22
-    });
-  }
-  static courierBoldOblique() {
-    return new PdfType1Font({
-      fontName: "Courier-BoldOblique",
-      ascent: .91,
-      descent: -.22
-    });
-  }
-  static courierOblique() {
-    return new PdfType1Font({
-      fontName: "Courier-Oblique",
-      ascent: .91,
-      descent: -.22
-    });
-  }
-  static helvetica() {
-    return new PdfType1Font({
-      fontName: "Helvetica",
-      ascent: .931,
-      descent: -.225,
-      widths: helveticaWidths
-    });
-  }
-  static helveticaBold() {
-    return new PdfType1Font({
-      fontName: "Helvetica-Bold",
-      ascent: .962,
-      descent: -.228,
-      widths: helveticaBoldWidths
-    });
-  }
-  static helveticaBoldOblique() {
-    return new PdfType1Font({
-      fontName: "Helvetica-BoldOblique",
-      ascent: .962,
-      descent: -.228,
-      widths: helveticaBoldObliqueWidths
-    });
-  }
-  static helveticaOblique() {
-    return new PdfType1Font({
-      fontName: "Helvetica-Oblique",
-      ascent: .931,
-      descent: -.225,
-      widths: helveticaObliqueWidths
-    });
-  }
-  static times() {
-    return new PdfType1Font({
-      fontName: "Times-Roman",
-      ascent: .898,
-      descent: -.218,
-      widths: timesWidths
-    });
-  }
-  static timesBold() {
-    return new PdfType1Font({
-      fontName: "Times-Bold",
-      ascent: .935,
-      descent: -.218,
-      widths: timesBoldWidths
-    });
-  }
-  static timesBoldItalic() {
-    return new PdfType1Font({
-      fontName: "Times-BoldItalic",
-      ascent: .921,
-      descent: -.218,
-      widths: timesBoldItalicWidths
-    });
-  }
-  static timesItalic() {
-    return new PdfType1Font({
-      fontName: "Times-Italic",
-      ascent: .883,
-      descent: -.217,
-      widths: timesItalicWidths
-    });
-  }
-  static symbol() {
-    return new PdfType1Font({
-      fontName: "Symbol",
-      ascent: 1.01,
-      descent: -.293,
-      widths: symbolWidths
-    });
-  }
-  static zapfDingbats() {
-    return new PdfType1Font({
-      fontName: "ZapfDingbats",
-      ascent: .82,
-      descent: -.143,
-      widths: zapfDingbatsWidths
-    });
-  }
-  glyphMetrics(charCode) {
-    const advanceWidth = this.widths[charCode] ?? this.missingWidth;
-    return new PdfFontMetrics({
-      left: 0,
-      top: this.descent,
-      right: advanceWidth,
-      bottom: this.ascent
-    });
-  }
-  stringMetrics(text, size, letterSpacing = 0) {
-    const metrics = [];
-    for (const character of String(text)) {
-      metrics.push(this.glyphMetrics(toWinAnsiByte(character.codePointAt(0) ?? 63)).scale(size));
-    }
-    return PdfFontMetrics.append(metrics, letterSpacing);
-  }
-  encodeText(text) {
-    return pdfLiteral(text);
-  }
-  resourceDict() {
-    return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/Type1") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfName("/WinAnsiEncoding") ] ]);
-  }
-}
-
-const defaultPdfFont = PdfType1Font.helvetica();
-
-class PdfSoftMaskReference extends PdfDataType {
-  constructor(mask) {
-    super();
-    this.mask = mask;
-  }
-  output(_stream) {
-    throw new Error("A PDF soft mask must be resolved by PdfDocument before output");
-  }
-}
-
-const LINE_CAP_OPERAND = Object.freeze({
-  butt: 0,
-  round: 1,
-  square: 2
-});
-
-const LINE_JOIN_OPERAND = Object.freeze({
-  miter: 0,
-  round: 1,
-  bevel: 2
-});
-
-const M4 = .551784;
-
-function operands(values) {
-  return values.map(formatNumber).join(" ");
-}
-
-function compositeTextOperand(font, text, wordSpacing, fontSize) {
-  const parts = [];
-  let run = "";
-  const adjustment = formatNumber(-wordSpacing * 1e3 / fontSize);
-  for (const character of String(text)) {
-    run += character;
-    if (character === " ") {
-      parts.push(font.encodeText(run), adjustment);
-      run = "";
-    }
-  }
-  if (run !== "" || parts.length === 0) {
-    parts.push(font.encodeText(run));
-  }
-  return `[${parts.join(" ")}]`;
-}
-
-class PdfCanvas {
-  constructor(pageHeight) {
-    this.content = new PdfStream;
-    this.formNames = new Map;
-    this.commandCount = 0;
-    this.fontNames = new Map;
-    this.stateNames = new Map;
-    this.stateDicts = new Map;
-    this.patternNames = new Map;
-    this.patternDicts = new Map;
-    this.shadingNames = new Map;
-    this.shadingDicts = new Map;
-    this.imageNames = new Map;
-    this.softMaskNames = new Map;
-    this.pageAnnotations = [];
-    this.currentSoftMask = null;
-    this.softMaskStack = [];
-    this.currentTransform = identityMatrix;
-    this.transformStack = [];
-    this.currentLetterSpacing = 0;
-    this.currentWordSpacing = 0;
-    this.textSpacingStack = [];
-    this.textSpacingDirty = false;
-    this.pageHeight = pageHeight;
-  }
-  push(command) {
-    if (this.commandCount > 0) {
-      this.content.putByte(10);
-    }
-    this.content.putString(command);
-    this.commandCount++;
-  }
-  toPdfY(top) {
-    return this.pageHeight - top;
-  }
-  transformWidgetPoint(x, top) {
-    return transformPoint(this.currentTransform, x, this.toPdfY(top));
-  }
-  addFont(font) {
-    const existing = this.fontNames.get(font);
-    if (existing !== undefined) {
-      return existing;
-    }
-    const name = `/F${this.fontNames.size + 1}`;
-    this.fontNames.set(font, name);
-    return name;
-  }
-  get fonts() {
-    return this.fontNames;
-  }
-  get graphicStates() {
-    return this.stateDicts;
-  }
-  get patterns() {
-    return this.patternDicts;
-  }
-  get shadings() {
-    return this.shadingDicts;
-  }
-  get forms() {
-    return this.formNames;
-  }
-  drawForm(form, x, y, width = form.width, height = form.height) {
-    if (![ x, y, width, height ].every(Number.isFinite) || width <= 0 || height <= 0) throw new RangeError("Invalid form placement");
-    let name = this.formNames.get(form);
-    if (name === undefined) {
-      name = `/Xf${this.formNames.size + 1}`;
-      this.formNames.set(form, name);
-    }
-    this.push(`q ${formatNumber(width / form.width)} 0 0 ${formatNumber(height / form.height)} ${formatNumber(x)} ${formatNumber(y)} cm ${name} Do Q`);
-  }
-  get images() {
-    return this.imageNames;
-  }
-  get annotations() {
-    return this.pageAnnotations;
-  }
-  addAnnotation(annotation) {
-    this.pageAnnotations.push(annotation);
-  }
-  addUrlLink(destination, x, top, width, height, border) {
-    this.addLink("url", destination, x, top, width, height, border);
-  }
-  addNamedLink(destination, x, top, width, height, border) {
-    this.addLink("destination", destination, x, top, width, height, border);
-  }
-  addLink(kind, destination, x, top, width, height, border) {
-    if (width <= 0 || height <= 0) return;
-    const points = [ this.transformWidgetPoint(x, top), this.transformWidgetPoint(x + width, top), this.transformWidgetPoint(x, top + height), this.transformWidgetPoint(x + width, top + height) ];
-    const xs = points.map(point => point.x);
-    const ys = points.map(point => point.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    this.pageAnnotations.push({
-      kind,
-      destination,
-      border,
-      rect: {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY
-      }
-    });
-  }
-  addFormField(field, x, top, width, height) {
-    if (width <= 0 || height <= 0) return;
-    const points = [ this.transformWidgetPoint(x, top), this.transformWidgetPoint(x + width, top), this.transformWidgetPoint(x, top + height), this.transformWidgetPoint(x + width, top + height) ];
-    const xs = points.map(point => point.x);
-    const ys = points.map(point => point.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    this.pageAnnotations.push({
-      ...field,
-      rect: {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY
-      }
-    });
-  }
-  addImage(image) {
-    const existing = this.imageNames.get(image);
-    if (existing !== undefined) return existing;
-    const name = `/I${this.imageNames.size + 1}`;
-    this.imageNames.set(image, name);
-    return name;
-  }
-  saveContext() {
-    this.push("q");
-    this.transformStack.push(this.currentTransform);
-    this.textSpacingStack.push([ this.currentLetterSpacing, this.currentWordSpacing ]);
-    this.softMaskStack.push(this.currentSoftMask);
-  }
-  restoreContext() {
-    const restored = this.transformStack.pop();
-    const spacing = this.textSpacingStack.pop();
-    const softMask = this.softMaskStack.pop();
-    if (restored === undefined) {
-      return;
-    }
-    this.push("Q");
-    this.currentTransform = restored;
-    if (spacing !== undefined) {
-      this.currentLetterSpacing = spacing[0];
-      this.currentWordSpacing = spacing[1];
-    }
-    this.currentSoftMask = softMask ?? null;
-  }
-  save() {
-    this.saveContext();
-  }
-  restore() {
-    this.restoreContext();
-  }
-  setTransform(matrix) {
-    this.push(`${operands(matrix)} cm`);
-    this.currentTransform = multiplyMatrix(this.currentTransform, matrix);
-  }
-  getTransform() {
-    return this.currentTransform;
-  }
-  setGraphicState(state) {
-    if (state.isEmpty) {
-      return null;
-    }
-    const existing = this.stateNames.get(state.key);
-    if (existing !== undefined) {
-      this.push(`${existing} gs`);
-      return existing;
-    }
-    const name = `/g${this.stateDicts.size + 1}`;
-    this.stateNames.set(state.key, name);
-    this.stateDicts.set(name, state.output());
-    this.push(`${name} gs`);
-    return name;
-  }
-  setSoftMask(mask) {
-    this.currentSoftMask = mask;
-    const existing = this.softMaskNames.get(mask);
-    if (existing !== undefined) {
-      this.push(`${existing} gs`);
-      return existing;
-    }
-    const name = `/g${this.stateDicts.size + 1}`;
-    const state = new PdfDict;
-    state.set("/SMask", new PdfSoftMaskReference(mask));
-    this.softMaskNames.set(mask, name);
-    this.stateDicts.set(name, state);
-    this.push(`${name} gs`);
-    return name;
-  }
-  getSoftMask() {
-    return this.currentSoftMask;
-  }
-  addPattern(pattern) {
-    const existing = this.patternNames.get(pattern.key);
-    if (existing !== undefined) {
-      return existing;
-    }
-    const name = `/p${this.patternDicts.size + 1}`;
-    this.patternNames.set(pattern.key, name);
-    this.patternDicts.set(name, pattern.output());
-    return name;
-  }
-  setFillPattern(pattern) {
-    const name = this.addPattern(pattern);
-    this.push(`/Pattern cs ${name} scn`);
-    return name;
-  }
-  setStrokePattern(pattern) {
-    const name = this.addPattern(pattern);
-    this.push(`/Pattern CS ${name} SCN`);
-    return name;
-  }
-  drawShading(shading) {
-    const dict = shading.output();
-    const key = dict.toString();
-    let name = this.shadingNames.get(key);
-    if (name === undefined) {
-      name = `/s${this.shadingDicts.size + 1}`;
-      this.shadingNames.set(key, name);
-      this.shadingDicts.set(name, dict);
-    }
-    this.push(`${name} sh`);
-    return name;
-  }
-  drawImage(image, x, y, width = image.width, height) {
-    const resolvedHeight = height ?? image.height * width / image.width;
-    const name = this.addImage(image);
-    let matrix;
-    switch (image.orientation) {
-     case "topRight":
-      matrix = [ -width, 0, 0, resolvedHeight, width + x, y ];
-      break;
-
-     case "bottomRight":
-      matrix = [ -width, 0, 0, -resolvedHeight, width + x, resolvedHeight + y ];
-      break;
-
-     case "bottomLeft":
-      matrix = [ width, 0, 0, -resolvedHeight, x, resolvedHeight + y ];
-      break;
-
-     case "leftTop":
-      matrix = [ 0, -resolvedHeight, -width, 0, width + x, resolvedHeight + y ];
-      break;
-
-     case "rightTop":
-      matrix = [ 0, -resolvedHeight, width, 0, x, resolvedHeight + y ];
-      break;
-
-     case "rightBottom":
-      matrix = [ 0, resolvedHeight, width, 0, x, y ];
-      break;
-
-     case "leftBottom":
-      matrix = [ 0, resolvedHeight, -width, 0, width + x, y ];
-      break;
-
-     default:
-      matrix = [ width, 0, 0, resolvedHeight, x, y ];
-      break;
-    }
-    this.push("q");
-    this.push(`${operands(matrix)} cm`);
-    this.push(`${name} Do`);
-    this.push("Q");
-  }
-  moveTo(x, y) {
-    this.push(`${operands([ x, y ])} m`);
-  }
-  lineTo(x, y) {
-    this.push(`${operands([ x, y ])} l`);
-  }
-  curveTo(x1, y1, x2, y2, x3, y3) {
-    this.push(`${operands([ x1, y1, x2, y2, x3, y3 ])} c`);
-  }
-  closePath() {
-    this.push("h");
-  }
-  drawLine(x1, y1, x2, y2) {
-    this.moveTo(x1, y1);
-    this.lineTo(x2, y2);
-  }
-  drawRect(x, y, width, height) {
-    this.push(`${operands([ x, y, width, height ])} re`);
-  }
-  drawBox(box) {
-    this.drawRect(box.x, box.y, box.width, box.height);
-  }
-  drawRRect(x, y, width, height, rv, rh) {
-    this.moveTo(x, y + rv);
-    this.curveTo(x, y - M4 * rv + rv, x - M4 * rh + rh, y, x + rh, y);
-    this.lineTo(x + width - rh, y);
-    this.curveTo(x + M4 * rh + width - rh, y, x + width, y - M4 * rv + rv, x + width, y + rv);
-    this.lineTo(x + width, y + height - rv);
-    this.curveTo(x + width, y + M4 * rv + height - rv, x + M4 * rh + width - rh, y + height, x + width - rh, y + height);
-    this.lineTo(x + rh, y + height);
-    this.curveTo(x - M4 * rh + rh, y + height, x, y + M4 * rv + height - rv, x, y + height - rv);
-    this.lineTo(x, y + rv);
-  }
-  drawEllipse(x, y, r1, r2, clockwise = true) {
-    this.moveTo(x, y - r2);
-    if (clockwise) {
-      this.curveTo(x + M4 * r1, y - r2, x + r1, y - M4 * r2, x + r1, y);
-      this.curveTo(x + r1, y + M4 * r2, x + M4 * r1, y + r2, x, y + r2);
-      this.curveTo(x - M4 * r1, y + r2, x - r1, y + M4 * r2, x - r1, y);
-      this.curveTo(x - r1, y - M4 * r2, x - M4 * r1, y - r2, x, y - r2);
-    } else {
-      this.curveTo(x - M4 * r1, y - r2, x - r1, y - M4 * r2, x - r1, y);
-      this.curveTo(x - r1, y + M4 * r2, x - M4 * r1, y + r2, x, y + r2);
-      this.curveTo(x + M4 * r1, y + r2, x + r1, y + M4 * r2, x + r1, y);
-      this.curveTo(x + r1, y - M4 * r2, x + M4 * r1, y - r2, x, y - r2);
-    }
-  }
-  bezierArc(x1, y1, rx, ry, x2, y2, {large = false, sweep = false, phi = 0} = {}) {
-    if (x1 === x2 && y1 === y2) {
-      return;
-    }
-    if (Math.abs(rx) <= 1e-10 || Math.abs(ry) <= 1e-10) {
-      this.lineTo(x2, y2);
-      return;
-    }
-    if (phi !== 0) {
-      const dx = x2 - x1;
-      const dy = y2 - y1;
-      const cos = Math.cos(-phi);
-      const sin = Math.sin(-phi);
-      this.endToCenterParameters(0, 0, cos * dx - sin * dy, sin * dx + cos * dy, large, sweep, rx, ry);
-    } else {
-      this.endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry);
-    }
-  }
-  vectorAngle(ux, uy, vx, vy) {
-    const d = Math.sqrt(ux * ux + uy * uy) * Math.sqrt(vx * vx + vy * vy);
-    if (d === 0) {
-      return 0;
-    }
-    let c = (ux * vx + uy * vy) / d;
-    if (c < -1) c = -1; else if (c > 1) c = 1;
-    const s = ux * vy - uy * vx;
-    c = Math.acos(c);
-    return Math.sign(c) === Math.sign(s) ? c : -c;
-  }
-  endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry) {
-    rx = Math.abs(rx);
-    ry = Math.abs(ry);
-    const x1d = .5 * (x1 - x2);
-    const y1d = .5 * (y1 - y2);
-    let r = x1d * x1d / (rx * rx) + y1d * y1d / (ry * ry);
-    if (r > 1) {
-      const rr = Math.sqrt(r);
-      rx *= rr;
-      ry *= rr;
-      r = x1d * x1d / (rx * rx) + y1d * y1d / (ry * ry);
-    } else if (r !== 0) {
-      r = 1 / r - 1;
-    }
-    if (r > -1e-10 && r < 0) {
-      r = 0;
-    }
-    r = Math.sqrt(r);
-    if (large === sweep) {
-      r = -r;
-    }
-    const cxd = r * rx * y1d / ry;
-    const cyd = -(r * ry * x1d) / rx;
-    const cx = cxd + .5 * (x1 + x2);
-    const cy = cyd + .5 * (y1 + y2);
-    const theta = this.vectorAngle(1, 0, (x1d - cxd) / rx, (y1d - cyd) / ry);
-    const tau = Math.PI * 2;
-    let dTheta = this.vectorAngle((x1d - cxd) / rx, (y1d - cyd) / ry, (-x1d - cxd) / rx, (-y1d - cyd) / ry) % tau;
-    if (dTheta < 0) {
-      dTheta += tau;
-    }
-    if (!sweep && dTheta > 0) {
-      dTheta -= tau;
-    } else if (sweep && dTheta < 0) {
-      dTheta += tau;
-    }
-    this.bezierArcFromCentre(cx, cy, rx, ry, -theta, -dTheta);
-  }
-  bezierArcFromCentre(cx, cy, rx, ry, startAngle, extent) {
-    let fragmentsCount;
-    let fragmentsAngle;
-    if (Math.abs(extent) <= Math.PI / 2) {
-      fragmentsCount = 1;
-      fragmentsAngle = extent;
-    } else {
-      fragmentsCount = Math.ceil(Math.abs(extent) / (Math.PI / 2));
-      fragmentsAngle = extent / fragmentsCount;
-    }
-    if (fragmentsAngle === 0) {
-      return;
-    }
-    const halfFragment = fragmentsAngle * .5;
-    let kappa = Math.abs(4 / 3 * (1 - Math.cos(halfFragment)) / Math.sin(halfFragment));
-    if (fragmentsAngle < 0) {
-      kappa = -kappa;
-    }
-    let theta = startAngle;
-    const startFragment = theta + fragmentsAngle;
-    let c1 = Math.cos(theta);
-    let s1 = Math.sin(theta);
-    for (let i = 0; i < fragmentsCount; i++) {
-      const c0 = c1;
-      const s0 = s1;
-      theta = startFragment + i * fragmentsAngle;
-      c1 = Math.cos(theta);
-      s1 = Math.sin(theta);
-      this.curveTo(cx + rx * (c0 - kappa * s0), cy - ry * (s0 + kappa * c0), cx + rx * (c1 + kappa * s1), cy - ry * (s1 - kappa * c1), cx + rx * c1, cy - ry * s1);
-    }
-  }
-  fillPath({evenOdd = false} = {}) {
-    this.push(evenOdd ? "f*" : "f");
-  }
-  strokePath({close = false} = {}) {
-    this.push(close ? "s" : "S");
-  }
-  fillAndStrokePath({evenOdd = false, close = false} = {}) {
-    this.push(`${close ? "b" : "B"}${evenOdd ? "*" : ""}`);
-  }
-  clipPath({evenOdd = false, end = true} = {}) {
-    this.push(`W${evenOdd ? "*" : ""}${end ? " n" : ""}`);
-  }
-  setLineWidth(width) {
-    this.push(`${formatNumber(width)} w`);
-  }
-  setLineCap(cap) {
-    this.push(`${LINE_CAP_OPERAND[cap]} J`);
-  }
-  setLineJoin(join) {
-    this.push(`${LINE_JOIN_OPERAND[join]} j`);
-  }
-  setMiterLimit(limit) {
-    if (limit < 1) {
-      throw new RangeError("miter limit must be at least 1");
-    }
-    this.push(`${formatNumber(limit)} M`);
-  }
-  setLineDashPattern(array = [], phase = 0) {
-    this.push(`[${operands(array)}] ${formatNumber(phase)} d`);
-  }
-  setFillColor(color) {
-    this.push(colorOperator(color));
-  }
-  setStrokeColor(color) {
-    this.push(colorOperator(color, true));
-  }
-  setColor(color) {
-    this.setFillColor(color);
-    this.setStrokeColor(color);
-  }
-  fillRect(x, top, width, height, color) {
-    const bottom = this.pageHeight - top - height;
-    this.push(`${colorOperator(color)} ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re f`);
-  }
-  strokeRect(x, top, width, height, color, lineWidth = 1) {
-    const bottom = this.pageHeight - top - height;
-    this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re S`);
-  }
-  text(text, x, baselineFromTop, style) {
-    const baseline = this.pageHeight - baselineFromTop;
-    const fontSize = style.fontSize;
-    const font = style.font ?? defaultPdfFont;
-    const letterSpacing = style.letterSpacing ?? 0;
-    const wordSpacing = style.wordSpacing ?? 0;
-    const operatorWordSpacing = font.isComposite === true ? 0 : wordSpacing;
-    const spacingOperators = [];
-    if (letterSpacing === 0 && operatorWordSpacing === 0 && this.textSpacingDirty) {
-      spacingOperators.push("0", "Tc", "0", "Tw");
-      this.currentLetterSpacing = 0;
-      this.currentWordSpacing = 0;
-      this.textSpacingDirty = false;
-    } else {
-      if (letterSpacing !== this.currentLetterSpacing) {
-        spacingOperators.push(formatNumber(letterSpacing), "Tc");
-        this.currentLetterSpacing = letterSpacing;
-      }
-      if (operatorWordSpacing !== this.currentWordSpacing) {
-        spacingOperators.push(formatNumber(operatorWordSpacing), "Tw");
-        this.currentWordSpacing = operatorWordSpacing;
-      }
-      if (letterSpacing !== 0 || operatorWordSpacing !== 0) {
-        this.textSpacingDirty = true;
-      }
-    }
-    const usesTextArray = font.isComposite === true && wordSpacing !== 0;
-    const textOperand = usesTextArray ? compositeTextOperand(font, text, wordSpacing, fontSize) : font.encodeText(text);
-    const command = [ "BT", this.addFont(font), formatNumber(fontSize), "Tf", colorOperator(style.color), ...spacingOperators, "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", textOperand, usesTextArray ? "TJ" : "Tj", "ET" ].join(" ");
-    this.push(command);
-  }
-  drawString(font, fontSize, text, x, y, renderingMode = 0) {
-    const mode = renderingMode === 0 ? [] : [ String(renderingMode), "Tr" ];
-    this.push([ "BT", this.addFont(font), formatNumber(fontSize), "Tf", ...mode, "1 0 0 -1", formatNumber(x), formatNumber(y), "Tm", font.encodeText(text), "Tj", "ET" ].join(" "));
-  }
-  line(x1, top1, x2, top2, color = "#000000", lineWidth = 1) {
-    const y1 = this.pageHeight - top1;
-    const y2 = this.pageHeight - top2;
-    this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x1)} ${formatNumber(y1)} m ${formatNumber(x2)} ${formatNumber(y2)} l S`);
-  }
-  circle(cx, topCenter, radius, {fill = null, stroke = null, lineWidth = 1} = {}) {
-    const cy = this.pageHeight - topCenter;
-    const k = .5522847498;
-    const ox = radius * k;
-    const oy = radius * k;
-    const path = [ `${formatNumber(cx + radius)} ${formatNumber(cy)} m`, `${formatNumber(cx + radius)} ${formatNumber(cy + oy)} ${formatNumber(cx + ox)} ${formatNumber(cy + radius)} ${formatNumber(cx)} ${formatNumber(cy + radius)} c`, `${formatNumber(cx - ox)} ${formatNumber(cy + radius)} ${formatNumber(cx - radius)} ${formatNumber(cy + oy)} ${formatNumber(cx - radius)} ${formatNumber(cy)} c`, `${formatNumber(cx - radius)} ${formatNumber(cy - oy)} ${formatNumber(cx - ox)} ${formatNumber(cy - radius)} ${formatNumber(cx)} ${formatNumber(cy - radius)} c`, `${formatNumber(cx + ox)} ${formatNumber(cy - radius)} ${formatNumber(cx + radius)} ${formatNumber(cy - oy)} ${formatNumber(cx + radius)} ${formatNumber(cy)} c` ].join(" ");
-    if (fill && stroke) {
-      this.push(`${colorOperator(fill)} ${colorOperator(stroke, true)} ${formatNumber(lineWidth)} w ${path} B`);
-    } else if (fill) {
-      this.push(`${colorOperator(fill)} ${path} f`);
-    } else {
-      this.push(`${colorOperator(stroke ?? "#000000", true)} ${formatNumber(lineWidth)} w ${path} S`);
-    }
-  }
-  output() {
-    const bytes = this.content.view();
-    let result = "";
-    const chunkSize = 8192;
-    for (let index = 0; index < bytes.length; index += chunkSize) {
-      result += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-    }
-    return `${result}\n`;
-  }
-  outputBytes() {
-    const bytes = this.content.view();
-    const result = new Uint8Array(bytes.length + 1);
-    result.set(bytes);
-    result[bytes.length] = 10;
-    return result;
-  }
-  takeOutputBytes() {
-    return this.content.take(10);
   }
 }
 
@@ -6419,84 +6250,6 @@ PdfPageFormat.cm = PageUnit.cm;
 PdfPageFormat.mm = PageUnit.mm;
 
 PdfPageFormat.dp = PageUnit.dp;
-
-function codeUnits(text) {
-  const units = new Uint16Array(text.length);
-  for (let i = 0; i < text.length; i++) units[i] = text.charCodeAt(i);
-  return units;
-}
-
-function utf8Encode(text) {
-  const bytes = new Uint8Array(text.length * 3);
-  let length = 0;
-  for (const character of text) {
-    let point = character.codePointAt(0) ?? 65533;
-    if (point >= 55296 && point <= 57343) point = 65533;
-    if (point < 128) {
-      bytes[length++] = point;
-    } else if (point < 2048) {
-      bytes[length++] = 192 | point >> 6;
-      bytes[length++] = 128 | point & 63;
-    } else if (point < 65536) {
-      bytes[length++] = 224 | point >> 12;
-      bytes[length++] = 128 | point >> 6 & 63;
-      bytes[length++] = 128 | point & 63;
-    } else {
-      bytes[length++] = 240 | point >> 18;
-      bytes[length++] = 128 | point >> 12 & 63;
-      bytes[length++] = 128 | point >> 6 & 63;
-      bytes[length++] = 128 | point & 63;
-    }
-  }
-  return bytes.subarray(0, length).slice();
-}
-
-function utf8Decode(bytes) {
-  let text = "";
-  for (let i = 0; i < bytes.length; ) {
-    const first = bytes[i];
-    let point;
-    let length;
-    if (first < 128) {
-      point = first;
-      length = 1;
-    } else if ((first & 224) === 192) {
-      point = first & 31;
-      length = 2;
-    } else if ((first & 240) === 224) {
-      point = first & 15;
-      length = 3;
-    } else if ((first & 248) === 240) {
-      point = first & 7;
-      length = 4;
-    } else {
-      text += "�";
-      i++;
-      continue;
-    }
-    if (i + length > bytes.length) {
-      text += "�";
-      break;
-    }
-    let valid = true;
-    for (let n = 1; n < length; n++) {
-      const byte = bytes[i + n];
-      if ((byte & 192) !== 128) {
-        valid = false;
-        break;
-      }
-      point = point << 6 | byte & 63;
-    }
-    if (!valid || point > 1114111) {
-      text += "�";
-      i++;
-      continue;
-    }
-    text += String.fromCodePoint(point);
-    i += length;
-  }
-  return text;
-}
 
 class BarcodeException extends Error {
   constructor(message) {
@@ -7867,7 +7620,17 @@ const stopWord = 260649;
 
 const paddingCodeword = 900;
 
-const codewords = [ [ 120256, 125680, 128380, 120032, 125560, 128318, 108736, 119920, 108640, 86080, 108592, 86048, 110016, 120560, 125820, 109792, 120440, 125758, 88256, 109680, 88160, 89536, 110320, 120700, 89312, 110200, 120638, 89200, 110140, 89840, 110460, 89720, 110398, 89980, 128506, 119520, 125304, 128190, 107712, 119408, 125244, 107616, 119352, 84032, 107568, 119324, 84e3, 107544, 83984, 108256, 119672, 125374, 85184, 108144, 119612, 85088, 108088, 119582, 85040, 108060, 85728, 108408, 119742, 85616, 108348, 85560, 108318, 85880, 108478, 85820, 85790, 107200, 119152, 125116, 107104, 119096, 125086, 83008, 107056, 119068, 82976, 107032, 82960, 82952, 83648, 107376, 119228, 83552, 107320, 119198, 83504, 107292, 83480, 83468, 83824, 107452, 83768, 107422, 83740, 83900, 106848, 118968, 125022, 82496, 106800, 118940, 82464, 106776, 118926, 82448, 106764, 82440, 106758, 82784, 106936, 119006, 82736, 106908, 82712, 106894, 82700, 82694, 106974, 82830, 82240, 106672, 118876, 82208, 106648, 118862, 82192, 106636, 82184, 106630, 82180, 82352, 82328, 82316, 82080, 118830, 106572, 106566, 82050, 117472, 124280, 127678, 103616, 117360, 124220, 103520, 117304, 124190, 75840, 103472, 75808, 104160, 117624, 124350, 76992, 104048, 117564, 76896, 103992, 76848, 76824, 77536, 104312, 117694, 77424, 104252, 77368, 77340, 77688, 104382, 77628, 77758, 121536, 126320, 128700, 121440, 126264, 128670, 111680, 121392, 126236, 111648, 121368, 126222, 111632, 121356, 103104, 117104, 124092, 112320, 103008, 117048, 124062, 112224, 121656, 126366, 93248, 74784, 102936, 117006, 93216, 112152, 93200, 75456, 103280, 117180, 93888, 75360, 103224, 117150, 93792, 112440, 121758, 93744, 75288, 93720, 75632, 103356, 94064, 75576, 103326, 94008, 112542, 93980, 75708, 94140, 75678, 94110, 121184, 126136, 128606, 111168, 121136, 126108, 111136, 121112, 126094, 111120, 121100, 111112, 111108, 102752, 116920, 123998, 111456, 102704, 116892, 91712, 74272, 121244, 116878, 91680, 74256, 102668, 91664, 111372, 102662, 74244, 74592, 102840, 116958, 92e3, 74544, 102812, 91952, 111516, 102798, 91928, 74508, 74502, 74680, 102878, 92088, 74652, 92060, 74638, 92046, 92126, 110912, 121008, 126044, 110880, 120984, 126030, 110864, 120972, 110856, 120966, 110852, 110850, 74048, 102576, 116828, 90944, 74016, 102552, 116814, 90912, 111e3, 121038, 90896, 73992, 102534, 90888, 110982, 90884, 74160, 102620, 91056, 74136, 102606, 91032, 111054, 91020, 74118, 91014, 91100, 91086, 110752, 120920, 125998, 110736, 120908, 110728, 120902, 110724, 110722, 73888, 102488, 116782, 90528, 73872, 102476, 90512, 110796, 102470, 90504, 73860, 90500, 73858, 73944, 90584, 90572, 90566, 120876, 120870, 110658, 102444, 73800, 90312, 90308, 90306, 101056, 116080, 123580, 100960, 116024, 70720, 100912, 115996, 70688, 100888, 70672, 70664, 71360, 101232, 116156, 71264, 101176, 116126, 71216, 101148, 71192, 71180, 71536, 101308, 71480, 101278, 71452, 71612, 71582, 118112, 124600, 127838, 105024, 118064, 124572, 104992, 118040, 124558, 104976, 118028, 104968, 118022, 100704, 115896, 123486, 105312, 100656, 115868, 79424, 70176, 118172, 115854, 79392, 105240, 100620, 79376, 70152, 79368, 70496, 100792, 115934, 79712, 70448, 118238, 79664, 105372, 100750, 79640, 70412, 79628, 70584, 100830, 79800, 70556, 79772, 70542, 70622, 79838, 122176, 126640, 128860, 122144, 126616, 128846, 122128, 126604, 122120, 126598, 122116, 104768, 117936, 124508, 113472, 104736, 126684, 124494, 113440, 122264, 126670, 113424, 104712, 117894, 113416, 122246, 104706, 69952, 100528, 115804, 78656, 69920, 100504, 115790, 96064, 78624, 104856, 117966, 96032, 113560, 122318, 100486, 96016, 78600, 104838, 96008, 69890, 70064, 100572, 78768, 70040, 100558, 96176, 78744, 104910, 96152, 113614, 70022, 78726, 70108, 78812, 70094, 96220, 78798, 122016, 126552, 128814, 122e3, 126540, 121992, 126534, 121988, 121986, 104608, 117848, 124462, 113056, 104592, 126574, 113040, 122060, 117830, 113032, 104580, 113028, 104578, 113026, 69792, 100440, 115758, 78240, 69776, 100428, 95136, 78224, 104652, 100422, 95120, 113100, 69764, 95112, 78212, 69762, 78210, 69848, 100462, 78296, 69836, 95192, 78284, 69830, 95180, 78278, 69870, 95214, 121936, 126508, 121928, 126502, 121924, 121922, 104528, 117804, 112848, 104520, 117798, 112840, 121958, 112836, 104514, 112834, 69712, 100396, 78032, 69704, 100390, 94672, 78024, 104550, 94664, 112870, 69698, 94660, 78018, 94658, 78060, 94700, 94694, 126486, 121890, 117782, 104484, 104482, 69672, 77928, 94440, 69666, 77922, 99680, 68160, 99632, 68128, 99608, 115342, 68112, 99596, 68104, 99590, 68448, 99768, 115422, 68400, 99740, 68376, 99726, 68364, 68358, 68536, 99806, 68508, 68494, 68574, 101696, 116400, 123740, 101664, 116376, 101648, 116364, 101640, 116358, 101636, 67904, 99504, 115292, 72512, 67872, 116444, 115278, 72480, 101784, 116430, 72464, 67848, 99462, 72456, 101766, 67842, 68016, 99548, 72624, 67992, 99534, 72600, 101838, 72588, 67974, 68060, 72668, 68046, 72654, 118432, 124760, 127918, 118416, 124748, 118408, 124742, 118404, 118402, 101536, 116312, 105888, 101520, 116300, 105872, 118476, 116294, 105864, 101508, 105860, 101506, 105858, 67744, 99416, 72096, 67728, 116334, 80800, 72080, 101580, 99398, 80784, 105932, 67716, 80776, 72068, 67714, 72066, 67800, 99438, 72152, 67788, 80856, 72140, 67782, 80844, 72134, 67822, 72174, 80878, 126800, 128940, 126792, 128934, 126788, 126786, 118352, 124716, 122576, 126828, 124710, 122568, 126822, 122564, 118338, 122562, 101456, 116268, 105680, 101448, 116262, 114128, 105672, 118374, 114120, 122598, 101442, 114116, 105666, 114114, 67664, 99372, 71888, 67656, 99366, 80336, 71880, 101478, 97232, 80328, 105702, 67650, 97224, 114150, 71874, 97220, 67692, 71916, 67686, 80364, 71910, 97260, 80358, 97254, 126760, 128918, 126756, 126754, 118312, 124694, 122472, 126774, 122468, 118306, 122466, 101416, 116246, 105576, 101412, 113896, 105572, 101410, 113892, 105570, 113890, 67624, 99350, 71784, 101430, 80104, 71780, 67618, 96744, 80100, 71778, 96740, 80098, 96738, 71798, 96758, 126738, 122420, 122418, 105524, 113780, 113778, 71732, 79988, 96500, 96498, 66880, 66848, 98968, 66832, 66824, 66820, 66992, 66968, 66956, 66950, 67036, 67022, 1e5, 99984, 115532, 99976, 115526, 99972, 99970, 66720, 98904, 69024, 100056, 98892, 69008, 100044, 69e3, 100038, 68996, 66690, 68994, 66776, 98926, 69080, 100078, 69068, 66758, 69062, 66798, 69102, 116560, 116552, 116548, 116546, 99920, 102096, 116588, 115494, 102088, 116582, 102084, 99906, 102082, 66640, 68816, 66632, 98854, 73168, 68808, 66628, 73160, 68804, 66626, 73156, 68802, 66668, 68844, 66662, 73196, 68838, 73190, 124840, 124836, 124834, 116520, 118632, 124854, 118628, 116514, 118626, 99880, 115478, 101992, 116534, 106216, 101988, 99874, 106212, 101986, 106210, 66600, 98838, 68712, 99894, 72936, 68708, 66594, 81384, 72932, 68706, 81380, 72930, 66614, 68726, 72950, 81398, 128980, 128978, 124820, 126900, 124818, 126898, 116500, 118580, 116498, 122740, 118578, 122738, 99860, 101940, 99858, 106100, 101938, 114420 ], [ 128352, 129720, 125504, 128304, 129692, 125472, 128280, 129678, 125456, 128268, 125448, 128262, 125444, 125792, 128440, 129758, 120384, 125744, 128412, 120352, 125720, 128398, 120336, 125708, 120328, 125702, 120324, 120672, 125880, 128478, 110144, 120624, 125852, 110112, 120600, 125838, 110096, 120588, 110088, 120582, 110084, 110432, 120760, 125918, 89664, 110384, 120732, 89632, 110360, 120718, 89616, 110348, 89608, 110342, 89952, 110520, 120798, 89904, 110492, 89880, 110478, 89868, 90040, 110558, 90012, 89998, 125248, 128176, 129628, 125216, 128152, 129614, 125200, 128140, 125192, 128134, 125188, 125186, 119616, 125360, 128220, 119584, 125336, 128206, 119568, 125324, 119560, 125318, 119556, 119554, 108352, 119728, 125404, 108320, 119704, 125390, 108304, 119692, 108296, 119686, 108292, 108290, 85824, 108464, 119772, 85792, 108440, 119758, 85776, 108428, 85768, 108422, 85764, 85936, 108508, 85912, 108494, 85900, 85894, 85980, 85966, 125088, 128088, 129582, 125072, 128076, 125064, 128070, 125060, 125058, 119200, 125144, 128110, 119184, 125132, 119176, 125126, 119172, 119170, 107424, 119256, 125166, 107408, 119244, 107400, 119238, 107396, 107394, 83872, 107480, 119278, 83856, 107468, 83848, 107462, 83844, 83842, 83928, 107502, 83916, 83910, 83950, 125008, 128044, 125e3, 128038, 124996, 124994, 118992, 125036, 118984, 125030, 118980, 118978, 106960, 119020, 106952, 119014, 106948, 106946, 82896, 106988, 82888, 106982, 82884, 82882, 82924, 82918, 124968, 128022, 124964, 124962, 118888, 124982, 118884, 118882, 106728, 118902, 106724, 106722, 82408, 106742, 82404, 82402, 124948, 124946, 118836, 118834, 106612, 106610, 124224, 127664, 129372, 124192, 127640, 129358, 124176, 127628, 124168, 127622, 124164, 124162, 117568, 124336, 127708, 117536, 124312, 127694, 117520, 124300, 117512, 124294, 117508, 117506, 104256, 117680, 124380, 104224, 117656, 124366, 104208, 117644, 104200, 117638, 104196, 104194, 77632, 104368, 117724, 77600, 104344, 117710, 77584, 104332, 77576, 104326, 77572, 77744, 104412, 77720, 104398, 77708, 77702, 77788, 77774, 128672, 129880, 93168, 128656, 129868, 92664, 128648, 129862, 92412, 128644, 128642, 124064, 127576, 129326, 126368, 124048, 129902, 126352, 128716, 127558, 126344, 124036, 126340, 124034, 126338, 117152, 124120, 127598, 121760, 117136, 124108, 121744, 126412, 124102, 121736, 117124, 121732, 117122, 121730, 103328, 117208, 124142, 112544, 103312, 117196, 112528, 121804, 117190, 112520, 103300, 112516, 103298, 112514, 75680, 103384, 117230, 94112, 75664, 103372, 94096, 112588, 103366, 94088, 75652, 94084, 75650, 75736, 103406, 94168, 75724, 94156, 75718, 94150, 75758, 128592, 129836, 91640, 128584, 129830, 91388, 128580, 91262, 128578, 123984, 127532, 126160, 123976, 127526, 126152, 128614, 126148, 123970, 126146, 116944, 124012, 121296, 116936, 124006, 121288, 126182, 121284, 116930, 121282, 102864, 116972, 111568, 102856, 116966, 111560, 121318, 111556, 102850, 111554, 74704, 102892, 92112, 74696, 102886, 92104, 111590, 92100, 74690, 92098, 74732, 92140, 74726, 92134, 128552, 129814, 90876, 128548, 90750, 128546, 123944, 127510, 126056, 128566, 126052, 123938, 126050, 116840, 123958, 121064, 116836, 121060, 116834, 121058, 102632, 116854, 111080, 121078, 111076, 102626, 111074, 74216, 102646, 91112, 74212, 91108, 74210, 91106, 74230, 91126, 128532, 90494, 128530, 123924, 126004, 123922, 126002, 116788, 120948, 116786, 120946, 102516, 110836, 102514, 110834, 73972, 90612, 73970, 90610, 128522, 123914, 125978, 116762, 120890, 102458, 110714, 123552, 127320, 129198, 123536, 127308, 123528, 127302, 123524, 123522, 116128, 123608, 127342, 116112, 123596, 116104, 123590, 116100, 116098, 101280, 116184, 123630, 101264, 116172, 101256, 116166, 101252, 101250, 71584, 101336, 116206, 71568, 101324, 71560, 101318, 71556, 71554, 71640, 101358, 71628, 71622, 71662, 127824, 129452, 79352, 127816, 129446, 79100, 127812, 78974, 127810, 123472, 127276, 124624, 123464, 127270, 124616, 127846, 124612, 123458, 124610, 115920, 123500, 118224, 115912, 123494, 118216, 124646, 118212, 115906, 118210, 100816, 115948, 105424, 100808, 115942, 105416, 118246, 105412, 100802, 105410, 70608, 100844, 79824, 70600, 100838, 79816, 105446, 79812, 70594, 79810, 70636, 79852, 70630, 79846, 129960, 95728, 113404, 129956, 95480, 113278, 129954, 95356, 95294, 127784, 129430, 78588, 128872, 129974, 95996, 78462, 128868, 127778, 95870, 128866, 123432, 127254, 124520, 123428, 126696, 128886, 123426, 126692, 124514, 126690, 115816, 123446, 117992, 115812, 122344, 117988, 115810, 122340, 117986, 122338, 100584, 115830, 104936, 100580, 113640, 104932, 100578, 113636, 104930, 113634, 70120, 100598, 78824, 70116, 96232, 78820, 70114, 96228, 78818, 96226, 70134, 78838, 129940, 94968, 113022, 129938, 94844, 94782, 127764, 78206, 128820, 127762, 95102, 128818, 123412, 124468, 123410, 126580, 124466, 126578, 115764, 117876, 115762, 122100, 117874, 122098, 100468, 104692, 100466, 113140, 104690, 113138, 69876, 78324, 69874, 95220, 78322, 95218, 129930, 94588, 94526, 127754, 128794, 123402, 124442, 126522, 115738, 117818, 121978, 100410, 104570, 112890, 69754, 78074, 94714, 94398, 123216, 127148, 123208, 127142, 123204, 123202, 115408, 123244, 115400, 123238, 115396, 115394, 99792, 115436, 99784, 115430, 99780, 99778, 68560, 99820, 68552, 99814, 68548, 68546, 68588, 68582, 127400, 129238, 72444, 127396, 72318, 127394, 123176, 127126, 123752, 123172, 123748, 123170, 123746, 115304, 123190, 116456, 115300, 116452, 115298, 116450, 99560, 115318, 101864, 99556, 101860, 99554, 101858, 68072, 99574, 72680, 68068, 72676, 68066, 72674, 68086, 72694, 129492, 80632, 105854, 129490, 80508, 80446, 127380, 72062, 127924, 127378, 80766, 127922, 123156, 123700, 123154, 124788, 123698, 124786, 115252, 116340, 115250, 118516, 116338, 118514, 99444, 101620, 99442, 105972, 101618, 105970, 67828, 72180, 67826, 80884, 72178, 80882, 97008, 114044, 96888, 113982, 96828, 96798, 129482, 80252, 130010, 97148, 80190, 97086, 127370, 127898, 128954, 123146, 123674, 124730, 126842, 115226, 116282, 118394, 122618, 99386, 101498, 105722, 114170, 67706, 71930, 80378, 96632, 113854, 96572, 96542, 80062, 96702, 96444, 96414, 96350, 123048, 123044, 123042, 115048, 123062, 115044, 115042, 99048, 115062, 99044, 99042, 67048, 99062, 67044, 67042, 67062, 127188, 68990, 127186, 123028, 123316, 123026, 123314, 114996, 115572, 114994, 115570, 98932, 100084, 98930, 100082, 66804, 69108, 66802, 69106, 129258, 73084, 73022, 127178, 127450, 123018, 123290, 123834, 114970, 115514, 116602, 98874, 99962, 102138, 66682, 68858, 73210, 81272, 106174, 81212, 81182, 72894, 81342, 97648, 114364, 97592, 114334, 97564, 97550, 81084, 97724, 81054, 97694, 97464, 114270, 97436, 97422, 80990, 97502, 97372, 97358, 97326, 114868, 114866, 98676, 98674, 66292, 66290, 123098, 114842, 115130, 98618, 99194, 66170, 67322, 69310, 73404, 73374, 81592, 106334, 81564, 81550, 73310, 81630, 97968, 114524, 97944, 114510, 97932, 97926, 81500, 98012, 81486, 97998, 97880, 114478, 97868, 97862, 81454, 97902, 97836, 97830, 69470, 73564, 73550, 81752, 106414, 81740, 81734, 73518, 81774, 81708, 81702 ], [ 109536, 120312, 86976, 109040, 120060, 86496, 108792, 119934, 86256, 108668, 86136, 129744, 89056, 110072, 129736, 88560, 109820, 129732, 88312, 109694, 129730, 88188, 128464, 129772, 89592, 128456, 129766, 89340, 128452, 89214, 128450, 125904, 128492, 125896, 128486, 125892, 125890, 120784, 125932, 120776, 125926, 120772, 120770, 110544, 120812, 110536, 120806, 110532, 84928, 108016, 119548, 84448, 107768, 119422, 84208, 107644, 84088, 107582, 84028, 129640, 85488, 108284, 129636, 85240, 108158, 129634, 85116, 85054, 128232, 129654, 85756, 128228, 85630, 128226, 125416, 128246, 125412, 125410, 119784, 125430, 119780, 119778, 108520, 119798, 108516, 108514, 83424, 107256, 119166, 83184, 107132, 83064, 107070, 83004, 82974, 129588, 83704, 107390, 129586, 83580, 83518, 128116, 83838, 128114, 125172, 125170, 119284, 119282, 107508, 107506, 82672, 106876, 82552, 106814, 82492, 82462, 129562, 82812, 82750, 128058, 125050, 119034, 82296, 106686, 82236, 82206, 82366, 82108, 82078, 76736, 103920, 117500, 76256, 103672, 117374, 76016, 103548, 75896, 103486, 75836, 129384, 77296, 104188, 129380, 77048, 104062, 129378, 76924, 76862, 127720, 129398, 77564, 127716, 77438, 127714, 124392, 127734, 124388, 124386, 117736, 124406, 117732, 117730, 104424, 117750, 104420, 104418, 112096, 121592, 126334, 92608, 111856, 121468, 92384, 111736, 121406, 92272, 111676, 92216, 111646, 92188, 75232, 103160, 117118, 93664, 74992, 103036, 93424, 112252, 102974, 93304, 74812, 93244, 74782, 93214, 129332, 75512, 103294, 129908, 129330, 93944, 75388, 129906, 93820, 75326, 93758, 127604, 75646, 128756, 127602, 94078, 128754, 124148, 126452, 124146, 126450, 117236, 121844, 117234, 121842, 103412, 103410, 91584, 111344, 121212, 91360, 111224, 121150, 91248, 111164, 91192, 111134, 91164, 91150, 74480, 102780, 91888, 74360, 102718, 91768, 111422, 91708, 74270, 91678, 129306, 74620, 129850, 92028, 74558, 91966, 127546, 128634, 124026, 126202, 116986, 121338, 102906, 90848, 110968, 121022, 90736, 110908, 90680, 110878, 90652, 90638, 74104, 102590, 91e3, 74044, 90940, 74014, 90910, 74174, 91070, 90480, 110780, 90424, 110750, 90396, 90382, 73916, 90556, 73886, 90526, 90296, 110686, 90268, 90254, 73822, 90334, 90204, 90190, 71136, 101112, 116094, 70896, 100988, 70776, 100926, 70716, 70686, 129204, 71416, 101246, 129202, 71292, 71230, 127348, 71550, 127346, 123636, 123634, 116212, 116210, 101364, 101362, 79296, 105200, 118140, 79072, 105080, 118078, 78960, 105020, 78904, 104990, 78876, 78862, 70384, 100732, 79600, 70264, 100670, 79480, 105278, 79420, 70174, 79390, 129178, 70524, 129466, 79740, 70462, 79678, 127290, 127866, 123514, 124666, 115962, 118266, 100858, 113376, 122232, 126654, 95424, 113264, 122172, 95328, 113208, 122142, 95280, 113180, 95256, 113166, 95244, 78560, 104824, 117950, 95968, 78448, 104764, 95856, 113468, 104734, 95800, 78364, 95772, 78350, 95758, 70008, 100542, 78712, 69948, 96120, 78652, 69918, 96060, 78622, 96030, 70078, 78782, 96190, 94912, 113008, 122044, 94816, 112952, 122014, 94768, 112924, 94744, 112910, 94732, 94726, 78192, 104636, 95088, 78136, 104606, 95032, 113054, 95004, 78094, 94990, 69820, 78268, 69790, 95164, 78238, 95134, 94560, 112824, 121950, 94512, 112796, 94488, 112782, 94476, 94470, 78008, 104542, 94648, 77980, 94620, 77966, 94606, 69726, 78046, 94686, 94384, 112732, 94360, 112718, 94348, 94342, 77916, 94428, 77902, 94414, 94296, 112686, 94284, 94278, 77870, 94318, 94252, 94246, 68336, 99708, 68216, 99646, 68156, 68126, 68476, 68414, 127162, 123258, 115450, 99834, 72416, 101752, 116414, 72304, 101692, 72248, 101662, 72220, 72206, 67960, 99518, 72568, 67900, 72508, 67870, 72478, 68030, 72638, 80576, 105840, 118460, 80480, 105784, 118430, 80432, 105756, 80408, 105742, 80396, 80390, 72048, 101564, 80752, 71992, 101534, 80696, 71964, 80668, 71950, 80654, 67772, 72124, 67742, 80828, 72094, 80798, 114016, 122552, 126814, 96832, 113968, 122524, 96800, 113944, 122510, 96784, 113932, 96776, 113926, 96772, 80224, 105656, 118366, 97120, 80176, 105628, 97072, 114076, 105614, 97048, 80140, 97036, 80134, 97030, 71864, 101470, 80312, 71836, 97208, 80284, 71822, 97180, 80270, 97166, 67678, 71902, 80350, 97246, 96576, 113840, 122460, 96544, 113816, 122446, 96528, 113804, 96520, 113798, 96516, 96514, 80048, 105564, 96688, 80024, 105550, 96664, 113870, 96652, 80006, 96646, 71772, 80092, 71758, 96732, 80078, 96718, 96416, 113752, 122414, 96400, 113740, 96392, 113734, 96388, 96386, 79960, 105518, 96472, 79948, 96460, 79942, 96454, 71726, 79982, 96494, 96336, 113708, 96328, 113702, 96324, 96322, 79916, 96364, 79910, 96358, 96296, 113686, 96292, 96290, 79894, 96310, 66936, 99006, 66876, 66846, 67006, 68976, 100028, 68920, 99998, 68892, 68878, 66748, 69052, 66718, 69022, 73056, 102072, 116574, 73008, 102044, 72984, 102030, 72972, 72966, 68792, 99934, 73144, 68764, 73116, 68750, 73102, 66654, 68830, 73182, 81216, 106160, 118620, 81184, 106136, 118606, 81168, 106124, 81160, 106118, 81156, 81154, 72880, 101980, 81328, 72856, 101966, 81304, 106190, 81292, 72838, 81286, 68700, 72924, 68686, 81372, 72910, 81358, 114336, 122712, 126894, 114320, 122700, 114312, 122694, 114308, 114306, 81056, 106072, 118574, 97696, 81040, 106060, 97680, 114380, 106054, 97672, 81028, 97668, 81026, 97666, 72792, 101934, 81112, 72780, 97752, 81100, 72774, 97740, 81094, 97734, 68654, 72814, 81134, 97774, 114256, 122668, 114248, 122662, 114244, 114242, 80976, 106028, 97488, 80968, 106022, 97480, 114278, 97476, 80962, 97474, 72748, 81004, 72742, 97516, 80998, 97510, 114216, 122646, 114212, 114210, 80936, 106006, 97384, 80932, 97380, 80930, 97378, 72726, 80950, 97398, 114196, 114194, 80916, 97332, 80914, 97330, 66236, 66206, 67256, 99166, 67228, 67214, 66142, 67294, 69296, 100188, 69272, 100174, 69260, 69254, 67164, 69340, 67150, 69326, 73376, 102232, 116654, 73360, 102220, 73352, 102214, 73348, 73346, 69208, 100142, 73432, 102254, 73420, 69190, 73414, 67118, 69230, 73454, 106320, 118700, 106312, 118694, 106308, 106306, 73296, 102188, 81616, 106348, 102182, 81608, 73284, 81604, 73282, 81602, 69164, 73324, 69158, 81644, 73318, 81638, 122792, 126934, 122788, 122786, 106280, 118678, 114536, 106276, 114532, 106274, 114530, 73256, 102166, 81512, 73252, 98024, 81508, 73250, 98020, 81506, 98018, 69142, 73270, 81526, 98038, 122772, 122770, 106260, 114484, 106258, 114482, 73236, 81460, 73234, 97908, 81458, 97906, 122762, 106250, 114458, 73226, 81434, 97850, 66396, 66382, 67416, 99246, 67404, 67398, 66350, 67438, 69456, 100268, 69448, 100262, 69444, 69442, 67372, 69484, 67366, 69478, 102312, 116694, 102308, 102306, 69416, 100246, 73576, 102326, 73572, 69410, 73570, 67350, 69430, 73590, 118740, 118738, 102292, 106420, 102290, 106418, 69396, 73524, 69394, 81780, 73522, 81778, 118730, 102282, 106394, 69386, 73498, 81722, 66476, 66470, 67496, 99286, 67492, 67490, 66454, 67510, 100308, 100306, 67476, 69556, 67474, 69554, 116714 ] ];
+const digits = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+const packedClusters = [ "dXAerwfV8dTgep4fU+ajAdRwahgVBAagwVAga3Adbwet8azgdZ4es+VjAaxwVhgV3Aa7wdd8Vzga54dc+Vxwa48V7wa98V54a8+V98fX6dLgel4fS+aTAdJwek8aRgdI4UhAaQwdIcUggaQYUgQabgdN4em+UzAaZwdM8UxgaY4dMeUwwaYcU7gad4dO+U5wac8U44aceU94ae+U88U8eaLAdFwei8aJgdE4eieURAaIwdEcUQgaIYUQQUQIUbAaNwdG8UZgaM4dGeUYwaMcUYYUYMUdwaO8Uc4aOeUccUe8aFgdC4eheUJAaEwdCcUIgaEYdCOUIQaEMUIIaEGUNgaG4dDeUMwaGcUMYaGOUMMUMGaHeUOOUFAaCwdBcUEgaCYdBOUEQaCMUEIaCGUEEUGwUGYUGMUCgdAuaBMaBGUCCcrgeV4fK+ZTAcpweU8ZRgco4eUeShAZQwSggZbgct4eW+SzAZZwcs8SxgZY4SwwSwYS7gZd4cu+S5wZc8S44S4cS94Ze+S88S++drAe1wfa8dpge04faebRAdowe0cbQgdoYe0ObQQdoMZLAclweS8bbAZJgck4eSebZgds4e2eWxASQgZIYckOWwgbYYWwQSbAZNwcm8W7ASZgZM4cmeW5gbc4dueW4wSYYW4YSdwZO8W9wSc4ZOeW84beeW8cSe8W+8SeeW+edlgey4fZebJAdkweycbIgdkYeyObIQdkMbIIbIEZFgci4eRebNgZEwcicWZASIgdmcciOWYgSIQZEMWYQbMMZEGSIESNgZG4cjeWdgSMwZGcWcwbOcZGOWcYSMMSMGSO4ZHeWe4SOcWecSOOWeOWfebFAdiwexcbEgdiYexObEQdiMbEIdiGbEEbECSFAZCwchcWNASEgZCYchOWMgbGYdjOWMQSEIZCGWMIbGGWMESGwZDcWOwSGYZDOWOYbHOWOMSGGWOGWPcWPObCgdhYewubCQdhMbCIdhGbCEbCCSCgZBYcguWGgSCQZBMWGQbDMZBGWGISCEWGESCCSDYWHYWHMWHGdgsdgmbBCZAsSBIWDIWDEWDCYrAcVweK8YpgcU4RRAYowcUcRQgYoYRQQRQIRbAYtwcW8RZgYs4cWeRYwYscRYYRYMRdwYu8Rc4YueRccRe8Reec1gea4fNeZpAc0weacZogc0YeaOZoQc0MZoIc0GYlgcS4eJeZtgYkwcScTZARIgc2ccSOTYgZsYYkMTYQRIITYIRNgYm4cTeTdgRMwc3eTcwZucYmOTcYRMMTcMRO4YneTe4ROcTecROORPeTfed1Ae6wfdcd0ge6YfdOd0Qe6Md0Ie6Gd0EZlAcyweZcbtAZkge7ceZObsgd2Ye7ObsQZkIcyGbsId2GZkCRFAYiwcRcTNAREgYiYcROXdATMgZmYczOXcgbuYd3OYiGXcQTMIZmGXcIRECRGwYjcTOwRGYYjOXewTOYZnOXeYbvORGGTOGRHcTPcRHOXfcTPOdyge5YfcudyQe5MdyIe5GdyEdyCZigcxYeYubmgZiQe5ubmQdzMcxGbmIZiEbmEZiCbmCRCgYhYcQuTGgRCQYhMXOgTGQZjMYhGXOQbnMRCEXOITGERCCTGCRDYYhuTHYRDMXPYTHMRDGXPMTHGRDuXPudxQe4sdxIe4mdxEdxCZhQcwsbjQZhIcwmbjIdxmbjEZhCbjCRBQYgsTDQRBIYgmXHQTDIZhmXHIbjmRBCXHETDCXHCTDsXHsXHme4WdwicwWZgkZgiRAoTBoXDoRAiTBiYVgQpAYUwQogYUYcKOQoQYUMQoIYUGQtgYW4cLeQswYWcQsYYWOQsMQsGQu4YXeQucQuOQveY1AcaweNcY0gcaYY0QcaMY0IcaGY0EQlAYSwcJcRtAQkgcbccJORsgY2YcbORsQQkIYSGRsIY2GQkCQmwYTcRuwQmYYTORuYY3ORuMQmGQncRvcQnORvOc6gedYfOuc6QedMc6IedGc6Ec6CYygcZYZ2gYyQcZMZ2Qc7McZGZ2IYyEZ2EYyCZ2CQigYRYRmgQiQcZuTugRmQYzMYRGTuQZ3MQiETuIRmEQiCRmCQjYYRuRnYQjMTvYRnMQjGTvMRnGQjuRnuTvue9Qfese9Ifeme9Ee9Cc5Qecsd7Qe9secmd7Ie9md7Ec5Cd7CYxQcYsZzQYxIcYmb3QZzIc5mb3Id7mYxCb3EZzCb3CQhQYQsRjQQhIYQmTnQRjIYxmXvQTnIZzmQhCXvIb3mRjCXvEQhsRjsQhmTnsRjmXvsTnmXvme8ofeWe8ke8ic4oecWd5oe82d5kc4id5iYwocYWZxoYwkbzoZxkYwibzkZxibziQgoYQWRhoYw2TjoRhkQgiXnoTjkRhiXnkTjiXniRh2Xn2e8Sd40d4yZw0bx0bxyRg0Th0Xj0XjyQVAQUgYKYQUQQUIQUEQWwQWYQWMQWGQXcQXOYagYaQcNMYaIcNGYaEYaCQSgYJYQ2gYbYYJMQ2QYbMQ2IYbGQ2EQSCQ2CQTYYJuQ3YYbuQ3MQTGQ3GQTuQ3ucdQcdIcdEcdCYZQY7QcdscMmY7IcdmY7EYZCY7CQRQQzQQRIYImR3QQzIQRER3IQzEQRCR3EQzCQRsQzsQRmR3sQzmR3meeoeekeeiccoc9oee2c9kccic9iYYocMWY5occ2Z7oY5kYYiZ7kY5iZ7iQQoYIWQxoYY2RzoQxkQQiT3oRzkQxiT3kRziQQ2Qx2Rz2T32ffUffSeeUe+0eeSe+yccUc80ccSd90c8yd9yYYUY40YYSZ50Y4yb70", "fVgfq4epAfUwfqceogfUYfqOeoQfUMeoIfUGeoEetgfW4fredZAeswfWcdYgesYfWOdYQesMdYIesGdYEddgeu4fXea5Adcweuca4gdcYeuOa4QdcMa4IdcGa4Ea9gde4eveV5Aa8wdecV4ga8YdeOV4Qa8MV4Ia8GV9ga+4dfeV8wa+cV8Ya+OV8MV+4a/eV+cV+OelAfSwfpcekgfSYfpOekQfSMekIfSGekEekCdNAemwfTcdMgemYfTOdMQemMdMIemGdMEdMCadAdOwencacgdOYenOacQdOMacIdOGacEacCU9AaewdPcU8gaeYdPOU8QaeMU8IaeGU8EU+wafcU+YafOU+MU+GU/cU/OeigfRYfoueiQfRMeiIfRGeiEeiCdGgejYfRudGQejMdGIejGdGEdGCaOgdHYejuaOQdHMaOIdHGaOEaOCUegaPYdHuUeQaPMUeIaPGUeEUeCUfYaPuUfMUfGUfuehQfQsehIfQmehEehCdDQehsdDIehmdDEdDCaHQdDsaHIdDmaHEaHCUPQaHsUPIaHmUPEUPCUPsUPmegofQWegkegidBoeg2dBkdBiaDodB2aDkaDiUHoaD2UHkUHiegUegSdA0dAyaB0aByeVAfKwflceUgfKYflOeUQfKMeUIfKGeUEeUCctAeWwfLccsgeWYfLOcsQeWMcsIeWGcsEcsCZdAcuweXcZcgcuYeXOZcQcuMZcIcuGZcEZcCS9AZewcvcS8gZeYcvOS8QZeMS8IZeGS8ES+wZfcS+YZfOS+MS+GS/cS/OfagftYWvwfaQftMWn4faIftGWj8faEfaCeSgfJYfkue2geSQftue2QfbMfJGe2IeSEe2EeSCe2CcmgeTYfJudugcmQeTMduQe3MeTGduIcmEduEcmCduCZOgcnYeTubegZOQcnMbeQdvMcnGbeIZOEbeEZOCbeCSegZPYcnuW+gSeQZPMW+QbfMZPGW+ISeEW+ESeCSfYZPuW/YSfMW/MSfGW/GSfufZQfssWX4fZIfsmWT8fZEWR+fZCeRQfIsezQeRIfImezIfZmezEeRCezCcjQeRsdnQcjIeRmdnIezmdnEcjCdnCZHQcjsbPQZHIcjmbPIdnmbPEZHCbPCSPQZHsWfQSPIZHmWfIbPmWfESPCWfCSPsWfsSPmWfmfYofsWWL8fYkWJ+fYieQofIWexofY2exkeQiexichoeQ2djochkdjkchidjiZDoch2bHodj2bHkZDibHiSHoZD2WPoSHkWPkSHiWPiSH2WP2fYUWF+fYSeQUew0eQSewycg0dh0cgydhyZB0bD0ZBybDySD0WH0SDyWHyfYKeQKewacgadg6ZA6bB6eKgfFYfiueKQfFMeKIfFGeKEeKCcWgeLYfFucWQeLMcWIeLGcWEcWCYugcXYeLuYuQcXMYuIcXGYuEYuCRegYvYcXuReQYvMReIYvGReEReCRfYYvuRfMRfGRfufNQfmsTX4fNIfmmTT8fNETR+fNCeJQfEsebQeJIfEmebIfNmebEeJCebCcTQeJsc3QcTIeJmc3Iebmc3EcTCc3CYnQcTsZvQYnIcTmZvIc3mZvEYnCZvCRPQYnsTfQRPIYnmTfIZvmTfERPCTfCRPsTfsRPmTfmfuoXXwbr8fukXT4bp+fuiXR8XQ+fMofmWTL8fdofu2Xb8TJ+fdkfMiXZ+fdieIofEWeZoeIke7ofd2eIie7keZie7icRoeI2czocRkd3oczkcRid3kczid3iYjocR2ZnoYjkbvoZnkYjibvkZnibviRHoYj2TPoRHkXfoTPkRHiXfkTPiXfiRH2TP2fuUXL4bl+fuSXJ8XI+fMUTF+fc0fMSXN+fcyeIUeY0eISe50eYye5ycQ0cx0cQydz0cxydzyYh0Zj0Yhybn0ZjybnyRD0TH0RDyXP0THyXPyfuKXF8XE+fMKfcaeIKeYae46cQacw6dx6Yg6Zh6bj6RB6TD6XH6XC+eFQfCseFIfCmeFEeFCcLQeFscLIeFmcLEcLCYXQcLsYXIcLmYXEYXCQvQYXsQvIYXmQvEQvCQvsQvmfGofjWRr8fGkRp+fGieEofCWeNoeEkeNkeEieNicJoeE2cbocJkcbkcJicbiYTocJ2Y3oYTkY3kYTiY3iQnoYT2RvoQnkRvkQniRviQn2Rv2fnUTr4Z1+fnSTp8To+fGURl+fO0fGSTt+fOyeEUeM0eESed0eMyedycI0cZ0cIyc70cZyc7yYR0Yz0YRyZ30YzyZ3yQj0Rn0QjyTv0RnyTvyXrwb18Xp4b0+Xo8XoefnKTl8fvaXt8Tk+Xs+fGKfOafe6eEKeMaec6e96cIacY6c56d76YQ6Yx6Zz6b36Qh6Rj6Tn6Xl4by+Xk8XkeTi+Xm+Xi8XieXheeCoeCkeCicFoeC2cFkcFiYLocF2YLkYLiQXoYL2QXkQXiQX2fDUQ1+fDSeCUeG0eCSeGycE0cN0cEycNyYJ0Yb0YJyYbyQT0Q30QTyQ3yfjqR18R0+fDKfHaeCKeGaeO6cEacM6cd6YI6YZ6Y76QR6Qz6R36T14Z6+T08T0eRy+T2+X1wb68X04b6eX0cX0OTy8X28TyeX2eXy4b5eXycXyOTxeXzeXxcXxOXwucC0cCyYF0YFyQL0QLyeDacCacG6YE6YN6QJ6Qb6Q6+R68R6eT64Z9eT6cT6OR5eT7eX6wb9cX6Yb9OX6MX6GT5cX7cT5OX7OX5Yb8uX5MX5GT4uX5uX4sX4mQ9eR9cR9OT9YZ+uT9MT9GR8uT9uT8sT8m", "avgdX4VPAanwdT8VHgaj4dR+VDwah8VB4frQVvga34frIVnwaz8frEVj4ax+frCVh8fXQfrsV34fXIfrmVz8fXEVx+fXCevQfXsevIfXmevEevCdfQevsdfIevmdfEdfCa/Qdfsa/Idfma/EUvAaXwdL8UngaT4dJ+UjwaR8Uh4aQ+Ug8fpoU3wab8fpkUz4aZ+fpiUx8Uw+fTofp2U78fTkU5+fTienofT2enkenidPoen2dPkdPiafodP2afkafiUXgaL4dF+UTwaJ8UR4aI+UQ8UQefo0Ub4aN+foyUZ8UY+fR0Ud+fRyej0ejydH0dHyaP0aPyULwaF8UJ4aE+UI8UIefoaUN8UM+fQ6eh6dD6UF4aC+UE8UEeUG+UC8UCeSvAZXwcr8SngZT4cp+SjwZR8Sh4ZQ+Sg8floS3wZb8flkSz4ZZ+fliSx8Sw+fLofl2S78fLkS5+fLieXofL2eXkeXicvoeX2cvkcviZfocv2ZfkZfibXgdr4e1+WnAbTwdp8WjgbR4do+WhwbQ8Wg4bQeWgcSXgZL4cl+W3gSTwZJ8WzwbZ8ZI+Wx4SQ8Ww8SQeWwefk0Sb4ZN+ft0fkyW74SZ8ftyW58SY+W4+fJ0Sd+fb0fJyW9+fbyeT0e30eTye3ycn0dv0cnydvyZP0ZPyWXAbLwdl8WTgbJ4dk+WRwbI8WQ4bIeWQcWQOSLwZF8WbwSJ4ZE+WZ4bM+WY8SIeWYefkaSN8fs6Wd8SM+Wc+fI6fZ6eR6ez6cj6dn6ZH6WLgbF4di+WJwbE8WI4bEeWIcWIOSF4ZC+WN4SE8WM8SEeWMeSG+WO+WFwbC8WE4bCeWEcWEOSC8WG8SCeWGeWC4bBeWCcWCOSBeWDeWBcWBORXgYr4cV+RTwYp8RR4Yo+RQ8RQefi0Rb4Yt+fiyRZ8RY+fF0Rd+fFyeL0eLycX0cXyYv0YvyTXAZrwc18TTgZp4c0+TRwZo8TQ4ZoeTQcTQORLwYl8TbwRJ4Yk+TZ4Zs+TY8RIeTYefiaRN8fm6Td8RM+Tc+fE6fN6eJ6eb6cT6c36Yn6brgd14e6+XTAbpwd08XRgbo4d0eXQwbocXQYboOXQMTLgZl4cy+XbgTJwZk8XZwbs8ZkeXY4TIcXYcTIOXYORF4Yi+TN4RE8Xd4TM8REeXc8TMeXceRG+TO+Xe+XLAblwdy8XJgbk4dyeXIwbkcXIYbkOXIMXIGTFwZi8XNwTE4ZieXM4bmeXMcTEOXMORC8TG8RCeXO8TGeXOeXFgbi4dxeXEwbicXEYbiOXEMXEGTC4ZheXG4TCcXGcTCOXGORBeTDeXHeXCwbhcXCYbhOXCMXCGTBcXDcTBOXDOXBYbguXBMXBGTAuXBuXAsXAmQrwYV8Qp4YU+Qo8QoeQt8Qs+fC6eF6cL6YX6RrgY14ca+RpwY08Ro4Y0eRocRoOQl4YS+Rt4Qk8Rs8QkeRseQm+Ru+TrAZ1wc68TpgZ04c6eTowZ0cToYZ0OToMToGRlwYy8TtwRk4YyeTs4RkcTscRkOTsOQi8Rm8QieTu8RmeTueb1gd64e9eXpAb0wd6cXogb0Yd6OXoQb0MXoIb0GXoETlgZy4c5eXtgTkwZycXswb2cZyOXsYTkMXsMTkGXsGRi4YxeTm4RicXu4TmcRiOXucTmOXuOQheRjeTneXveXlAbywd5cXkgbyYd5OXkQbyMXkIbyGXkEXkCTiwZxcXmwTiYZxOXmYbzOXmMTiGXmGRhcTjcRhOXncTjOXnOXigbxYd4uXiQbxMXiIbxGXiEXiCThYZwuXjYThMXjMThGXjGRguThuXjuXhQbwsXhIbwmXhEXhCTgsXhsTgmXhmXgobwWXgkXgiTgWXg2QV4YK+QU8QUeQW+Q1wYa8Q04YaeQ0cQ0OQS8Q28QSeQ2eR1gY64cdeR0wY6cR0YY6OR0MR0GQy4YZeR24QycR2cQyOR2OQReQzeR3eT1AZ6wc9cT0gZ6Yc9OT0QZ6MT0IZ6GT0ET0CRywY5cT2wRyYY5OT2YZ7OT2MRyGT2GQxcRzcQxOT3cRzOT3Ob6gd9Ye+ub6Qd9Mb6Id9Gb6Eb6CTygZ5Yc8uX2gTyQZ5MX2Qb7MZ5GX2ITyEX2ETyCX2CRxYY4uTzYRxMX3YTzMRxGX3MTzGX3GQwuRxuTzuX3ub5Qd8sb5Id8mb5Eb5CTxQZ4sXzQTxIZ4mXzIb5mXzETxCXzCRwsTxsRwmXzsTxmXzmb4od8Wb4kb4iTwoZ4WXxoTwkXxkTwiXxiRwWTw2Xx2b4Ub4STwUXw0TwSXwyQK8QKeQa4YNeQacQaOQJeQbeQ6wYdcQ6YYdOQ6MQ6GQZcQ7cQZOQ7OR6gY9YceuR6QY9MR6IY9GR6ER6CQ5YYcuR7YY9uR7MQ5GR7GQYuQ5uR7uZ9Qc+sZ9Ic+mZ9EZ9CR5QY8sT7QZ9sY8mT7IR5ET7ER5CT7CQ4sR5sQ4mT7sR5mT7md+oe/Wd+kd+iZ8oc+Wb9oZ8kb9kZ8ib9iR4oY8WT5oR4kX7oT5kR4iX7kT5iX7iQ4WR42T52X72d+Ud+SZ8Ub80Z8Sb8yR4UT40R4SX50T4yX5yd+KZ8Kb8aR4KT4aX46QNcQNOQdYYOuQdMQdGQMuQduQ9QYesQ9IYemQ9EQ9CQcsQ9sQcmQ9mY+ocfWY+kY+iQ8oYeWR9oY+2R9kQ8iR9iQcWQ82R92c/Uc/SY+UZ+0Y+SZ+yQ8UR80Q8ST90R8yT9yc/KY+KZ+aQ8KR8aT86QOsQOmQeoYPWQekQeiQOWQe2YfUYfSQeUQ+0QeSQ+ycfq" ];
+
+const codewords = packedClusters.map(packed => {
+  const cluster = [];
+  for (let index = 0; index < packed.length; index += 3) {
+    cluster.push(digits.indexOf(packed[index]) << 12 | digits.indexOf(packed[index + 1]) << 6 | digits.indexOf(packed[index + 2]));
+  }
+  return cluster;
+});
 
 const correctionFactors = [ [ 27, 917 ], [ 522, 568, 723, 809 ], [ 237, 308, 436, 284, 646, 653, 428, 379 ], [ 274, 562, 232, 755, 599, 524, 801, 132, 295, 116, 442, 428, 295, 42, 176, 65 ], [ 361, 575, 922, 525, 176, 586, 640, 321, 536, 742, 677, 742, 687, 284, 193, 517, 273, 494, 263, 147, 593, 800, 571, 320, 803, 133, 231, 390, 685, 330, 63, 410 ], [ 539, 422, 6, 93, 862, 771, 453, 106, 610, 287, 107, 505, 733, 877, 381, 612, 723, 476, 462, 172, 430, 609, 858, 822, 543, 376, 511, 400, 672, 762, 283, 184, 440, 35, 519, 31, 460, 594, 225, 535, 517, 352, 605, 158, 651, 201, 488, 502, 648, 733, 717, 83, 404, 97, 280, 771, 840, 629, 4, 381, 843, 623, 264, 543 ], [ 521, 310, 864, 547, 858, 580, 296, 379, 53, 779, 897, 444, 400, 925, 749, 415, 822, 93, 217, 208, 928, 244, 583, 620, 246, 148, 447, 631, 292, 908, 490, 704, 516, 258, 457, 907, 594, 723, 674, 292, 272, 96, 684, 432, 686, 606, 860, 569, 193, 219, 129, 186, 236, 287, 192, 775, 278, 173, 40, 379, 712, 463, 646, 776, 171, 491, 297, 763, 156, 732, 95, 270, 447, 90, 507, 48, 228, 821, 808, 898, 784, 663, 627, 378, 382, 262, 380, 602, 754, 336, 89, 614, 87, 432, 670, 616, 157, 374, 242, 726, 600, 269, 375, 898, 845, 454, 354, 130, 814, 587, 804, 34, 211, 330, 539, 297, 827, 865, 37, 517, 834, 315, 550, 86, 801, 4, 108, 539 ], [ 524, 894, 75, 766, 882, 857, 74, 204, 82, 586, 708, 250, 905, 786, 138, 720, 858, 194, 311, 913, 275, 190, 375, 850, 438, 733, 194, 280, 201, 280, 828, 757, 710, 814, 919, 89, 68, 569, 11, 204, 796, 605, 540, 913, 801, 700, 799, 137, 439, 418, 592, 668, 353, 859, 370, 694, 325, 240, 216, 257, 284, 549, 209, 884, 315, 70, 329, 793, 490, 274, 877, 162, 749, 812, 684, 461, 334, 376, 849, 521, 307, 291, 803, 712, 19, 358, 399, 908, 103, 511, 51, 8, 517, 225, 289, 470, 637, 731, 66, 255, 917, 269, 463, 830, 730, 433, 848, 585, 136, 538, 906, 90, 2, 290, 743, 199, 655, 903, 329, 49, 802, 580, 355, 588, 188, 462, 10, 134, 628, 320, 479, 130, 739, 71, 263, 318, 374, 601, 192, 605, 142, 673, 687, 234, 722, 384, 177, 752, 607, 640, 455, 193, 689, 707, 805, 641, 48, 60, 732, 621, 895, 544, 261, 852, 655, 309, 697, 755, 756, 60, 231, 773, 434, 421, 726, 528, 503, 118, 49, 795, 32, 144, 500, 238, 836, 394, 280, 566, 319, 9, 647, 550, 73, 914, 342, 126, 32, 681, 331, 792, 620, 60, 609, 441, 180, 791, 893, 754, 605, 383, 228, 749, 760, 213, 54, 297, 134, 54, 834, 299, 922, 191, 910, 532, 609, 829, 189, 20, 167, 29, 872, 449, 83, 402, 41, 656, 505, 579, 481, 173, 404, 251, 688, 95, 497, 555, 642, 543, 307, 159, 924, 558, 648, 55, 497, 10 ], [ 352, 77, 373, 504, 35, 599, 428, 207, 409, 574, 118, 498, 285, 380, 350, 492, 197, 265, 920, 155, 914, 299, 229, 643, 294, 871, 306, 88, 87, 193, 352, 781, 846, 75, 327, 520, 435, 543, 203, 666, 249, 346, 781, 621, 640, 268, 794, 534, 539, 781, 408, 390, 644, 102, 476, 499, 290, 632, 545, 37, 858, 916, 552, 41, 542, 289, 122, 272, 383, 800, 485, 98, 752, 472, 761, 107, 784, 860, 658, 741, 290, 204, 681, 407, 855, 85, 99, 62, 482, 180, 20, 297, 451, 593, 913, 142, 808, 684, 287, 536, 561, 76, 653, 899, 729, 567, 744, 390, 513, 192, 516, 258, 240, 518, 794, 395, 768, 848, 51, 610, 384, 168, 190, 826, 328, 596, 786, 303, 570, 381, 415, 641, 156, 237, 151, 429, 531, 207, 676, 710, 89, 168, 304, 402, 40, 708, 575, 162, 864, 229, 65, 861, 841, 512, 164, 477, 221, 92, 358, 785, 288, 357, 850, 836, 827, 736, 707, 94, 8, 494, 114, 521, 2, 499, 851, 543, 152, 729, 771, 95, 248, 361, 578, 323, 856, 797, 289, 51, 684, 466, 533, 820, 669, 45, 902, 452, 167, 342, 244, 173, 35, 463, 651, 51, 699, 591, 452, 578, 37, 124, 298, 332, 552, 43, 427, 119, 662, 777, 475, 850, 764, 364, 578, 911, 283, 711, 472, 420, 245, 288, 594, 394, 511, 327, 589, 777, 699, 688, 43, 408, 842, 383, 721, 521, 560, 644, 714, 559, 62, 145, 873, 663, 713, 159, 672, 729, 624, 59, 193, 417, 158, 209, 563, 564, 343, 693, 109, 608, 563, 365, 181, 772, 677, 310, 248, 353, 708, 410, 579, 870, 617, 841, 632, 860, 289, 536, 35, 777, 618, 586, 424, 833, 77, 597, 346, 269, 757, 632, 695, 751, 331, 247, 184, 45, 787, 680, 18, 66, 407, 369, 54, 492, 228, 613, 830, 922, 437, 519, 644, 905, 789, 420, 305, 441, 207, 300, 892, 827, 141, 537, 381, 662, 513, 56, 252, 341, 242, 797, 838, 837, 720, 224, 307, 631, 61, 87, 560, 310, 756, 665, 397, 808, 851, 309, 473, 795, 378, 31, 647, 915, 459, 806, 590, 731, 425, 216, 548, 249, 321, 881, 699, 535, 673, 782, 210, 815, 905, 303, 843, 922, 281, 73, 469, 791, 660, 162, 498, 308, 155, 422, 907, 817, 187, 62, 16, 425, 535, 336, 286, 437, 375, 273, 610, 296, 183, 923, 116, 667, 751, 353, 62, 366, 691, 379, 687, 842, 37, 357, 720, 742, 330, 5, 39, 923, 311, 424, 242, 749, 321, 54, 669, 316, 342, 299, 534, 105, 667, 488, 640, 672, 576, 540, 316, 486, 721, 610, 46, 656, 447, 171, 616, 464, 190, 531, 297, 321, 762, 752, 533, 175, 134, 14, 381, 433, 717, 45, 111, 20, 596, 284, 736, 138, 646, 411, 877, 669, 141, 919, 45, 780, 407, 164, 332, 899, 165, 726, 600, 325, 498, 655, 357, 752, 768, 223, 849, 647, 63, 310, 863, 251, 366, 304, 282, 738, 675, 410, 389, 244, 31, 121, 303, 263 ] ];
 
@@ -9470,16 +9233,10 @@ function isArabicDiacritic(codePoint) {
   return DIACRITICS.has(codePoint);
 }
 
-function previousLetter(codePoints, index) {
-  for (let cursor = index - 1; cursor >= 0; cursor--) {
-    if (!isArabicDiacritic(codePoints[cursor])) return codePoints[cursor];
-  }
-  return 0;
-}
-
-function nextLetter(codePoints, index) {
-  for (let cursor = index + 1; cursor < codePoints.length; cursor++) {
-    if (!isArabicDiacritic(codePoints[cursor])) return codePoints[cursor];
+function letterAt(text, index, step) {
+  for (let cursor = index + step; cursor >= 0 && cursor < text.length; cursor += step) {
+    const code = text.charCodeAt(cursor);
+    if (!isArabicDiacritic(code)) return code;
   }
   return 0;
 }
@@ -9502,50 +9259,17 @@ const LAM_ALEF = Object.freeze({
   1575: [ 65275, 65276 ]
 });
 
-function shapeArabic(input, visualOrder) {
-  const logical = Array.from(input, character => character.codePointAt(0));
-  const clusters = [];
-  for (let index = 0; index < logical.length; index++) {
-    const codePoint = logical[index];
-    if (isArabicDiacritic(codePoint) && clusters.length > 0) {
-      const last = clusters[clusters.length - 1];
-      clusters[clusters.length - 1] = {
-        base: last.base,
-        marks: [ ...last.marks, codePoint ]
-      };
-      continue;
-    }
-    const next = nextLetter(logical, index);
-    if (codePoint === 1604 && LAM_ALEF[next] !== undefined) {
-      const before = previousLetter(logical, index);
-      const joinsBefore = ARABIC_FORMS[before]?.length === 4;
-      const ligature = LAM_ALEF[next][joinsBefore ? 1 : 0];
-      const marks = [];
-      let cursor = index + 2;
-      while (cursor < logical.length && isArabicDiacritic(logical[cursor])) {
-        marks.push(logical[cursor++]);
-      }
-      index = cursor - 1;
-      clusters.push({
-        base: ligature,
-        marks
-      });
-      continue;
-    }
-    clusters.push({
-      base: formFor(codePoint, previousLetter(logical, index), next),
-      marks: []
-    });
+function shapeArabicRange(text, start = 0, end = text.length) {
+  let shaped = "";
+  for (let index = start; index < end; index++) {
+    const code = text.charCodeAt(index);
+    const before = letterAt(text, index, -1);
+    if (before === 1604 && LAM_ALEF[code] !== undefined) continue;
+    const after = letterAt(text, index, 1);
+    const ligature = code === 1604 ? LAM_ALEF[after] : undefined;
+    shaped += String.fromCharCode(ligature === undefined ? formFor(code, before, after) : ligature[ARABIC_FORMS[before]?.length === 4 ? 1 : 0]);
   }
-  const visual = [];
-  {
-    for (const cluster of clusters) visual.push(cluster.base, ...cluster.marks);
-  }
-  return String.fromCodePoint(...visual);
-}
-
-function shapeArabicLogical(input) {
-  return shapeArabic(input);
+  return shaped;
 }
 
 function cffFontMetadata(bytes, glyphCount) {
@@ -10440,17 +10164,13 @@ function bidiFactory() {
   return bidi;
 }
 
-function reorderUnicodeBidi(input, direction) {
-  const api = bidiFactory();
-  const levels = api.getEmbeddingLevels(input, direction);
-  return api.getReorderedString(input, levels);
+let shared = null;
+
+function unicodeBidi() {
+  return shared ?? (shared = bidiFactory());
 }
 
-const basicToIsolatedMappings = new Map([ [ 1575, 65165 ], [ 1576, 65167 ], [ 1578, 65173 ], [ 1579, 65177 ], [ 1580, 65181 ], [ 1581, 65185 ], [ 1582, 65189 ], [ 1583, 65193 ], [ 1584, 65195 ], [ 1585, 65197 ], [ 1586, 65199 ], [ 1587, 65201 ], [ 1588, 65205 ], [ 1589, 65209 ], [ 1590, 65213 ], [ 1591, 65217 ], [ 1592, 65221 ], [ 1593, 65225 ], [ 1594, 65229 ], [ 1601, 65233 ], [ 1602, 65237 ], [ 1603, 65241 ], [ 1604, 65245 ], [ 1605, 65249 ], [ 1606, 65253 ], [ 1607, 65257 ], [ 1608, 65261 ], [ 1610, 65263 ], [ 1569, 65152 ], [ 1570, 65153 ], [ 1571, 65155 ], [ 1572, 65157 ], [ 1573, 65159 ], [ 1574, 65161 ], [ 1577, 65171 ] ]);
-
-function logicalToVisual(input) {
-  return input.split("\n").map(line => reorderUnicodeBidi(shapeArabicLogical(line), "rtl")).join("\n");
-}
+const basicToIsolatedMappings = new Map([ [ 1575, 65165 ], [ 1576, 65167 ], [ 1578, 65173 ], [ 1579, 65177 ], [ 1580, 65181 ], [ 1581, 65185 ], [ 1582, 65189 ], [ 1583, 65193 ], [ 1584, 65195 ], [ 1585, 65197 ], [ 1586, 65199 ], [ 1587, 65201 ], [ 1588, 65205 ], [ 1589, 65209 ], [ 1590, 65213 ], [ 1591, 65217 ], [ 1592, 65221 ], [ 1593, 65225 ], [ 1594, 65229 ], [ 1601, 65233 ], [ 1602, 65237 ], [ 1603, 65241 ], [ 1604, 65245 ], [ 1605, 65249 ], [ 1606, 65253 ], [ 1607, 65257 ], [ 1608, 65261 ], [ 1609, 65263 ], [ 1610, 65265 ], [ 1569, 65152 ], [ 1570, 65153 ], [ 1571, 65155 ], [ 1572, 65157 ], [ 1573, 65159 ], [ 1574, 65161 ], [ 1577, 65171 ] ]);
 
 const TtfParserName = Object.freeze({
   copyright: 0,
@@ -10649,102 +10369,104 @@ class TtfParser {
     return macintoshName;
   }
   parseCMap() {
-    const basePosition = this.tableOffset(TtfTable.cmap);
-    const numSubTables = this.view.getUint16(basePosition + 2);
-    for (let i = 0; i < numSubTables; i++) {
-      const offset = this.view.getUint32(basePosition + i * 8 + 8);
-      const format = this.view.getUint16(basePosition + offset);
-      switch (format) {
-       case 0:
-        this.parseCMapFormat0(basePosition + offset + 2);
-        break;
-
-       case 4:
-        this.parseCMapFormat4(basePosition + offset + 2);
-        break;
-
-       case 6:
-        this.parseCMapFormat6(basePosition + offset + 2);
-        break;
-
-       case 12:
-        this.parseCMapFormat12(basePosition + offset + 2);
-        break;
+    const base = this.tableOffset(TtfTable.cmap);
+    const map = this.charToGlyphIndexMap;
+    const records = Math.min(this.view.getUint16(base + 2), this.bytes.length - base - 4 >> 3);
+    const subtables = [];
+    for (let i = 0; i < records; i++) {
+      const record = base + 4 + i * 8;
+      const start = base + this.view.getUint32(record + 4);
+      const rank = start + 2 <= this.bytes.length ? cmapRank(this.view.getUint16(record), this.view.getUint16(record + 2), this.view.getUint16(start)) : 0;
+      if (rank > 0) subtables.push([ rank, start ]);
+    }
+    const best = Math.max(0, ...subtables.map(([rank]) => rank));
+    for (const [, start] of subtables.filter(([rank]) => best > 2 ? rank > 2 : rank === best).sort((a, b) => a[0] - b[0])) {
+      this.parseCMapSubtable(start);
+    }
+    if (best === 2) {
+      for (const [code, glyph] of map) {
+        if (code >= 61440 && code <= 61695 && !map.has(code & 255)) map.set(code & 255, glyph);
       }
+    } else if (best === 1) {
+      for (const code of map.keys()) if (code >= 128) map.delete(code);
     }
     for (const [basic, isolated] of basicToIsolatedMappings) {
-      const glyph = this.charToGlyphIndexMap.get(basic);
-      if (glyph !== undefined && !this.charToGlyphIndexMap.has(isolated)) {
-        this.charToGlyphIndexMap.set(isolated, glyph);
+      const glyph = map.get(basic);
+      if (glyph !== undefined && !map.has(isolated)) {
+        map.set(isolated, glyph);
       }
     }
   }
-  parseCMapFormat0(basePosition) {
-    for (let i = 0; i < 256; i++) {
-      const glyphIndex = this.view.getUint8(basePosition + i + 2);
-      if (glyphIndex > 0) {
-        this.charToGlyphIndexMap.set(i, glyphIndex);
+  parseCMapSubtable(start) {
+    const view = this.view;
+    const map = this.charToGlyphIndexMap;
+    const length = this.bytes.length;
+    const fits = end => end <= length;
+    switch (view.getUint16(start)) {
+     case 0:
+      if (!fits(start + 262)) return;
+      for (let code = 0; code < 256; code++) {
+        const glyph = view.getUint8(start + 6 + code);
+        if (glyph > 0) map.set(code, glyph);
       }
-    }
-  }
-  parseCMapFormat4(basePosition) {
-    const segCount = Math.floor(this.view.getUint16(basePosition + 4) / 2);
-    const endCodes = [];
-    for (let i = 0; i < segCount; i++) {
-      endCodes.push(this.view.getUint16(basePosition + i * 2 + 12));
-    }
-    const startCodes = [];
-    for (let i = 0; i < segCount; i++) {
-      startCodes.push(this.view.getUint16(basePosition + (segCount + i) * 2 + 14));
-    }
-    const idDeltas = [];
-    for (let i = 0; i < segCount; i++) {
-      idDeltas.push(this.view.getUint16(basePosition + (segCount * 2 + i) * 2 + 14));
-    }
-    const idRangeOffsetBasePos = basePosition + segCount * 6 + 14;
-    const idRangeOffsets = [];
-    for (let i = 0; i < segCount; i++) {
-      idRangeOffsets.push(this.view.getUint16(idRangeOffsetBasePos + i * 2));
-    }
-    for (let s = 0; s < segCount - 1; s++) {
-      const startCode = startCodes[s];
-      const endCode = endCodes[s];
-      const idDelta = idDeltas[s];
-      const idRangeOffset = idRangeOffsets[s];
-      const idRangeOffsetAddress = idRangeOffsetBasePos + s * 2;
-      for (let c = startCode; c <= endCode; c++) {
-        let glyphIndex;
-        if (idRangeOffset === 0) {
-          glyphIndex = (idDelta + c) % 65536;
-        } else {
-          const glyphIndexAddress = idRangeOffset + 2 * (c - startCode) + idRangeOffsetAddress;
-          if (glyphIndexAddress + 1 >= this.bytes.length) {
-            continue;
+      return;
+
+     case 4:
+      {
+        if (!fits(start + 14)) return;
+        const segments = view.getUint16(start + 6) >> 1;
+        const ends = start + 14;
+        const starts = ends + segments * 2 + 2;
+        const deltas = starts + segments * 2;
+        const ranges = deltas + segments * 2;
+        if (!fits(ranges + segments * 2)) return;
+        for (let s = 0; s < segments - 1; s++) {
+          const end = view.getUint16(ends + s * 2);
+          const first = view.getUint16(starts + s * 2);
+          const delta = view.getUint16(deltas + s * 2);
+          const range = view.getUint16(ranges + s * 2);
+          for (let code = first; code <= end; code++) {
+            let glyph = code + delta & 65535;
+            if (range !== 0) {
+              const address = ranges + s * 2 + range + 2 * (code - first);
+              if (!fits(address + 2)) continue;
+              glyph = view.getUint16(address);
+              if (glyph !== 0) glyph = glyph + delta & 65535;
+            }
+            if (glyph !== 0) map.set(code, glyph);
           }
-          glyphIndex = this.view.getUint16(glyphIndexAddress);
         }
-        this.charToGlyphIndexMap.set(c, glyphIndex);
+        return;
       }
-    }
-  }
-  parseCMapFormat6(basePosition) {
-    const firstCode = this.view.getUint16(basePosition + 4);
-    const entryCount = this.view.getUint16(basePosition + 6);
-    for (let i = 0; i < entryCount; i++) {
-      const glyphIndex = this.view.getUint16(basePosition + i * 2 + 8);
-      if (glyphIndex > 0) {
-        this.charToGlyphIndexMap.set(firstCode + i, glyphIndex);
+
+     case 6:
+      {
+        if (!fits(start + 10)) return;
+        const first = view.getUint16(start + 6);
+        const count = view.getUint16(start + 8);
+        if (!fits(start + 10 + count * 2)) return;
+        for (let i = 0; i < count; i++) {
+          const glyph = view.getUint16(start + 10 + i * 2);
+          if (glyph > 0) map.set(first + i, glyph);
+        }
+        return;
       }
-    }
-  }
-  parseCMapFormat12(basePosition) {
-    const numGroups = this.view.getUint32(basePosition + 10);
-    for (let i = 0; i < numGroups; i++) {
-      const startCharCode = this.view.getUint32(basePosition + i * 12 + 14);
-      const endCharCode = this.view.getUint32(basePosition + i * 12 + 18);
-      const startGlyphID = this.view.getUint32(basePosition + i * 12 + 22);
-      for (let j = startCharCode; j <= endCharCode; j++) {
-        this.charToGlyphIndexMap.set(j, startGlyphID + j - startCharCode);
+
+     case 12:
+      {
+        if (!fits(start + 16)) return;
+        const groups = view.getUint32(start + 12);
+        if (!fits(start + 16 + groups * 12)) return;
+        for (let i = 0; i < groups; i++) {
+          const group = start + 16 + i * 12;
+          const first = view.getUint32(group);
+          const end = view.getUint32(group + 4);
+          const glyph = view.getUint32(group + 8) - first;
+          if (end > 1114111) continue;
+          for (let code = first; code <= end; code++) {
+            if (glyph + code !== 0) map.set(code, glyph + code);
+          }
+        }
       }
     }
   }
@@ -10821,7 +10543,7 @@ class TtfParser {
     const glyfOffset = this.tableOffset(TtfTable.glyf);
     const start = glyfOffset + this.glyphOffsets[index];
     const glyfEnd = glyfOffset + (this.tableSize.get(TtfTable.glyf) ?? 0);
-    if (start >= glyfEnd || start === 0 || this.glyphSizes[index] === 0) {
+    if (start >= glyfEnd || start === 0 || this.glyphSizes[index] <= 0) {
       return {
         index,
         data: new Uint8Array(0),
@@ -10830,6 +10552,9 @@ class TtfParser {
     }
     const numberOfContours = this.view.getInt16(start);
     return numberOfContours === -1 ? this.readCompoundGlyph(index, start, start + 10) : this.readSimpleGlyph(index, start, start + 10, numberOfContours);
+  }
+  glyphBytes(glyph, start, end) {
+    return this.bytes.subarray(start, Math.min(end, start + this.glyphSizes[glyph]));
   }
   readSimpleGlyph(glyph, start, offset, numberOfContours) {
     const xIsByte = 2;
@@ -10846,7 +10571,7 @@ class TtfParser {
     if (numberOfContours === 0) {
       return {
         index: glyph,
-        data: this.bytes.subarray(start, offset),
+        data: this.glyphBytes(glyph, start, offset),
         compounds: []
       };
     }
@@ -10878,7 +10603,7 @@ class TtfParser {
     }
     return {
       index: glyph,
-      data: this.bytes.subarray(start, offset),
+      data: this.glyphBytes(glyph, start, offset),
       compounds: []
     };
   }
@@ -10912,7 +10637,7 @@ class TtfParser {
     }
     return {
       index: glyph,
-      data: this.bytes.subarray(start, offset),
+      data: this.glyphBytes(glyph, start, offset),
       compounds: components
     };
   }
@@ -10956,6 +10681,13 @@ class TtfParser {
       sizeOffset += 48;
     }
   }
+}
+
+function cmapRank(platform, encoding, format) {
+  if (format !== 0 && format !== 4 && format !== 6 && format !== 12) return 0;
+  if (platform === 0) return encoding === 4 || encoding === 6 ? 5 : 3;
+  if (platform === 3) return encoding === 10 ? 6 : encoding === 1 ? 4 : encoding === 0 ? 2 : 0;
+  return platform === 1 && encoding === 0 ? 1 : 0;
 }
 
 function decodeUtf16Be(bytes) {
@@ -11137,7 +10869,7 @@ class TtfWriter {
     } else {
       locaView.setUint32(locaIndex, glyphOffset);
     }
-    for (const name of [ TtfTable.head, TtfTable.maxp, TtfTable.hhea, TtfTable.os2 ]) {
+    for (const name of [ TtfTable.head, TtfTable.maxp, TtfTable.hhea, TtfTable.os2, "cvt ", "fpgm", "prep", "gasp" ]) {
       const start = ttf.tableOffsets.get(name);
       if (start === undefined) {
         continue;
@@ -11218,7 +10950,7 @@ class TtfWriter {
     return this.writeFile(tables, tablesLength);
   }
   writeFile(tables, tablesLength) {
-    const tableKeys = [ TtfTable.head, TtfTable.hhea, TtfTable.maxp, TtfTable.os2, TtfTable.hmtx, TtfTable.cmap, TtfTable.loca, TtfTable.glyf, TtfTable.name, TtfTable.post ].filter(name => tables.has(name));
+    const tableKeys = [ ...tables.keys() ].sort();
     const numTables = tableKeys.length;
     const directoryLength = 12 + numTables * 16;
     let total = directoryLength;
@@ -11229,13 +10961,13 @@ class TtfWriter {
     const view = viewOf(output);
     view.setUint32(0, 65536);
     view.setUint16(4, numTables);
-    let pot = numTables;
-    while ((pot & pot - 1) !== 0) {
-      pot++;
+    let entrySelector = 0;
+    while (2 << entrySelector <= numTables) {
+      entrySelector++;
     }
-    view.setUint16(6, pot * 16);
-    view.setUint16(8, Math.trunc(Math.log(pot)));
-    view.setUint16(10, pot * 16 - numTables * 16);
+    view.setUint16(6, 16 << entrySelector);
+    view.setUint16(8, entrySelector);
+    view.setUint16(10, numTables * 16 - (16 << entrySelector));
     let offset = directoryLength;
     let headOffset = 0;
     let count = 0;
@@ -11817,10 +11549,11 @@ function deflateZlib(data) {
 }
 
 class PdfDictStream extends PdfDict {
-  constructor(data = new Uint8Array(0), values, compress = false) {
+  constructor(data = new Uint8Array(0), values, compress = false, eol = false) {
     super(values);
     this.data = data;
     this.compress = compress;
+    this.eol = eol;
   }
   output(s) {
     const params = new PdfDict(this.values);
@@ -11836,7 +11569,7 @@ class PdfDictStream extends PdfDict {
     params.output(s);
     s.putString("\nstream\n");
     s.putBytes(data);
-    if (data.length === 0 || data[data.length - 1] !== 10) {
+    if (this.eol || data.length === 0 || data[data.length - 1] !== 10) {
       s.putByte(10);
     }
     s.putString("endstream");
@@ -11845,27 +11578,34 @@ class PdfDictStream extends PdfDict {
 
 class PdfObjectStream extends PdfObject {
   constructor(document, data, compress) {
-    super(document, new PdfDictStream(data, undefined, compress ?? document.settings.compress));
+    super(document, new PdfDictStream(data, undefined, compress ?? document.settings.compress, document.settings.pdfa !== undefined));
   }
 }
 
-function hex4(value) {
-  return value.toString(16).toUpperCase().padStart(4, "0");
-}
+const hex4 = value => value.toString(16).toUpperCase().padStart(4, "0");
 
-function unicodeCmapStream(cmap, protect = false) {
-  const values = protect ? cmap.map((value, index) => index === 0 ? value : 32) : cmap;
-  let output = "/CIDInit/ProcSet\nfindresource begin\n" + "12 dict begin\n" + "begincmap\n" + "/CIDSystemInfo<<\n" + "/Registry (Adobe)\n" + "/Ordering (UCS)\n" + "/Supplement 0\n" + ">> def\n" + "/CMapName/Adobe-Identity-UCS def\n" + "/CMapType 2 def\n" + "1 begincodespacerange\n" + "<0000> <FFFF>\n" + "endcodespacerange\n" + `${values.length} beginbfchar\n`;
-  for (let key = 0; key < values.length; key++) {
-    output += `<${hex4(key)}> <${hex4(values[key] ?? 0)}>\n`;
+function fontCmap(values, protect = false, cid = false, simple = false, ros = {
+  registry: "Adobe",
+  ordering: "UCS",
+  supplement: 0
+}) {
+  let result = "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n" + `/CIDSystemInfo << /Registry ${pdfLiteral(ros.registry)} /Ordering ${pdfLiteral(ros.ordering)} /Supplement ${ros.supplement} >> def\n` + `/CMapName /${cid ? "JsPdfEncoding" : "Adobe-Identity-UCS"} def\n/CMapType ${cid ? 1 : 2} def\n` + (cid ? "/WMode 0 def\n" : "") + `1 begincodespacerange\n<${simple ? "00> <FF" : "0000> <FFFF"}>\nendcodespacerange\n`;
+  for (let start = 0; start < values.length; start += 100) {
+    const end = Math.min(start + 100, values.length);
+    result += `${end - start} begin${cid ? "cid" : "bf"}char\n`;
+    for (let index = start; index < end; index++) {
+      const rune = protect && index !== 0 ? 32 : values[index];
+      const destination = rune <= 65535 ? hex4(rune) : hex4(55296 + (rune - 65536 >> 10)) + hex4(56320 + (rune - 65536 & 1023));
+      result += `<${simple ? index.toString(16).padStart(2, "0") : hex4(index)}> ${cid ? rune : "<" + destination + ">"}\n`;
+    }
+    result += `end${cid ? "cid" : "bf"}char\n`;
   }
-  output += "endbfchar\n" + "endcmap\n" + "CMapName currentdict /CMap defineresource pop\n" + "end\n" + "end";
-  return output;
+  return result + "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend";
 }
 
 class PdfUnicodeCmap extends PdfObjectStream {
-  constructor(document, cmap, protect = false) {
-    super(document, encodeLatin1(unicodeCmapStream(cmap, protect)));
+  constructor(document, cmap, protect = false, simple = false) {
+    super(document, encodeLatin1(fontCmap(cmap, protect, false, simple)));
   }
 }
 
@@ -11896,7 +11636,7 @@ class PdfTtfFont {
     return this.font.unitsPerEm;
   }
   isRuneSupported(codePoint) {
-    return (this.isComposite || winAnsiRune(toWinAnsiByte(codePoint)) === codePoint) && this.font.charToGlyphIndexMap.has(codePoint);
+    return (this.isComposite || isWinAnsiRune(codePoint)) && this.font.charToGlyphIndexMap.has(codePoint);
   }
   getBitmap(codePoint) {
     return this.font.getBitmap(codePoint);
@@ -11983,9 +11723,9 @@ class PdfTtfFont {
         const rune = winAnsiRune(index + 32);
         return Math.trunc(this.glyphMetrics(rune).advanceWidth * 1e3);
       });
-      return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/TrueType") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfName("/WinAnsiEncoding") ], [ "/FontDescriptor", descriptor.ref() ], [ "/FirstChar", new PdfNum(32) ], [ "/LastChar", new PdfNum(255) ], [ "/Widths", PdfArray.fromNum(widths) ], [ "/ToUnicode", new PdfObjectStream(document, encodeLatin1(fontCmap(Array.from({
+      return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/TrueType") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfName("/WinAnsiEncoding") ], [ "/FontDescriptor", descriptor.ref() ], [ "/FirstChar", new PdfNum(32) ], [ "/LastChar", new PdfNum(255) ], [ "/Widths", PdfArray.fromNum(widths) ], [ "/ToUnicode", new PdfUnicodeCmap(document, Array.from({
         length: 256
-      }, (_, i) => winAnsiRune(i)), this.protect, false, true))).ref() ] ]);
+      }, (_, i) => winAnsiRune(i)), this.protect, true).ref() ] ]);
     }
     const {registry, ordering, supplement} = this.cffMetadata;
     const encoding = fontCmap(this.cmap.map(rune => this.cffMetadata.cids[this.font.charToGlyphIndexMap.get(rune) ?? 0] ?? 0), false, true, false, {
@@ -12002,42 +11742,16 @@ class PdfTtfFont {
       widths.add(new PdfNum(cid));
       widths.add(PdfArray.fromNum([ Math.trunc(this.glyphMetrics(rune).advanceWidth * 1e3) ]));
     }
-    const descendant = new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/CIDFontType0") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/FontDescriptor", descriptor.ref() ], [ "/W", widths ], [ "/CIDSystemInfo", new PdfDict([ [ "/Registry", new PdfString(registry) ], [ "/Ordering", new PdfString(ordering) ], [ "/Supplement", new PdfNum(supplement) ] ]) ] ]);
-    return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/Type0") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfObjectStream(document, encodeLatin1(encoding)).ref() ], [ "/DescendantFonts", new PdfArray([ descendant ]) ], [ "/ToUnicode", new PdfObjectStream(document, encodeLatin1(fontCmap(this.cmap, this.protect))).ref() ] ]);
-  }
-}
-
-function winAnsiRune(byte) {
-  return WIN_ANSI_RUNES[byte] ?? 63;
-}
-
-const WIN_ANSI_RUNES = Array.from({
-  length: 256
-}, (_, byte) => byte);
-
-for (let rune = 256; rune <= 8482; rune++) {
-  const byte = toWinAnsiByte(rune);
-  if (byte !== 63) WIN_ANSI_RUNES[byte] = rune;
-}
-
-function fontCmap(values, protect = false, cid = false, simple = false, ros = {
-  registry: "Adobe",
-  ordering: "Identity",
-  supplement: 0
-}) {
-  const hex = n => n.toString(16).toUpperCase().padStart(4, "0");
-  let result = "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n" + `/CIDSystemInfo << /Registry ${pdfLiteral(ros.registry)} /Ordering ${pdfLiteral(ros.ordering)} /Supplement ${ros.supplement} >> def\n` + `/CMapName /JsPdf${cid ? "Encoding" : "Unicode"} def\n/CMapType ${cid ? 1 : 2} def\n` + (cid ? "/WMode 0 def\n" : "") + `1 begincodespacerange\n<${simple ? "00> <FF" : "0000> <FFFF"}>\nendcodespacerange\n`;
-  for (let start = 0; start < values.length; start += 100) {
-    const end = Math.min(start + 100, values.length);
-    result += `${end - start} begin${cid ? "cid" : "bf"}char\n`;
-    for (let index = start; index < end; index++) {
-      const rune = protect && index !== 0 ? 32 : values[index];
-      const destination = rune <= 65535 ? hex(rune) : hex(55296 + (rune - 65536 >> 10)) + hex(56320 + (rune - 65536 & 1023));
-      result += `<${simple ? index.toString(16).padStart(2, "0") : hex(index)}> ${cid ? rune : "<" + destination + ">"}\n`;
+    const systemInfo = new PdfDict([ [ "/Registry", new PdfString(registry) ], [ "/Ordering", new PdfString(ordering) ], [ "/Supplement", new PdfNum(supplement) ] ]);
+    const descendant = new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/CIDFontType0") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/FontDescriptor", descriptor.ref() ], [ "/W", widths ], [ "/CIDSystemInfo", systemInfo ] ]);
+    const cmap = new PdfObjectStream(document, encodeLatin1(encoding));
+    if (document.settings.pdfa !== undefined) {
+      cmap.params.set("/Type", new PdfName("/CMap"));
+      cmap.params.set("/CMapName", new PdfName("/JsPdfEncoding"));
+      cmap.params.set("/CIDSystemInfo", systemInfo);
     }
-    result += `end${cid ? "cid" : "bf"}char\n`;
+    return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/Type0") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", cmap.ref() ], [ "/DescendantFonts", new PdfArray([ descendant ]) ], [ "/ToUnicode", new PdfUnicodeCmap(document, this.cmap, this.protect).ref() ] ]);
   }
-  return result + "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend";
 }
 
 class BitReader {
@@ -12538,7 +12252,7 @@ function parseJpeg(bytes) {
   let height = 0;
   let bitsPerComponent = 0;
   let components = 0;
-  let adobeTransform = null;
+  let adobe = false;
   let orientation = "topLeft";
   let foundFrame = false;
   while (offset < bytes.length) {
@@ -12567,8 +12281,8 @@ function parseJpeg(bytes) {
       foundFrame = true;
     } else if (marker === 225) {
       orientation = exifOrientation(bytes, dataStart, dataEnd) ?? orientation;
-    } else if (marker === 238 && length >= 14 && bytes[dataStart] === 65 && bytes[dataStart + 1] === 100 && bytes[dataStart + 2] === 111 && bytes[dataStart + 3] === 98 && bytes[dataStart + 4] === 101) {
-      adobeTransform = bytes[dataStart + 11];
+    } else if (marker === 238 && length >= 7 && bytes[dataStart] === 65 && bytes[dataStart + 1] === 100 && bytes[dataStart + 2] === 111 && bytes[dataStart + 3] === 98 && bytes[dataStart + 4] === 101) {
+      adobe = true;
     }
     offset = dataEnd;
   }
@@ -12583,7 +12297,7 @@ function parseJpeg(bytes) {
     bitsPerComponent,
     components,
     colorSpace,
-    inverted: colorSpace === "cmyk" && adobeTransform !== 0,
+    inverted: colorSpace === "cmyk" && adobe,
     orientation
   };
 }
@@ -12899,7 +12613,12 @@ class PdfPageLabels extends PdfObject {
   }
   prepare() {
     const nums = new PdfArray;
-    for (const key of [ ...this.labels.keys() ].sort((a, b) => a - b)) {
+    const keys = [ ...this.labels.keys() ].sort((a, b) => a - b);
+    if (keys.length > 0 && keys[0] !== 0) {
+      nums.add(new PdfNum(0));
+      nums.add(PdfPageLabel.arabic().toDict());
+    }
+    for (const key of keys) {
       const label = this.labels.get(key);
       if (label === undefined) continue;
       nums.add(new PdfNum(key));
@@ -13305,33 +13024,6 @@ class ClipOval extends ClipWidget {
   }
 }
 
-class InheritedDirectionality extends Inherited {
-  constructor(textDirection) {
-    super();
-    this.textDirection = textDirection;
-  }
-}
-
-class Directionality extends StatelessWidget {
-  constructor({textDirection, child}) {
-    super();
-    if (textDirection !== "ltr" && textDirection !== "rtl") {
-      throw new TypeError(`Unknown text direction: ${String(textDirection)}`);
-    }
-    this.textDirection = textDirection;
-    this.child = child;
-  }
-  static of(context) {
-    return InheritedWidget.of(context, InheritedDirectionality)?.textDirection ?? context.textDirection ?? "ltr";
-  }
-  build(_context) {
-    return new InheritedWidget({
-      inherited: new InheritedDirectionality(this.textDirection),
-      build: () => this.child
-    });
-  }
-}
-
 const PdfPoint = Object.freeze({
   zero: Object.freeze({
     x: 0,
@@ -13568,15 +13260,11 @@ class SvgNumeric {
     this.brush = brush;
   }
   static parse(text, brush) {
-    const match = /([-+]?[\d.]+)\s*(px|pt|em|cm|mm|in|%|)/.exec(text);
-    if (match === null) {
+    const numeric = parseNumeric(text, brush);
+    if (numeric === null) {
       throw new SyntaxError(`Not a number: "${text}"`);
     }
-    const value = Number.parseFloat(match[1]);
-    if (!Number.isFinite(value)) {
-      throw new SyntaxError(`Not a number: "${text}"`);
-    }
-    return new SvgNumeric(value, brush, UNIT_SUFFIXES[match[2] ?? ""] ?? "direct");
+    return numeric;
   }
   get colorValue() {
     if (this.unit === "percent") {
@@ -13586,6 +13274,14 @@ class SvgNumeric {
       return this.value / 255;
     }
     throw new SyntaxError(`Invalid color value ${this.value} (${this.unit})`);
+  }
+  lengthIn(axis) {
+    const viewport = this.brush?.viewport;
+    if (this.unit !== "percent" || viewport === null || viewport === undefined) {
+      return this.sizeValue;
+    }
+    const {width, height} = viewport;
+    return this.value / 100 * (axis === "x" ? width : axis === "y" ? height : Math.sqrt((width * width + height * height) / 2));
   }
   get sizeValue() {
     switch (this.unit) {
@@ -13624,6 +13320,22 @@ function splitNumeric(parameters, brush) {
   return [ ...parameters.matchAll(PARAMETER) ].map(match => SvgNumeric.parse(match[0], brush));
 }
 
+const NUMBER = /[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g;
+
+function parseNumbers(text) {
+  return /^[\s,]*$/.test(text.replace(NUMBER, " ")) ? (text.match(NUMBER) ?? []).map(Number) : null;
+}
+
+function parseViewBox(value) {
+  const box = value === null ? null : parseNumbers(value);
+  return box?.length === 4 && box[2] > 0 && box[3] > 0 ? {
+    x: box[0],
+    y: box[1],
+    width: box[2],
+    height: box[3]
+  } : null;
+}
+
 function splitDoubles(parameters) {
   return [ ...parameters.matchAll(PARAMETER) ].map(match => {
     const value = Number.parseFloat(match[0]);
@@ -13634,37 +13346,36 @@ function splitDoubles(parameters) {
   });
 }
 
+function parseNumeric(text, brush) {
+  const match = /([-+]?[\d.]+)\s*(px|pt|em|cm|mm|in|%|)/.exec(text);
+  const value = match === null ? NaN : Number.parseFloat(match[1]);
+  return Number.isFinite(value) ? new SvgNumeric(value, brush, UNIT_SUFFIXES[match[2] ?? ""] ?? "direct") : null;
+}
+
 function getDouble(element, name, {namespace, defaultValue = 0} = {}) {
   const attribute = element.getAttribute(name, namespace);
   if (attribute === null) {
     return defaultValue;
   }
   const value = Number.parseFloat(attribute);
-  if (!Number.isFinite(value)) {
-    throw new SyntaxError(`Attribute ${name}="${attribute}" is not a number`);
-  }
-  return value;
+  return Number.isFinite(value) ? value : defaultValue;
 }
 
 function getNumeric(element, name, brush, {namespace, defaultValue = null} = {}) {
   const attribute = element.getAttribute(name, namespace);
-  if (attribute === null) {
-    return defaultValue === null ? null : new SvgNumeric(defaultValue, null);
-  }
-  return SvgNumeric.parse(attribute, brush);
+  return (attribute === null ? null : parseNumeric(attribute, brush)) ?? (defaultValue === null ? null : new SvgNumeric(defaultValue, null));
 }
 
-const STYLE_DECLARATION = /([\w-]+)\s*:\s*(.*)/;
+const STYLE_DECLARATION = /([\w-]+)\s*:\s*([\s\S]*)/;
+
+const STYLE_SPLIT = /(?:[^;'"(]|'[^']*'|"[^"]*"|\([^)]*\))+/g;
 
 function convertStyle(element) {
   const style = element.getAttribute("style")?.trim();
   if (style === undefined || style === null || style.length === 0) {
     return;
   }
-  for (const declaration of style.split(";")) {
-    if (declaration.trim().length === 0) {
-      continue;
-    }
+  for (const declaration of style.match(STYLE_SPLIT) ?? []) {
     const match = STYLE_DECLARATION.exec(declaration);
     if (match === null) {
       continue;
@@ -13684,8 +13395,12 @@ class SvgParser {
   static fromXml({xml, colorFilter = null}) {
     const root = xml.rootElement;
     const viewBoxAttribute = root.getAttribute("viewBox");
-    const width = getNumeric(root, "width", null)?.sizeValue ?? null;
-    const height = getNumeric(root, "height", null)?.sizeValue ?? null;
+    const size = name => {
+      const numeric = getNumeric(root, name, null);
+      return numeric === null || numeric.unit === "percent" ? null : numeric.sizeValue;
+    };
+    const width = size("width");
+    const height = size("height");
     const parsed = viewBoxAttribute === null ? [ 0, 0, width ?? 1e3, height ?? 1e3 ] : splitDoubles(viewBoxAttribute);
     if (parsed.length === 0 || parsed.length > 4) {
       throw new SyntaxError("viewBox must contain 1..4 parameters");
@@ -13764,47 +13479,39 @@ class SvgColor {
     if (parser.colorFilter !== null) {
       return new SvgColor(parser.colorFilter);
     }
-    const named = svgColors[value.toLowerCase()];
+    const lower = value.toLowerCase();
+    if (lower === "transparent") {
+      return new SvgColor([ 0, 0, 0 ], false, 0);
+    }
+    const named = svgColors[lower];
     if (named !== undefined) {
       return new SvgColor(normalizeColor(named));
     }
-    const lower = value.toLowerCase();
-    if (lower.startsWith("rgba")) {
-      const parts = splitNumeric(functionArguments(value), null);
-      if (parts.length >= 3) {
-        return new SvgColor([ parts[0].colorValue, parts[1].colorValue, parts[2].colorValue ], false, Math.min(1, Math.max(0, parts[3]?.value ?? 1)));
+    if (/^(rgb|hsl)a?\s*\(/.test(lower)) {
+      try {
+        const parts = splitNumeric(functionArguments(value), null);
+        const [first, second, third, alpha] = parts;
+        if (third === undefined || parts.some(part => part.unit !== "direct" && part.unit !== "percent")) {
+          return SvgColor.unknown;
+        }
+        const rgb = lower.startsWith("hsl") ? hslToRgb(first.unit === "percent" ? first.value / 100 : first.value / 360, second.colorValue, third.colorValue) : [ first.colorValue, second.colorValue, third.colorValue ];
+        const opacity = alpha === undefined ? 1 : alpha.unit === "percent" ? alpha.value / 100 : alpha.value;
+        return new SvgColor(rgb, false, Math.min(1, Math.max(0, opacity)));
+      } catch {
+        return SvgColor.unknown;
       }
+    }
+    if (lower.startsWith("url(")) {
+      const fallback = value.slice(value.indexOf(")") + 1).trim();
+      return fallback === "" || !value.includes(")") ? SvgColor.unknown : SvgColor.fromXml(fallback, parser, currentColor);
+    }
+    const hex = /^(?:#([0-9a-f]{3,4})|#?([0-9a-f]{6}|[0-9a-f]{8}))$/.exec(lower);
+    if (hex === null) {
       return SvgColor.unknown;
     }
-    if (lower.startsWith("hsl")) {
-      const parts = splitNumeric(functionArguments(value), null);
-      if (parts.length >= 3) {
-        return new SvgColor(hslToRgb(parts[0].colorValue, parts[1].colorValue, parts[2].colorValue));
-      }
-      return SvgColor.unknown;
-    }
-    if (lower.startsWith("rgb")) {
-      const parts = splitNumeric(functionArguments(value), null);
-      if (parts.length >= 3) {
-        return new SvgColor([ parts[0].colorValue, parts[1].colorValue, parts[2].colorValue ]);
-      }
-      return SvgColor.unknown;
-    }
-    if (lower.startsWith("url(#")) {
-      return SvgColor.unknown;
-    }
-    try {
-      return new SvgColor(normalizeColor(SvgColor.expandHex(value)));
-    } catch {
-      return SvgColor.unknown;
-    }
-  }
-  static expandHex(value) {
-    if (/^#[0-9a-fA-F]{3}$/.test(value)) {
-      const [, r, g, b] = value;
-      return `#${r}${r}${g}${g}${b}${b}`;
-    }
-    return value;
+    const digits = hex[2] ?? hex[1].replace(/./g, "$&$&");
+    const byte = index => parseInt(digits.slice(index, index + 2), 16) / 255;
+    return new SvgColor([ byte(0), byte(2), byte(4) ], false, digits.length > 6 ? byte(6) : 1);
   }
 }
 
@@ -13842,53 +13549,24 @@ class SvgTransform {
     let matrix = identityMatrix;
     for (const match of transform.matchAll(TRANSFORM)) {
       const name = match[1];
-      const parameters = splitDoubles(match[2]);
-      switch (name) {
-       case "matrix":
-        {
-          const m = [ ...parameters, 0, 0, 0, 0, 0, 0 ].slice(0, 6);
-          matrix = multiplyMatrix(matrix, m);
-          break;
-        }
-
-       case "translate":
-        {
-          const dx = parameters[0] ?? 0;
-          const dy = parameters[1] ?? 0;
-          matrix = multiplyMatrix(matrix, translationMatrix(dx, dy));
-          break;
-        }
-
-       case "scale":
-        {
-          const sx = parameters[0] ?? 1;
-          const sy = parameters[1] ?? sx;
-          matrix = multiplyMatrix(matrix, scaleMatrix(sx, sy));
-          break;
-        }
-
-       case "rotate":
-        {
-          const degrees = parameters[0] ?? 0;
-          const ox = parameters[1] ?? 0;
-          const oy = parameters[2] ?? 0;
-          if (parameters.length > 1) {
-            matrix = multiplyMatrix(matrix, translationMatrix(ox, oy));
-          }
-          matrix = multiplyMatrix(matrix, rotationMatrix(toRadians(degrees)));
-          if (ox !== 0 || oy !== 0) {
-            matrix = multiplyMatrix(matrix, translationMatrix(-ox, -oy));
-          }
-          break;
-        }
-
-       case "skewX":
-        matrix = multiplyMatrix(matrix, skewMatrix(toRadians(parameters[0] ?? 0), 0));
-        break;
-
-       case "skewY":
-        matrix = multiplyMatrix(matrix, skewMatrix(0, toRadians(parameters[0] ?? 0)));
-        break;
+      const p = parseNumbers(match[2]) ?? [];
+      const [a = 0, b, c = 0] = p;
+      const one = p.length === 1;
+      const upToTwo = p.length === 1 || p.length === 2;
+      let step = null;
+      if (name === "matrix") {
+        step = p.length === 6 ? p : null;
+      } else if (name === "translate") {
+        step = upToTwo ? translationMatrix(a, b ?? 0) : null;
+      } else if (name === "scale") {
+        step = upToTwo ? scaleMatrix(a, b ?? a) : null;
+      } else if (name === "rotate") {
+        step = one || p.length === 3 ? multiplyMatrix(multiplyMatrix(translationMatrix(b ?? 0, c), rotationMatrix(toRadians(a))), translationMatrix(-(b ?? 0), -c)) : null;
+      } else {
+        step = one ? skewMatrix(name === "skewX" ? toRadians(a) : 0, name === "skewY" ? toRadians(a) : 0) : null;
+      }
+      if (step !== null) {
+        matrix = multiplyMatrix(matrix, step);
       }
     }
     return new SvgTransform(matrix);
@@ -13896,6 +13574,15 @@ class SvgTransform {
 }
 
 SvgTransform.none = new SvgTransform(null);
+
+function inheritedColor(element, parser) {
+  for (let node = element; node !== null; node = node.parent) {
+    convertStyle(node);
+    const color = SvgColor.fromXml(node.getAttribute("color") ?? "inherit", parser, SvgColor.unknown);
+    if (color.isNotEmpty) return color;
+  }
+  return SvgColor.defaultColor;
+}
 
 function readStops(element, parser) {
   const colors = [];
@@ -13907,7 +13594,8 @@ function readStops(element, parser) {
       continue;
     }
     convertStyle(child);
-    const color = SvgColor.fromXml(child.getAttribute("stop-color") ?? "black", parser);
+    const value = child.getAttribute("stop-color") ?? "black";
+    const color = SvgColor.fromXml(value, parser, /^\s*currentcolor\s*$/i.test(value) ? inheritedColor(child, parser) : SvgColor.defaultColor);
     const offset = Math.min(1, Math.max(previous, getNumeric(child, "offset", null, {
       defaultValue: 0
     }).sizeValue));
@@ -13925,10 +13613,12 @@ function readStops(element, parser) {
   };
 }
 
-function hrefElement(element, parser) {
+function hrefElement(element, parser, seen) {
   const xlink = [ "http:", "", "www.w3.org", "1999", "xlink" ].join("/");
   const href = element.getAttribute("href") ?? element.getAttribute("href", xlink);
-  return href?.startsWith("#") === true ? parser.findById(href.slice(1)) : null;
+  if (href?.startsWith("#") !== true) return null;
+  const id = href.slice(1);
+  return seen.includes(id) ? null : parser.findById(id);
 }
 
 class SvgGradient extends SvgColor {
@@ -14006,11 +13696,11 @@ class SvgGradient extends SvgColor {
     }
   }
   static fromReference(value, parser) {
-    const match = /^url\(\s*#([^)\s]+)\s*\)$/.exec(value.trim());
+    const match = /^url\(\s*(['"]?)#([^'")\s]+)\1\s*\)/.exec(value.trim());
     if (match === null) {
       return null;
     }
-    const element = parser.findById(match[1]);
+    const element = parser.findById(match[2]);
     if (element?.name.local === "linearGradient") {
       return SvgLinearGradient.fromElement(element, parser);
     }
@@ -14031,13 +13721,10 @@ class SvgLinearGradient extends SvgGradient {
   }
   static fromElement(element, parser, seen = []) {
     const id = element.getAttribute("id");
-    if (id !== null && seen.includes(id)) {
-      throw new SyntaxError(`Circular gradient reference: ${id}`);
-    }
     const nextSeen = id === null ? seen : [ ...seen, id ];
     const stopData = readStops(element, parser);
     const local = new SvgLinearGradient(SvgLinearGradient.units(element), getNumeric(element, "x1", null)?.sizeValue ?? null, getNumeric(element, "y1", null)?.sizeValue ?? null, getNumeric(element, "x2", null)?.sizeValue ?? null, getNumeric(element, "y2", null)?.sizeValue ?? null, SvgTransform.fromString(element.getAttribute("gradientTransform")), stopData.colors, stopData.stops, stopData.opacities, SvgLinearGradient.spread(element));
-    const inherited = hrefElement(element, parser);
+    const inherited = hrefElement(element, parser, nextSeen);
     return inherited?.name.local === "linearGradient" ? SvgLinearGradient.fromElement(inherited, parser, nextSeen).mergeWith(local) : local;
   }
   static units(element) {
@@ -14107,15 +13794,12 @@ class SvgRadialGradient extends SvgGradient {
   }
   static fromElement(element, parser, seen = []) {
     const id = element.getAttribute("id");
-    if (id !== null && seen.includes(id)) {
-      throw new SyntaxError(`Circular gradient reference: ${id}`);
-    }
     const nextSeen = id === null ? seen : [ ...seen, id ];
     const stopData = readStops(element, parser);
     const unitsValue = element.getAttribute("gradientUnits");
     const spreadValue = element.getAttribute("spreadMethod");
     const local = new SvgRadialGradient(unitsValue === "userSpaceOnUse" || unitsValue === "objectBoundingBox" ? unitsValue : null, getNumeric(element, "r", null)?.sizeValue ?? null, getNumeric(element, "cx", null)?.sizeValue ?? null, getNumeric(element, "cy", null)?.sizeValue ?? null, getNumeric(element, "fr", null)?.sizeValue ?? null, getNumeric(element, "fx", null)?.sizeValue ?? null, getNumeric(element, "fy", null)?.sizeValue ?? null, SvgTransform.fromString(element.getAttribute("gradientTransform")), stopData.colors, stopData.stops, stopData.opacities, spreadValue === "pad" || spreadValue === "reflect" || spreadValue === "repeat" ? spreadValue : null);
-    const inherited = hrefElement(element, parser);
+    const inherited = hrefElement(element, parser, nextSeen);
     return inherited?.name.local === "radialGradient" ? SvgRadialGradient.fromElement(inherited, parser, nextSeen).mergeWith(local) : local;
   }
   mergeWith(other) {
@@ -14198,6 +13882,8 @@ const LINE_CAPS = Object.freeze({
 
 const LINE_JOINS = Object.freeze({
   miter: "miter",
+  "miter-clip": "miter",
+  arcs: "miter",
   bevel: "bevel",
   round: "round"
 });
@@ -14207,6 +13893,16 @@ const TEXT_ANCHORS = Object.freeze({
   middle: "middle",
   end: "end"
 });
+
+function dashArray(value, brush) {
+  if (value === null) return null;
+  if (value === "none") return [];
+  try {
+    return splitNumeric(value, brush).map(n => n.value);
+  } catch {
+    return null;
+  }
+}
 
 class SvgBrush {
   constructor(fields) {
@@ -14229,6 +13925,8 @@ class SvgBrush {
     this.fontWeight = fields.fontWeight;
     this.textAnchor = fields.textAnchor;
     this.blendMode = fields.blendMode;
+    this.viewport = fields.viewport;
+    this.preserveSpace = fields.preserveSpace;
   }
   merge(other) {
     if (other === null) {
@@ -14261,7 +13959,9 @@ class SvgBrush {
       textAnchor: other.textAnchor ?? this.textAnchor,
       strokeLineCap: other.strokeLineCap ?? this.strokeLineCap,
       strokeLineJoin: other.strokeLineJoin ?? this.strokeLineJoin,
-      strokeMiterLimit: other.strokeMiterLimit ?? this.strokeMiterLimit
+      strokeMiterLimit: other.strokeMiterLimit ?? this.strokeMiterLimit,
+      viewport: other.viewport ?? this.viewport,
+      preserveSpace: other.preserveSpace ?? this.preserveSpace
     });
   }
   copyWith(fields) {
@@ -14284,7 +13984,9 @@ class SvgBrush {
       fontStyle: fields.fontStyle ?? this.fontStyle,
       fontWeight: fields.fontWeight ?? this.fontWeight,
       textAnchor: fields.textAnchor ?? this.textAnchor,
-      blendMode: fields.blendMode ?? this.blendMode
+      blendMode: fields.blendMode ?? this.blendMode,
+      viewport: fields.viewport ?? this.viewport,
+      preserveSpace: fields.preserveSpace ?? this.preserveSpace
     });
   }
   static fromXml(element, parent, parser) {
@@ -14292,7 +13994,8 @@ class SvgBrush {
     const strokeDashArray = element.getAttribute("stroke-dasharray");
     const fillRule = element.getAttribute("fill-rule");
     const strokeLineCap = element.getAttribute("stroke-linecap");
-    const strokeLineJoin = element.getAttribute("stroke-linejoin");
+    const strokeLineJoin = element.getAttribute("stroke-linejoin")?.trim() ?? null;
+    const space = element.getAttribute("xml:space");
     const blendMode = element.getAttribute("mix-blend-mode");
     const color = SvgColor.fromXml(element.getAttribute("color"), parser, parent.color ?? SvgColor.defaultColor);
     const currentColor = color.inherit ? parent.color ?? SvgColor.defaultColor : color;
@@ -14326,13 +14029,15 @@ class SvgBrush {
       fillEvenOdd: fillRule === null ? null : fillRule === "evenodd",
       stroke: paint(element.getAttribute("stroke")),
       strokeWidth: getNumeric(element, "stroke-width", parent),
-      strokeDashArray: strokeDashArray === null ? null : strokeDashArray === "none" ? [] : splitNumeric(strokeDashArray, parent).map(n => n.value),
-      strokeDashOffset: getNumeric(element, "stroke-dashoffset", parent)?.sizeValue ?? null,
+      strokeDashArray: dashArray(strokeDashArray, parent),
+      strokeDashOffset: getNumeric(element, "stroke-dashoffset", parent)?.lengthIn() ?? null,
       fontSize: getNumeric(element, "font-size", parent),
       fontFamily: element.getAttribute("font-family"),
       fontStyle: element.getAttribute("font-style"),
       fontWeight: element.getAttribute("font-weight"),
-      textAnchor: TEXT_ANCHORS[element.getAttribute("text-anchor") ?? ""] ?? null
+      textAnchor: TEXT_ANCHORS[element.getAttribute("text-anchor") ?? ""] ?? null,
+      viewport: null,
+      preserveSpace: space === "preserve" ? true : space === "default" ? false : null
     }));
   }
 }
@@ -14356,7 +14061,9 @@ SvgBrush.defaultContext = new SvgBrush({
   fontFamily: "sans-serif",
   fontWeight: "normal",
   fontStyle: "normal",
-  textAnchor: "start"
+  textAnchor: "start",
+  viewport: null,
+  preserveSpace: false
 });
 
 class SvgClipPath {
@@ -14421,6 +14128,7 @@ SvgClipPath.empty = new SvgClipPath([]);
 
 class SvgOperation {
   constructor(brush, clip, transform, painter) {
+    this.mask = null;
     this.brush = brush;
     this.clip = clip;
     this.transform = transform;
@@ -14428,16 +14136,17 @@ class SvgOperation {
   }
   paint(canvas) {
     canvas.saveContext();
-    this.clip.apply(canvas, this.boundingBox());
     if (this.transform.matrix !== null) {
       canvas.setTransform(this.transform.matrix);
     }
+    this.clip.apply(canvas, this.boundingBox());
     if ((this.brush.opacity ?? 1) < 1 || this.brush.blendMode !== null) {
       canvas.setGraphicState(new PdfGraphicState({
         opacity: this.brush.opacity === 1 ? null : this.brush.opacity,
         blendMode: this.brush.blendMode
       }));
     }
+    this.mask?.apply(canvas);
     this.paintShape(canvas);
     canvas.restoreContext();
   }
@@ -15169,8 +14878,8 @@ class SvgPath extends SvgOperation {
 
      case "circle":
       {
-        const cx = SvgPath.numeric(element, "cx", brush);
-        const cy = SvgPath.numeric(element, "cy", brush);
+        const cx = SvgPath.numeric(element, "cx", brush, "x");
+        const cy = SvgPath.numeric(element, "cy", brush, "y");
         const r = SvgPath.numeric(element, "r", brush);
         d = `M${cx - r},${cy}A${r},${r} 0,0,0 ${cx + r},${cy}` + `A${r},${r} 0,0,0 ${cx - r},${cy}z`;
         break;
@@ -15178,20 +14887,20 @@ class SvgPath extends SvgOperation {
 
      case "ellipse":
       {
-        const cx = SvgPath.numeric(element, "cx", brush);
-        const cy = SvgPath.numeric(element, "cy", brush);
-        const rx = SvgPath.numeric(element, "rx", brush);
-        const ry = SvgPath.numeric(element, "ry", brush);
+        const cx = SvgPath.numeric(element, "cx", brush, "x");
+        const cy = SvgPath.numeric(element, "cy", brush, "y");
+        const rx = SvgPath.numeric(element, "rx", brush, "x");
+        const ry = SvgPath.numeric(element, "ry", brush, "y");
         d = `M${cx - rx},${cy}A${rx},${ry} 0,0,0 ${cx + rx},${cy}` + `A${rx},${ry} 0,0,0 ${cx - rx},${cy}z`;
         break;
       }
 
      case "line":
       {
-        const x1 = SvgPath.numeric(element, "x1", brush);
-        const y1 = SvgPath.numeric(element, "y1", brush);
-        const x2 = SvgPath.numeric(element, "x2", brush);
-        const y2 = SvgPath.numeric(element, "y2", brush);
+        const x1 = SvgPath.numeric(element, "x1", brush, "x");
+        const y1 = SvgPath.numeric(element, "y1", brush, "y");
+        const x2 = SvgPath.numeric(element, "x2", brush, "x");
+        const y2 = SvgPath.numeric(element, "y2", brush, "y");
         d = `M${x1} ${y1} ${x2} ${y2}`;
         break;
       }
@@ -15209,18 +14918,16 @@ class SvgPath extends SvgOperation {
     }
     return new SvgPath(d, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
   }
-  static numeric(element, name, brush) {
-    return getNumeric(element, name, brush, {
-      defaultValue: 0
-    }).sizeValue;
+  static numeric(element, name, brush, axis) {
+    return getNumeric(element, name, brush)?.lengthIn(axis) ?? 0;
   }
   static rectData(element, brush) {
-    const x = SvgPath.numeric(element, "x", brush);
-    const y = SvgPath.numeric(element, "y", brush);
-    const width = SvgPath.numeric(element, "width", brush);
-    const height = SvgPath.numeric(element, "height", brush);
-    let rx = getNumeric(element, "rx", brush)?.sizeValue ?? null;
-    let ry = getNumeric(element, "ry", brush)?.sizeValue ?? null;
+    const x = SvgPath.numeric(element, "x", brush, "x");
+    const y = SvgPath.numeric(element, "y", brush, "y");
+    const width = SvgPath.numeric(element, "width", brush, "x");
+    const height = SvgPath.numeric(element, "height", brush, "y");
+    let rx = getNumeric(element, "rx", brush)?.lengthIn("x") ?? null;
+    let ry = getNumeric(element, "ry", brush)?.lengthIn("y") ?? null;
     ry = ry ?? rx ?? 0;
     rx = rx ?? ry;
     const topRight = rx !== 0 || ry !== 0 ? `a ${rx} ${ry} 0 0 1 ${rx} ${ry}` : "";
@@ -15231,13 +14938,13 @@ class SvgPath extends SvgOperation {
   }
   paintShape(canvas) {
     const fill = this.brush.fill;
-    if (fill?.isNotEmpty === true) {
+    const fillOpacity = (this.brush.fillOpacity ?? 1) * (fill?.opacity ?? 1);
+    if (fill?.isNotEmpty === true && fillOpacity > 0) {
       canvas.saveContext();
       fill.setFillColor(this, canvas);
-      const opacity = (this.brush.fillOpacity ?? 1) * fill.opacity;
-      if (opacity < 1) {
+      if (fillOpacity < 1) {
         canvas.setGraphicState(new PdfGraphicState({
-          opacity
+          opacity: fillOpacity
         }));
       }
       drawShape(canvas, this.d);
@@ -15247,10 +14954,11 @@ class SvgPath extends SvgOperation {
       canvas.restoreContext();
     }
     const stroke = this.brush.stroke;
-    if (stroke?.isNotEmpty === true) {
+    const width = this.brush.strokeWidth?.lengthIn() ?? 1;
+    const opacity = (this.brush.strokeOpacity ?? 1) * (stroke?.opacity ?? 1);
+    if (stroke?.isNotEmpty === true && width > 0 && opacity > 0) {
       canvas.saveContext();
       stroke.setStrokeColor(this, canvas);
-      const opacity = (this.brush.strokeOpacity ?? 1) * stroke.opacity;
       if (opacity < 1) {
         canvas.setGraphicState(new PdfGraphicState({
           opacity
@@ -15261,7 +14969,7 @@ class SvgPath extends SvgOperation {
       canvas.setLineJoin(this.brush.strokeLineJoin ?? "miter");
       canvas.setMiterLimit(Math.max(1, this.brush.strokeMiterLimit ?? 4));
       canvas.setLineDashPattern(this.brush.strokeDashArray ?? [], this.brush.strokeDashOffset ?? 0);
-      canvas.setLineWidth(this.brush.strokeWidth?.sizeValue ?? 1);
+      canvas.setLineWidth(width);
       canvas.strokePath();
       canvas.restoreContext();
     }
@@ -15294,7 +15002,7 @@ class Image extends Widget {
     this.height = height;
     this.dpi = dpi;
   }
-  layout(_context, constraints) {
+  layout(context, constraints) {
     const parent = BoxConstraints.from(constraints);
     const offered = {
       width: parent.constrainWidth(this.width ?? (parent.hasBoundedWidth ? parent.maxWidth : this.image.width)),
@@ -15312,8 +15020,9 @@ class Image extends Widget {
       width: image.width,
       height: image.height
     }, layoutFit.destination);
-    const sourceOffset = inscribe(this.alignment, fitted.source.width, fitted.source.height, image.width, image.height);
-    const destinationOffset = inscribe(this.alignment, fitted.destination.width, fitted.destination.height, layoutFit.destination.width, layoutFit.destination.height);
+    const alignment = alignmentIn(context, this.alignment);
+    const sourceOffset = inscribe(alignment, fitted.source.width, fitted.source.height, image.width, image.height);
+    const destinationOffset = inscribe(alignment, fitted.destination.width, fitted.destination.height, layoutFit.destination.width, layoutFit.destination.height);
     return {
       widget: this,
       width: layoutFit.destination.width,
@@ -16753,7 +16462,7 @@ class MemoryImage extends ImageProvider {
 class RawImage extends ImageProvider {
   constructor({bytes, width, height, orientation = "topLeft", dpi = null}) {
     const image = new PdfImage({
-      pixels: bytes.slice(),
+      pixels: bytes,
       width,
       height,
       orientation,
@@ -16827,14 +16536,15 @@ class WidgetSpan extends InlineSpan {
   }
 }
 
-function countSpaces(value) {
-  let count = 0;
-  for (const character of value) if (/\s/u.test(character)) count++;
-  return count;
-}
-
 function textWidth(style, value) {
-  return style.font.stringMetrics(value, style.fontSize, style.letterSpacing).advanceWidth + countSpaces(value) * style.wordSpacing;
+  let glyphs = 0;
+  let spaces = 0;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code === 32) spaces++;
+    if (code < 56320 || code > 57343) glyphs++;
+  }
+  return style.font.stringMetrics(value, style.fontSize).advanceWidth + glyphs * style.letterSpacing + spaces * style.wordSpacing;
 }
 
 function supportsRune(font, codePoint) {
@@ -16883,19 +16593,45 @@ function resolveStyle(context, style, baseline, scale, directFont = null) {
   };
 }
 
-function splitLongWord(value, maxWidth, style) {
-  const parts = [];
-  let current = "";
-  for (const character of value) {
-    const candidate = current + character;
-    if (current !== "" && textWidth(style, candidate) > maxWidth) {
-      parts.push(current);
-      current = character;
-    } else {
-      current = candidate;
-    }
+function cutsAfter(code, next) {
+  return (code === 45 || code === 8208) && next !== "" && !/[\d\u2060]/.test(next);
+}
+
+function hyphenCuts(value) {
+  const cuts = [];
+  for (let index = 1; index < value.length; index++) {
+    if (cutsAfter(value.charCodeAt(index), value.charAt(index + 1))) cuts.push(index + 1);
   }
-  if (current !== "") parts.push(current);
+  return cuts;
+}
+
+function splitLongWord(value, maxWidth, style, cuts = hyphenCuts(value)) {
+  const fits = text => textWidth(style, text) - style.letterSpacing <= maxWidth;
+  const parts = [];
+  let start = 0;
+  while (start < value.length) {
+    const rest = value.slice(start);
+    if (fits(rest)) {
+      parts.push(rest);
+      break;
+    }
+    let end = start;
+    for (const cut of cuts) {
+      if (cut <= start) continue;
+      if (!fits(value.slice(start, cut))) break;
+      end = cut;
+    }
+    if (end === start) {
+      let current = "";
+      for (const character of rest) {
+        if (current !== "" && !fits(current + character)) break;
+        current += character;
+      }
+      end = start + current.length;
+    }
+    parts.push(value.slice(start, end));
+    start = end;
+  }
   return parts.length === 0 ? [ "" ] : parts;
 }
 
@@ -16908,8 +16644,18 @@ function isSingleAsciiWord(value) {
   return true;
 }
 
+const SPACES$1 = "\\t\\v\\f\\r \\u1680\\u2000-\\u2006\\u2008-\\u200a\\u2028\\u2029\\u205f\\u3000";
+
+const GAP = new RegExp(`^[${SPACES$1}]+$`);
+
+const WORDS = new RegExp(`([${SPACES$1}]+)|(?<=\\u200b)(?!\\u2060)`);
+
+const RTL = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc\u200f\u202b\u202e\u2067]/;
+
+const IGNORABLE = /[\xad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufff8\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0000}-\u{e0fff}]/u;
+
 function splitLine(line, splitter) {
-  if (splitter === null) return line.split(/([^\S\n]+|[^\s]+)/u).filter(part => part !== "");
+  if (splitter === null) return line.split(WORDS).filter(part => part);
   const parts = splitter(line);
   const result = [];
   let cursor = 0;
@@ -16935,7 +16681,106 @@ function trimTrailingGaps(line) {
   }
 }
 
-function positionLine(line, y, contentWidth, align, direction) {
+function sliceToken(token, start, end, suffix = "") {
+  const text = token.text.slice(start, end) + suffix;
+  let levels = token.levels;
+  if (levels) {
+    const sliced = new Uint8Array(text.length);
+    sliced.set(levels.subarray(start, end));
+    sliced.fill(levels[end - 1] ?? 0, end - start);
+    levels = sliced;
+  }
+  const rebase = offsets => {
+    const inside = offsets?.filter(offset => offset > start && offset < end).map(offset => offset - start);
+    return inside?.length ? inside : undefined;
+  };
+  return {
+    ...token,
+    text,
+    width: textWidth(token.style, text),
+    levels,
+    shy: rebase(token.shy),
+    hyphens: rebase(token.hyphens)
+  };
+}
+
+function narrowestPiece(token) {
+  if (token.hyphens === undefined && token.shy === undefined) return token.width;
+  const cuts = [ ...token.hyphens ?? [], ...token.shy ?? [] ].sort((a, b) => a - b);
+  let widest = 0;
+  let start = 0;
+  for (const end of [ ...cuts, token.text.length ]) {
+    if (end <= start) continue;
+    const piece = token.text.slice(start, end) + (token.shy?.includes(end) === true ? "-" : "");
+    widest = Math.max(widest, textWidth(token.style, piece));
+    start = end;
+  }
+  return widest;
+}
+
+function softSyllables(text, offsets) {
+  const syllables = [];
+  let start = 0;
+  for (const offset of offsets) {
+    if (offset <= start || offset >= text.length) continue;
+    syllables.push(text.slice(start, offset));
+    start = offset;
+  }
+  syllables.push(text.slice(start));
+  return syllables;
+}
+
+function visualOrder(tokens, base) {
+  const bidi = unicodeBidi();
+  const pieces = [];
+  const pieceLevels = [];
+  let skeleton = "";
+  for (const token of tokens) {
+    const levels = token.levels;
+    if (token.kind === "widget" || !levels) {
+      pieces.push(token);
+      pieceLevels.push(levels?.[0] ?? base);
+      skeleton += "￼";
+      continue;
+    }
+    let start = 0;
+    for (let index = 1; index <= token.text.length; index++) {
+      if (index < token.text.length && (levels[index] === levels[start] || (token.text.charCodeAt(index) & 64512) === 56320)) continue;
+      pieces.push(start === 0 && index === token.text.length ? token : sliceToken(token, start, index));
+      pieceLevels.push(levels[start] ?? base);
+      skeleton += token.kind === "gap" ? " " : "a";
+      start = index;
+    }
+  }
+  const order = pieces.map((_, index) => index);
+  const segments = bidi.getReorderSegments(skeleton, {
+    levels: Uint8Array.from(pieceLevels),
+    paragraphs: [ {
+      start: 0,
+      end: pieces.length - 1,
+      level: base
+    } ]
+  });
+  for (const [first = 0, last = 0] of segments) {
+    for (let low = first, high = last; low < high; low++, high--) {
+      const swap = order[low] ?? 0;
+      order[low] = order[high] ?? 0;
+      order[high] = swap;
+    }
+  }
+  return order.map(index => {
+    const piece = pieces[index];
+    if (piece.kind !== "text" || ((pieceLevels[index] ?? 0) & 1) === 0) return piece;
+    let text = "";
+    for (const character of piece.text) text = (bidi.getMirroredCharacter(character) ?? character) + text;
+    return {
+      ...piece,
+      text
+    };
+  });
+}
+
+function positionLine(line, y, contentWidth, align, direction, bidi) {
   let lineSpacing = line.emptyStyle.lineSpacing;
   let ascent = line.emptyStyle.fontSize + Math.max(0, line.emptyStyle.baseline);
   let descent = Math.max(0, line.emptyStyle.lineAdvance + lineSpacing - line.emptyStyle.fontSize - line.emptyStyle.baseline);
@@ -16952,14 +16797,16 @@ function positionLine(line, y, contentWidth, align, direction) {
     }
   }
   const height = Math.max(minimumHeight, ascent + descent);
-  const effectiveAlign = align === "start" ? direction === "rtl" ? "right" : "left" : align === "end" ? direction === "rtl" ? "left" : "right" : align;
+  const resolvedAlign = align === "start" ? direction === "rtl" ? "right" : "left" : align === "end" ? direction === "rtl" ? "left" : "right" : align;
+  const tokens = bidi ? visualOrder(line.tokens, direction === "rtl" ? 1 : 0) : line.tokens;
+  const gapCount = line.wrapped && resolvedAlign === "justify" ? tokens.filter(token => token.kind === "gap").length : 0;
+  const extraPerGap = gapCount === 0 ? 0 : Math.max(0, contentWidth - line.width) / gapCount;
+  const effectiveAlign = resolvedAlign === "justify" && extraPerGap === 0 && direction === "rtl" ? "right" : resolvedAlign;
   let offset = 0;
   if (effectiveAlign === "right") offset = contentWidth - line.width;
   if (effectiveAlign === "center") offset = (contentWidth - line.width) / 2;
-  const gapCount = line.wrapped && effectiveAlign === "justify" ? line.tokens.filter(token => token.kind === "gap").length : 0;
-  const extraPerGap = gapCount === 0 ? 0 : Math.max(0, contentWidth - line.width) / gapCount;
   const paintTokens = [];
-  for (const token of line.tokens) {
+  for (const token of tokens) {
     const previous = paintTokens[paintTokens.length - 1];
     if (extraPerGap === 0 && token.kind !== "widget" && previous !== undefined && previous.kind !== "widget" && previous.style === token.style && previous.annotation === token.annotation) {
       paintTokens[paintTokens.length - 1] = {
@@ -16977,8 +16824,7 @@ function positionLine(line, y, contentWidth, align, direction) {
   let accumulatedExtra = 0;
   const runs = [];
   for (const token of paintTokens) {
-    let runX = x + accumulatedExtra;
-    if (direction === "rtl") runX = contentWidth - runX - token.width;
+    const runX = x + accumulatedExtra;
     const tokenBaseline = y + ascent - token.style.baseline;
     const tokenY = token.kind === "widget" ? tokenBaseline - token.height : tokenBaseline - token.style.fontSize;
     runs.push({
@@ -16995,6 +16841,13 @@ function positionLine(line, y, contentWidth, align, direction) {
     });
     x += token.width;
     if (token.kind === "gap") accumulatedExtra += extraPerGap;
+  }
+  const last = runs[runs.length - 1];
+  if (last !== undefined && last.kind === "text" && last.style.letterSpacing !== 0) {
+    runs[runs.length - 1] = {
+      ...last,
+      width: last.width - last.style.letterSpacing
+    };
   }
   const usedWidth = extraPerGap === 0 ? line.width : contentWidth;
   return {
@@ -17033,7 +16886,7 @@ class RichText extends SpanningWidget {
     this.textScaleFactor = assertFiniteNumber(Number(textScaleFactor), "textScaleFactor");
     this.maxLines = maxLines;
     this.overflow = overflow;
-    this.margin = normalizeInsets(margin);
+    this.margin = normalizeInsetsGeometry(margin);
   }
   initialSpanState() {
     return {
@@ -17041,30 +16894,73 @@ class RichText extends SpanningWidget {
     };
   }
   inputTokens(context, maxWidth) {
-    const result = [];
     const scale = this.textScaleFactor;
     const direction = this.textDirection ?? Directionality.of(context);
+    const items = [];
+    let source = "";
+    let bidi = direction === "rtl";
     this.text.visitChildren((span, textStyle, annotation) => {
-      const baseStyle = resolveStyle(context, textStyle, span.baseline, scale, this.directFont);
+      const style = resolveStyle(context, textStyle, span.baseline, scale, this.directFont);
       if (span instanceof WidgetSpan) {
         const childBox = span.child.layout(context, new BoxConstraints({
           maxWidth,
           maxHeight: Infinity
         }));
-        result.push({
+        items.push({
           kind: "widget",
-          width: childBox.width,
-          height: childBox.height,
-          style: baseStyle,
-          childBox,
-          annotation
+          start: source.length,
+          token: {
+            kind: "widget",
+            width: childBox.width,
+            height: childBox.height,
+            style,
+            childBox,
+            annotation
+          }
         });
-        return true;
+        source += "￼";
+      } else if (span instanceof TextSpan && span.text !== null) {
+        const text = span.text.replace(/\r\n?/g, "\n");
+        bidi || (bidi = RTL.test(text));
+        items.push({
+          kind: "span",
+          textStyle,
+          style,
+          annotation,
+          text,
+          start: source.length
+        });
+        source += text;
       }
-      if (!(span instanceof TextSpan) || span.text === null) return true;
+      return true;
+    }, context.theme.defaultTextStyle);
+    let levels = null;
+    if (bidi) {
+      const arabic = /[\u0621-\u06d3]/.test(source);
+      let shaped = "";
+      for (const item of items) {
+        const start = item.start;
+        item.start = shaped.length;
+        if (item.kind === "widget") shaped += "￼"; else shaped += item.text = arabic ? shapeArabicRange(source, start, start + item.text.length) : item.text;
+      }
+      levels = unicodeBidi().getEmbeddingLevels(shaped, direction).levels;
+    }
+    const result = [];
+    const groupLevels = levels === null ? null : new Uint8Array(levels.length);
+    for (const item of items) {
+      if (item.kind === "widget") {
+        result.push(levels === null ? item.token : {
+          ...item.token,
+          levels: levels.subarray(item.start, item.start + 1)
+        });
+        continue;
+      }
+      const {style: baseStyle, textStyle, annotation, text} = item;
       let group = "";
       let groupFont = baseStyle.font;
       let kind = "text";
+      let shy = [];
+      let hyphens = [];
       const styles = new Map([ [ baseStyle.font, baseStyle ] ]);
       const flush = () => {
         if (group === "") return;
@@ -17081,27 +16977,42 @@ class RichText extends SpanningWidget {
           text: group,
           width: textWidth(style, group),
           style,
-          annotation
+          annotation,
+          levels: groupLevels?.slice(0, group.length) ?? null,
+          shy: shy.length === 0 ? undefined : shy,
+          hyphens: hyphens.length === 0 ? undefined : hyphens
         });
         group = "";
+        shy = [];
+        hyphens = [];
       };
-      const visualText = direction === "rtl" ? logicalToVisual(span.text) : span.text;
-      const singleWord = this.lineSplitter === null && isSingleAsciiWord(visualText);
-      const lines = singleWord ? [ visualText ] : visualText.replace(/\r\n?/g, "\n").split("\n");
+      const singleWord = this.lineSplitter === null && isSingleAsciiWord(text);
+      const lines = singleWord ? [ text ] : text.split("\n");
+      let offset = item.start;
       for (let index = 0; index < lines.length; index++) {
-        if (index > 0) result.push({
-          kind: "break",
-          style: baseStyle
-        });
-        const parts = singleWord ? [ visualText ] : splitLine(lines[index] ?? "", this.lineSplitter);
+        if (index > 0) {
+          result.push({
+            kind: "break",
+            style: baseStyle
+          });
+          offset++;
+        }
+        const parts = singleWord ? [ text ] : splitLine(lines[index] ?? "", this.lineSplitter);
         for (const part of parts) {
-          kind = !singleWord && /^\s+$/u.test(part) ? "gap" : "text";
-          for (const character of part) {
-            const codePoint = character.codePointAt(0) ?? 0;
+          kind = !singleWord && GAP.test(part) ? "gap" : "text";
+          for (let at = 0; at < part.length; ) {
+            const codePoint = part.codePointAt(at) ?? 0;
+            let character = String.fromCodePoint(codePoint);
+            const unit = offset + at;
+            at += character.length;
+            if (codePoint >= 173 && IGNORABLE.test(character)) {
+              if (codePoint === 173 && group !== "" && part.charCodeAt(at) !== 8288) shy.push(group.length);
+              continue;
+            }
             let font = baseStyle.font;
             let bitmap = null;
-            if (!supportsRune(font, codePoint)) {
-              for (const fallback of textStyle.fontFallback) {
+            if (codePoint < 32 || !supportsRune(font, codePoint)) {
+              for (const fallback of codePoint < 32 ? [] : textStyle.fontFallback) {
                 const candidate = fallback.getFont(context);
                 if (supportsRune(candidate, codePoint)) {
                   font = candidate;
@@ -17109,6 +17020,7 @@ class RichText extends SpanningWidget {
                   break;
                 }
               }
+              if (font === baseStyle.font && (codePoint < 32 || /\s/.test(character))) character = " ";
             }
             if (bitmap !== null) {
               flush();
@@ -17128,58 +17040,70 @@ class RichText extends SpanningWidget {
                   baseline: baseStyle.baseline + metrics.ascent + metrics.descent - metrics.height
                 },
                 childBox,
-                annotation
+                annotation,
+                levels: levels?.subarray(unit, unit + 1) ?? null
               });
               groupFont = baseStyle.font;
               continue;
             }
             if (font !== groupFont && group !== "") flush();
             groupFont = font;
+            if (levels !== null) groupLevels?.set(levels.subarray(unit, unit + character.length), group.length);
             group += character;
+            if (at > 1 && cutsAfter(codePoint, part.charAt(at))) hyphens.push(group.length);
           }
           flush();
+          offset += part.length;
         }
       }
-      return true;
-    }, context.theme.defaultTextStyle);
-    return result;
+    }
+    const first = items[0];
+    return {
+      tokens: result,
+      style: first === undefined ? null : first.kind === "widget" ? first.token.style : first.style,
+      bidi: levels !== null
+    };
   }
   allLines(context, contentWidth, minContentWidth = 0) {
-    const align = this.textAlign ?? context.theme.textAlign ?? "left";
+    const align = this.textAlign ?? context.theme.textAlign ?? "start";
     const softWrap = this.softWrap ?? context.theme.softWrap;
     const maxLines = this.maxLines ?? context.theme.maxLines;
-    const tokens = this.inputTokens(context, contentWidth);
-    const fallbackStyle = resolveStyle(context, context.theme.defaultTextStyle, 0, this.textScaleFactor);
+    const {tokens, style, bidi} = this.inputTokens(context, contentWidth);
+    if (style === null) return [];
+    if (context.minContent === true) {
+      let widest = 1;
+      for (const token of tokens) {
+        if (token.kind === "widget") widest = Math.max(widest, token.width); else if (token.kind === "text") widest = Math.max(widest, narrowestPiece(token));
+      }
+      contentWidth = Math.min(contentWidth, widest);
+    }
     const raw = [];
     let current = {
       tokens: [],
       width: 0,
+      blank: 0,
       wrapped: false,
-      emptyStyle: fallbackStyle
+      emptyStyle: style
     };
     const pushLine = wrapped => {
       trimTrailingGaps(current);
+      const last = current.tokens[current.tokens.length - 1];
+      if (last === undefined) current.width = current.blank; else if (last.kind === "text") current.width -= last.style.letterSpacing;
       current.wrapped = wrapped;
       raw.push(current);
       current = {
         tokens: [],
         width: 0,
+        blank: 0,
         wrapped: false,
         emptyStyle: current.emptyStyle
       };
     };
-    const appendToken = (token, spacing = 0) => {
-      const index = current.tokens.length - 1;
-      const previous = current.tokens[index];
-      if (previous !== undefined && spacing !== 0) {
-        current.tokens[index] = {
-          ...previous,
-          width: previous.width + spacing
-        };
-      }
+    const appendToken = token => {
       current.tokens.push(token);
-      current.width += token.width + spacing;
+      current.width += token.width;
     };
+    const overflows = (width, token) => current.width + width - (token.kind === "text" ? token.style.letterSpacing : 0) > contentWidth + 1e-5;
     for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
       const token = tokens[tokenIndex];
       if (token === undefined) continue;
@@ -17188,11 +17112,12 @@ class RichText extends SpanningWidget {
         pushLine(false);
         continue;
       }
-      if (token.kind === "gap" && current.tokens.length === 0) continue;
-      const previous = current.tokens[current.tokens.length - 1];
-      const joinSpacing = this.lineSplitter !== null && token.kind === "text" && previous?.kind === "text" && previous.style === token.style ? token.style.letterSpacing : 0;
-      if (softWrap && token.kind === "text" && this.hyphenation !== null && current.width + joinSpacing + token.width > contentWidth + 1e-5) {
-        const syllables = this.hyphenation(token.text);
+      if (token.kind === "gap" && current.tokens.length === 0) {
+        current.blank += token.width;
+        continue;
+      }
+      if (softWrap && token.kind === "text" && overflows(token.width, token)) {
+        const syllables = token.shy !== undefined ? softSyllables(token.text, token.shy) : this.hyphenation?.(token.text) ?? [];
         if (syllables.length > 1) {
           if (syllables.some(part => typeof part !== "string" || part === "") || syllables.join("") !== token.text) {
             throw new RangeError("hyphenation must return nonempty syllables which reconstruct the word");
@@ -17200,43 +17125,28 @@ class RichText extends SpanningWidget {
           let fits = "";
           for (let index = 0; index < syllables.length - 1; index++) {
             const candidate = fits + syllables[index];
-            if (current.width + joinSpacing + textWidth(token.style, candidate + "-") > contentWidth + 1e-5) break;
+            if (overflows(textWidth(token.style, candidate + "-"), token)) break;
             fits = candidate;
           }
           if (fits !== "") {
-            const head = fits + "-";
-            const width = textWidth(token.style, head);
-            appendToken({
-              ...token,
-              text: head,
-              width
-            }, joinSpacing);
+            appendToken(sliceToken(token, 0, fits.length, "-"));
             pushLine(true);
-            const tail = token.text.slice(fits.length);
-            tokens[tokenIndex] = {
-              ...token,
-              text: tail,
-              width: textWidth(token.style, tail)
-            };
+            tokens[tokenIndex] = sliceToken(token, fits.length, token.text.length);
             tokenIndex--;
             continue;
           }
         }
       }
-      if (softWrap && current.tokens.length > 0 && current.width + joinSpacing + token.width > contentWidth + 1e-5) {
+      if (softWrap && current.tokens.length > 0 && overflows(token.width, token)) {
         pushLine(true);
         if (token.kind !== "gap") tokenIndex--;
         continue;
       }
-      if (token.kind === "text" && softWrap && token.width > contentWidth + 1e-5) {
-        const pieces = splitLongWord(token.text, contentWidth, token.style);
+      if (token.kind === "text" && softWrap && token.width - token.style.letterSpacing > contentWidth + 1e-5) {
+        const pieces = splitLongWord(token.text, contentWidth, token.style, token.hyphens ?? []);
+        let start = 0;
         for (let index = 0; index < pieces.length; index++) {
-          const piece = pieces[index] ?? "";
-          const part = {
-            ...token,
-            text: piece,
-            width: textWidth(token.style, piece)
-          };
+          const part = sliceToken(token, start, start += (pieces[index] ?? "").length);
           if (current.tokens.length > 0) pushLine(true);
           current.tokens.push(part);
           current.width = part.width;
@@ -17244,7 +17154,7 @@ class RichText extends SpanningWidget {
         }
         continue;
       }
-      appendToken(token, joinSpacing);
+      appendToken(token);
     }
     if (current.tokens.length > 0 || raw.length === 0 || tokens[tokens.length - 1]?.kind === "break") pushLine(false);
     const limited = maxLines === null ? raw : raw.slice(0, Math.max(1, maxLines));
@@ -17253,7 +17163,7 @@ class RichText extends SpanningWidget {
     const lines = [];
     const textDirection = this.textDirection ?? Directionality.of(context);
     for (const line of limited) {
-      const positioned = positionLine(line, y, targetWidth, align, textDirection);
+      const positioned = positionLine(line, y, targetWidth, align, textDirection, bidi);
       lines.push(positioned);
       y += positioned.height;
     }
@@ -17268,16 +17178,17 @@ class RichText extends SpanningWidget {
   }
   fragment(context, constraints, lineIndex, spanning) {
     const parent = BoxConstraints.from(constraints);
-    const contentWidth = Math.max(1, parent.maxWidth - this.margin.left - this.margin.right);
-    const minContentWidth = Math.max(0, parent.minWidth - this.margin.left - this.margin.right);
+    const margin = insetsIn(context, this.margin);
+    const contentWidth = Math.max(1, parent.maxWidth - margin.left - margin.right);
+    const minContentWidth = Math.max(0, parent.minWidth - margin.left - margin.right);
     const all = this.allLines(context, contentWidth, minContentWidth);
-    const topMargin = lineIndex === 0 ? this.margin.top : 0;
+    const topMargin = lineIndex === 0 ? margin.top : 0;
     const availableHeight = Math.max(0, parent.maxHeight - topMargin);
     let end = lineIndex;
     let height = 0;
     while (end < all.length) {
       const nextHeight = all[end]?.height ?? 0;
-      const finalBottom = end === all.length - 1 ? this.margin.bottom : 0;
+      const finalBottom = end === all.length - 1 ? margin.bottom : 0;
       if (spanning && height + nextHeight + finalBottom > availableHeight + 1e-5) break;
       height += nextHeight;
       end++;
@@ -17285,13 +17196,13 @@ class RichText extends SpanningWidget {
     }
     if (!spanning) end = all.length;
     const isFinal = end >= all.length;
-    const bottomMargin = isFinal ? this.margin.bottom : 0;
+    const bottomMargin = isFinal ? margin.bottom : 0;
     const lineTop = all[lineIndex]?.y ?? 0;
     const selected = rebaseLines(all.slice(lineIndex, end), lineTop - topMargin);
     const widest = Math.max(0, ...selected.map(line => line.width));
     const naturalHeight = topMargin + selected.reduce((sum, line) => sum + line.height, 0) + bottomMargin;
     const size = parent.constrain({
-      width: widest + this.margin.left + this.margin.right,
+      width: widest + margin.left + margin.right,
       height: naturalHeight
     });
     const effectiveOverflow = this.overflow ?? context.theme.overflow;
@@ -17302,7 +17213,7 @@ class RichText extends SpanningWidget {
         height: size.height,
         data: {
           lines: selected,
-          contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
+          contentWidth: Math.max(0, size.width - margin.left - margin.right),
           clip: effectiveOverflow === "clip" || naturalHeight > size.height + 1e-5,
           textDirection: this.textDirection ?? Directionality.of(context)
         }
@@ -17321,6 +17232,7 @@ class RichText extends SpanningWidget {
   }
   paint(context, box) {
     const {canvas} = context;
+    const margin = insetsIn(context, this.margin);
     if (box.data.clip) {
       canvas.saveContext();
       canvas.drawRect(box.x, canvas.pageHeight - box.y - box.height, box.width, box.height);
@@ -17328,7 +17240,7 @@ class RichText extends SpanningWidget {
     }
     for (const line of box.data.lines) {
       for (const run of line.runs) {
-        const x = box.x + this.margin.left + run.x;
+        const x = box.x + margin.left + run.x;
         const y = box.y + run.y;
         if (run.annotation !== null && run.width > 0 && run.height > 0) {
           run.annotation.build(context, {
@@ -17345,7 +17257,7 @@ class RichText extends SpanningWidget {
     }
     for (const line of box.data.lines) {
       for (const run of line.runs) {
-        const x = box.x + this.margin.left + run.x;
+        const x = box.x + margin.left + run.x;
         if (run.kind === "text") {
           canvas.text(run.text, x, box.y + run.baseline, {
             font: run.style.font,
@@ -17366,7 +17278,7 @@ class RichText extends SpanningWidget {
     for (const line of box.data.lines) {
       for (const run of line.runs) {
         if (run.style.decorations.length === 0 || run.width <= 0) continue;
-        const x = box.x + this.margin.left + run.x;
+        const x = box.x + margin.left + run.x;
         const width = Math.max(.25, run.style.fontSize * .05 * run.style.decorationThickness);
         for (const decoration of run.style.decorations) {
           const top = decoration === "underline" ? box.y + run.baseline + run.style.fontSize * .08 : decoration === "overline" ? box.y + run.baseline - run.style.fontSize : box.y + run.baseline - run.style.fontSize * .35;
@@ -17429,6 +17341,9 @@ class Header extends StatelessWidget {
     this.title = title === undefined ? text : title;
     this.outlineColor = outlineColor === null ? null : normalizeColor(outlineColor);
     this.outlineStyle = outlineStyle;
+  }
+  get canSpan() {
+    return false;
   }
   build(context) {
     const millimeter = PageUnit.mm;
@@ -17782,7 +17697,7 @@ class GridAxis {
   }
   angleDirection() {
     if (this.angle === 0) return 0;
-    if (this.angle % Math.PI > Math.PI / 2) return -1;
+    if ((this.angle % Math.PI + Math.PI) % Math.PI > Math.PI / 2) return -1;
     return 1;
   }
 }
@@ -17830,7 +17745,8 @@ class FixedAxis extends GridAxis {
       height: 0
     };
     const lastSize = last ?? {
-      width: 0
+      width: 0,
+      height: 0
     };
     const ad = this.angleDirection();
     if (direction === "horizontal") {
@@ -17851,8 +17767,8 @@ class FixedAxis extends GridAxis {
       };
     }
     const textMargin = this.margin ?? 10;
-    const marginEnd = Math.max(incoming.marginEnd, ad === 0 ? lastSize.width / 2 : ad < 0 ? lastSize.width : 0);
-    const minStart = ad === 0 ? firstSize.height / 2 : ad > 0 ? firstSize.width : 0;
+    const marginEnd = Math.max(incoming.marginEnd, ad === 0 ? lastSize.height / 2 : ad < 0 ? lastSize.height : 0);
+    const minStart = ad === 0 ? firstSize.height / 2 : ad > 0 ? firstSize.height : 0;
     const crossAxisPosition = Math.max(incoming.crossAxisPosition, minStart);
     const axisPosition = Math.max(incoming.axisPosition, maxWidth + textMargin);
     return {
@@ -18139,28 +18055,25 @@ class Wrap extends SpanningWidget {
     const containerMain = horizontal ? size.width : size.height;
     const containerCross = horizontal ? size.height : size.width;
     const [runLeading, runBetweenExtra] = spaces(this.runAlignment, Math.max(0, containerCross - usedCross), runs.length);
-    const reverseRuns = horizontal && this.verticalDirection === "up";
+    const [reverseChildren, reverseRuns] = reversedAxes(context, horizontal, this.verticalDirection);
     let crossCursor = reverseRuns ? containerCross - runLeading : runLeading;
     const placed = [];
     for (const run of runs) {
       if (reverseRuns) crossCursor -= run.cross;
       const [childLeading, childBetweenExtra] = spaces(this.alignment, Math.max(0, containerMain - run.main), run.children.length);
-      const reverseChildren = !horizontal && this.verticalDirection === "up";
       let mainCursor = reverseChildren ? containerMain - childLeading : childLeading;
       for (const child of run.children) {
         if (reverseChildren) mainCursor -= child.main;
         const freeCross = run.cross - child.cross;
-        const childCross = this.crossAxisAlignment === "end" ? freeCross : this.crossAxisAlignment === "center" ? freeCross / 2 : 0;
+        const childCross = crossOffset(this.crossAxisAlignment, freeCross, reverseRuns);
         placed.push({
           box: child.box,
           dx: horizontal ? mainCursor : crossCursor + childCross,
           dy: horizontal ? crossCursor + childCross : mainCursor
         });
-        const advance = child.main + this.spacing + childBetweenExtra;
-        mainCursor += reverseChildren ? -advance : advance;
+        mainCursor += reverseChildren ? -(this.spacing + childBetweenExtra) : child.main + this.spacing + childBetweenExtra;
       }
-      const runAdvance = run.cross + this.runSpacing + runBetweenExtra;
-      crossCursor += reverseRuns ? -runAdvance : runAdvance;
+      crossCursor += reverseRuns ? -(this.runSpacing + runBetweenExtra) : run.cross + this.runSpacing + runBetweenExtra;
     }
     const lastChild = placed.length === 0 ? state.firstChild : Math.max(...runs.flatMap(run => run.children.map(child => child.index))) + 1;
     const data = {
@@ -18215,7 +18128,7 @@ class ChartLegend extends StatelessWidget {
     this.position = resolveLegendPosition(position);
     this.direction = direction;
     this.decoration = normalizeBoxDecoration(decoration);
-    this.padding = normalizeInsets(padding);
+    this.padding = normalizeInsetsGeometry(padding);
   }
   buildLegend(context, dataset) {
     const style = context.theme.defaultTextStyle.merge(this.textStyle);
@@ -18281,6 +18194,7 @@ class PieDataSet extends Dataset {
     if (innerRadius < 0) throw new RangeError("PieDataSet innerRadius must not be negative");
     if (offset < 0) throw new RangeError("PieDataSet offset must not be negative");
     this.value = Number(value);
+    if (!Number.isFinite(this.value)) throw new RangeError("PieDataSet value must be a finite number");
     this.legendWidget = legendWidget;
     const fill = this.color ?? normalizePaintColor(CHART_BLUE);
     const border = this.borderColor;
@@ -18321,7 +18235,7 @@ class PieDataSet extends Dataset {
           style: this.legendStyle ?? undefined
         }) ],
         style: new TextStyle({
-          color: position === "inside" ? isLightColor(this.color ?? CHART_BLUE) ? normalizePaintColor(CHART_WHITE) : normalizePaintColor(CHART_BLACK) : null
+          color: position === "inside" ? isLightColor(this.color ?? CHART_BLUE) ? normalizePaintColor(CHART_BLACK) : normalizePaintColor(CHART_WHITE) : null
         })
       }),
       textAlign: align
@@ -18649,6 +18563,8 @@ class PdfCatalog extends PdfObject {
     this.outline = null;
     this.metadata = null;
     this.pageLabels = null;
+    this.colorProfile = null;
+    this.attached = null;
     this.formFields = [];
     this.formFonts = new Map;
     this.showOutlines = false;
@@ -18670,22 +18586,30 @@ class PdfCatalog extends PdfObject {
       this.params.set("/AcroForm", form);
     }
     if (this.showOutlines) this.params.set("/PageMode", new PdfName("/UseOutlines"));
+    if (this.attached !== null && this.attached.isNotEmpty) this.params.set("/AF", this.attached.catalogAF());
+    if (this.colorProfile !== null) this.params.set("/OutputIntents", this.colorProfile.outputIntents());
   }
 }
 
 const LIBRARY_NAME = "https://github.com/romulocrj/js_pdf";
 
+function pdfProducer(producer) {
+  return producer == null ? LIBRARY_NAME : `${producer} (${LIBRARY_NAME})`;
+}
+
 class PdfInfo extends PdfObject {
-  constructor(document, metadata) {
+  constructor(document, metadata, modDate = false) {
     super(document, new PdfDict);
-    const producer = metadata.producer == null ? LIBRARY_NAME : `${metadata.producer} (${LIBRARY_NAME})`;
+    const producer = pdfProducer(metadata.producer);
     const entries = [ [ "/Title", metadata.title ], [ "/Author", metadata.author ], [ "/Subject", metadata.subject ], [ "/Keywords", metadata.keywords ], [ "/Creator", metadata.creator ], [ "/Producer", producer ] ];
     for (const [key, value] of entries) {
       if (value) {
         this.params.set(key, new PdfString(value));
       }
     }
-    this.params.set("/CreationDate", PdfString.fromDate(new Date));
+    const date = PdfString.fromDate(metadata.creationDate ?? new Date);
+    this.params.set("/CreationDate", date);
+    if (modDate) this.params.set("/ModDate", date);
   }
 }
 
@@ -18794,11 +18718,14 @@ class PdfNull extends PdfDataType {
 class PdfNames extends PdfObject {
   constructor(document) {
     super(document, new PdfDict);
-    this.destinations = [];
+    this.embeddedFiles = null;
+    this.destinations = new Map;
+  }
+  has(name) {
+    return this.destinations.has(name);
   }
   addDestination(name, page, {x = null, y = null, zoom = null} = {}) {
-    this.destinations.push({
-      name,
+    this.destinations.set(name, {
       page,
       x,
       y,
@@ -18806,10 +18733,14 @@ class PdfNames extends PdfObject {
     });
   }
   prepare() {
-    const sorted = [ ...this.destinations ].sort((a, b) => a.name.localeCompare(b.name));
+    const sorted = [ ...this.destinations ].map(([name, destination]) => ({
+      key: pdfTextBytes(name),
+      name,
+      destination
+    })).sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
     const values = new PdfArray;
-    for (const destination of sorted) {
-      values.add(new PdfString(destination.name));
+    for (const {name, destination} of sorted) {
+      values.add(new PdfString(name));
       values.add(new PdfDict([ [ "/D", new PdfArray([ destination.page.ref(), new PdfName("/XYZ"), destination.x === null ? new PdfNull : new PdfNum(destination.x), destination.y === null ? new PdfNull : new PdfNum(destination.y), destination.zoom === null ? new PdfNull : new PdfNum(destination.zoom) ]) ] ]));
     }
     const destinations = new PdfDict;
@@ -18817,7 +18748,8 @@ class PdfNames extends PdfObject {
       destinations.set("/Names", values);
       destinations.set("/Limits", new PdfArray([ new PdfString(sorted[0].name), new PdfString(sorted[sorted.length - 1].name) ]));
     }
-    this.params.set("/Dests", destinations);
+    if (sorted.length > 0 || this.embeddedFiles === null) this.params.set("/Dests", destinations);
+    if (this.embeddedFiles !== null) this.params.set("/EmbeddedFiles", this.embeddedFiles.ref());
   }
 }
 
@@ -18842,9 +18774,6 @@ class PdfOutline extends PdfObject {
     child.parent = this;
     this.children.push(child);
   }
-  descendantCount() {
-    return this.children.reduce((count, child) => count + 1 + child.descendantCount(), 0);
-  }
   prepare() {
     if (this.parent !== null) {
       this.params.set("/Title", new PdfString(this.title ?? ""));
@@ -18857,8 +18786,7 @@ class PdfOutline extends PdfObject {
       if (index + 1 < this.parent.children.length) {
         this.params.set("/Next", this.parent.children[index + 1].ref());
       }
-      const descendants = this.descendantCount();
-      if (descendants > 0) this.params.set("/Count", new PdfNum(-descendants));
+      if (this.children.length > 0) this.params.set("/Count", new PdfNum(-this.children.length));
     } else {
       this.params.set("/Count", new PdfNum(this.children.length));
     }
@@ -18872,10 +18800,12 @@ class PdfOutline extends PdfObject {
 class PdfAnnotation extends PdfObject {
   constructor(document, page, annotation, defaultAppearanceName = null, appearances = null) {
     super(document, new PdfDict([ [ "/Type", new PdfName("/Annot") ] ]));
+    this.parent = null;
     this.page = page;
     this.annotation = annotation;
     this.defaultAppearanceName = defaultAppearanceName;
     this.appearances = appearances;
+    this.pdfa = document.settings.pdfa !== undefined;
     page.annotations.push(this);
   }
   prepare() {
@@ -18939,6 +18869,7 @@ class PdfAnnotation extends PdfObject {
     if (annotation.inkList !== undefined) {
       this.params.set("/InkList", new PdfArray(annotation.inkList.map(points => PdfArray.fromNum(points.flatMap(point => [ point.x, point.y ])))));
     }
+    if (this.appearances?.normal !== undefined) this.params.set("/AP", new PdfDict([ [ "/N", this.appearances.normal.ref() ] ]));
   }
   prepareForm(field) {
     const fieldNames = {
@@ -18951,34 +18882,33 @@ class PdfAnnotation extends PdfObject {
     this.params.set("/Rect", PdfArray.fromNum([ field.rect.x, field.rect.y, field.rect.x + field.rect.width, field.rect.y + field.rect.height ]));
     this.params.set("/P", this.page.ref());
     this.params.set("/F", new PdfNum(4));
-    this.params.set("/FT", new PdfName(fieldNames[field.fieldType]));
-    this.params.set("/T", new PdfString(field.name));
-    this.params.set("/Ff", new PdfNum(field.fieldFlags ?? 0));
-    if (field.alternateName) this.params.set("/TU", new PdfString(field.alternateName));
-    if (field.mappingName) this.params.set("/TM", new PdfString(field.mappingName));
+    const fieldParams = this.parent?.params ?? this.params;
+    fieldParams.set("/FT", new PdfName(fieldNames[field.fieldType]));
+    if (this.parent === null) this.params.set("/T", new PdfString(field.name)); else this.params.set("/Parent", this.parent.ref());
+    fieldParams.set("/Ff", new PdfNum(field.fieldFlags ?? 0));
+    if (field.alternateName) fieldParams.set("/TU", new PdfString(field.alternateName));
+    if (field.mappingName) fieldParams.set("/TM", new PdfString(field.mappingName));
     if (field.maxLength !== null && field.maxLength !== undefined) {
-      this.params.set("/MaxLen", new PdfNum(field.maxLength));
+      fieldParams.set("/MaxLen", new PdfNum(field.maxLength));
     }
     if (field.textAlign !== null && field.textAlign !== undefined) {
-      this.params.set("/Q", new PdfNum([ "left", "center", "right" ].indexOf(field.textAlign)));
+      fieldParams.set("/Q", new PdfNum([ "left", "center", "right" ].indexOf(field.textAlign)));
     }
     if (field.items !== undefined) {
-      this.params.set("/Opt", new PdfArray(field.items.map(item => new PdfString(item))));
+      fieldParams.set("/Opt", new PdfArray(field.items.map(item => new PdfString(item))));
     }
     const isButton = field.fieldType === "checkbox" || field.fieldType === "button";
     if (field.value) {
-      this.params.set("/V", isButton ? new PdfName(field.value) : new PdfString(field.value));
+      fieldParams.set("/V", isButton ? new PdfName(field.value) : new PdfString(field.value));
     }
     if (field.defaultValue) {
-      this.params.set("/DV", isButton ? new PdfName(field.defaultValue) : new PdfString(field.defaultValue));
+      fieldParams.set("/DV", isButton ? new PdfName(field.defaultValue) : new PdfString(field.defaultValue));
     }
     if (field.fieldType === "checkbox") {
       this.params.set("/AS", new PdfName(field.value ?? "/Off"));
     }
     if (this.defaultAppearanceName !== null) {
-      const color = field.textColor ?? [ 0, 0, 0 ];
-      const operator = color instanceof PdfColor ? colorOperator(color) : `${color[0]} ${color[1]} ${color[2]} rg`;
-      this.params.set("/DA", new PdfString(`${this.defaultAppearanceName} ${field.fontSize ?? 12} Tf ${operator}`));
+      fieldParams.set("/DA", new PdfString(`${this.defaultAppearanceName} ${formatNumber(field.fontSize ?? 12)} Tf ${colorOperator(field.textColor ?? [ 0, 0, 0 ])}`));
     }
     const appearance = new PdfDict;
     if (field.borderColor !== null && field.borderColor !== undefined) {
@@ -19000,7 +18930,10 @@ class PdfAnnotation extends PdfObject {
     }
     if (this.appearances !== null) {
       const appearances = new PdfDict;
-      if (this.appearances.normal !== undefined) {
+      if (this.appearances.normal !== undefined && this.pdfa && field.fieldType === "button") {
+        appearances.set("/N", new PdfDict([ [ "/On", this.appearances.normal.ref() ] ]));
+        this.params.set("/AS", new PdfName("/On"));
+      } else if (this.appearances.normal !== undefined) {
         appearances.set("/N", this.appearances.normal.ref());
       } else if (this.appearances.normalStates !== undefined) {
         const states = new PdfDict;
@@ -19026,6 +18959,168 @@ class PdfMetadata extends PdfObjectStream {
   }
 }
 
+const pad = (value, width = 2) => String(value).padStart(width, "0");
+
+class PdfaDateFormat {
+  format({dt, asIso = false}) {
+    if (!(dt instanceof Date) || !Number.isFinite(dt.getTime())) throw new RangeError("PDF/A date must be a valid Date");
+    const date = `${pad(dt.getUTCFullYear(), 4)}${asIso ? "-" : ""}${pad(dt.getUTCMonth() + 1)}${asIso ? "-" : ""}${pad(dt.getUTCDate())}`;
+    const time = `${pad(dt.getUTCHours())}${asIso ? ":" : ""}${pad(dt.getUTCMinutes())}${asIso ? ":" : ""}${pad(dt.getUTCSeconds())}`;
+    return asIso ? `${date}T${time}` : date + time;
+  }
+}
+
+function pdfaClean(value) {
+  return value.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f￾￿]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, "");
+}
+
+function xmlText(value) {
+  return pdfaClean(value).replace(/[&<>\r]/g, c => c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&#xD;");
+}
+
+const iso = date => `${(new PdfaDateFormat).format({
+  dt: date,
+  asIso: true
+})}Z`;
+
+class PdfaRdf {
+  constructor({title = null, author = null, creator = null, subject = null, keywords = null, producer = null, creationDate = null, modificationDate = null, part = 3, conformance = "B", invoiceRdf = ""} = {}) {
+    this.title = title;
+    this.author = author;
+    this.creator = creator;
+    this.subject = subject;
+    this.keywords = keywords;
+    this.producer = producer;
+    this.creationDate = creationDate ?? new Date;
+    this.modificationDate = modificationDate;
+    this.part = part;
+    this.conformance = conformance;
+    this.invoiceRdf = invoiceRdf;
+  }
+  create() {
+    const property = (name, value, wrap = text => text) => value === null ? null : `<${name}>${wrap(xmlText(value))}</${name}>`;
+    const alt = text => `<rdf:Alt><rdf:li xml:lang="x-default">${text}</rdf:li></rdf:Alt>`;
+    const description = (prefix, uri, properties) => {
+      const present = properties.filter(entry => entry !== null);
+      return present.length === 0 ? "" : `  <rdf:Description rdf:about="" xmlns:${prefix}="${uri}">\n    ${present.join("\n    ")}\n  </rdf:Description>\n`;
+    };
+    return '<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>\n<x:xmpmeta xmlns:x="adobe:ns:meta/">\n' + '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\n' + description("pdf", "http://ns.adobe.com/pdf/1.3/", [ property("pdf:Producer", this.producer), property("pdf:Keywords", this.keywords) ]) + description("xmp", "http://ns.adobe.com/xap/1.0/", [ `<xmp:CreateDate>${iso(this.creationDate)}</xmp:CreateDate>`, this.modificationDate === null ? null : `<xmp:ModifyDate>${iso(this.modificationDate)}</xmp:ModifyDate>`, property("xmp:CreatorTool", this.creator) ]) + description("dc", "http://purl.org/dc/elements/1.1/", [ property("dc:creator", this.author, text => `<rdf:Seq><rdf:li>${text}</rdf:li></rdf:Seq>`), property("dc:title", this.title, alt), property("dc:description", this.subject, alt) ]) + description("pdfaid", "http://www.aiim.org/pdfa/ns/id/", [ property("pdfaid:part", String(this.part)), property("pdfaid:conformance", this.conformance) ]) + (this.invoiceRdf === "" ? "" : `${this.invoiceRdf}\n`) + '</rdf:RDF>\n</x:xmpmeta>\n<?xpacket end="r"?>';
+  }
+}
+
+const SPACES = {
+  "RGB ": [ "RGB", 3 ],
+  CMYK: [ "CMYK", 4 ],
+  GRAY: [ "GRAY", 1 ]
+};
+
+function iccProfileInfo(icc) {
+  if (!(icc instanceof Uint8Array) || icc.length < 132) {
+    throw new TypeError("PDF/A colorProfile must be ICC profile bytes");
+  }
+  const view = new DataView(icc.buffer, icc.byteOffset, icc.byteLength);
+  const signature = offset => String.fromCharCode(icc[offset], icc[offset + 1], icc[offset + 2], icc[offset + 3]);
+  const size = view.getUint32(0);
+  if (size !== icc.length) throw new RangeError(`ICC profile size ${size} is not its length ${icc.length}`);
+  if (signature(36) !== "acsp") throw new RangeError("ICC profile has no acsp signature");
+  if (icc[8] < 2 || icc[8] > 4) throw new RangeError(`ICC profile version ${icc[8]} is not 2 to 4`);
+  const deviceClass = signature(12);
+  if (deviceClass !== "mntr" && deviceClass !== "prtr") {
+    throw new RangeError(`PDF/A needs a mntr or prtr ICC profile class, not '${deviceClass}'`);
+  }
+  const space = SPACES[signature(16)];
+  if (space === undefined) throw new RangeError(`ICC colour space '${signature(16)}' is not RGB, CMYK or GRAY`);
+  if (signature(20) !== "XYZ " && signature(20) !== "Lab ") throw new RangeError("ICC connection space is not XYZ or Lab");
+  const count = view.getUint32(128);
+  if (132 + count * 12 > size) throw new RangeError("ICC tag table overruns the profile");
+  for (let index = 0; index < count; index++) {
+    const entry = 132 + index * 12;
+    if (view.getUint32(entry + 4) + view.getUint32(entry + 8) > size) {
+      throw new RangeError(`ICC tag '${signature(entry)}' overruns the profile`);
+    }
+  }
+  return {
+    colorSpace: space[0],
+    components: space[1]
+  };
+}
+
+class PdfaColorProfile extends PdfObjectStream {
+  constructor(document, icc, outputCondition = "Custom") {
+    const info = iccProfileInfo(icc);
+    super(document, icc);
+    this.icc = icc;
+    this.colorSpace = info.colorSpace;
+    this.outputCondition = outputCondition;
+    this.params.set("/N", new PdfNum(info.components));
+    document.catalog.colorProfile = this;
+  }
+  outputIntents() {
+    return new PdfArray([ new PdfDict([ [ "/Type", new PdfName("/OutputIntent") ], [ "/S", new PdfName("/GTS_PDFA1") ], [ "/OutputConditionIdentifier", new PdfString(this.outputCondition) ], [ "/Info", new PdfString(this.outputCondition) ], [ "/RegistryName", new PdfString("http://www.color.org") ], [ "/DestOutputProfile", this.ref() ] ]) ]);
+  }
+}
+
+const RELATIONSHIPS = [ "Data", "Source", "Alternative", "Supplement", "Unspecified" ];
+
+class PdfaAttachedFile {
+  constructor({name, data, mimeType = "text/xml", relationship = "Alternative", description = null, modificationDate = null}) {
+    const fail = message => {
+      throw new TypeError(`PDF/A attachment ${JSON.stringify(name)}: ${message}`);
+    };
+    if (typeof name !== "string" || name === "") fail("the name must be a non-empty string");
+    if (typeof data !== "string" && !(data instanceof Uint8Array)) fail("data must be a string or a Uint8Array");
+    if (typeof mimeType !== "string" || !/^[^\s/]+\/[^\s/]+$/.test(mimeType)) fail("mimeType must be type/subtype");
+    if (!RELATIONSHIPS.includes(relationship)) fail(`relationship must be ${RELATIONSHIPS.join(", ")}`);
+    if (description !== null && typeof description !== "string") fail("description must be a string");
+    if (modificationDate !== null && !(modificationDate instanceof Date && Number.isFinite(modificationDate.getTime()))) {
+      fail("modificationDate must be a valid Date");
+    }
+    this.name = name;
+    this.data = typeof data === "string" ? utf8Encode(data) : data;
+    this.mimeType = mimeType;
+    this.relationship = relationship;
+    this.description = description;
+    this.modificationDate = modificationDate;
+  }
+}
+
+class PdfaAttachedFiles {
+  constructor(document, files, date = new Date) {
+    this.specs = [];
+    this.files = files.map(file => file instanceof PdfaAttachedFile ? file : new PdfaAttachedFile(file));
+    const keyed = [];
+    for (const file of this.files) {
+      const stream = new PdfObjectStream(document, file.data);
+      stream.params.set("/Type", new PdfName("/EmbeddedFile"));
+      stream.params.set("/Subtype", new PdfName("/" + file.mimeType));
+      stream.params.set("/Params", new PdfDict([ [ "/Size", new PdfNum(file.data.length) ], [ "/ModDate", PdfString.fromDate(file.modificationDate ?? date) ] ]));
+      const spec = new PdfObject(document, new PdfDict([ [ "/Type", new PdfName("/Filespec") ], [ "/F", new PdfString(file.name) ], [ "/UF", new PdfString(file.name) ], [ "/EF", new PdfDict([ [ "/F", stream.ref() ] ]) ], [ "/AFRelationship", new PdfName("/" + file.relationship) ] ]));
+      if (file.description) spec.params.set("/Desc", new PdfString(file.description));
+      this.specs.push(spec);
+      keyed.push({
+        key: pdfTextBytes(file.name),
+        name: file.name,
+        spec
+      });
+    }
+    keyed.sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+    keyed.forEach((entry, index) => {
+      if (index > 0 && entry.key === keyed[index - 1].key) throw new RangeError(`PDF/A attachment name ${entry.name} is not unique`);
+    });
+    this.names = new PdfObject(document, new PdfDict([ [ "/Names", new PdfArray(keyed.flatMap(entry => [ new PdfString(entry.name), entry.spec.ref() ])) ] ]));
+    document.catalog.attached = this;
+  }
+  get isNotEmpty() {
+    return this.specs.length > 0;
+  }
+  catalogNames() {
+    return new PdfDict([ [ "/EmbeddedFiles", this.names.ref() ] ]);
+  }
+  catalogAF() {
+    return PdfArray.fromObjects(this.specs);
+  }
+}
+
 class PdfDocument {
   constructor(metadata, settings = DEFAULT_PDF_SETTINGS) {
     this.serial = 0;
@@ -19035,13 +19130,45 @@ class PdfDocument {
     this.formObjects = new Map;
     this.softMaskObjects = new Map;
     this.formFontNames = new Map;
+    this.formFieldKids = new Map;
+    this.emptyForm = null;
     this.settings = settings;
     const catalogSerial = this.genSerial();
     this.pageList = new PdfPageList(this);
     this.catalog = new PdfCatalog(this, this.pageList, catalogSerial);
-    this.info = new PdfInfo(this, metadata);
-    if (metadata.xmpMetadata) {
-      this.catalog.metadata = new PdfMetadata(this, metadata.xmpMetadata);
+    const pdfa = settings.pdfa;
+    if (pdfa === undefined) {
+      this.info = new PdfInfo(this, metadata);
+      if (metadata.xmpMetadata) {
+        this.catalog.metadata = new PdfMetadata(this, metadata.xmpMetadata);
+      }
+      return;
+    }
+    const date = metadata.creationDate ?? new Date;
+    const clean = value => value ? pdfaClean(value) || null : null;
+    const info = {
+      title: clean(metadata.title),
+      author: clean(metadata.author),
+      subject: clean(metadata.subject),
+      keywords: clean(metadata.keywords),
+      creator: clean(metadata.creator),
+      producer: metadata.producer == null ? null : pdfaClean(metadata.producer),
+      creationDate: date
+    };
+    this.info = new PdfInfo(this, info, true);
+    this.catalog.metadata = new PdfMetadata(this, new PdfaRdf({
+      ...info,
+      producer: pdfProducer(info.producer),
+      modificationDate: date,
+      part: pdfa.part,
+      conformance: pdfa.conformance,
+      invoiceRdf: pdfa.extensionRdf
+    }).create());
+    new PdfaColorProfile(this, pdfa.colorProfile, pdfa.outputCondition);
+    if (pdfa.attachments !== undefined && pdfa.attachments.length > 0) {
+      const names = new PdfNames(this);
+      names.embeddedFiles = new PdfaAttachedFiles(this, pdfa.attachments, date).names;
+      this.catalog.names = names;
     }
   }
   get objects() {
@@ -19058,7 +19185,15 @@ class PdfDocument {
     if (existing !== undefined) {
       return existing;
     }
-    const object = new PdfObject(this, font.resourceDict(this));
+    const dict = font.resourceDict(this);
+    const pdfa = this.settings.pdfa;
+    if (pdfa !== undefined && !dict.has("/FontDescriptor") && !dict.has("/DescendantFonts")) {
+      throw new TypeError(`PDF/A needs embedded fonts; ${font.fontName} is a standard Type1 font, never embedded. Make TrueType ` + "faces the theme: new Document({ theme: ThemeData.withFont({ base: Font.ttf(regular), bold: Font.ttf(bold) }), pdfa })");
+    }
+    if (pdfa?.conformance === "U" && font.protect === true) {
+      throw new TypeError(`PDF/A-${pdfa.part}U needs extractable text; ${font.fontName} has protect: true`);
+    }
+    const object = new PdfObject(this, dict);
     this.fontObjects.set(font, object);
     return object;
   }
@@ -19180,6 +19315,7 @@ class PdfDocument {
       page.addXObject(name, this.imageObject(image));
     }
     for (const [form, name] of forms) page.addXObject(name, this.formObject(form));
+    const pdfa = this.settings.pdfa !== undefined;
     for (const annotation of annotations) {
       let appearanceName = null;
       if (annotation.kind === "form") {
@@ -19193,15 +19329,54 @@ class PdfDocument {
           }
         }
       }
-      const appearances = annotation.kind === "form" ? this.resolveFormAppearances(annotation.appearances) : null;
+      const source = annotation.kind === "form" ? annotation.appearances : undefined;
+      let appearances = this.resolveFormAppearances(pdfa && source !== undefined ? {
+        normal: source.normal,
+        normalStates: source.normalStates
+      } : source);
+      if (pdfa && annotation.kind !== "url" && annotation.kind !== "destination" && appearances?.normal === undefined && appearances?.normalStates === undefined) {
+        appearances = {
+          normal: this.emptyAppearance()
+        };
+      }
       const object = new PdfAnnotation(this, page, annotation, appearanceName, appearances);
-      if (annotation.kind === "form") this.catalog.formFields.push(object);
+      if (annotation.kind === "form") this.addFormField(object, annotation.name);
     }
     page.contents.push(stream);
     return page;
   }
+  emptyAppearance() {
+    return this.emptyForm ?? (this.emptyForm = this.formAppearanceObject({
+      width: 1,
+      height: 1,
+      content: "",
+      fonts: new Map,
+      graphicStates: new Map,
+      patterns: new Map,
+      shadings: new Map,
+      images: new Map
+    }));
+  }
+  addFormField(widget, name) {
+    const kids = this.formFieldKids.get(name);
+    if (kids === undefined) {
+      this.formFieldKids.set(name, [ widget ]);
+      this.catalog.formFields.push(widget);
+      return;
+    }
+    const first = kids[0];
+    let parent = first.parent;
+    if (parent === null) {
+      parent = new PdfObject(this, new PdfDict([ [ "/T", new PdfString(name) ] ]));
+      first.parent = parent;
+      this.catalog.formFields[this.catalog.formFields.indexOf(first)] = parent;
+    }
+    widget.parent = parent;
+    kids.push(widget);
+    parent.params.set("/Kids", PdfArray.fromObjects(kids));
+  }
   addNavigation(outlines, pageMode, destinations = []) {
-    const names = outlines.length > 0 || destinations.length > 0 ? new PdfNames(this) : null;
+    const names = outlines.length > 0 || destinations.length > 0 ? this.catalog.names ?? new PdfNames(this) : null;
     for (const entry of destinations) {
       const page = this.pageList.pages[entry.page - 1];
       if (page !== undefined) {
@@ -19218,7 +19393,7 @@ class PdfDocument {
       for (const entry of outlines) {
         const page = this.pageList.pages[entry.page - 1];
         if (page === undefined) continue;
-        names?.addDestination(entry.anchor, page, {
+        if (names !== null && !names.has(entry.anchor)) names.addDestination(entry.anchor, page, {
           y: entry.y
         });
         const node = new PdfOutline(this, {
@@ -19255,8 +19430,139 @@ class PdfDocument {
     }
     this.xref.params.set("/Root", this.catalog.ref());
     this.xref.params.set("/Info", this.info.ref());
+    if (this.catalog.colorProfile !== null) {
+      this.checkPdfa(this.catalog.colorProfile.colorSpace);
+      const id = new PdfHexBytes(this.documentId());
+      this.xref.params.set("/ID", new PdfArray([ id, id ]));
+    }
     this.xref.output(stream);
   }
+  checkPdfa(space) {
+    for (const {pageFormat: {width, height}} of this.pageList.pages) {
+      if (!(width >= 3 && height >= 3 && width <= 14400 && height <= 14400)) {
+        throw new RangeError(`PDF/A pages are 3 to 14400 points a side, not ${width} x ${height}`);
+      }
+    }
+    const used = new Set;
+    const contents = new Set(this.pageList.pages.flatMap(page => page.contents));
+    for (const object of this.objects) {
+      const params = object.params;
+      deviceSpaces(params, used);
+      if (params instanceof PdfDictStream && (contents.has(object) || isName(params.get("/Subtype"), "/Form"))) {
+        const depth = scanContent(params.data, used);
+        if (depth > 28) throw new RangeError(`PDF/A limits q nesting to 28, not ${depth}`);
+      }
+      if (space !== "RGB" && params instanceof PdfDict && isName(params.get("/Type"), "/Annot") && (params.has("/C") || params.has("/IC"))) {
+        throw new RangeError(`PDF/A allows annotation colours only under an RGB output intent, not ${space}`);
+      }
+    }
+    for (const [device, painted] of [ [ "RGB", "an RGB colour, image, gradient or soft mask" ], [ "CMYK", "a PdfColorCmyk or CMYK JPEG" ] ]) {
+      if (used.has(device) && space !== device) {
+        throw new RangeError(`PDF/A: Device${device} (${painted}) is painted, but the output intent profile is ${space}`);
+      }
+    }
+  }
+  documentId() {
+    const hash = new Uint32Array([ 2166136261, 2654435769, 2246822507, 3266489909 ]);
+    const dicts = new PdfStream;
+    for (const {params} of this.objects) {
+      if (params instanceof PdfDictStream) {
+        new PdfDict(params.values).output(dicts);
+        mix(hash, params.data);
+      } else {
+        params.output(dicts);
+      }
+    }
+    mix(hash, dicts.view());
+    const id = new Uint8Array(16);
+    for (let lane = 0; lane < 4; lane++) {
+      let h = (hash[lane] ^ Math.imul(hash[(lane + 1) % 4], 2654435761)) >>> 0;
+      h = Math.imul(h ^ h >>> 16, 2246822507);
+      h = Math.imul(h ^ h >>> 13, 3266489909);
+      h ^= h >>> 16;
+      for (let byte = 0; byte < 4; byte++) id[lane * 4 + byte] = h >>> 24 - byte * 8 & 255;
+    }
+    return id;
+  }
+}
+
+class PdfHexBytes extends PdfDataType {
+  constructor(bytes) {
+    super();
+    this.bytes = bytes;
+  }
+  output(s) {
+    let hex = "";
+    for (const byte of this.bytes) hex += byte.toString(16).padStart(2, "0");
+    s.putString(`<${hex}>`);
+  }
+}
+
+function mix(hash, bytes) {
+  let a = hash[0];
+  let b = hash[1];
+  let c = hash[2];
+  let d = hash[3];
+  for (let index = 0; index < bytes.length; index++) {
+    const x = bytes[index];
+    a = Math.imul(a ^ x, 16777619);
+    b = Math.imul(b + x, 1540483477) ^ b >>> 15;
+    c = Math.imul(c ^ x, 2246822507) + a | 0;
+    d = Math.imul(d + x, 3266489909) ^ c >>> 13;
+  }
+  hash[0] = a;
+  hash[1] = b;
+  hash[2] = c;
+  hash[3] = d;
+}
+
+const isName = (value, name) => value instanceof PdfName && value.value === name;
+
+function deviceSpaces(value, used) {
+  if (value instanceof PdfName) {
+    if (value.value === "/DeviceRGB") used.add("RGB"); else if (value.value === "/DeviceCMYK") used.add("CMYK");
+  } else if (value instanceof PdfDict) {
+    for (const entry of value.values.values()) deviceSpaces(entry, used);
+  } else if (value instanceof PdfArray) {
+    for (const entry of value.values) deviceSpaces(entry, used);
+  }
+}
+
+const isRegular = c => c > 32 && c !== 40 && c !== 41 && c !== 60 && c !== 62 && c !== 91 && c !== 93 && c !== 123 && c !== 125 && c !== 47 && c !== 37;
+
+function scanContent(data, used) {
+  let depth = 0;
+  let deepest = 0;
+  for (let index = 0; index < data.length; ) {
+    const c = data[index];
+    if (c === 40) {
+      let open = 0;
+      do {
+        const d = data[index++];
+        if (d === 92) index++; else if (d === 40) open++; else if (d === 41) open--;
+      } while (open > 0 && index < data.length);
+    } else if (c === 60) {
+      if (data[index + 1] === 60) {
+        index += 2;
+      } else {
+        while (index < data.length && data[index] !== 62) index++;
+        index++;
+      }
+    } else if (c === 37) {
+      while (index < data.length && data[index] !== 10 && data[index] !== 13) index++;
+    } else if (isRegular(c) || c === 47) {
+      const start = index++;
+      while (index < data.length && isRegular(data[index])) index++;
+      const length = index - start;
+      const next = data[start + 1];
+      if (length === 1 && (c === 107 || c === 75)) used.add("CMYK"); else if (length === 2 && (c === 114 && next === 103 || c === 82 && next === 71)) used.add("RGB"); else if (length === 1 && c === 113) deepest = Math.max(deepest, ++depth); else if (length === 1 && c === 81) depth--; else if (c === 47 && (length === 10 || length === 11)) {
+        deviceSpaces(new PdfName(String.fromCharCode(...data.subarray(start, index))), used);
+      }
+    } else {
+      index++;
+    }
+  }
+  return deepest;
 }
 
 function writePdf(output, pages, metadata, outlines = [], pageMode = "none", destinations = [], pageLabels = [], settings = DEFAULT_PDF_SETTINGS) {
@@ -19270,7 +19576,7 @@ function writePdf(output, pages, metadata, outlines = [], pageMode = "none", des
 }
 
 class PageTheme {
-  constructor({pageFormat = PageFormat.A4, buildBackground = null, buildForeground = null, theme = null, orientation = "natural", margin = null, clip = false} = {}) {
+  constructor({pageFormat = PageFormat.A4, buildBackground = null, buildForeground = null, theme = null, orientation = "natural", margin = null, clip = false, textDirection = null} = {}) {
     this.pageFormat = {
       ...pageFormat,
       width: Number(pageFormat.width),
@@ -19284,7 +19590,8 @@ class PageTheme {
     this.buildForeground = buildForeground;
     this.theme = theme;
     this.clip = clip;
-    this.declaredMargin = margin == null ? null : normalizeInsets(margin);
+    this.textDirection = textDirection;
+    this.declaredMargin = margin == null ? null : normalizeInsetsGeometry(margin);
   }
   get mustRotate() {
     return this.orientation === "landscape" && this.pageFormat.height > this.pageFormat.width || this.orientation === "portrait" && this.pageFormat.width > this.pageFormat.height;
@@ -19297,7 +19604,7 @@ class PageTheme {
   }
   get margin() {
     const fromFormat = formatMargin(this.pageFormat);
-    const declared = this.declaredMargin ?? (fromFormat === null ? normalizeInsets(DEFAULT_MARGIN) : fromFormat);
+    const declared = this.declaredMargin ? resolveInsets(this.declaredMargin, this.textDirection) : fromFormat === null ? normalizeInsets(DEFAULT_MARGIN) : fromFormat;
     return this.mustRotate ? {
       left: declared.bottom,
       top: declared.left,
@@ -19313,20 +19620,22 @@ class PageTheme {
       theme: options.theme ?? this.theme,
       orientation: options.orientation ?? this.orientation,
       margin: options.margin ?? this.declaredMargin,
-      clip: options.clip ?? this.clip
+      clip: options.clip ?? this.clip,
+      textDirection: options.textDirection ?? this.textDirection
     });
   }
 }
 
 class Page {
-  constructor({pageTheme = undefined, pageFormat = undefined, format = undefined, margin = undefined, theme = undefined, orientation = undefined, build, background = null}) {
+  constructor({pageTheme = undefined, pageFormat = undefined, format = undefined, margin = undefined, theme = undefined, orientation = undefined, textDirection = undefined, build, background = null}) {
     if (typeof build !== "function") throw new TypeError("Page.build must be a function");
     const base = pageTheme ?? new PageTheme;
     this.pageTheme = base.copyWith({
       pageFormat: pageFormat ?? format,
       margin,
       theme,
-      orientation
+      orientation,
+      textDirection
     });
     this.build = build;
     this.background = background;
@@ -19337,7 +19646,8 @@ class Page {
   render(documentContext) {
     let format = this.pageTheme.resolvedFormat;
     const margin = this.pageTheme.margin;
-    let canvas = new PdfCanvas(Number.isFinite(format.height) ? format.height : 0);
+    const settings = documentContext.document.settings;
+    let canvas = new PdfCanvas(Number.isFinite(format.height) ? format.height : 0, settings);
     let context = {
       ...documentContext,
       canvas,
@@ -19345,7 +19655,8 @@ class Page {
       pageNumber: documentContext.pageOffset + 1,
       pageLabel: documentContext.document.pageLabel(documentContext.pageOffset),
       pagesCount: documentContext.pagesCount || documentContext.pageOffset + 1,
-      theme: this.pageTheme.theme ?? documentContext.document.theme
+      theme: this.pageTheme.theme ?? documentContext.document.theme,
+      textDirection: this.pageTheme.textDirection
     };
     const maxWidth = format.width - margin.left - margin.right;
     const maxHeight = format.height - margin.top - margin.bottom;
@@ -19366,7 +19677,7 @@ class Page {
       if (!Number.isFinite(format.width) || !Number.isFinite(format.height) || format.width <= 0 || format.height <= 0) {
         throw new RangeError("Page content must resolve to positive finite dimensions");
       }
-      canvas = new PdfCanvas(format.height);
+      canvas = new PdfCanvas(format.height, settings);
       context = {
         ...context,
         canvas,
@@ -19377,7 +19688,7 @@ class Page {
     this.paintLayer(this.pageTheme.buildBackground, context, format);
     paintPageChild(this.pageTheme, context, widget, {
       ...box,
-      x: margin.left,
+      x: pageChildX(this.pageTheme, margin.left, format.width - margin.left - margin.right, box.width),
       y: margin.top
     });
     this.paintLayer(this.pageTheme.buildForeground, context, format);
@@ -19404,10 +19715,14 @@ class Page {
     }));
     paintPageChild(this.pageTheme, context, widget, {
       ...box,
-      x: 0,
+      x: pageChildX(this.pageTheme, 0, format.width, box.width),
       y: 0
     });
   }
+}
+
+function pageChildX(theme, left, available, width, alignment = "start") {
+  return left + crossOffset(alignment, available - width, theme.textDirection === "rtl");
 }
 
 function paintPageChild(theme, context, widget, box) {
@@ -19455,7 +19770,7 @@ class NewPage extends Widget {
 }
 
 class MultiPage {
-  constructor({pageTheme = undefined, format = undefined, pageFormat = undefined, margin = undefined, orientation = undefined, gap = 0, theme = undefined, build, header = null, footer = null, background = null, maxPages = 50}) {
+  constructor({pageTheme = undefined, format = undefined, pageFormat = undefined, margin = undefined, orientation = undefined, textDirection = undefined, crossAxisAlignment = "start", gap = 0, theme = undefined, build, header = null, footer = null, background = null, maxPages = 50}) {
     this.renderedPages = [];
     if (typeof build !== "function") throw new TypeError("MultiPage.build must be a function");
     const base = pageTheme ?? new PageTheme({
@@ -19465,8 +19780,10 @@ class MultiPage {
       pageFormat: pageFormat ?? format,
       margin,
       orientation,
-      theme
+      theme,
+      textDirection
     });
+    this.crossAxisAlignment = checkCrossAxisAlignment(crossAxisAlignment);
     this.theme = this.pageTheme.theme;
     this.gap = Number(gap);
     this.build = build;
@@ -19493,7 +19810,7 @@ class MultiPage {
       if (pages.length >= this.maxPages) {
         throw new RangeError(`MultiPage exceeded its ${this.maxPages} page limit`);
       }
-      const canvas = new PdfCanvas(this.format.height);
+      const canvas = new PdfCanvas(this.format.height, documentContext.document.settings);
       if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
       const pageNumber = documentContext.pageOffset + pages.length + 1;
       const context = {
@@ -19503,7 +19820,8 @@ class MultiPage {
         pageNumber,
         pageLabel: documentContext.document.pageLabel(pageNumber - 1),
         pagesCount: documentContext.pagesCount || pageNumber,
-        theme: this.theme ?? documentContext.document.theme
+        theme: this.theme ?? documentContext.document.theme,
+        textDirection: this.pageTheme.textDirection
       };
       this.paintLayer(this.pageTheme.buildBackground, context);
       const maxWidth = this.format.width - this.margin.left - this.margin.right;
@@ -19552,7 +19870,7 @@ class MultiPage {
         if (natural.height <= initialAvailable + .001) {
           paintPageChild(this.pageTheme, page.context, child, {
             ...natural,
-            x: this.margin.left,
+            x: this.childX(page, natural.width),
             y: page.cursor
           });
           page.cursor += natural.height + this.gap;
@@ -19567,18 +19885,27 @@ class MultiPage {
           }));
           paintPageChild(this.pageTheme, page.context, child, {
             ...moved,
-            x: this.margin.left,
+            x: this.childX(page, moved.width),
             y: page.cursor
           });
           page.cursor += moved.height + this.gap;
           continue;
         }
+        let continued = false;
         while (true) {
           const available = page.bottom - page.cursor;
-          const fragment = child.layoutSpan(page.context, new BoxConstraints({
+          let fragment = child.layoutSpan(page.context, new BoxConstraints({
             maxWidth: page.maxWidth,
             maxHeight: available
           }), state);
+          if (continued && !fragment.hasMore) {
+            const natural = child.layoutSpan(page.context, new BoxConstraints({
+              maxWidth: page.maxWidth,
+              maxHeight: Infinity
+            }), state);
+            if (!natural.hasMore && natural.box.height <= available + .001) fragment = natural;
+          }
+          continued = true;
           const box = fragment.box;
           if (box.height > available + .001) {
             throw new RangeError("A spanning widget returned a fragment taller than its constraint");
@@ -19593,7 +19920,7 @@ class MultiPage {
           if (box.height > 0) {
             paintPageChild(this.pageTheme, page.context, child, {
               ...box,
-              x: this.margin.left,
+              x: this.childX(page, box.width),
               y: page.cursor
             });
           }
@@ -19622,7 +19949,7 @@ class MultiPage {
       }
       paintPageChild(this.pageTheme, page.context, child, {
         ...box,
-        x: this.margin.left,
+        x: this.childX(page, box.width),
         y: page.cursor
       });
       page.cursor += box.height + this.gap;
@@ -19646,7 +19973,7 @@ class MultiPage {
           }));
           paintPageChild(this.pageTheme, context, headerWidget, {
             ...headerBox,
-            x: this.margin.left,
+            x: pageChildX(this.pageTheme, this.margin.left, state.maxWidth, headerBox.width),
             y: this.margin.top
           });
         }
@@ -19657,7 +19984,7 @@ class MultiPage {
           }));
           paintPageChild(this.pageTheme, context, footerWidget, {
             ...footerBox,
-            x: this.margin.left,
+            x: pageChildX(this.pageTheme, this.margin.left, state.maxWidth, footerBox.width),
             y: this.format.height - this.margin.bottom - footerBox.height
           });
         }
@@ -19703,9 +20030,12 @@ class MultiPage {
     }));
     paintPageChild(this.pageTheme, context, widget, {
       ...box,
-      x: 0,
+      x: pageChildX(this.pageTheme, 0, this.format.width, box.width),
       y: 0
     });
+  }
+  childX(page, width) {
+    return pageChildX(this.pageTheme, this.margin.left, page.maxWidth, width, this.crossAxisAlignment);
   }
 }
 
@@ -19774,7 +20104,7 @@ class Icon extends StatelessWidget {
     if (font === null) {
       throw new Error("Icon requires Icon.font or ThemeData.withFont({ icons })");
     }
-    const direction = this.textDirection ?? "ltr";
+    const direction = this.textDirection ?? Directionality.of(context);
     let widget = new RichText({
       textDirection: direction,
       text: new TextSpan({
@@ -19983,8 +20313,42 @@ class DefaultTextStyle extends InheritedTheme {
   }
 }
 
+const MAX_OUTLINE_REPLAYS = 4;
+
+function pdfaSettings({part = 3, conformance = "B", colorProfile, outputCondition, attachments = [], extensionRdf}, xmpMetadata) {
+  if (part === 1) {
+    throw new RangeError("PDF/A-1 is unsupported: it forbids transparency, which js_pdf paints (alpha, soft masks); use part 2 or 3");
+  }
+  if (part !== 2 && part !== 3) throw new RangeError(`PDF/A part must be 2 or 3, not ${String(part)}`);
+  if (conformance === "A") {
+    throw new RangeError("PDF/A level A needs a structure tree, which js_pdf does not write; use 'B' or 'U'");
+  }
+  if (conformance !== "B" && conformance !== "U") throw new RangeError(`PDF/A conformance must be 'B' or 'U', not ${String(conformance)}`);
+  if (colorProfile === undefined) {
+    throw new TypeError("PDF/A needs pdfa.colorProfile, the ICC profile bytes, e.g. sRGB2014.icc");
+  }
+  if ([ outputCondition, extensionRdf ].some(value => value !== undefined && typeof value !== "string")) {
+    throw new TypeError("pdfa.outputCondition and pdfa.extensionRdf must be strings");
+  }
+  iccProfileInfo(colorProfile);
+  if (xmpMetadata) {
+    throw new TypeError("Pass xmpMetadata or pdfa, not both: PDF/A writes its own XMP; add RDF with pdfa.extensionRdf");
+  }
+  if (attachments.length > 0 && part !== 3) {
+    throw new RangeError("PDF/A-2 attachments must be PDF/A files, which js_pdf cannot verify; use part 3");
+  }
+  return {
+    part,
+    conformance,
+    colorProfile,
+    outputCondition,
+    extensionRdf,
+    attachments: attachments.map(file => file instanceof PdfaAttachedFile ? file : new PdfaAttachedFile(file))
+  };
+}
+
 class Document {
-  constructor({title = null, author = null, subject = null, creator = null, producer = null, keywords = null, xmpMetadata = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none", compress = true, simpleTrueTypeFonts = false} = {}) {
+  constructor({title = null, author = null, subject = null, creator = null, producer = null, keywords = null, xmpMetadata = null, creationDate = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none", compress = true, simpleTrueTypeFonts = false, colorAlpha = true, pdfa = null} = {}) {
     this.sections = [];
     this.outlineEntries = [];
     this.destinationEntries = [];
@@ -19994,6 +20358,9 @@ class Document {
     this.outlineRerenderRequested = false;
     this.fonts = new Map;
     this.fallbackFont = Font.helvetica();
+    if (creationDate !== null && !(creationDate instanceof Date && Number.isFinite(creationDate.getTime()))) {
+      throw new TypeError("Document creationDate must be a valid Date");
+    }
     this.metadata = {
       title,
       author,
@@ -20001,11 +20368,18 @@ class Document {
       creator,
       producer,
       keywords,
-      xmpMetadata
+      xmpMetadata,
+      creationDate
     };
-    this.settings = {
+    this.settings = pdfa === null ? {
       compress,
-      simpleTrueTypeFonts
+      simpleTrueTypeFonts,
+      colorAlpha
+    } : {
+      compress,
+      simpleTrueTypeFonts,
+      colorAlpha,
+      pdfa: pdfaSettings(pdfa, xmpMetadata)
     };
     for (const {pageIndex, label} of pageLabels) this.setPageLabel(pageIndex, label);
     this.theme = theme ?? (font === undefined ? ThemeData.base() : ThemeData.withFont({
@@ -20061,29 +20435,17 @@ class Document {
   }
   registerOutline({title, level, pageNumber, y, anchor = null, color = null, style = "normal"}) {
     const page = pageNumber;
-    if (this.outlineReplay) {
-      const existing = this.outlineEntries[this.outlineCursor];
-      if (existing !== undefined) {
-        existing.page = page;
-        existing.y = y;
-      } else {
-        this.outlineEntries.push({
-          title,
-          level,
-          anchor: anchor ?? `outline-${this.outlineCursor + 1}`,
-          page,
-          y,
-          color,
-          style
-        });
-      }
-      this.outlineCursor++;
+    const index = this.outlineReplay ? this.outlineCursor++ : this.outlineEntries.length;
+    const existing = this.outlineEntries[index];
+    if (this.outlineReplay && existing !== undefined) {
+      existing.page = page;
+      existing.y = y;
       return;
     }
     this.outlineEntries.push({
       title,
       level,
-      anchor: anchor ?? `outline-${this.outlineEntries.length + 1}`,
+      anchor: anchor ?? `__dest${index}`,
       page,
       y,
       color,
@@ -20098,6 +20460,9 @@ class Document {
       y,
       zoom
     });
+  }
+  outlinePages() {
+    return this.outlineEntries.map(entry => entry.page).join();
   }
   renderSections(replay, expectedPagesCount = 0) {
     this.outlineReplay = replay;
@@ -20139,8 +20504,11 @@ class Document {
     this.outlineEntries.length = 0;
     this.outlineRerenderRequested = false;
     let pages = this.renderSections(false);
-    if (this.outlineRerenderRequested) {
+    for (let replay = 0; this.outlineRerenderRequested && replay < MAX_OUTLINE_REPLAYS; replay++) {
+      const before = this.outlinePages();
       pages = this.renderSections(true, pages.length);
+      this.outlineEntries.length = this.outlineCursor;
+      if (this.outlinePages() === before) break;
     }
     if (pages.length === 0) {
       throw new Error("Document must contain at least one page");
@@ -20173,7 +20541,7 @@ class GridView extends SpanningWidget {
       throw new TypeError(`Unknown GridView axis: ${direction}`);
     }
     this.direction = direction;
-    this.padding = normalizeInsets(padding);
+    this.padding = normalizeInsetsGeometry(padding);
     this.crossAxisCount = Math.trunc(Number(crossAxisCount));
     if (!Number.isFinite(this.crossAxisCount) || this.crossAxisCount <= 0) {
       throw new RangeError("GridView.crossAxisCount must be a positive integer");
@@ -20193,7 +20561,7 @@ class GridView extends SpanningWidget {
       childMainAxis: null
     };
   }
-  fragment(context, incoming, state) {
+  fragment(context, incoming, state, spanning) {
     const parent = BoxConstraints.from(incoming);
     if (state.firstChild >= this.children.length) {
       const size = parent.constrain({
@@ -20218,7 +20586,9 @@ class GridView extends SpanningWidget {
         hasMore: false
       };
     }
-    const inner = parent.deflate(this.padding);
+    const direction = Directionality.of(context);
+    const padding = resolveInsets(this.padding, direction);
+    const inner = parent.deflate(padding);
     const vertical = this.direction === "vertical";
     const maxMain = vertical ? inner.maxHeight : inner.maxWidth;
     const maxCross = vertical ? inner.maxWidth : inner.maxHeight;
@@ -20239,11 +20609,14 @@ class GridView extends SpanningWidget {
         childMainAxis = Math.max(0, (maxMain - this.mainAxisSpacing * (neededRuns - 1)) / neededRuns);
       }
     }
-    const runCapacity = Number.isFinite(maxMain) ? Math.max(0, Math.floor((maxMain + this.mainAxisSpacing + 1e-6) / (childMainAxis + this.mainAxisSpacing))) : neededRuns;
+    const runCapacity = Number.isFinite(maxMain) ? Math.max(spanning ? 0 : 1, Math.floor((maxMain + this.mainAxisSpacing + 1e-6) / (childMainAxis + this.mainAxisSpacing))) : neededRuns;
     const childCapacity = runCapacity * this.crossAxisCount;
     const count = Math.min(remaining, childCapacity);
     const runCount = count === 0 ? 0 : Math.ceil(count / this.crossAxisCount);
     const children = [];
+    const totalMain = runCount === 0 ? 0 : runCount * childMainAxis + (runCount - 1) * this.mainAxisSpacing;
+    const totalCross = this.crossAxisCount * childCrossAxis + (this.crossAxisCount - 1) * this.crossAxisSpacing;
+    const band = vertical ? totalCross : totalMain;
     for (let local = 0; local < count; local++) {
       const index = state.firstChild + local;
       const run = Math.floor(local / this.crossAxisCount);
@@ -20256,20 +20629,19 @@ class GridView extends SpanningWidget {
         height: childCrossAxis
       });
       const childBox = this.children[index].layout(context, childConstraints);
+      const dx = padding.left + (vertical ? cross * (childCrossAxis + this.crossAxisSpacing) : run * (childMainAxis + this.mainAxisSpacing));
       children.push({
         box: childBox,
-        dx: this.padding.left + (vertical ? cross * (childCrossAxis + this.crossAxisSpacing) : run * (childMainAxis + this.mainAxisSpacing)),
-        dy: this.padding.top + (vertical ? run * (childMainAxis + this.mainAxisSpacing) : cross * (childCrossAxis + this.crossAxisSpacing))
+        dx: direction === "rtl" ? 2 * padding.left + band - dx - childBox.width : dx,
+        dy: padding.top + (vertical ? run * (childMainAxis + this.mainAxisSpacing) : cross * (childCrossAxis + this.crossAxisSpacing))
       });
     }
-    const totalMain = runCount === 0 ? 0 : runCount * childMainAxis + (runCount - 1) * this.mainAxisSpacing;
-    const totalCross = this.crossAxisCount * childCrossAxis + (this.crossAxisCount - 1) * this.crossAxisSpacing;
     const natural = vertical ? {
-      width: totalCross + this.padding.left + this.padding.right,
-      height: totalMain + this.padding.top + this.padding.bottom
+      width: totalCross + padding.left + padding.right,
+      height: totalMain + padding.top + padding.bottom
     } : {
-      width: totalMain + this.padding.left + this.padding.right,
-      height: totalCross + this.padding.top + this.padding.bottom
+      width: totalMain + padding.left + padding.right,
+      height: totalCross + padding.top + padding.bottom
     };
     const size = parent.constrain(natural);
     const lastChild = state.firstChild + count;
@@ -20297,10 +20669,10 @@ class GridView extends SpanningWidget {
     };
   }
   layout(context, constraints) {
-    return this.fragment(context, constraints, this.initialSpanState()).box;
+    return this.fragment(context, constraints, this.initialSpanState(), false).box;
   }
   layoutSpan(context, constraints, state) {
-    return this.fragment(context, constraints, state);
+    return this.fragment(context, constraints, state, true);
   }
   paint(context, box) {
     for (const child of box.data.children) {
@@ -20342,7 +20714,7 @@ class GridPaper extends Widget {
     this.verticalDivisions = verticalDivisions;
     this.horizontalSubdivisions = horizontalSubdivisions;
     this.verticalSubdivisions = verticalSubdivisions;
-    this.margin = normalizeInsets(margin);
+    this.margin = normalizeInsetsGeometry(margin);
     this.horizontalOffset = resolvedHorizontalOffset;
     this.verticalOffset = resolvedVerticalOffset;
     this.border = border;
@@ -20427,9 +20799,10 @@ class GridPaper extends Widget {
       width: parent.hasBoundedWidth ? parent.maxWidth : parent.minWidth,
       height: parent.hasBoundedHeight ? parent.maxHeight : parent.minHeight
     };
+    const margin = insetsIn(context, this.margin);
     const childBox = this.child?.layout(context, new BoxConstraints({
-      maxWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
-      maxHeight: Math.max(0, size.height - this.margin.top - this.margin.bottom)
+      maxWidth: Math.max(0, size.width - margin.left - margin.right),
+      maxHeight: Math.max(0, size.height - margin.top - margin.bottom)
     })) ?? null;
     return {
       widget: this,
@@ -20442,10 +20815,11 @@ class GridPaper extends Widget {
   }
   paint(context, box) {
     const childBox = box.data.childBox;
+    const margin = insetsIn(context, this.margin);
     childBox?.widget.paint(context, {
       ...childBox,
-      x: box.x + this.margin.left,
-      y: box.y + this.margin.top
+      x: box.x + margin.left,
+      y: box.y + margin.top
     });
     const canvas = context.canvas;
     canvas.saveContext();
@@ -20459,8 +20833,8 @@ class GridPaper extends Widget {
       if (!(step > 0)) return;
       canvas.setStrokeColor(color);
       let n = offset;
-      const start = vertical ? box.x + this.margin.left : box.y + this.margin.top;
-      const end = vertical ? box.x + box.width - this.margin.right : box.y + box.height - this.margin.bottom;
+      const start = vertical ? box.x + margin.left : box.y + margin.top;
+      const end = vertical ? box.x + box.width - margin.right : box.y + box.height - margin.bottom;
       for (let position = start; position <= end + .001; position += step) {
         canvas.setLineWidth(n % (subdivisions * divisions) === 0 ? widths[0] : n % subdivisions === 0 ? widths[1] : widths[2]);
         if (vertical) canvas.drawLine(position, canvas.toPdfY(box.y), position, canvas.toPdfY(box.y + box.height)); else canvas.drawLine(box.x, canvas.toPdfY(position), box.x + box.width, canvas.toPdfY(position));
@@ -20668,20 +21042,40 @@ function nonNegativeNumber(value, name) {
   return resolved;
 }
 
+function optionalSize(value, name) {
+  return value === null ? null : nonNegativeNumber(value, name);
+}
+
+function boundedSize(maximum, fallback, widget, option) {
+  if (Number.isFinite(maximum)) return maximum;
+  if (fallback === null) {
+    throw new RangeError(`${widget} is unbounded; give it ${option} or a parent that constrains it`);
+  }
+  return fallback;
+}
+
 function shadeColor(color, strength) {
-  return normalizeColor(new PdfColor(...normalizeColor(color)).shade(strength));
+  const [red, green, blue] = normalizeColor(new PdfColor(...normalizeColor(color)).shade(strength));
+  return new PdfColor(red, green, blue, color instanceof PdfColor ? color.alpha : 1);
 }
 
 class CircularProgressIndicator extends Widget {
-  constructor({value, color = null, strokeWidth = 4, backgroundColor = null}) {
+  constructor({value, color = null, strokeWidth = 4, backgroundColor = null, fallbackWidth = null, fallbackHeight = null}) {
     super();
     this.value = finiteNumber(value, "CircularProgressIndicator.value");
     this.color = color;
     this.strokeWidth = nonNegativeNumber(strokeWidth, "CircularProgressIndicator.strokeWidth");
     this.backgroundColor = backgroundColor;
+    this.fallbackWidth = optionalSize(fallbackWidth, "CircularProgressIndicator.fallbackWidth");
+    this.fallbackHeight = optionalSize(fallbackHeight, "CircularProgressIndicator.fallbackHeight");
   }
   layout(_context, constraints) {
-    const size = BoxConstraints.from(constraints).biggest;
+    const parent = BoxConstraints.from(constraints);
+    const name = "CircularProgressIndicator";
+    const size = parent.constrain({
+      width: boundedSize(parent.maxWidth, this.fallbackWidth, name, "fallbackWidth"),
+      height: boundedSize(parent.maxHeight, this.fallbackHeight, name, "fallbackHeight")
+    });
     return {
       widget: this,
       width: size.width,
@@ -20746,16 +21140,17 @@ class CircularProgressIndicator extends Widget {
 }
 
 class LinearProgressIndicator extends Widget {
-  constructor({value, backgroundColor = null, valueColor = null, minHeight = null}) {
+  constructor({value, backgroundColor = null, valueColor = null, minHeight = null, fallbackWidth = null}) {
     super();
     this.value = finiteNumber(value, "LinearProgressIndicator.value");
     this.backgroundColor = backgroundColor;
     this.valueColor = valueColor;
-    this.minHeight = minHeight === null ? null : nonNegativeNumber(minHeight, "LinearProgressIndicator.minHeight");
+    this.minHeight = optionalSize(minHeight, "LinearProgressIndicator.minHeight");
+    this.fallbackWidth = optionalSize(fallbackWidth, "LinearProgressIndicator.fallbackWidth");
   }
   layout(_context, constraints) {
     const size = new BoxConstraints({
-      minWidth: Infinity,
+      minWidth: boundedSize(constraints.maxWidth, this.fallbackWidth, "LinearProgressIndicator", "fallbackWidth"),
       minHeight: this.minHeight ?? 4
     }).enforce(constraints).smallest;
     return {
@@ -20826,7 +21221,9 @@ function resolvedStyle(context, style) {
 }
 
 function appearanceFor(context, width, height, child) {
-  const canvas = new PdfCanvas(height);
+  const canvas = new PdfCanvas(height, {
+    colorAlpha: context.canvas.colorAlpha
+  });
   const scoped = {
     ...context,
     canvas,
@@ -21144,31 +21541,83 @@ class TextField extends Widget {
   }
 }
 
+const ALIGN = Object.freeze({
+  Min: 0,
+  Mid: .5,
+  Max: 1
+});
+
+function viewBoxTransform(viewport, viewBox, preserveAspectRatio) {
+  if (viewBox === null) {
+    return [ 1, 0, 0, 1, viewport.x, viewport.y ];
+  }
+  const words = (preserveAspectRatio ?? "").trim().split(/\s+/).filter(word => word !== "defer");
+  let sx = viewport.width / viewBox.width;
+  let sy = viewport.height / viewBox.height;
+  let ax = .5;
+  let ay = .5;
+  if (words[0] !== "none") {
+    const align = /^x(Min|Mid|Max)Y(Min|Mid|Max)$/.exec(words[0] ?? "");
+    ax = ALIGN[align?.[1] ?? "Mid"];
+    ay = ALIGN[align?.[2] ?? "Mid"];
+    sx = sy = align !== null && words[1] === "slice" ? Math.max(sx, sy) : Math.min(sx, sy);
+  }
+  return [ sx, 0, 0, sy, viewport.x + (viewport.width - viewBox.width * sx) * ax - viewBox.x * sx, viewport.y + (viewport.height - viewBox.height * sy) * ay - viewBox.y * sy ];
+}
+
 class SvgGroup extends SvgOperation {
-  constructor(children, brush, clip, transform, painter) {
+  constructor(children, brush, clip, transform, painter, viewport = null) {
     super(brush, clip, transform, painter);
     this.children = children;
+    this.viewport = viewport;
   }
-  static fromXml(element, painter, parent) {
-    const brush = SvgBrush.fromXml(element, parent, painter.parser);
+  static fromXml(element, painter, parent, size = null) {
+    let brush = SvgBrush.fromXml(element, parent, painter.parser);
+    let viewport = null;
+    if (size !== null) {
+      const outer = brush.viewport ?? PdfRect.zero;
+      const length = (name, axis, fallback) => getNumeric(element, name, brush)?.lengthIn(axis) ?? fallback;
+      const box = {
+        x: length("x", "x", 0),
+        y: length("y", "y", 0),
+        width: size.width ?? length("width", "x", outer.width),
+        height: size.height ?? length("height", "y", outer.height)
+      };
+      if (box.width <= 0 || box.height <= 0) {
+        return new SvgGroup([], brush, SvgClipPath.empty, SvgTransform.none, painter);
+      }
+      const viewBox = parseViewBox(element.getAttribute("viewBox"));
+      viewport = {
+        box,
+        matrix: viewBoxTransform(box, viewBox, element.getAttribute("preserveAspectRatio"))
+      };
+      brush = brush.copyWith({
+        viewport: viewBox ?? box
+      });
+    }
     const children = [];
     for (const child of element.elements) {
-      if (child.name.local === "symbol") {
-        continue;
-      }
       const operation = painter.operationFromXml(child, brush);
       if (operation !== null) {
         children.push(operation);
       }
     }
-    return new SvgGroup(children, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+    return new SvgGroup(children, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter, viewport);
   }
   paintShape(canvas) {
+    if (this.viewport !== null) {
+      canvas.drawBox(this.viewport.box);
+      canvas.clipPath();
+      canvas.setTransform(this.viewport.matrix);
+    }
     for (const child of this.children) {
       child.paint(canvas);
     }
   }
   drawShape(canvas) {
+    if (this.viewport !== null) {
+      canvas.setTransform(this.viewport.matrix);
+    }
     for (const child of this.children) {
       child.draw(canvas);
     }
@@ -21188,7 +21637,8 @@ class SvgGroup extends SvgOperation {
       right = Math.max(right, PdfRect.right(box));
       top = Math.max(top, PdfRect.top(box));
     }
-    return PdfRect.fromLTRB(left, bottom, right, top);
+    const [sx, , , sy, tx, ty] = this.viewport?.matrix ?? [ 1, 0, 0, 1, 0, 0 ];
+    return PdfRect.fromLTRB(left * sx + tx, bottom * sy + ty, right * sx + tx, top * sy + ty);
   }
 }
 
@@ -21241,24 +21691,22 @@ class SvgImageOperation extends SvgOperation {
   }
   static fromXml(element, painter, parent) {
     const brush = SvgBrush.fromXml(element, parent, painter.parser);
-    const width = getNumeric(element, "width", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const height = getNumeric(element, "height", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const x = getNumeric(element, "x", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const y = getNumeric(element, "y", brush, {
-      defaultValue: 0
-    }).sizeValue;
+    const length = (name, axis) => getNumeric(element, name, brush)?.lengthIn(axis) ?? 0;
     const href = element.getAttribute("href") ?? element.getAttribute("href", "http://www.w3.org/1999/xlink");
     if (href === null || !href.startsWith("data:") || !href.includes(";base64,")) {
-      throw new TypeError("SVG image href must be a base64 data URL");
+      return null;
     }
-    const bytes = decodeBase64(href.slice(href.indexOf(";base64,") + 8));
-    const image = bytes[0] === 255 && bytes[1] === 216 ? PdfImage.fromJpeg(bytes) : PdfImage.fromPng(bytes);
+    let image;
+    try {
+      const bytes = decodeBase64(href.slice(href.indexOf(";base64,") + 8));
+      image = bytes[0] === 255 && bytes[1] === 216 ? PdfImage.fromJpeg(bytes) : PdfImage.fromPng(bytes);
+    } catch {
+      return null;
+    }
+    const width = length("width", "x");
+    const height = length("height", "y");
+    const x = length("x", "x");
+    const y = length("y", "y");
     return new SvgImageOperation(x, y, width, height, image, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
   }
   paintShape(canvas) {
@@ -21279,64 +21727,31 @@ class SvgImageOperation extends SvgOperation {
   }
 }
 
-function referenceId(value) {
-  const match = /^url\(\s*#([^\s)]+)\s*\)$/.exec(value);
-  return match?.[1] ?? null;
-}
-
-class SvgMaskedOperation extends SvgOperation {
-  constructor(target, mask, painter) {
-    super(target.brush, target.clip, target.transform, painter);
-    this.target = target;
-    this.mask = mask;
+class SvgMask {
+  constructor(content, painter) {
+    this.content = content;
+    this.painter = painter;
   }
-  static fromXml(element, target, painter) {
-    const attribute = element.getAttribute("mask");
-    const id = attribute === null ? null : referenceId(attribute);
-    const maskElement = id === null ? null : painter.parser.findById(id);
-    if (maskElement === null || maskElement.name.local !== "mask") {
-      throw new RangeError(`Unable to resolve SVG mask ${attribute ?? ""}`.trim());
+  static fromXml(element, painter) {
+    const id = /^url\(\s*(['"]?)#([^'")\s]+)\1\s*\)/.exec(element.getAttribute("mask") ?? "")?.[2];
+    const mask = id === undefined ? null : painter.parser.findById(id);
+    if (mask?.name.local !== "mask") {
+      return null;
     }
-    const mask = SvgGroup.fromXml(maskElement, painter, target.brush);
-    return new SvgMaskedOperation(target, mask, painter);
+    return new SvgMask(SvgGroup.fromXml(mask, painter, painter.brushOf(mask.parent)), painter);
   }
-  paint(canvas) {
+  apply(canvas) {
     const maskCanvas = new PdfCanvas(canvas.pageHeight);
-    this.mask.paint(maskCanvas);
-    canvas.saveContext();
+    this.content.paint(maskCanvas);
     canvas.setSoftMask({
       content: maskCanvas.takeOutputBytes(),
-      boundingBox: this.boundingBox(),
+      boundingBox: this.painter.userSpaceBox(canvas),
       fonts: maskCanvas.fonts,
       graphicStates: maskCanvas.graphicStates,
       patterns: maskCanvas.patterns,
       shadings: maskCanvas.shadings,
       images: maskCanvas.images
     });
-    this.target.paint(canvas);
-    canvas.restoreContext();
-  }
-  draw(canvas) {
-    this.target.draw(canvas);
-  }
-  paintShape(_canvas) {}
-  drawShape(_canvas) {}
-  boundingBox() {
-    return this.target.boundingBox();
-  }
-}
-
-class SvgSymbol extends SvgGroup {
-  static fromXml(element, painter, parent) {
-    const brush = painter.brushFor(element, parent);
-    const children = [];
-    for (const child of element.elements) {
-      const operation = painter.operationFromXml(child, brush);
-      if (operation !== null) {
-        children.push(operation);
-      }
-    }
-    return new SvgSymbol(children, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
   }
 }
 
@@ -21673,102 +22088,136 @@ function parseXml(source) {
   return new XmlParser(source).parseDocument();
 }
 
+const TEXT_CONTENT = new Set([ "tspan", "textPath", "a" ]);
+
 class SvgText extends SvgOperation {
-  constructor(x, y, advance, text, font, fontSize, metrics, spans, brush, clip, transform, painter) {
+  constructor(runs, brush, clip, transform, painter) {
     super(brush, clip, transform, painter);
-    this.x = x;
-    this.y = y;
-    this.advance = advance;
-    this.text = text;
-    this.font = font;
-    this.fontSize = fontSize;
-    this.metrics = metrics;
-    this.spans = spans;
+    this.runs = runs;
   }
-  static fromXml(element, painter, parent, offset = {
-    x: 0,
-    y: 0
-  }) {
+  static fromXml(element, painter, parent) {
     const brush = SvgBrush.fromXml(element, parent, painter.parser);
-    const dx = getNumeric(element, "dx", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const dy = getNumeric(element, "dy", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const ownX = getNumeric(element, "x", brush)?.sizeValue;
-    const ownY = getNumeric(element, "y", brush)?.sizeValue;
-    const text = element.children.filter(child => child instanceof XmlText).map(child => child.value).join("").trim();
-    const fontSize = brush.fontSize.sizeValue;
-    const font = painter.resolveFont(brush.fontFamily, brush.fontStyle, brush.fontWeight);
-    const metrics = font.stringMetrics(text, fontSize);
-    let x = (ownX ?? offset.x) + dx;
-    const y = (ownY ?? offset.y) + dy;
-    if (brush.textAnchor === "middle") x -= metrics.width / 2; else if (brush.textAnchor === "end") x -= metrics.width;
-    let childOffset = {
-      x: x + metrics.advanceWidth,
-      y
+    const layout = {
+      x: 0,
+      y: 0,
+      space: false,
+      chunks: []
     };
-    const spans = [];
-    for (const child of element.elements) {
-      if (child.name.local !== "tspan") continue;
-      const span = SvgText.fromXml(child, painter, brush, childOffset);
-      spans.push(span);
-      childOffset = {
-        x: span.x + span.advance,
-        y: span.y
-      };
+    SvgText.walk(element, painter, brush, layout, true);
+    const runs = [];
+    for (const {anchor, runs: chunk} of layout.chunks) {
+      const width = chunk.reduce((sum, run) => sum + run.metrics.advanceWidth, 0);
+      const shift = anchor === "middle" ? -width / 2 : anchor === "end" ? -width : 0;
+      for (const run of chunk) runs.push(shift === 0 ? run : {
+        ...run,
+        x: run.x + shift
+      });
     }
-    return new SvgText(x, y, metrics.advanceWidth, text, font, fontSize, metrics, spans, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+    return new SvgText(runs, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+  }
+  static walk(element, painter, brush, layout, root, opacity = 1) {
+    const length = (name, axis) => getNumeric(element, name, brush)?.lengthIn(axis) ?? null;
+    const x = length("x", "x");
+    const y = length("y", "y");
+    if (root || x !== null || y !== null) {
+      layout.chunks.push({
+        anchor: brush.textAnchor ?? "start",
+        runs: []
+      });
+      layout.space = false;
+    }
+    layout.x = (x ?? layout.x) + (length("dx", "x") ?? 0);
+    layout.y = (y ?? layout.y) + (length("dy", "y") ?? 0);
+    const font = painter.resolveFont(brush.fontFamily, brush.fontStyle, brush.fontWeight);
+    const fontSize = brush.fontSize.sizeValue;
+    const chunk = () => layout.chunks[layout.chunks.length - 1];
+    for (const node of element.children) {
+      if (!(node instanceof XmlText)) {
+        if (TEXT_CONTENT.has(node.name.local)) {
+          const childBrush = SvgBrush.fromXml(node, brush, painter.parser);
+          SvgText.walk(node, painter, childBrush, layout, false, opacity * (childBrush.opacity ?? 1));
+        }
+        continue;
+      }
+      let text = node.value.replace(brush.preserveSpace === true ? /[\r\n\t]/g : /\s+/g, " ");
+      if (brush.preserveSpace !== true) {
+        const lead = text.startsWith(" ");
+        const trail = text.endsWith(" ");
+        text = text.trim();
+        if (text.length > 0 && (layout.space || lead) && chunk().runs.length > 0) text = ` ${text}`;
+        layout.space = text.length > 0 ? trail : layout.space || lead || trail;
+      }
+      if (text.length === 0) continue;
+      const metrics = font.stringMetrics(text, fontSize);
+      chunk().runs.push({
+        text,
+        x: layout.x,
+        y: layout.y,
+        font,
+        fontSize,
+        metrics,
+        brush,
+        opacity
+      });
+      layout.x += metrics.advanceWidth;
+    }
   }
   paintShape(canvas) {
-    const fill = this.brush.fill;
-    const stroke = this.brush.stroke;
-    if (this.text.length > 0 && fill.isNotEmpty) {
-      canvas.saveContext();
-      fill.setFillColor(this, canvas);
-      if (this.brush.fillOpacity < 1) {
-        canvas.setGraphicState(new PdfGraphicState({
-          opacity: this.brush.fillOpacity
-        }));
+    for (const run of this.runs) {
+      const {brush} = run;
+      const fill = brush.fill;
+      const stroke = brush.stroke;
+      const fillOpacity = brush.fillOpacity * fill.opacity * (run.opacity ?? 1);
+      const strokeOpacity = brush.strokeOpacity * stroke.opacity * (run.opacity ?? 1);
+      const strokeWidth = brush.strokeWidth?.lengthIn() ?? 1;
+      if (fill.isNotEmpty && fillOpacity > 0) {
+        canvas.saveContext();
+        fill.setFillColor(this, canvas);
+        if (fillOpacity < 1) {
+          canvas.setGraphicState(new PdfGraphicState({
+            opacity: fillOpacity
+          }));
+        }
+        canvas.drawString(run.font, run.fontSize, run.text, run.x, run.y, 0);
+        canvas.restoreContext();
       }
-      canvas.drawString(this.font, this.fontSize, this.text, this.x, this.y, 0);
-      canvas.restoreContext();
-    }
-    if (this.text.length > 0 && stroke.isNotEmpty) {
-      canvas.saveContext();
-      stroke.setStrokeColor(this, canvas);
-      if (this.brush.strokeWidth !== null) canvas.setLineWidth(this.brush.strokeWidth.sizeValue);
-      if (this.brush.strokeDashArray !== null) canvas.setLineDashPattern(this.brush.strokeDashArray);
-      if (this.brush.strokeOpacity < 1) {
-        canvas.setGraphicState(new PdfGraphicState({
-          opacity: this.brush.strokeOpacity
-        }));
+      if (stroke.isNotEmpty && strokeOpacity > 0 && strokeWidth > 0) {
+        canvas.saveContext();
+        stroke.setStrokeColor(this, canvas);
+        canvas.setLineWidth(strokeWidth);
+        if (brush.strokeDashArray !== null) canvas.setLineDashPattern(brush.strokeDashArray);
+        if (strokeOpacity < 1) {
+          canvas.setGraphicState(new PdfGraphicState({
+            opacity: strokeOpacity
+          }));
+        }
+        canvas.drawString(run.font, run.fontSize, run.text, run.x, run.y, 1);
+        canvas.restoreContext();
       }
-      canvas.drawString(this.font, this.fontSize, this.text, this.x, this.y, 1);
-      canvas.restoreContext();
     }
-    for (const span of this.spans) span.paint(canvas);
   }
   drawShape(canvas) {
-    if (this.text.length > 0) {
-      canvas.drawString(this.font, this.fontSize, this.text, this.x, this.y, 7);
+    for (const run of this.runs) {
+      canvas.drawString(run.font, run.fontSize, run.text, run.x, run.y, 7);
     }
-    for (const span of this.spans) span.draw(canvas);
   }
   boundingBox() {
-    let left = this.x + this.metrics.left;
-    let bottom = this.y - this.metrics.bottom;
-    let right = this.x + this.metrics.right;
-    let top = this.y - this.metrics.top;
-    for (const span of this.spans) {
-      const box = span.boundingBox();
-      left = Math.min(left, box.x);
-      bottom = Math.min(bottom, box.y);
-      right = Math.max(right, box.x + box.width);
-      top = Math.max(top, box.y + box.height);
+    let left = Infinity;
+    let bottom = Infinity;
+    let right = -Infinity;
+    let top = -Infinity;
+    for (const {x, y, metrics} of this.runs) {
+      left = Math.min(left, x + metrics.left);
+      right = Math.max(right, x + metrics.right);
+      bottom = Math.min(bottom, y - metrics.bottom);
+      top = Math.max(top, y - metrics.top);
     }
-    return {
+    return left > right ? {
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0
+    } : {
       x: left,
       y: bottom,
       width: right - left,
@@ -21790,27 +22239,16 @@ class SvgUse extends SvgOperation {
   }
   static fromXml(element, painter, parent) {
     const brush = SvgBrush.fromXml(element, parent, painter.parser);
-    const x = getNumeric(element, "x", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const y = getNumeric(element, "y", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const width = getNumeric(element, "width", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const height = getNumeric(element, "height", brush, {
-      defaultValue: 0
-    }).sizeValue;
+    const length = (name, axis) => getNumeric(element, name, brush)?.lengthIn(axis) ?? null;
+    const width = length("width", "x");
+    const height = length("height", "y");
     const hrefAttribute = element.getAttribute("href") ?? element.getAttribute("href", XLINK);
-    let href = null;
-    if (hrefAttribute?.startsWith("#") === true) {
-      const referenced = painter.parser.findById(hrefAttribute.slice(1));
-      if (referenced !== null && referenced !== element) {
-        href = painter.operationFromXml(referenced, brush);
-      }
-    }
-    return new SvgUse(x, y, width, height, href, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+    const referenced = hrefAttribute?.startsWith("#") === true && hrefAttribute.length > 1 ? painter.parser.findById(hrefAttribute.slice(1)) : null;
+    const href = referenced === null ? null : painter.operationFromXml(referenced, brush, {
+      width,
+      height
+    });
+    return new SvgUse(length("x", "x") ?? 0, length("y", "y") ?? 0, width ?? 0, height ?? 0, href, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
   }
   paintShape(canvas) {
     if (this.x !== 0 || this.y !== 0) {
@@ -21832,10 +22270,14 @@ class SvgUse extends SvgOperation {
 class SvgPainter {
   constructor(parser, canvas, boundingBox, fontLookup = () => PdfType1Font.helvetica()) {
     this.fonts = new Map;
+    this.building = new Set;
     this.parser = parser;
     this.canvas = canvas;
     this.boundingBox = boundingBox;
     this.fontLookup = fontLookup;
+    this.rootBrush = SvgBrush.defaultContext.copyWith({
+      viewport: parser.viewBox
+    });
   }
   resolveFont(family, style, weight) {
     const key = `${family}-${style}-${weight}`;
@@ -21846,54 +22288,86 @@ class SvgPainter {
     }
     return font;
   }
-  brushFor(element, parent) {
-    return SvgBrush.fromXml(element, parent, this.parser);
+  brushOf(element) {
+    return element === null ? this.rootBrush : SvgBrush.fromXml(element, this.brushOf(element.parent), this.parser);
   }
-  operationFromXml(element, brush) {
-    if (element.getAttribute("visibility") === "hidden" || element.getAttribute("display") === "none") {
+  userSpaceBox(canvas) {
+    const inverse = invertMatrix(canvas.getTransform());
+    if (inverse === null) return this.boundingBox;
+    const {x, y, width, height} = this.boundingBox;
+    const corners = [ [ x, y ], [ x + width, y ], [ x, y + height ], [ x + width, y + height ] ].map(([px, py]) => transformPoint(inverse, px, py));
+    const xs = corners.map(point => point.x);
+    const ys = corners.map(point => point.y);
+    return PdfRect.fromLTRB(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
+  }
+  isHidden(element) {
+    convertStyle(element);
+    return element.getAttribute("display")?.trim() === "none" || element.getAttribute("visibility")?.trim() === "hidden";
+  }
+  operationFromXml(element, brush, size = null) {
+    if (this.isHidden(element) || this.building.has(element)) {
       return null;
     }
-    let operation;
-    switch (element.name.local) {
-     case "circle":
-     case "ellipse":
-     case "line":
-     case "path":
-     case "polygon":
-     case "polyline":
-     case "rect":
-      operation = SvgPath.fromXmlElement(element, this, brush);
-      break;
+    this.building.add(element);
+    try {
+      let operation;
+      switch (element.name.local) {
+       case "circle":
+       case "ellipse":
+       case "line":
+       case "path":
+       case "polygon":
+       case "polyline":
+       case "rect":
+        operation = SvgPath.fromXmlElement(element, this, brush);
+        break;
 
-     case "g":
-     case "svg":
-      operation = SvgGroup.fromXml(element, this, brush);
-      break;
+       case "g":
+        operation = SvgGroup.fromXml(element, this, brush);
+        break;
 
-     case "symbol":
-      operation = SvgSymbol.fromXml(element, this, brush);
-      break;
+       case "svg":
+        operation = SvgGroup.fromXml(element, this, brush, size ?? {});
+        break;
 
-     case "use":
-      operation = SvgUse.fromXml(element, this, brush);
-      break;
+       case "symbol":
+        operation = size === null ? null : SvgGroup.fromXml(element, this, brush, size);
+        break;
 
-     case "text":
-     case "tspan":
-      operation = SvgText.fromXml(element, this, brush);
-      break;
+       case "use":
+        operation = SvgUse.fromXml(element, this, brush);
+        break;
 
-     case "image":
-      operation = SvgImageOperation.fromXml(element, this, brush);
-      break;
+       case "text":
+        operation = SvgText.fromXml(element, this, brush);
+        break;
 
-     default:
-      operation = null;
+       case "image":
+        operation = SvgImageOperation.fromXml(element, this, brush);
+        break;
+
+       default:
+        operation = null;
+      }
+      if (operation !== null) {
+        operation.mask = SvgMask.fromXml(element, this);
+      }
+      return operation;
+    } finally {
+      this.building.delete(element);
     }
-    return operation !== null && element.getAttribute("mask") !== null ? SvgMaskedOperation.fromXml(element, operation, this) : operation;
   }
   rootOperation() {
-    return SvgGroup.fromXml(this.parser.root, this, SvgBrush.defaultContext);
+    const root = this.parser.root;
+    if (this.isHidden(root)) {
+      return new SvgGroup([], this.rootBrush, SvgClipPath.empty, SvgTransform.none, this);
+    }
+    this.building.add(root);
+    try {
+      return SvgGroup.fromXml(root, this, this.rootBrush);
+    } finally {
+      this.building.delete(root);
+    }
   }
   paint() {
     this.rootOperation().paint(this.canvas);
@@ -22305,14 +22779,14 @@ class IntrinsicColumnWidth extends TableColumnWidth {
     super();
     this.flex = flex === null ? null : Math.max(0, assertFiniteNumber(Number(flex), "intrinsic column flex"));
   }
-  layout(child, context, constraints) {
+  layout(child, context, _constraints) {
     if (this.flex !== null) {
       return {
         width: 0,
         flex: this.flex
       };
     }
-    const box = child.layout(context, constraints);
+    const box = child.layout(context, new BoxConstraints);
     return {
       width: Number.isFinite(box.width) ? Math.max(0, box.width) : 0,
       flex: Number.isFinite(box.width) ? 0 : 1
@@ -22366,7 +22840,7 @@ function mappedWidth(map, index) {
 }
 
 class Table extends SpanningWidget {
-  constructor({children = [], border = null, defaultVerticalAlignment = "top", columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max"} = {}) {
+  constructor({children = [], border = null, defaultVerticalAlignment = "top", columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max", textDirection = null} = {}) {
     super();
     if (![ "bottom", "middle", "top", "full" ].includes(defaultVerticalAlignment)) {
       throw new TypeError(`Unknown table vertical alignment: ${defaultVerticalAlignment}`);
@@ -22380,6 +22854,10 @@ class Table extends SpanningWidget {
     this.columnWidths = columnWidths;
     this.defaultColumnWidth = defaultColumnWidth;
     this.tableWidth = tableWidth;
+    this.textDirection = textDirection;
+  }
+  rtl(context) {
+    return (this.textDirection ?? Directionality.of(context)) === "rtl";
   }
   resolveWidths(context, constraints) {
     const count = this.children.reduce((maximum, row) => Math.max(maximum, row.children.length), 0);
@@ -22407,16 +22885,17 @@ class Table extends SpanningWidget {
     if (totalFlex > 0) {
       let fixedSpace = widths.reduce((sum, value, index) => sum + (flex[index] === 0 ? value : 0), 0);
       if (fixedSpace > maximum && fixedSpace > 0) {
-        const scale = maximum / fixedSpace;
-        for (let index = 0; index < count; index++) {
-          if (flex[index] === 0) widths[index] = widths[index] * scale;
-        }
+        this.fitColumns(context, widths, flex, maximum);
         fixedSpace = maximum;
       }
       const remaining = Math.max(0, maximum - fixedSpace);
       for (let index = 0; index < count; index++) {
         if (flex[index] > 0) widths[index] = remaining * flex[index] / totalFlex;
       }
+      return widths;
+    }
+    if (intrinsicTotal > maximum && intrinsicTotal > 0) {
+      this.fitColumns(context, widths, flex, maximum);
       return widths;
     }
     if (this.tableWidth === "max") {
@@ -22426,13 +22905,42 @@ class Table extends SpanningWidget {
       const scale = maximum / intrinsicTotal;
       return widths.map(value => value * scale);
     }
-    if (intrinsicTotal > maximum && intrinsicTotal > 0) {
-      const scale = maximum / intrinsicTotal;
-      return widths.map(value => value * scale);
-    }
     return widths;
   }
-  layoutRows(context, _constraints, columnWidths, selectedRows) {
+  fitColumns(context, widths, flex, maximum) {
+    const minContext = {
+      ...context,
+      minContent: true
+    };
+    const mins = widths.map(() => 0);
+    for (const row of this.children) {
+      for (let index = 0; index < row.children.length; index++) {
+        if (flex[index] !== 0) continue;
+        const width = widths[index];
+        const columnWidth = mappedWidth(this.columnWidths, index) ?? this.defaultColumnWidth;
+        let minimum = width;
+        if (columnWidth instanceof IntrinsicColumnWidth && columnWidth.flex === null) {
+          const box = row.children[index].layout(minContext, new BoxConstraints);
+          if (Number.isFinite(box.width)) minimum = Math.min(width, Math.max(0, box.width));
+        }
+        mins[index] = Math.max(mins[index], minimum);
+      }
+    }
+    let totalMin = 0;
+    let totalMax = 0;
+    for (let index = 0; index < widths.length; index++) {
+      if (flex[index] !== 0) continue;
+      totalMin += mins[index];
+      totalMax += widths[index];
+    }
+    const share = (maximum - totalMin) / (totalMax - totalMin);
+    const scale = maximum / totalMin;
+    for (let index = 0; index < widths.length; index++) {
+      if (flex[index] !== 0) continue;
+      widths[index] = totalMin <= maximum ? mins[index] + (widths[index] - mins[index]) * share : mins[index] * scale;
+    }
+  }
+  layoutRows(context, columnWidths, headers, start, maxHeight) {
     if (columnWidths.length === 0) {
       return {
         widget: this,
@@ -22448,26 +22956,31 @@ class Table extends SpanningWidget {
     const rows = [];
     const rowHeights = [];
     let rowY = 0;
-    for (const row of selectedRows) {
+    const total = headers.length + this.children.length - start;
+    const width = columnWidths.reduce((sum, value) => sum + value, 0);
+    const rtl = this.rtl(context);
+    for (let position = 0; position < total; position++) {
+      const row = position < headers.length ? headers[position] : this.children[start + position - headers.length];
       const measured = [];
       let x = 0;
       let rowHeight = 0;
       for (let column = 0; column < row.children.length; column++) {
         const child = row.children[column];
-        const width = columnWidths[column] ?? 0;
+        const columnWidth = columnWidths[column] ?? 0;
         const box = child.layout(context, new BoxConstraints({
-          minWidth: width,
-          maxWidth: width,
+          minWidth: columnWidth,
+          maxWidth: columnWidth,
           maxHeight: Infinity
         }));
         measured.push({
           box,
           column,
-          x
+          x: rtl ? width - x - columnWidth : x
         });
         rowHeight = Math.max(rowHeight, box.height);
-        x += width;
+        x += columnWidth;
       }
+      if (rowY + rowHeight > maxHeight + .001) break;
       const alignment = row.verticalAlignment ?? this.defaultVerticalAlignment;
       const cells = measured.map(cell => {
         const height = alignment === "full" ? rowHeight : cell.box.height;
@@ -22490,7 +23003,7 @@ class Table extends SpanningWidget {
     }
     return {
       widget: this,
-      width: columnWidths.reduce((sum, value) => sum + value, 0),
+      width,
       height: rowY,
       data: {
         columnWidths,
@@ -22501,7 +23014,7 @@ class Table extends SpanningWidget {
   }
   layout(context, constraints) {
     const columnWidths = this.resolveWidths(context, constraints);
-    return this.layoutRows(context, constraints, columnWidths, this.children);
+    return this.layoutRows(context, columnWidths, [], 0, Infinity);
   }
   initialSpanState() {
     return Object.freeze({
@@ -22513,33 +23026,23 @@ class Table extends SpanningWidget {
     if (!Number.isInteger(nextRow) || nextRow < 0 || nextRow > this.children.length) {
       throw new RangeError("Invalid table continuation state");
     }
-    const columnWidths = this.resolveWidths(context, constraints);
-    const candidates = [];
-    for (let index = 0; index < this.children.length; index++) {
-      const row = this.children[index];
-      if (index >= nextRow || row.repeat) {
-        candidates.push({
-          row,
-          index
-        });
-      }
+    const parent = BoxConstraints.from(constraints);
+    const key = `${parent.minWidth},${parent.maxWidth}`;
+    let widths = state.widths;
+    if (widths === undefined || widths.key !== key || widths.theme !== context.theme) {
+      widths = Object.freeze({
+        key,
+        theme: context.theme,
+        columns: Object.freeze(this.resolveWidths(context, constraints))
+      });
     }
-    const measured = this.layoutRows(context, constraints, columnWidths, candidates.map(candidate => candidate.row));
-    let height = 0;
-    let count = 0;
-    let followingRow = nextRow;
-    for (let index = 0; index < measured.data.rows.length; index++) {
-      const rowHeight = measured.data.rowHeights[index] ?? 0;
-      if (height + rowHeight > constraints.maxHeight + .001) {
-        break;
-      }
-      height += rowHeight;
-      count++;
-      const originalIndex = candidates[index].index;
-      if (originalIndex >= followingRow) {
-        followingRow = originalIndex + 1;
-      }
+    const columnWidths = widths.columns;
+    const headers = [];
+    for (let index = 0; index < nextRow; index++) {
+      if (this.children[index].repeat) headers.push(this.children[index]);
     }
+    const box = this.layoutRows(context, columnWidths, headers, nextRow, constraints.maxHeight);
+    const followingRow = nextRow + Math.max(0, box.data.rows.length - headers.length);
     const hasMore = followingRow < this.children.length;
     if (hasMore && followingRow === nextRow) {
       const emptyBox = {
@@ -22554,26 +23057,18 @@ class Table extends SpanningWidget {
       };
       return {
         box: emptyBox,
-        nextState: state,
+        nextState: Object.freeze({
+          nextRow,
+          widths
+        }),
         hasMore: true
       };
     }
-    const rows = measured.data.rows.slice(0, count);
-    const rowHeights = measured.data.rowHeights.slice(0, count);
-    const box = {
-      widget: this,
-      width: measured.width,
-      height,
-      data: {
-        columnWidths,
-        rowHeights,
-        rows
-      }
-    };
     return {
       box,
       nextState: Object.freeze({
-        nextRow: followingRow
+        nextRow: followingRow,
+        widths
       }),
       hasMore
     };
@@ -22599,7 +23094,7 @@ class Table extends SpanningWidget {
     for (const row of box.data.rows) {
       paintTableDecorationBorder(context, row.row.decoration, box.x, box.y + row.y, box.width, row.height);
     }
-    this.border?.paint(context, box.x, box.y, box.width, box.height, box.data.columnWidths, box.data.rowHeights);
+    this.border?.paint(context, box.x, box.y, box.width, box.height, this.rtl(context) ? [ ...box.data.columnWidths ].reverse() : box.data.columnWidths, box.data.rowHeights);
   }
 }
 
@@ -22613,7 +23108,7 @@ function alignment(value) {
   if (typeof value !== "string") {
     return value;
   }
-  const resolved = Alignment[value];
+  const resolved = namedAlignment(value);
   if (resolved === undefined) {
     throw new TypeError(`Unknown table alignment: ${value}`);
   }
@@ -22621,24 +23116,27 @@ function alignment(value) {
 }
 
 function textAlign(value) {
-  if (value.x === 0) return "center";
-  return value.x < 0 ? "left" : "right";
+  const directional = "start" in value;
+  const x = directional ? value.start : value.x;
+  if (x === 0) return "center";
+  return directional ? x < 0 ? "start" : "end" : x < 0 ? "left" : "right";
 }
 
 class HelperCell extends Widget {
   constructor({child, padding, minimumHeight, alignment: cellAlignment, decoration}) {
     super();
     this.child = child;
-    this.padding = normalizeInsets(padding);
+    this.padding = normalizeInsetsGeometry(padding);
     this.minimumHeight = Math.max(0, assertFiniteNumber(Number(minimumHeight), "table cell height"));
     this.alignment = cellAlignment;
     this.decoration = decoration;
   }
   layout(context, constraints) {
     const parent = BoxConstraints.from(constraints);
-    const horizontal = insetsHorizontal(this.padding);
-    const vertical = insetsVertical(this.padding);
-    const childBox = this.child.layout(context, parent.deflate(this.padding));
+    const padding = insetsIn(context, this.padding);
+    const horizontal = insetsHorizontal(padding);
+    const vertical = insetsVertical(padding);
+    const childBox = this.child.layout(context, parent.deflate(padding));
     const size = parent.constrain({
       width: childBox.width + horizontal,
       height: Math.max(this.minimumHeight, childBox.height + vertical)
@@ -22655,13 +23153,14 @@ class HelperCell extends Widget {
   paint(context, box) {
     paintTableDecorationBackground(context, this.decoration, box.x, box.y, box.width, box.height);
     const {childBox} = box.data;
-    const innerWidth = Math.max(0, box.width - insetsHorizontal(this.padding));
-    const innerHeight = Math.max(0, box.height - insetsVertical(this.padding));
-    const offset = inscribe(this.alignment, childBox.width, childBox.height, innerWidth, innerHeight);
+    const padding = insetsIn(context, this.padding);
+    const innerWidth = Math.max(0, box.width - insetsHorizontal(padding));
+    const innerHeight = Math.max(0, box.height - insetsVertical(padding));
+    const offset = inscribe(alignmentIn(context, this.alignment), childBox.width, childBox.height, innerWidth, innerHeight);
     childBox.widget.paint(context, {
       ...childBox,
-      x: box.x + this.padding.left + offset.dx,
-      y: box.y + this.padding.top + offset.dy
+      x: box.x + padding.left + offset.dx,
+      y: box.y + padding.top + offset.dy
     });
     paintTableDecorationBorder(context, this.decoration, box.x, box.y, box.width, box.height);
   }
@@ -22670,7 +23169,7 @@ class HelperCell extends Widget {
 const defaultBorder = TableBorder.all();
 
 class TableHelper {
-  static fromTextArray({context = null, data, cellPadding = 5, cellHeight = 0, cellAlignment = "topLeft", cellAlignments = null, cellStyle = null, oddCellStyle = null, cellFormat = null, cellDecoration = null, headerCount = 1, headers = null, headerPadding = cellPadding, headerHeight = cellHeight, headerAlignment = "center", headerAlignments = cellAlignments, headerStyle = null, headerFormat = null, border = defaultBorder, columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max", headerDecoration = null, headerCellDecoration = null, rowDecoration = null, oddRowDecoration = rowDecoration, cellBuilder = null, textStyleBuilder = null}) {
+  static fromTextArray({context = null, data, cellPadding = 5, cellHeight = 0, cellAlignment = "topLeft", cellAlignments = null, cellStyle = null, oddCellStyle = null, cellFormat = null, cellDecoration = null, headerCount = 1, headers = null, headerPadding = cellPadding, headerHeight = cellHeight, headerAlignment = "center", headerAlignments = cellAlignments, headerStyle = null, headerFormat = null, border = defaultBorder, columnWidths = null, defaultColumnWidth = new IntrinsicColumnWidth, tableWidth = "max", headerDecoration = null, headerCellDecoration = null, rowDecoration = null, oddRowDecoration = rowDecoration, headerDirection = null, tableDirection = null, cellBuilder = null, textStyleBuilder = null}) {
     if (!Array.isArray(data)) {
       throw new TypeError("TableHelper.fromTextArray requires a data array");
     }
@@ -22717,7 +23216,8 @@ class TableHelper {
         },
         ...isHeaderRow ? {} : {
           align: textAlign(resolvedAlignment)
-        }
+        },
+        textDirection: isHeader ? headerDirection : tableDirection
       });
       return new HelperCell({
         child: text,
@@ -22755,6 +23255,15 @@ class TableHelper {
       defaultColumnWidth,
       defaultVerticalAlignment: "full"
     });
+  }
+}
+
+const property = (name, description) => `<rdf:li rdf:parseType="Resource">\n<pdfaProperty:name>${name}</pdfaProperty:name>\n<pdfaProperty:valueType>Text</pdfaProperty:valueType>\n<pdfaProperty:category>external</pdfaProperty:category>\n<pdfaProperty:description>${description}</pdfaProperty:description>\n</rdf:li>\n`;
+
+class PdfaFacturxRdf {
+  create({filename = "factur-x.xml", namespace = "urn:cen.eu:invoice:1p0:schema#", conformanceLevel = "BASIC", version = "1.0"} = {}) {
+    const uri = xmlText(namespace);
+    return `<rdf:Description xmlns:fx="${uri.replace(/"/g, "&quot;")}" rdf:about="">\n<fx:DocumentType>INVOICE</fx:DocumentType>\n<fx:DocumentFileName>${xmlText(filename)}</fx:DocumentFileName>\n<fx:Version>${xmlText(version)}</fx:Version>\n<fx:ConformanceLevel>${xmlText(conformanceLevel)}</fx:ConformanceLevel>\n</rdf:Description>\n<rdf:Description rdf:about="" xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#">\n<pdfaExtension:schemas><rdf:Bag><rdf:li rdf:parseType="Resource">\n<pdfaSchema:schema>Invoice PDFA Extension Schema</pdfaSchema:schema>\n<pdfaSchema:namespaceURI>${uri}</pdfaSchema:namespaceURI>\n<pdfaSchema:prefix>fx</pdfaSchema:prefix>\n<pdfaSchema:property><rdf:Seq>\n${property("DocumentFileName", "name of the embedded XML invoice file")}${property("DocumentType", "INVOICE")}${property("Version", "The actual version of the ZUGFeRD data")}${property("ConformanceLevel", "The conformance level of the ZUGFeRD data")}</rdf:Seq></pdfaSchema:property>\n</rdf:li></rdf:Bag></pdfaExtension:schemas>\n</rdf:Description>`;
   }
 }
 
@@ -22910,8 +23419,12 @@ const publicApi = Object.freeze({
   Directionality,
   InheritedDirectionality,
   Alignment,
+  AlignmentDirectional,
   BoxConstraints,
   EdgeInsets,
+  EdgeInsetsDirectional,
+  resolveAlignment: resolveAlignment$1,
+  resolveInsets,
   PdfColor,
   PdfColorGrey,
   PdfColorCmyk,
@@ -22958,4 +23471,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationText, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ChartValue, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, PointChartValue as LineChartValue, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, PageUnit, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfBorder, PdfColor, PdfColorCmyk, PdfColorGrey, PdfColorHsl, PdfColorHsv, PdfColors, PdfFontMetrics, PdfFormXObject, PdfGraphicState, PdfImage, PdfLogo, PdfPageFormat, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfStream, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextAnnotation, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AlignmentDirectional, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationText, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ChartValue, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, EdgeInsetsDirectional, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, PointChartValue as LineChartValue, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, PageUnit, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfBorder, PdfColor, PdfColorCmyk, PdfColorGrey, PdfColorHsl, PdfColorHsv, PdfColors, PdfFontMetrics, PdfFormXObject, PdfGraphicState, PdfImage, PdfLogo, PdfPageFormat, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfStream, PdfTtfFont, PdfType1Font, PdfaAttachedFile, PdfaAttachedFiles, PdfaColorProfile, PdfaFacturxRdf, PdfaRdf, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextAnnotation, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, resolveAlignment$1 as resolveAlignment, resolveInsets, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };

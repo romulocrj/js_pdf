@@ -2,8 +2,7 @@ import type { BasicAlignmentInput } from '../basic.ts';
 import { BoxDecoration } from '../decoration.ts';
 import type { BoxDecorationInput } from '../decoration.ts';
 import type { Axis } from '../flex.ts';
-import { Alignment } from '../geometry.ts';
-import type { Insets, InsetsInput } from '../geometry.ts';
+import type { AlignmentGeometry, InsetsGeometry, InsetsInput } from '../geometry.ts';
 import type { TextStyle } from '../text_style.ts';
 import { StatelessWidget } from '../widget.ts';
 import type { AnyWidget, RenderContext } from '../widget.ts';
@@ -19,10 +18,10 @@ export interface ChartLegendOptions {
 /** The colour swatches and labels of a chart's data sets. */
 export declare class ChartLegend extends StatelessWidget {
     readonly textStyle: TextStyle | null;
-    readonly position: Alignment;
+    readonly position: AlignmentGeometry;
     readonly direction: Axis;
     readonly decoration: BoxDecoration | null;
-    readonly padding: Insets;
+    readonly padding: InsetsGeometry;
     constructor({ textStyle, position, direction, decoration, padding }?: ChartLegendOptions);
     private buildLegend;
     build(context: RenderContext): AnyWidget;

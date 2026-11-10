@@ -89,7 +89,9 @@ test('word spacing in a composite font uses TJ adjustments instead of Tw', () =>
 });
 
 test('a CBLC/CBDT fallback glyph is painted as an image', () => {
-  const codePoint = 0x20ac;
+  // Outside WinAnsi, so Helvetica cannot draw it and the fallback is reached.
+  // The euro used here before is a WinAnsi glyph Helvetica now draws itself.
+  const codePoint = 0x0416;
   const fallback = Pdf.Font.ttf(withBitmapGlyph(openSans, codePoint));
   const bytes = Pdf.createPdf({}, () => new Pdf.Page({
     build: () => new Pdf.Text(`A${String.fromCodePoint(codePoint)}B`, {

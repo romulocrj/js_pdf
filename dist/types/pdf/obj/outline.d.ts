@@ -18,6 +18,5 @@ export declare class PdfOutline extends PdfObject<PdfDict> {
         readonly style?: PdfOutlineStyle;
     });
     add(child: PdfOutline): void;
-    descendantCount(): number;
     prepare(): void;
 }

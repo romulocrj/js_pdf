@@ -1,0 +1,10 @@
+{
+  "date": "2026-11-10",
+  "validator": "veraPDF",
+  "version": "1.30.4",
+  "command": "verapdf --format text examples/out/pdfa-phase-6.11.pdf",
+  "file": "examples/out/pdfa-phase-6.11.pdf",
+  "flavour": "3b",
+  "passed": true,
+  "sha256": "fdacd286298b8e22d3a91a401b1dd38a91f546a0221672ef04376aebb6c251e0"
+}

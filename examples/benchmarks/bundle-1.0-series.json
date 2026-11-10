@@ -1,0 +1,31 @@
+{
+  "node": "v26.8.1",
+  "gzipLevel": 9,
+  "brotliQuality": 11,
+  "bundles": [
+    {
+      "ref": "961db0d",
+      "rawBytes": 450928,
+      "gzipBytes": 138393,
+      "brotliBytes": 111811
+    },
+    {
+      "ref": "9cb031c",
+      "rawBytes": 422764,
+      "gzipBytes": 135763,
+      "brotliBytes": 110972
+    },
+    {
+      "ref": "c0a913f",
+      "rawBytes": 435345,
+      "gzipBytes": 141519,
+      "brotliBytes": 115631
+    },
+    {
+      "ref": "working-tree",
+      "rawBytes": 450154,
+      "gzipBytes": 147061,
+      "brotliBytes": 119979
+    }
+  ]
+}

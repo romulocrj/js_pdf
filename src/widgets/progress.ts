@@ -16,7 +16,7 @@
  */
 
 import { normalizeColor, PdfColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput } from '../pdf/color.ts';
 import { BoxConstraints } from './geometry.ts';
 import { Widget } from './widget.ts';
 import type { Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
@@ -40,9 +40,31 @@ function nonNegativeNumber(value: number, name: string): number {
   return resolved;
 }
 
-/** Use the public upstream color conversion, including its achromatic guard. */
-function shadeColor(color: ColorInput, strength: number): Rgb {
-  return normalizeColor(new PdfColor(...normalizeColor(color)).shade(strength));
+function optionalSize(value: number | null, name: string): number | null {
+  return value === null ? null : nonNegativeNumber(value, name);
+}
+
+/*
+ * The size on one axis: the parent's maximum when it is bounded, otherwise the
+ * widget's fallback (upstream PR #1980). Both indicators used to take the
+ * maximum verbatim, so inside a Row the content stream carried `Infinity`.
+ */
+function boundedSize(maximum: number, fallback: number | null, widget: string, option: string): number {
+  if (Number.isFinite(maximum)) return maximum;
+  if (fallback === null) {
+    throw new RangeError(`${widget} is unbounded; give it ${option} or a parent that constrains it`);
+  }
+  return fallback;
+}
+
+/**
+ * Use the public upstream color conversion, including its achromatic guard.
+ * `shade` drops the alpha, upstream too; the track keeps the value colour's,
+ * now that a fill paints it, so a translucent bar is not laid on an opaque track.
+ */
+function shadeColor(color: ColorInput, strength: number): PdfColor {
+  const [red, green, blue] = normalizeColor(new PdfColor(...normalizeColor(color)).shade(strength));
+  return new PdfColor(red, green, blue, color instanceof PdfColor ? color.alpha : 1);
 }
 
 export interface CircularProgressIndicatorOptions {
@@ -50,6 +72,10 @@ export interface CircularProgressIndicatorOptions {
   readonly color?: ColorInput | null;
   readonly strokeWidth?: number;
   readonly backgroundColor?: ColorInput | null;
+  /** The width to take when the parent leaves the width unbounded. */
+  readonly fallbackWidth?: number | null;
+  /** The height to take when the parent leaves the height unbounded. */
+  readonly fallbackHeight?: number | null;
 }
 
 /** A determinate circular progress ring. */
@@ -58,22 +84,33 @@ export class CircularProgressIndicator extends Widget<null> {
   readonly color: ColorInput | null;
   readonly strokeWidth: number;
   readonly backgroundColor: ColorInput | null;
+  readonly fallbackWidth: number | null;
+  readonly fallbackHeight: number | null;
 
   constructor({
     value,
     color = null,
     strokeWidth = 4,
-    backgroundColor = null
+    backgroundColor = null,
+    fallbackWidth = null,
+    fallbackHeight = null
   }: CircularProgressIndicatorOptions) {
     super();
     this.value = finiteNumber(value, 'CircularProgressIndicator.value');
     this.color = color;
     this.strokeWidth = nonNegativeNumber(strokeWidth, 'CircularProgressIndicator.strokeWidth');
     this.backgroundColor = backgroundColor;
+    this.fallbackWidth = optionalSize(fallbackWidth, 'CircularProgressIndicator.fallbackWidth');
+    this.fallbackHeight = optionalSize(fallbackHeight, 'CircularProgressIndicator.fallbackHeight');
   }
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<null> {
-    const size = BoxConstraints.from(constraints).biggest;
+    const parent = BoxConstraints.from(constraints);
+    const name = 'CircularProgressIndicator';
+    const size = parent.constrain({
+      width: boundedSize(parent.maxWidth, this.fallbackWidth, name, 'fallbackWidth'),
+      height: boundedSize(parent.maxHeight, this.fallbackHeight, name, 'fallbackHeight')
+    });
     return { widget: this, width: size.width, height: size.height, data: null };
   }
 
@@ -151,6 +188,8 @@ export interface LinearProgressIndicatorOptions {
   readonly backgroundColor?: ColorInput | null;
   readonly valueColor?: ColorInput | null;
   readonly minHeight?: number | null;
+  /** The width to take when the parent leaves the width unbounded. */
+  readonly fallbackWidth?: number | null;
 }
 
 /** A determinate material-design progress bar. */
@@ -159,25 +198,28 @@ export class LinearProgressIndicator extends Widget<null> {
   readonly backgroundColor: ColorInput | null;
   readonly valueColor: ColorInput | null;
   readonly minHeight: number | null;
+  readonly fallbackWidth: number | null;
 
   constructor({
     value,
     backgroundColor = null,
     valueColor = null,
-    minHeight = null
+    minHeight = null,
+    fallbackWidth = null
   }: LinearProgressIndicatorOptions) {
     super();
     this.value = finiteNumber(value, 'LinearProgressIndicator.value');
     this.backgroundColor = backgroundColor;
     this.valueColor = valueColor;
-    this.minHeight = minHeight === null
-      ? null
-      : nonNegativeNumber(minHeight, 'LinearProgressIndicator.minHeight');
+    this.minHeight = optionalSize(minHeight, 'LinearProgressIndicator.minHeight');
+    this.fallbackWidth = optionalSize(fallbackWidth, 'LinearProgressIndicator.fallbackWidth');
   }
 
   override layout(_context: RenderContext, constraints: Constraints): LayoutBox<null> {
+    // `minWidth: Infinity` was an "as wide as possible" sentinel that enforce()
+    // keeps when the incoming width is unbounded.
     const size = new BoxConstraints({
-      minWidth: Infinity,
+      minWidth: boundedSize(constraints.maxWidth, this.fallbackWidth, 'LinearProgressIndicator', 'fallbackWidth'),
       minHeight: this.minHeight ?? 4
     }).enforce(constraints).smallest;
     return { widget: this, width: size.width, height: size.height, data: null };

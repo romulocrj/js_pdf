@@ -58,3 +58,14 @@ export function latin1(bytes) {
     cursor = dataEnd;
   }
 }
+
+/**
+ * The bytes of a PDF with the digits of every `/CreationDate` and `/ModDate`
+ * zeroed. Each save stamps the current second, so two saves compared byte for
+ * byte disagree whenever a second boundary falls between them. Zeroing keeps
+ * every length, so cross-reference offsets still have to match exactly.
+ */
+export function stableBytes(bytes) {
+  return Buffer.from(Buffer.from(bytes).toString('latin1')
+    .replace(/(\/(?:Creation|Mod)Date \(D:)\d{14}(Z\))/g, '$100000000000000$2'), 'latin1');
+}

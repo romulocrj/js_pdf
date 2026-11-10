@@ -51,6 +51,16 @@ contain no third-party images or fonts. `generate-dpi-patterns.py` records the
 recipe; optional regeneration uses Pillow. Browser and Node examples load the
 committed bytes and do not need Pillow or Python.
 
+## Example ICC profile (phase 6.11)
+
+`JsPdfSrgbExample.icc` is an original sRGB-like ICC v2 display profile for
+js_pdf, Copyright (C) 2026, Romulo Campos, licensed under Apache-2.0. It is
+computed from the IEC 61966-2-1 primaries and transfer curve, with no bytes
+taken from another profile. `generate-srgb-icc.mjs` writes it from the recipe in
+`test/support/icc-profile.mjs`. It exists so the PDF/A example and tests need no
+download; production PDF/A should embed a standard profile, such as the ICC's
+sRGB2014, supplied by the caller. It is not part of dist.
+
 ## CJK line-breaking example font
 
 `JsPdfCjkExample.ttf` is a modified, static weight-400 subset of
@@ -69,6 +79,29 @@ not a general-purpose CJK font.
 the pinned source above and pass its path to the script; it verifies the source
 hash. The browser/Node examples use the committed subset and require neither
 Python nor fonttools. The existing font files listed above remain unmodified.
+
+## Arabic example font (phase 7.3)
+
+`JsPdfArabicExample.ttf` is a modified, static subset of
+[Noto Sans Arabic](https://github.com/google/fonts/tree/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notosansarabic),
+instanced at `wght` 400 and `wdth` 100. Original font:
+`NotoSansArabic[wdth,wght].ttf`, SHA-256
+`63111b5b2e074dd48cc67692e0a2726d86ee94c1c37fe8598257b7b4e87e869e`.
+
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic).
+Licensed under the [SIL Open Font License 1.1](licenses/NotoSansArabic-OFL.txt),
+retained in full with its original copyright notice. The subset is renamed
+`JsPdfArabicExample`; its internal copyright and license records are
+preserved. It holds ASCII, U+00A0, U+2010, U+202F, the Arabic letters, marks
+and digits used by phase 7.3, and the Arabic Presentation Forms-B except
+U+FEEF and U+FEF1, which are omitted so the font parser's isolated-form aliases
+can be tested. The OpenType layout tables (GSUB, GPOS, GDEF), which the port
+does not read, are dropped. It is not a general-purpose Arabic font.
+
+`generate-arabic-subset.py` records the recipe using fonttools 4.66.0. Download
+the pinned source above and pass its path to the script; it verifies the source
+hash. The browser/Node examples use the committed subset and require neither
+Python nor fonttools.
 
 ## Source Sans 3 CFF fixtures (phase 6.8)
 

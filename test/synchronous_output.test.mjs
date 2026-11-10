@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import * as pw from '../src/index.ts';
 import { PdfStream } from '../src/pdf/format/stream.ts';
 import { PdfDocument } from '../src/pdf/document.ts';
-import { latin1 } from './support/pdf-text.mjs';
+import { latin1, stableBytes } from './support/pdf-text.mjs';
 
 class Destination extends PdfStream {
   constructor(consume = () => {}) { super(); this.lengthWritten = 0; this.calls = 0; this.consume = consume; }
@@ -85,13 +85,13 @@ for (const compress of [false, true]) {
     const destination = new Destination(bytes => recorded.putBytes(bytes));
     assert.equal(doc.write(destination), undefined);
     const saved = doc.save();
-    assert.deepEqual(recorded.output(), saved);
+    assert.deepEqual(stableBytes(recorded.output()), stableBytes(saved));
     assert.equal(destination.offset, saved.length);
     assert.ok(destination.calls > 20);
     assertXref(recorded.output());
     const next = new PdfStream();
     doc.write(next);
-    assert.deepEqual(next.output(), saved);
+    assert.deepEqual(stableBytes(next.output()), stableBytes(saved));
   });
 }
 
@@ -99,7 +99,7 @@ test('low-level PdfDocument.write and save share the same serializer', () => {
   const doc = new PdfDocument({ title: 'Low-level' });
   const out = new PdfStream();
   doc.write(out);
-  assert.deepEqual(out.output(), doc.save());
+  assert.deepEqual(stableBytes(out.output()), stableBytes(doc.save()));
   assertXref(out.output());
 });
 
@@ -109,7 +109,7 @@ test('destination errors propagate unchanged and a fresh destination can retry',
   assert.throws(() => doc.write(new Destination(() => { throw failure; })), error => error === failure);
   const output = new PdfStream();
   doc.write(output);
-  assert.deepEqual(output.output(), doc.save());
+  assert.deepEqual(stableBytes(output.output()), stableBytes(doc.save()));
 });
 
 test('high-level empty documents keep their existing validation', () => {
@@ -141,14 +141,14 @@ test('lazy RGB JPEG writes chunks only at serialization and is deduplicated per 
   assert.ok(source.includes(`/Length ${bytes.length}`));
   assert.ok(source.includes(latin1(bytes)));
   assertXref(output.output());
-  assert.deepEqual(doc.save(), output.output());
+  assert.deepEqual(stableBytes(doc.save()), stableBytes(output.output()));
   assert.equal(calls, 2);
 });
 
 test('lazy JPEG serialization matches the existing buffered image path', () => {
   const bytes = jpeg();
   const lazy = pw.PdfImage.jpegStream({ width: 320, height: 160, length: bytes.length, write: out => out.putBytes(bytes) });
-  for (const compress of [false, true]) assert.deepEqual(documentWith(lazy, compress).save(), documentWith(pw.PdfImage.fromJpeg(bytes), compress).save());
+  for (const compress of [false, true]) assert.deepEqual(stableBytes(documentWith(lazy, compress).save()), stableBytes(documentWith(pw.PdfImage.fromJpeg(bytes), compress).save()));
 });
 
 test('lazy JPEG retains supplied orientation without invoking the writer during layout', () => {
@@ -191,4 +191,14 @@ test('large lazy payloads reach a non-materializing destination in bounded chunk
   assert.equal(largestWrite, chunk.length);
   assert.ok(output.offset > length);
   assert.equal(image.jpeg, null);
+});
+
+test('byte comparisons survive a second boundary between two saves', t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 10, 10, 12, 0, 0, 999) });
+  const doc = documentWith();
+  const first = doc.save();
+  t.mock.timers.tick(1);
+  const second = doc.save();
+  assert.notDeepEqual(first, second, 'each save stamps the current second');
+  assert.deepEqual(stableBytes(first), stableBytes(second));
 });

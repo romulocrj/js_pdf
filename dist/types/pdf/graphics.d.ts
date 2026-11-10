@@ -2,7 +2,7 @@ import type { ColorInput } from './color.ts';
 import type { PdfFont } from './font/font.ts';
 import { PdfDict } from './format/dict.ts';
 import type { PdfSoftMask } from './soft_mask.ts';
-import type { PdfGraphicState } from './graphic_state.ts';
+import { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
 import type { PdfShading } from './obj/shading.ts';
 import type { PdfBorderOptions } from './obj/border.ts';
@@ -61,6 +61,14 @@ export interface BezierArcOptions {
     /** X-axis rotation, in radians. */
     readonly phi?: number;
 }
+export interface PdfCanvasOptions {
+    /**
+     * Paint a `PdfColor`'s alpha as constant alpha. On by default, as upstream;
+     * `false` ignores it, as the port did before 1.0. PDF/A-1 forbids
+     * transparency. `PdfSettings` carries the same flag for a document.
+     */
+    readonly colorAlpha?: boolean;
+}
 /**
  * Content-stream builder for one page.
  *
@@ -95,7 +103,16 @@ export declare class PdfCanvas {
     private currentWordSpacing;
     private readonly textSpacingStack;
     private textSpacingDirty;
-    constructor(pageHeight: number);
+    readonly colorAlpha: boolean;
+    /**
+     * Upstream's `_PdfGraphicsContext` alphas: the fill and stroke opacity an
+     * enclosing `setGraphicState` established, which a colour's alpha multiplies,
+     * then the fill and stroke constant alpha currently in force, so a redundant
+     * `gs` is never written. Saved and restored with the CTM.
+     */
+    private alphas;
+    private readonly alphaStack;
+    constructor(pageHeight: number, { colorAlpha }?: PdfCanvasOptions);
     push(command: string): void;
     /** Widget-space (top-left, y-down) to PDF user space. */
     toPdfY(top: number): number;
@@ -154,8 +171,20 @@ export declare class PdfCanvas {
     /**
      * `gs`, selecting an `/ExtGState`. States with equal values share one name,
      * so a page that draws fifty half-transparent boxes writes one dictionary.
+     *
+     * `gs` sets constant alpha absolutely, so an opacity is multiplied here by
+     * the one already established: an `Opacity` inside an `Opacity` composes
+     * instead of replacing it (#1980 L56).
      */
     setGraphicState(state: PdfGraphicState): string | null;
+    /**
+     * Put a colour's alpha in force. PDF carries constant alpha only in an
+     * `/ExtGState`, never in `rg`/`k`/`g`, so without this every translucent fill
+     * and stroke painted opaque (#1980 L54). Anything that is not a `PdfColor`,
+     * including a null from plain JS, counts as opaque.
+     */
+    private setColorAlpha;
+    private emitGraphicState;
     setSoftMask(mask: PdfSoftMask): string;
     getSoftMask(): PdfSoftMask | null;
     private addPattern;

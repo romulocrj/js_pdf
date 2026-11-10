@@ -50,6 +50,21 @@ interface GradientStops {
   readonly opacities: readonly number[];
 }
 
+/**
+ * The `color` property in force at `element`, inherited through its document
+ * ancestors — the gradient's, not the referencing shape's, as CSS inheritance
+ * works. `stop-color: currentColor` used to resolve to black.
+ */
+function inheritedColor(element: XmlElement | null, parser: SvgParser): SvgColor {
+  for (let node = element; node !== null; node = node.parent) {
+    convertStyle(node);
+    // `inherit`, `currentColor` and an absent attribute are all empty here.
+    const color = SvgColor.fromXml(node.getAttribute('color') ?? 'inherit', parser, SvgColor.unknown);
+    if (color.isNotEmpty) return color;
+  }
+  return SvgColor.defaultColor;
+}
+
 function readStops(element: XmlElement, parser: SvgParser): GradientStops {
   const colors: Rgb[] = [];
   const stops: number[] = [];
@@ -61,7 +76,12 @@ function readStops(element: XmlElement, parser: SvgParser): GradientStops {
       continue;
     }
     convertStyle(child);
-    const color = SvgColor.fromXml(child.getAttribute('stop-color') ?? 'black', parser);
+    const value = child.getAttribute('stop-color') ?? 'black';
+    const color = SvgColor.fromXml(
+      value,
+      parser,
+      /^\s*currentcolor\s*$/i.test(value) ? inheritedColor(child, parser) : SvgColor.defaultColor
+    );
     const offset = Math.min(1, Math.max(
       previous,
       getNumeric(child, 'offset', null, { defaultValue: 0 })!.sizeValue
@@ -78,10 +98,17 @@ function readStops(element: XmlElement, parser: SvgParser): GradientStops {
   return { colors, stops, opacities };
 }
 
-function hrefElement(element: XmlElement, parser: SvgParser): XmlElement | null {
+/*
+ * The gradient an `href` inherits from. One already in the chain makes a cycle,
+ * which threw here and recursed without end upstream; like a `<use>` cycle in
+ * upstream PR #1980 it is left unresolved, so the chain stops at that link.
+ */
+function hrefElement(element: XmlElement, parser: SvgParser, seen: readonly string[]): XmlElement | null {
   const xlink = ['http:', '', 'www.w3.org', '1999', 'xlink'].join('/');
   const href = element.getAttribute('href') ?? element.getAttribute('href', xlink);
-  return href?.startsWith('#') === true ? parser.findById(href.slice(1)) : null;
+  if (href?.startsWith('#') !== true) return null;
+  const id = href.slice(1);
+  return seen.includes(id) ? null : parser.findById(id);
 }
 
 export abstract class SvgGradient extends SvgColor {
@@ -204,12 +231,17 @@ export abstract class SvgGradient extends SvgColor {
     }
   }
 
+  /**
+   * `url(#g)`, `url('#g')` or `url("#g")`, possibly followed by a fallback
+   * colour, which `SvgColor.fromXml` applies when this returns null. The old
+   * pattern was anchored on `)`, so a fallback or a quote left it unpainted.
+   */
   static fromReference(value: string, parser: SvgParser): SvgGradient | null {
-    const match = /^url\(\s*#([^)\s]+)\s*\)$/.exec(value.trim());
+    const match = /^url\(\s*(['"]?)#([^'")\s]+)\1\s*\)/.exec(value.trim());
     if (match === null) {
       return null;
     }
-    const element = parser.findById(match[1]!);
+    const element = parser.findById(match[2]!);
     if (element?.name.local === 'linearGradient') {
       return SvgLinearGradient.fromElement(element, parser);
     }
@@ -251,9 +283,6 @@ export class SvgLinearGradient extends SvgGradient {
     seen: readonly string[] = []
   ): SvgLinearGradient {
     const id = element.getAttribute('id');
-    if (id !== null && seen.includes(id)) {
-      throw new SyntaxError(`Circular gradient reference: ${id}`);
-    }
     const nextSeen = id === null ? seen : [...seen, id];
     const stopData = readStops(element, parser);
     const local = new SvgLinearGradient(
@@ -268,7 +297,7 @@ export class SvgLinearGradient extends SvgGradient {
       stopData.opacities,
       SvgLinearGradient.spread(element)
     );
-    const inherited = hrefElement(element, parser);
+    const inherited = hrefElement(element, parser, nextSeen);
     return inherited?.name.local === 'linearGradient'
       ? SvgLinearGradient.fromElement(inherited, parser, nextSeen).mergeWith(local)
       : local;
@@ -378,9 +407,6 @@ export class SvgRadialGradient extends SvgGradient {
     seen: readonly string[] = []
   ): SvgRadialGradient {
     const id = element.getAttribute('id');
-    if (id !== null && seen.includes(id)) {
-      throw new SyntaxError(`Circular gradient reference: ${id}`);
-    }
     const nextSeen = id === null ? seen : [...seen, id];
     const stopData = readStops(element, parser);
     const unitsValue = element.getAttribute('gradientUnits');
@@ -401,7 +427,7 @@ export class SvgRadialGradient extends SvgGradient {
         ? spreadValue
         : null
     );
-    const inherited = hrefElement(element, parser);
+    const inherited = hrefElement(element, parser, nextSeen);
     return inherited?.name.local === 'radialGradient'
       ? SvgRadialGradient.fromElement(inherited, parser, nextSeen).mergeWith(local)
       : local;

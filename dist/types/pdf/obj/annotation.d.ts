@@ -105,6 +105,13 @@ export declare class PdfAnnotation extends PdfObject<PdfDict> {
     readonly annotation: PdfAnnotationSpec;
     readonly defaultAppearanceName: string | null;
     readonly appearances: PdfResolvedFormAppearances | null;
+    /**
+     * The field this widget displays when several widgets share its name; set
+     * by `PdfDocument`. Null means the widget is its own field, the merged form
+     * ISO 32000-1 12.7.3.1 allows only for a single-widget field.
+     */
+    parent: PdfObject<PdfDict> | null;
+    private readonly pdfa;
     constructor(document: PdfObjectRegistry, page: PdfPage, annotation: PdfAnnotationSpec, defaultAppearanceName?: string | null, appearances?: PdfResolvedFormAppearances | null);
     prepare(): void;
     private prepareGeometric;

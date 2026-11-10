@@ -34,7 +34,7 @@
 <script type="importmap">
 {
   "imports": {
-    "@romulocrj/js_pdf": "https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs"
+    "@romulocrj/js_pdf": "https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs"
   }
 }
 </script>
@@ -724,6 +724,15 @@ import { generateSynchronousOutputPhase65 } from './synchronous-output-phase-6.5
 import { generateLayoutPerformancePhase66 } from './layout-performance-phase-6.6.mjs';
 import { generateColorsPhase67 } from './colors-phase-6.7.mjs';
 import { generateFontsPhase68, generateObjectsPhase610, generateApiPhase612 } from './fonts-objects-api-phases.mjs';
+import { generateDirectionalLayoutPhase69 } from './directional-layout-phase-6.9.mjs';
+import { generatePdfaPhase611 } from './pdfa-phase-6.11.mjs';
+import { generateSerializationPhase71 } from './serialization-phase-7.1.mjs';
+import { generateFontsPhase72 } from './fonts-phase-7.2.mjs';
+import { generateTextBidiPhase73 } from './text-bidi-phase-7.3.mjs';
+import { generateSvgPhase74 } from './svg-phase-7.4.mjs';
+import { generateGraphicsPhase75 } from './graphics-phase-7.5.mjs';
+import { generateLayoutPhase76 } from './layout-phase-7.6.mjs';
+import { generateReviewPr15 } from './review-pr15.mjs';
 import { generateProductionPaginationExample } from './production-pagination.mjs';
 import { createSalesReport } from './create-sales-report.mjs';
 
@@ -1102,12 +1111,60 @@ const groups = [
         generate: async () => generateFontsPhase68({ ttf: await bytesOf('OpenSans-Regular.ttf'), cff: await bytesOf('JsPdfCffExample.otf'), cid: await bytesOf('JsPdfCffCidExample.otf') })
       },
       {
+        id: 'directional-layout-phase-6.9', title: 'Directional layout', file: 'directional-layout-phase-6.9.mjs', badge: 'PHASE 6.9',
+        description: 'Right-to-left rows, tables, grids and wraps, directional insets and alignment, and MultiPage cross-axis alignment.',
+        generate: () => generateDirectionalLayoutPhase69()
+      },
+      {
         id: 'objects-phase-6.10', title: 'Reusable forms & notes', file: 'fonts-objects-api-phases.mjs', badge: 'PHASE 6.10',
         description: 'One form reused across pages, a text note and five annotation border styles.', generate: () => generateObjectsPhase610()
       },
       {
+        id: 'pdfa-phase-6.11', title: 'PDF/A-3B archive', file: 'pdfa-phase-6.11.mjs', badge: 'PHASE 6.11',
+        description: 'Output intent, XMP matching /Info, a content-derived /ID, an embedded Factur-X invoice, and the documents PDF/A refuses.',
+        generate: async () => {
+          const { openSans, openSansBold } = await commonFonts();
+          return generatePdfaPhase611(undefined, true, { regular: openSans, bold: openSansBold, colorProfile: await bytesOf('JsPdfSrgbExample.icc') });
+        }
+      },
+      {
         id: 'api-phase-6.12', title: 'API conveniences', file: 'fonts-objects-api-phases.mjs', badge: 'PHASE 6.12',
         description: 'Merged inherited text styles, page format values and chart compatibility aliases.', generate: () => generateApiPhase612()
+      },
+      {
+        id: 'serialization-phase-7.1', title: 'Strings, names & navigation', file: 'serialization-phase-7.1.mjs', badge: 'PHASE 7.1',
+        description: 'PDFDocEncoding text strings, UTF-8 names, outline counts, page labels, shared form fields and a self-consistent table of contents.',
+        generate: () => generateSerializationPhase71()
+      },
+      {
+        id: 'fonts-phase-7.2', title: 'Font tables & coverage', file: 'fonts-phase-7.2.mjs', badge: 'PHASE 7.2',
+        description: 'Supplementary-plane ToUnicode, WinAnsi punctuation in the standard fonts and preserved TrueType hinting.',
+        generate: async () => generateFontsPhase72({ openSans: await bytesOf('OpenSans-Regular.ttf'), cjk: await bytesOf('JsPdfCjkExample.ttf'), icons: await materialIcons() })
+      },
+      {
+        id: 'text-bidi-phase-7.3', title: 'Bidi lines & break rules', file: 'text-bidi-phase-7.3.mjs', badge: 'PHASE 7.3',
+        description: 'Wrapped Arabic paragraphs in reading order, mixed directions, soft hyphens, zero-width spaces, no-break spaces and letter spacing.',
+        generate: async () => generateTextBidiPhase73(undefined, true, await bytesOf('JsPdfArabicExample.ttf'))
+      },
+      {
+        id: 'svg-phase-7.4', title: 'SVG viewports & robustness', file: 'svg-phase-7.4.mjs', badge: 'PHASE 7.4',
+        description: 'Symbol sprites, nested viewports, preserveAspectRatio, hidden layers, tspan runs, colour alpha and malformed input.',
+        generate: () => generateSvgPhase74()
+      },
+      {
+        id: 'graphics-phase-7.5', title: 'Colour alpha & arcs', file: 'graphics-phase-7.5.mjs', badge: 'PHASE 7.5',
+        description: 'Translucent colours, nested opacity, the colorAlpha opt-out, exact and rotated arcs, and readable text on swatches.',
+        generate: () => generateGraphicsPhase75()
+      },
+      {
+        id: 'layout-phase-7.6', title: 'Tables & layout guards', file: 'layout-phase-7.6.mjs', badge: 'PHASE 7.6',
+        description: 'Whole words in overflowing tables, rotated boxes, chart axis labels, bounded stacks and progress, and a long table.',
+        generate: () => generateLayoutPhase76()
+      },
+      {
+        id: 'review-pr15', title: 'PR 15 review regressions', file: 'review-pr15.mjs', badge: 'REGRESSION',
+        description: 'Transparent backgrounds leave images and gradients visible, nested tspan opacity composes, and directional margins reserve space.',
+        generate: () => generateReviewPr15()
       },
       {
         id: 'production-pagination',

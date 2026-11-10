@@ -2,7 +2,7 @@ import type { PdfBlendMode } from '../pdf/graphic_state.ts';
 import type { PdfLineCap, PdfLineJoin } from '../pdf/graphics.ts';
 import { SvgColor } from './color.ts';
 import { SvgNumeric } from './parser.ts';
-import type { SvgParser } from './parser.ts';
+import type { SvgParser, SvgSize } from './parser.ts';
 import type { XmlElement } from './xml.ts';
 export type SvgTextAnchor = 'start' | 'middle' | 'end';
 export interface SvgBrushFields {
@@ -25,6 +25,10 @@ export interface SvgBrushFields {
     readonly fontWeight: string | null;
     readonly textAnchor: SvgTextAnchor | null;
     readonly blendMode: PdfBlendMode | null;
+    /** The nearest viewport, which a percentage geometry length is a fraction of. */
+    readonly viewport: SvgSize | null;
+    /** `xml:space="preserve"` in force: text white space is kept. */
+    readonly preserveSpace: boolean | null;
 }
 export declare class SvgBrush implements SvgBrushFields {
     readonly color: SvgColor | null;
@@ -46,6 +50,8 @@ export declare class SvgBrush implements SvgBrushFields {
     readonly fontWeight: string | null;
     readonly textAnchor: SvgTextAnchor | null;
     readonly blendMode: PdfBlendMode | null;
+    readonly viewport: SvgSize | null;
+    readonly preserveSpace: boolean | null;
     constructor(fields: SvgBrushFields);
     /** What an SVG paints with before any attribute is read. */
     static readonly defaultContext: SvgBrush;

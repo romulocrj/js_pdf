@@ -24,12 +24,14 @@ import type { SerializedPage } from '../pdf/document.ts';
 import { PdfCanvas } from '../pdf/graphics.ts';
 import { PageFormat } from '../pdf/page_format.ts';
 import type { PageSize } from '../pdf/page_format.ts';
-import { Flex } from './flex.ts';
+import type { TextDirection } from './border_radius.ts';
+import { checkCrossAxisAlignment, Flex } from './flex.ts';
+import type { CrossAxisAlignment } from './flex.ts';
 import { BoxConstraints } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import { PageTheme } from './page_theme.ts';
 import type { PageOrientation } from './page_theme.ts';
-import { paintPageChild } from './page.ts';
+import { pageChildX, paintPageChild } from './page.ts';
 import type { Section } from './page.ts';
 import type { ThemeData } from './theme.ts';
 import { SpanningWidget, Widget } from './widget.ts';
@@ -94,6 +96,15 @@ export interface MultiPageOptions {
 
   /** The styles this section's widgets inherit; defaults to the document's. */
   readonly theme?: ThemeData;
+
+  /** The page's text direction; see `PageThemeOptions.textDirection`. */
+  readonly textDirection?: TextDirection | null;
+
+  /**
+   * Where a child narrower than the body is placed. `start` and `end` follow
+   * the text direction; `stretch` is placed as `start`, as upstream does.
+   */
+  readonly crossAxisAlignment?: CrossAxisAlignment;
   readonly gap?: number;
   readonly build: (context: RenderContext) => AnyWidget[];
   readonly header?: ((context: RenderContext) => AnyWidget) | null;
@@ -119,6 +130,7 @@ export class MultiPage implements Section {
    * with the paper when the orientation disagrees with the declared format.
    */
   readonly pageTheme: PageTheme;
+  readonly crossAxisAlignment: CrossAxisAlignment;
   readonly gap: number;
   readonly theme: ThemeData | null;
   readonly build: (context: RenderContext) => AnyWidget[];
@@ -134,6 +146,8 @@ export class MultiPage implements Section {
     pageFormat = undefined,
     margin = undefined,
     orientation = undefined,
+    textDirection = undefined,
+    crossAxisAlignment = 'start',
     gap = 0,
     theme = undefined,
     build,
@@ -148,8 +162,10 @@ export class MultiPage implements Section {
       pageFormat: pageFormat ?? format,
       margin,
       orientation,
-      theme
+      theme,
+      textDirection
     });
+    this.crossAxisAlignment = checkCrossAxisAlignment(crossAxisAlignment);
     this.theme = this.pageTheme.theme;
     this.gap = Number(gap);
     this.build = build;
@@ -182,7 +198,7 @@ export class MultiPage implements Section {
       if (pages.length >= this.maxPages) {
         throw new RangeError(`MultiPage exceeded its ${this.maxPages} page limit`);
       }
-      const canvas = new PdfCanvas(this.format.height);
+      const canvas = new PdfCanvas(this.format.height, documentContext.document.settings);
       if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
 
       const pageNumber = documentContext.pageOffset + pages.length + 1;
@@ -193,7 +209,8 @@ export class MultiPage implements Section {
         pageNumber,
         pageLabel: documentContext.document.pageLabel(pageNumber - 1),
         pagesCount: documentContext.pagesCount || pageNumber,
-        theme: this.theme ?? documentContext.document.theme
+        theme: this.theme ?? documentContext.document.theme,
+        textDirection: this.pageTheme.textDirection
       };
 
       this.paintLayer(this.pageTheme.buildBackground, context);
@@ -244,7 +261,7 @@ export class MultiPage implements Section {
         if (natural.height <= initialAvailable + 0.001) {
           paintPageChild(this.pageTheme, page.context, child, {
             ...natural,
-            x: this.margin.left,
+            x: this.childX(page, natural.width),
             y: page.cursor
           });
           page.cursor += natural.height + this.gap;
@@ -268,19 +285,35 @@ export class MultiPage implements Section {
           }));
           paintPageChild(this.pageTheme, page.context, child, {
             ...moved,
-            x: this.margin.left,
+            x: this.childX(page, moved.width),
             y: page.cursor
           });
           page.cursor += moved.height + this.gap;
           continue;
         }
 
+        let continued = false;
         while (true) {
           const available = page.bottom - page.cursor;
-          const fragment = child.layoutSpan(page.context, new BoxConstraints({
+          let fragment = child.layoutSpan(page.context, new BoxConstraints({
             maxWidth: page.maxWidth,
             maxHeight: available
           }), state);
+          if (continued && !fragment.hasMore) {
+            /*
+             * Upstream lays what is left out against an unbounded height and
+             * keeps that box whenever it fits, so the last fragment takes only
+             * its content's height. Against the height left on the page, a
+             * Column (`mainAxisSize: max`) or an aligned Container filled the
+             * page and pushed the next widget onto a new one.
+             */
+            const natural = child.layoutSpan(page.context, new BoxConstraints({
+              maxWidth: page.maxWidth,
+              maxHeight: Infinity
+            }), state);
+            if (!natural.hasMore && natural.box.height <= available + 0.001) fragment = natural;
+          }
+          continued = true;
           const box = fragment.box;
 
           if (box.height > available + 0.001) {
@@ -298,7 +331,7 @@ export class MultiPage implements Section {
           if (box.height > 0) {
             paintPageChild(this.pageTheme, page.context, child, {
               ...box,
-              x: this.margin.left,
+              x: this.childX(page, box.width),
               y: page.cursor
             });
           }
@@ -333,7 +366,7 @@ export class MultiPage implements Section {
 
       paintPageChild(this.pageTheme, page.context, child, {
         ...box,
-        x: this.margin.left,
+        x: this.childX(page, box.width),
         y: page.cursor
       });
       page.cursor += box.height + this.gap;
@@ -361,7 +394,7 @@ export class MultiPage implements Section {
           }));
           paintPageChild(this.pageTheme, context, headerWidget, {
             ...headerBox,
-            x: this.margin.left,
+            x: pageChildX(this.pageTheme, this.margin.left, state.maxWidth, headerBox.width),
             y: this.margin.top
           });
         }
@@ -373,7 +406,7 @@ export class MultiPage implements Section {
           }));
           paintPageChild(this.pageTheme, context, footerWidget, {
             ...footerBox,
-            x: this.margin.left,
+            x: pageChildX(this.pageTheme, this.margin.left, state.maxWidth, footerBox.width),
             y: this.format.height - this.margin.bottom - footerBox.height
           });
         }
@@ -426,6 +459,15 @@ export class MultiPage implements Section {
       maxWidth: this.format.width,
       maxHeight: this.format.height
     }));
-    paintPageChild(this.pageTheme, context, widget, { ...box, x: 0, y: 0 });
+    paintPageChild(this.pageTheme, context, widget, {
+      ...box,
+      x: pageChildX(this.pageTheme, 0, this.format.width, box.width),
+      y: 0
+    });
+  }
+
+  /** A body child's x: upstream's crossAxisAlignment, against the text direction. */
+  private childX(page: PageState, width: number): number {
+    return pageChildX(this.pageTheme, this.margin.left, page.maxWidth, width, this.crossAxisAlignment);
   }
 }

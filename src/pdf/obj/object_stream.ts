@@ -33,6 +33,8 @@ import type { PdfObjectRegistry } from './object.ts';
  */
 export class PdfObjectStream extends PdfObject<PdfDictStream> {
   constructor(document: PdfObjectRegistry, data: Uint8Array, compress?: boolean) {
-    super(document, new PdfDictStream(data, undefined, compress ?? document.settings.compress));
+    super(document, new PdfDictStream(
+      data, undefined, compress ?? document.settings.compress, document.settings.pdfa !== undefined
+    ));
   }
 }

@@ -18,6 +18,7 @@
  * `WrapContext`, following the port's pure layout protocol.
  */
 
+import { crossOffset, reversedAxes } from './flex.ts';
 import type { Axis, VerticalDirection } from './flex.ts';
 import { BoxConstraints } from './geometry.ts';
 import { SpanningWidget } from './widget.ts';
@@ -214,7 +215,7 @@ export class Wrap extends SpanningWidget<WrapLayoutData, WrapState> {
       Math.max(0, containerCross - usedCross),
       runs.length
     );
-    const reverseRuns = horizontal && this.verticalDirection === 'up';
+    const [reverseChildren, reverseRuns] = reversedAxes(context, horizontal, this.verticalDirection);
     let crossCursor = reverseRuns ? containerCross - runLeading : runLeading;
     const placed: WrapChildLayout[] = [];
 
@@ -225,26 +226,25 @@ export class Wrap extends SpanningWidget<WrapLayoutData, WrapState> {
         Math.max(0, containerMain - run.main),
         run.children.length
       );
-      const reverseChildren = !horizontal && this.verticalDirection === 'up';
       let mainCursor = reverseChildren ? containerMain - childLeading : childLeading;
       for (const child of run.children) {
         if (reverseChildren) mainCursor -= child.main;
         const freeCross = run.cross - child.cross;
-        const childCross = this.crossAxisAlignment === 'end'
-          ? freeCross
-          : this.crossAxisAlignment === 'center'
-            ? freeCross / 2
-            : 0;
+        // Within a run, start is the side the runs start on.
+        const childCross = crossOffset(this.crossAxisAlignment, freeCross, reverseRuns);
         placed.push({
           box: child.box,
           dx: horizontal ? mainCursor : crossCursor + childCross,
           dy: horizontal ? crossCursor + childCross : mainCursor
         });
-        const advance = child.main + this.spacing + childBetweenExtra;
-        mainCursor += reverseChildren ? -advance : advance;
+        // A reversed cursor has already stepped over the child, as upstream's does.
+        mainCursor += reverseChildren
+          ? -(this.spacing + childBetweenExtra)
+          : child.main + this.spacing + childBetweenExtra;
       }
-      const runAdvance = run.cross + this.runSpacing + runBetweenExtra;
-      crossCursor += reverseRuns ? -runAdvance : runAdvance;
+      crossCursor += reverseRuns
+        ? -(this.runSpacing + runBetweenExtra)
+        : run.cross + this.runSpacing + runBetweenExtra;
     }
 
     const lastChild = placed.length === 0

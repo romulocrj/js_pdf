@@ -66,8 +66,9 @@ test('matrix takes its six operands in cm order', () => {
   assert.deepEqual(transform.matrix, [2, 0, 0, 3, 10, 20]);
 });
 
-test('a matrix with too few operands is padded rather than rejected', () => {
-  assert.deepEqual(SvgTransform.fromString('matrix(1 0)').matrix, [1, 0, 0, 0, 0, 0]);
+test('a matrix with too few operands is skipped, not padded into a singular matrix', () => {
+  // Phase 7.4: upstream PR #1980 checks every function's argument count.
+  assert.deepEqual(SvgTransform.fromString('matrix(1 0)').matrix, [1, 0, 0, 1, 0, 0]);
 });
 
 test('skewX and skewY lean opposite axes', () => {

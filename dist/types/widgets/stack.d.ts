@@ -1,5 +1,5 @@
 import type { BasicAlignmentInput } from './basic.ts';
-import { Alignment } from './geometry.ts';
+import type { AlignmentGeometry } from './geometry.ts';
 import type { TextDirection } from './border_radius.ts';
 import { Widget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
@@ -42,13 +42,19 @@ export interface PositionedDirectionalOptions {
     readonly width?: number | null;
     readonly height?: number | null;
     readonly child: AnyWidget;
-    readonly textDirection?: TextDirection;
+    /** Port extension: resolve against this instead of the ambient direction. */
+    readonly textDirection?: TextDirection | null;
 }
-/** Direction-aware positioned child, resolved at construction in this port. */
+/**
+ * A positioned child placed by `start` and `end`. Upstream resolves them with
+ * `Directionality.of` when it is laid out, and so does the port: `left` and
+ * `right` hold the ltr reading, and a `Stack` swaps them under rtl. A given
+ * `textDirection` resolves them once, here, as this port always used to.
+ */
 export declare class PositionedDirectional extends Positioned {
     readonly start: number | null;
     readonly end: number | null;
-    readonly textDirection: TextDirection;
+    readonly textDirection: TextDirection | null;
     constructor({ start, top, end, bottom, width, height, child, textDirection }: PositionedDirectionalOptions);
     static fill({ start, top, end, bottom, child, textDirection }: Omit<PositionedDirectionalOptions, 'width' | 'height'>): PositionedDirectional;
 }
@@ -68,7 +74,7 @@ export interface StackLayoutData {
 }
 /** Overlays children inside one shared box. */
 export declare class Stack extends Widget<StackLayoutData> {
-    readonly alignment: Alignment;
+    readonly alignment: AlignmentGeometry;
     readonly fit: StackFit;
     readonly overflow: StackOverflow;
     readonly children: readonly AnyWidget[];

@@ -74,7 +74,8 @@ test('text and tspan content emit font resources and text operators', () => {
     </svg>
   `);
   assert.ok(output.some(line => line.includes('(Hello) Tj')));
-  assert.ok(output.some(line => line.includes('(SVG) Tj')));
+  // Phase 7.4: the space before the tspan is content, not trimmed away.
+  assert.ok(output.some(line => line.includes('( SVG) Tj')));
   assert.equal(canvas.fonts.size, 1);
 });
 

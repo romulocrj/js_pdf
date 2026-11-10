@@ -29,20 +29,44 @@ Read the full history: [I ported dart_pdf to pure JavaScript](https://daily.dev/
 ## Status
 
 The base port is complete through phase 5.7. Compatibility work from phases
-6.1–6.8, 6.10 and 6.12 has also landed. Directional layout, RTL Flex/tables,
-baseline alignment (6.9) and PDF/A integration (6.11) remain unimplemented.
+6.1–6.8, 6.10 and 6.12 was released in 0.2.0. Version 1.0.0 adds directional
+layout (6.9), PDF/A-2 and PDF/A-3 output (6.11) and the phase-7 fixes from the
+2026-11-10 upstream audit.
 
 The library includes the PDF object model, standard Type1 fonts, embedded
 TrueType and OpenType CFF1 fonts, declarative layout and pagination, SVG,
 raster images, tables, charts, barcodes, annotations, forms, reusable form
-XObjects, page labels and metadata/XMP. All eight retained upstream examples
+XObjects, page labels, metadata/XMP and PDF/A-2/3 (levels B and U) with
+PDF/A-3 attachments. All eight retained upstream examples
 generate end to end; the base port was also exercised under bare ClearScript
-V8. The current repository passes 561 tests and generates 31 phase examples
-under Node.js.
+V8. Version 1.0.0 passes 756 tests and generates 39 phase examples under
+Node.js.
 
 Version 0.1.6 was the first release candidate and the first version published
-to npm. Version 0.2.0 includes the additions listed below; installing 0.1.6
-does not include them. The public API is not frozen until 1.0.0.
+to npm. From **1.0.0** the public API — everything exported by the package entry
+point, `@romulocrj/js_pdf` — follows [semantic versioning](https://semver.org/):
+breaking changes wait for 2.0.0. Modules reached by deep paths into `dist/` or
+`src/` are internal and may change in any release.
+
+### New in 1.0.0
+
+- Directional layout: `EdgeInsetsDirectional`, `AlignmentDirectional`,
+  `PositionedDirectional`, right-to-left Flex, Wrap, Stack, GridView and Table,
+  directional page margins and `MultiPage.crossAxisAlignment`.
+- About sixty fixes found by comparing the port with open upstream pull
+  requests, plus several port regressions — among them wrapped right-to-left
+  paragraphs emitted in reverse line order. See the
+  [CHANGELOG](CHANGELOG.md#100---2026-11-10).
+- PDF/A-2 and PDF/A-3 (levels B and U) through `Document({ pdfa })`, with an
+  output intent, matching XMP, a trailer `/ID`, PDF/A-3 attachments such as
+  Factur-X, and early errors for fonts or colours PDF/A forbids. The output
+  has structural tests; the PDF/A-3B example passed veraPDF 1.30.4 during PR #15
+  review. Production output still needs validation.
+- Color alpha is now painted, including gradient stops, with a
+  `colorAlpha: false` opt-out.
+- The minified bundle is **450,154 bytes**, 0.17% smaller than 0.2.0: three
+  literal tables are packed into strings, which pays for the fixes, the
+  directional layout and PDF/A. Compressed, it is 6.2% larger (gzip).
 
 ### New in 0.2.0
 
@@ -63,7 +87,7 @@ does not include them. The public API is not frozen until 1.0.0.
 - API conveniences: `DefaultTextStyle.merge`, `PdfPageFormat`,
   `ChartValue`/`LineChartValue`, `PdfDict.merge` and `PdfArray.uniq`.
 
-The current minified bundle is **450,928 bytes**, compared with **405,510
+The 0.2.0 minified bundle is **450,928 bytes**, compared with **405,510
 bytes** in 0.1.6 (+11.20%). Example fonts remain external assets. See the
 [bundle measurements](https://github.com/romulocrj/js_pdf/blob/main/docs/BUNDLE-SIZE.md)
 for compressed sizes, methodology and tradeoffs.
@@ -110,11 +134,11 @@ Pinning the version is recommended — the unpinned URL follows whatever the
 latest published release is:
 
 ```js
-import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs';
+import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs';
 ```
 
 unpkg serves the same file at
-`https://unpkg.com/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs`.
+`https://unpkg.com/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs`.
 
 ## Use
 
@@ -141,7 +165,7 @@ Browser, via importmap (cdn or vendoring) — no build step on the consumer side
 
 ```html
 <script type="importmap">
-  { "imports": { "@romulocrj/js_pdf": "https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs" } }
+  { "imports": { "@romulocrj/js_pdf": "https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs" } }
 </script>
 <script type="module">
   import * as pw from '@romulocrj/js_pdf';
@@ -220,10 +244,13 @@ covers, in [AI_USAGE.md](AI_USAGE.md).
 
 - Reading existing PDFs, rasterizing PDFs, encryption and digital signatures
   are out of scope.
-- Directional layout geometry, right-to-left (RTL) layout for Flex and tables,
-  and baseline alignment are not implemented (phase 6.9).
-- PDF/A integration, including output intents and the required conformance
-  handling, is not implemented (phase 6.11).
+- PDF/A output (`Document({ pdfa })`, parts 2 and 3, levels B and U) is
+  covered by structural tests; the PDF/A-3B example passed veraPDF 1.30.4.
+  Validate production output. PDF/A-1 and level A are not supported. The caller supplies the ICC
+  profile; the example's port-authored profile is not meant for production.
+- OpenType layout tables (GSUB/GPOS) are not read. Arabic shaping uses the
+  font's presentation-form code points, so fonts that join only through GSUB
+  are not supported.
 - CFF1 fonts are embedded in full and their ink bounds are approximate.
   CFF subsetting, CFF2, variable-font instancing and raw Type1/PFB font
   embedding are not implemented. Simple TrueType also embeds the full font.
@@ -319,8 +346,8 @@ The **Color values & device spaces** card demonstrates the Material palette,
 RGB/gray/CMYK painting, HSV/HSL/RYB conversions and flattened alpha. Its
 [shared generator](examples/colors-phase-6.7.mjs) follows phase 6.6 in the browser;
 `npm run phase-examples` writes `examples/out/colors-phase-6.7.pdf`.
-See [color usage](AI_USAGE.md#color-values-and-device-spaces) for constructors
-and the distinction between color alpha and painting opacity.
+See [color usage](AI_USAGE.md#color-values-and-device-spaces) for constructors,
+painted color alpha and the `colorAlpha: false` opt-out.
 
 
 Phases **6.8 / 6.10 / 6.12** add three ordered gallery cards:
@@ -330,3 +357,24 @@ They share [one generator module](examples/fonts-objects-api-phases.mjs) with
 complete SIL OFL; they are external assets, not part of dist. See
 [usage and limitations](AI_USAGE.md#font-compatibility-and-cff) and the
 [release-to-current bundle comparison](docs/BUNDLE-SIZE.md).
+
+
+Phase **6.9** adds the **Directional layout** card between 6.8 and 6.10:
+right-to-left rows, tables, grids and wraps, directional insets and alignment,
+and `MultiPage.crossAxisAlignment`
+([generator](examples/directional-layout-phase-6.9.mjs)). See
+[directional layout usage](AI_USAGE.md#directional-layout).
+
+Version **1.0.0** adds one proof per phase-7 domain after phase 6.12, each
+shared by the browser gallery and `npm run phase-examples`:
+[strings, names and navigation](examples/serialization-phase-7.1.mjs) (7.1),
+[font tables and coverage](examples/fonts-phase-7.2.mjs) (7.2),
+[bidi lines and break rules](examples/text-bidi-phase-7.3.mjs) (7.3, with a
+Noto Sans Arabic subset under the SIL OFL),
+[SVG viewports and robustness](examples/svg-phase-7.4.mjs) (7.4),
+[colour alpha and arcs](examples/graphics-phase-7.5.mjs) (7.5) and
+[tables and layout guards](examples/layout-phase-7.6.mjs) (7.6, extended by 7.7).
+
+The PR #15 review adds a shared [regression proof](examples/review-pr15.mjs)
+for colour-alpha isolation, nested tspan opacity and directional text/flex
+margins. It is available in the browser gallery and the phase example runner.

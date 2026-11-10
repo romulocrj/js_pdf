@@ -16,7 +16,8 @@
  *
  * Named destinations and outlines landed with phase 3.8. Phase 5.6 adds XML
  * metadata, page labels and the AcroForm assembled from widget annotations.
- * PDF/A output intents remain outside the current roadmap.
+ * Phase 6.11 adds the PDF/A output intent and the PDF/A-3 `/AF` array; the
+ * `/EmbeddedFiles` tree hangs off `PdfNames`.
  */
 
 import { PdfArray } from '../format/array.ts';
@@ -30,7 +31,8 @@ import type { PdfNames } from './names.ts';
 import type { PdfOutline } from './outline.ts';
 import type { PdfMetadata } from './metadata.ts';
 import type { PdfPageLabels } from './page_label.ts';
-import type { PdfAnnotation } from './annotation.ts';
+import type { PdfaColorProfile } from './pdfa/pdfa_color_profile.ts';
+import type { PdfaAttachedFiles } from './pdfa/pdfa_attached_files.ts';
 
 /** The document catalog: the `/Root` the trailer points at. */
 export class PdfCatalog extends PdfObject<PdfDict> {
@@ -39,7 +41,12 @@ export class PdfCatalog extends PdfObject<PdfDict> {
   outline: PdfOutline | null = null;
   metadata: PdfMetadata | null = null;
   pageLabels: PdfPageLabels | null = null;
-  readonly formFields: PdfAnnotation[] = [];
+  /** The PDF/A output intent profile. */
+  colorProfile: PdfaColorProfile | null = null;
+  /** PDF/A-3 attachments. */
+  attached: PdfaAttachedFiles | null = null;
+  /** The root fields: a widget that is its own field, or a shared parent. */
+  readonly formFields: PdfObject<PdfDict>[] = [];
   readonly formFonts = new Map<string, PdfObject<PdfDict>>();
   showOutlines = false;
 
@@ -71,5 +78,7 @@ export class PdfCatalog extends PdfObject<PdfDict> {
       this.params.set('/AcroForm', form);
     }
     if (this.showOutlines) this.params.set('/PageMode', new PdfName('/UseOutlines'));
+    if (this.attached !== null && this.attached.isNotEmpty) this.params.set('/AF', this.attached.catalogAF());
+    if (this.colorProfile !== null) this.params.set('/OutputIntents', this.colorProfile.outputIntents());
   }
 }

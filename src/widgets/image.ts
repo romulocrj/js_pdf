@@ -25,6 +25,7 @@ import { drawShape, shapeBoundingBox } from '../svg/path.ts';
 import { applyBoxFit, resolveBasicAlignment } from './basic.ts';
 import type { BasicAlignmentInput, FitSize } from './basic.ts';
 import { BoxConstraints, inscribe } from './geometry.ts';
+import { alignmentIn } from './directionality.ts';
 import type { BoxFit } from './svg.ts';
 import { Widget } from './widget.ts';
 import type { Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
@@ -76,7 +77,7 @@ export class Image extends Widget<ImageLayoutData> {
     this.dpi = dpi;
   }
 
-  override layout(_context: RenderContext, constraints: Constraints): LayoutBox<ImageLayoutData> {
+  override layout(context: RenderContext, constraints: Constraints): LayoutBox<ImageLayoutData> {
     const parent = BoxConstraints.from(constraints);
     const offered = {
       width: parent.constrainWidth(this.width ?? (parent.hasBoundedWidth ? parent.maxWidth : this.image.width)),
@@ -96,15 +97,16 @@ export class Image extends Widget<ImageLayoutData> {
       { width: image.width, height: image.height },
       layoutFit.destination
     );
+    const alignment = alignmentIn(context, this.alignment);
     const sourceOffset = inscribe(
-      this.alignment,
+      alignment,
       fitted.source.width,
       fitted.source.height,
       image.width,
       image.height
     );
     const destinationOffset = inscribe(
-      this.alignment,
+      alignment,
       fitted.destination.width,
       fitted.destination.height,
       layoutFit.destination.width,

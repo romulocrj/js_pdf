@@ -227,9 +227,7 @@ function alignedTableText(value, alignment, color = '#334155', fontWeight = 'nor
   return new Container({
     alignment,
     child: new Text(String(value), {
-      fontSize: 9,
-      fontWeight,
-      color,
+      style: new TextStyle({ fontSize: 9, fontWeight, color }),
       align: alignment === 'centerRight' ? 'right' : 'center'
     })
   });

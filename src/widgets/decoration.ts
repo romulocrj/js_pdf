@@ -19,7 +19,8 @@
  * while preserving offset, spread, blur extent, colour and opacity.
  */
 
-import { normalizeColor, normalizePaintColor } from '../pdf/color.ts';
+import { normalizeColor, normalizePaintColor, PdfColor } from '../pdf/color.ts';
+import { PdfCanvas } from '../pdf/graphics.ts';
 import type { ColorInput, PaintColor, Rgb } from '../pdf/color.ts';
 import { PdfGraphicState } from '../pdf/graphic_state.ts';
 import type { PdfPoint, PdfRect } from '../pdf/rect.ts';
@@ -33,6 +34,8 @@ import type { BoxBorderInput } from './box_border.ts';
 import { applyBoxFit, resolveBasicAlignment } from './basic.ts';
 import type { BasicAlignmentInput } from './basic.ts';
 import { Alignment, inscribe } from './geometry.ts';
+import type { AlignmentGeometry } from './geometry.ts';
+import { alignmentIn, Directionality } from './directionality.ts';
 import type { BoxFit } from './svg.ts';
 import type { ImageProvider } from './image_provider.ts';
 import type { RenderContext } from './widget.ts';
@@ -58,7 +61,7 @@ export interface DecorationImageOptions {
 export class DecorationImage extends DecorationGraphic {
   readonly image: ImageProvider;
   readonly fit: BoxFit;
-  readonly alignment: Alignment;
+  readonly alignment: AlignmentGeometry;
   readonly dpi: number | null;
 
   constructor({
@@ -88,15 +91,16 @@ export class DecorationImage extends DecorationGraphic {
     );
     if (fitted.source.width <= 0 || fitted.source.height <= 0) return;
 
+    const alignment = alignmentIn(context, this.alignment);
     const sourceOffset = inscribe(
-      this.alignment,
+      alignment,
       fitted.source.width,
       fitted.source.height,
       image.width,
       image.height
     );
     const destinationOffset = inscribe(
-      this.alignment,
+      alignment,
       fitted.destination.width,
       fitted.destination.height,
       box.width,
@@ -126,7 +130,9 @@ export class DecorationImage extends DecorationGraphic {
   }
 }
 
-function alignmentPoint(alignment: Alignment, box: PdfRect): PdfPoint {
+/** Upstream's `alignment.resolve(Directionality.of(context)).withinRect(box)`. */
+function alignmentPoint(context: RenderContext, geometry: AlignmentGeometry, box: PdfRect): PdfPoint {
+  const alignment = alignmentIn(context, geometry);
   return {
     x: box.x + ((alignment.x + 1) * box.width) / 2,
     y: box.y + ((alignment.y + 1) * box.height) / 2
@@ -142,6 +148,10 @@ export interface GradientOptions {
 export abstract class Gradient {
   readonly colors: readonly Rgb[];
   readonly stops: readonly number[];
+  /** The colour of a one-colour gradient, alpha and colour space kept. */
+  protected readonly solid: PaintColor | null;
+  /** Each stop's alpha, or null when every stop is opaque. */
+  protected readonly alphas: readonly number[] | null;
 
   constructor({ colors, stops = null }: GradientOptions) {
     if (colors.length === 0) throw new RangeError('A gradient needs at least one colour');
@@ -150,21 +160,57 @@ export abstract class Gradient {
     }
     this.colors = colors.map(color => normalizeColor(color));
     this.stops = stops === null ? [] : stops.map(value => Math.min(1, Math.max(0, Number(value))));
+    this.solid = colors.length === 1 ? normalizePaintColor(colors[0]) : null;
+    const alphas = colors.map(color => (color instanceof PdfColor ? color.alpha : 1));
+    this.alphas = alphas.some(alpha => alpha < 1) ? alphas : null;
   }
 
-  abstract paint(context: RenderContext, box: PdfRect): void;
+  /** The shading of this gradient over `box`, ramping through `colors`. */
+  protected abstract shading(context: RenderContext, box: PdfRect, colors: readonly Rgb[]): PdfShading;
+
+  /*
+   * One colour is a flat fill, as in upstream PR #1980: no shading object, and
+   * the colour's alpha is painted. A shading function carries no alpha, so
+   * translucent stops of a longer ramp go into a luminosity soft mask that
+   * repeats the shading in gray, as the SVG painter does for stop-opacity.
+   * Callers scope the mask with save/restore.
+   */
+  paint(context: RenderContext, box: PdfRect): void {
+    const { canvas } = context;
+    if (this.solid !== null) {
+      canvas.setFillColor(this.solid);
+    } else {
+      if (this.alphas !== null && canvas.colorAlpha) {
+        const mask = new PdfCanvas(canvas.pageHeight);
+        const existing = canvas.getSoftMask();
+        if (existing !== null) mask.setSoftMask(existing);
+        mask.setFillPattern(new PdfShadingPattern({
+          shading: this.shading(context, box, this.alphas.map(alpha => [alpha, alpha, alpha]))
+        }));
+        mask.drawBox(box);
+        mask.fillPath();
+        canvas.setSoftMask({
+          content: mask.takeOutputBytes(), boundingBox: box, fonts: mask.fonts, graphicStates: mask.graphicStates,
+          patterns: mask.patterns, shadings: mask.shadings, images: mask.images
+        });
+      }
+      canvas.setFillPattern(new PdfShadingPattern({ shading: this.shading(context, box, this.colors) }));
+    }
+    canvas.drawBox(box);
+    canvas.fillPath();
+  }
 }
 
 export interface LinearGradientOptions extends GradientOptions {
-  readonly begin?: Alignment;
-  readonly end?: Alignment;
+  readonly begin?: AlignmentGeometry;
+  readonly end?: AlignmentGeometry;
   readonly tileMode?: TileMode;
 }
 
 /** An axial PDF shading between two alignment points. */
 export class LinearGradient extends Gradient {
-  readonly begin: Alignment;
-  readonly end: Alignment;
+  readonly begin: AlignmentGeometry;
+  readonly end: AlignmentGeometry;
   readonly tileMode: TileMode;
 
   constructor({
@@ -180,38 +226,33 @@ export class LinearGradient extends Gradient {
     this.tileMode = tileMode;
   }
 
-  override paint(context: RenderContext, box: PdfRect): void {
-    const pattern = new PdfShadingPattern({
-      shading: new PdfShading({
-        type: 'axial',
-        boundingBox: box,
-        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: alignmentPoint(this.begin, box),
-        end: alignmentPoint(this.end, box),
-        extendStart: true,
-        extendEnd: true
-      })
+  protected override shading(context: RenderContext, box: PdfRect, colors: readonly Rgb[]): PdfShading {
+    return new PdfShading({
+      type: 'axial',
+      boundingBox: box,
+      fn: PdfBaseFunction.colorsAndStops(colors, this.stops),
+      start: alignmentPoint(context, this.begin, box),
+      end: alignmentPoint(context, this.end, box),
+      extendStart: true,
+      extendEnd: true
     });
-    context.canvas.setFillPattern(pattern);
-    context.canvas.drawBox(box);
-    context.canvas.fillPath();
   }
 }
 
 export interface RadialGradientOptions extends GradientOptions {
-  readonly center?: Alignment;
+  readonly center?: AlignmentGeometry;
   readonly radius?: number;
   readonly tileMode?: TileMode;
-  readonly focal?: Alignment | null;
+  readonly focal?: AlignmentGeometry | null;
   readonly focalRadius?: number;
 }
 
 /** A radial PDF shading with optional independent focal point. */
 export class RadialGradient extends Gradient {
-  readonly center: Alignment;
+  readonly center: AlignmentGeometry;
   readonly radius: number;
   readonly tileMode: TileMode;
-  readonly focal: Alignment | null;
+  readonly focal: AlignmentGeometry | null;
   readonly focalRadius: number;
 
   constructor({
@@ -231,24 +272,19 @@ export class RadialGradient extends Gradient {
     this.focalRadius = Math.max(0, Number(focalRadius));
   }
 
-  override paint(context: RenderContext, box: PdfRect): void {
+  protected override shading(context: RenderContext, box: PdfRect, colors: readonly Rgb[]): PdfShading {
     const scale = Math.min(box.width, box.height);
-    const pattern = new PdfShadingPattern({
-      shading: new PdfShading({
-        type: 'radial',
-        boundingBox: box,
-        fn: PdfBaseFunction.colorsAndStops(this.colors, this.stops),
-        start: alignmentPoint(this.focal ?? this.center, box),
-        end: alignmentPoint(this.center, box),
-        radius0: this.focalRadius * scale,
-        radius1: this.radius * scale,
-        extendStart: true,
-        extendEnd: true
-      })
+    return new PdfShading({
+      type: 'radial',
+      boundingBox: box,
+      fn: PdfBaseFunction.colorsAndStops(colors, this.stops),
+      start: alignmentPoint(context, this.focal ?? this.center, box),
+      end: alignmentPoint(context, this.center, box),
+      radius0: this.focalRadius * scale,
+      radius1: this.radius * scale,
+      extendStart: true,
+      extendEnd: true
     });
-    context.canvas.setFillPattern(pattern);
-    context.canvas.drawBox(box);
-    context.canvas.fillPath();
   }
 }
 
@@ -396,7 +432,7 @@ export class BoxDecoration {
     width: number,
     height: number,
     phase: PaintPhase = 'all',
-    direction: TextDirection = 'ltr'
+    direction: TextDirection = Directionality.of(context)
   ): void {
     const resolvedRadius = this.borderRadius?.resolve(direction) ?? null;
     const box = { x, y: context.canvas.pageHeight - y - height, width, height };

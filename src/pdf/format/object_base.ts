@@ -28,6 +28,24 @@
 import type { PdfDataType } from './base.ts';
 import { PdfIndirect } from './indirect.ts';
 import type { PdfStream } from './stream.ts';
+import type { PdfaAttachedFileOptions } from '../obj/pdfa/pdfa_attached_files.ts';
+
+/**
+ * PDF/A output, already validated by `Document`; see its `pdfa` option. Only
+ * parts 2 and 3 and levels B and U: part 1 forbids the transparency the port
+ * paints, and level A needs a structure tree the port does not write.
+ */
+export interface PdfaSettings {
+  readonly part: 2 | 3;
+  readonly conformance: 'B' | 'U';
+  /** The ICC profile of the `/OutputIntents` entry. */
+  readonly colorProfile: Uint8Array;
+  readonly outputCondition?: string;
+  /** PDF/A-3 only. */
+  readonly attachments?: readonly PdfaAttachedFileOptions[];
+  /** RDF inserted into the generated XMP packet, such as `PdfaFacturxRdf().create()`. */
+  readonly extensionRdf?: string;
+}
 
 /** Document-wide output options. */
 export interface PdfSettings {
@@ -40,6 +58,13 @@ export interface PdfSettings {
    * images pays real milliseconds for a very large saving.
    */
   readonly compress: boolean;
+  /**
+   * Paint a `PdfColor`'s alpha as constant alpha; on unless `false`. Pages
+   * read it when they create their canvas — see `PdfCanvasOptions`.
+   */
+  readonly colorAlpha?: boolean;
+  /** Write PDF/A: output intent, XMP, `/ID`, checks. Absent, nothing changes. */
+  readonly pdfa?: PdfaSettings;
 }
 
 export const DEFAULT_PDF_SETTINGS: PdfSettings = { compress: true };

@@ -27,6 +27,15 @@ import { generateSynchronousOutputPhase65 } from './synchronous-output-phase-6.5
 import { generateLayoutPerformancePhase66 } from './layout-performance-phase-6.6.mjs';
 import { generateColorsPhase67 } from './colors-phase-6.7.mjs';
 import { generateFontsPhase68, generateObjectsPhase610, generateApiPhase612 } from './fonts-objects-api-phases.mjs';
+import { generateDirectionalLayoutPhase69 } from './directional-layout-phase-6.9.mjs';
+import { generatePdfaPhase611 } from './pdfa-phase-6.11.mjs';
+import { generateSerializationPhase71 } from './serialization-phase-7.1.mjs';
+import { generateFontsPhase72 } from './fonts-phase-7.2.mjs';
+import { generateTextBidiPhase73 } from './text-bidi-phase-7.3.mjs';
+import { generateSvgPhase74 } from './svg-phase-7.4.mjs';
+import { generateGraphicsPhase75 } from './graphics-phase-7.5.mjs';
+import { generateLayoutPhase76 } from './layout-phase-7.6.mjs';
+import { generateReviewPr15 } from './review-pr15.mjs';
 import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
 import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
 import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
@@ -49,6 +58,12 @@ const compatibilityFonts = Object.fromEntries(await Promise.all(
     .map(async ([key, name]) => [key, new Uint8Array(await readFile(new URL('./assets/' + name, import.meta.url)))])
 ));
 const cjkFont = new Uint8Array(await readFile(new URL('./assets/JsPdfCjkExample.ttf', import.meta.url)));
+const arabicFont = new Uint8Array(await readFile(new URL('./assets/JsPdfArabicExample.ttf', import.meta.url)));
+const pdfaAssets = {
+  regular: compatibilityFonts.ttf,
+  bold: new Uint8Array(await readFile(new URL('./assets/OpenSans-Bold.ttf', import.meta.url))),
+  colorProfile: new Uint8Array(await readFile(new URL('./assets/JsPdfSrgbExample.icc', import.meta.url)))
+};
 
 const examples = [
   ['svg-gradients-phase-2.8', generateSvgGradientsPhase28],
@@ -80,8 +95,17 @@ const examples = [
   ['layout-performance-phase-6.6', () => generateLayoutPerformancePhase66()],
   ['colors-phase-6.7', () => generateColorsPhase67()],
   ['fonts-phase-6.8', () => generateFontsPhase68(compatibilityFonts)],
+  ['directional-layout-phase-6.9', () => generateDirectionalLayoutPhase69()],
   ['objects-phase-6.10', () => generateObjectsPhase610()],
-  ['api-phase-6.12', () => generateApiPhase612()]
+  ['pdfa-phase-6.11', () => generatePdfaPhase611(undefined, true, pdfaAssets)],
+  ['api-phase-6.12', () => generateApiPhase612()],
+  ['serialization-phase-7.1', () => generateSerializationPhase71()],
+  ['fonts-phase-7.2', () => generateFontsPhase72({ openSans: compatibilityFonts.ttf, cjk: cjkFont, icons: materialIcons })],
+  ['text-bidi-phase-7.3', () => generateTextBidiPhase73(undefined, true, arabicFont)],
+  ['svg-phase-7.4', () => generateSvgPhase74()],
+  ['graphics-phase-7.5', () => generateGraphicsPhase75()],
+  ['layout-phase-7.6', () => generateLayoutPhase76()],
+  ['review-pr15', () => generateReviewPr15()]
 ];
 
 const outputDirectory = new URL('./out/', import.meta.url);

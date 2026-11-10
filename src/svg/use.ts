@@ -58,25 +58,27 @@ export class SvgUse extends SvgOperation {
 
   static fromXml(element: XmlElement, painter: SvgPainter, parent: SvgBrush): SvgUse {
     const brush = SvgBrush.fromXml(element, parent, painter.parser);
-    const x = getNumeric(element, 'x', brush, { defaultValue: 0 })!.sizeValue;
-    const y = getNumeric(element, 'y', brush, { defaultValue: 0 })!.sizeValue;
-    const width = getNumeric(element, 'width', brush, { defaultValue: 0 })!.sizeValue;
-    const height = getNumeric(element, 'height', brush, { defaultValue: 0 })!.sizeValue;
+    const length = (name: string, axis: 'x' | 'y'): number | null =>
+      getNumeric(element, name, brush)?.lengthIn(axis) ?? null;
+    const width = length('width', 'x');
+    const height = length('height', 'y');
     const hrefAttribute = element.getAttribute('href') ?? element.getAttribute('href', XLINK);
 
-    let href: SvgOperation | null = null;
-    if (hrefAttribute?.startsWith('#') === true) {
-      const referenced = painter.parser.findById(hrefAttribute.slice(1));
-      if (referenced !== null && referenced !== element) {
-        href = painter.operationFromXml(referenced, brush);
-      }
-    }
+    // Only a local `#id`. The painter returns null for an element it is
+    // already building, so a reference to an ancestor or a mutual cycle paints
+    // nothing instead of overflowing the stack (upstream checked only for a
+    // direct self-reference). `width` and `height` size a <symbol> or <svg>
+    // target's viewport; any other target ignores them.
+    const referenced = hrefAttribute?.startsWith('#') === true && hrefAttribute.length > 1
+      ? painter.parser.findById(hrefAttribute.slice(1))
+      : null;
+    const href = referenced === null ? null : painter.operationFromXml(referenced, brush, { width, height });
 
     return new SvgUse(
-      x,
-      y,
-      width,
-      height,
+      length('x', 'x') ?? 0,
+      length('y', 'y') ?? 0,
+      width ?? 0,
+      height ?? 0,
       href,
       brush,
       SvgClipPath.fromXml(element, painter, brush),

@@ -1,6 +1,7 @@
 import { PdfStream } from '../pdf/format/stream.ts';
 import type { DocumentMetadata, PdfPageMode, SerializedPageLabel } from '../pdf/document.ts';
 import type { PdfSettings } from '../pdf/format/object_base.ts';
+import type { PdfaAttachedFileOptions } from '../pdf/obj/pdfa/pdfa_attached_files.ts';
 import type { Rgb } from '../pdf/color.ts';
 import type { PdfOutlineStyle } from '../pdf/obj/outline.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
@@ -8,6 +9,21 @@ import { PdfPageLabel } from '../pdf/obj/page_label.ts';
 import { Font } from './font.ts';
 import type { Section } from './page.ts';
 import { ThemeData } from './theme.ts';
+/** `Document({ pdfa })`: see AI_USAGE.md, "PDF/A". */
+export interface DocumentPdfaOptions {
+    /** 2 or 3, by default 3. Part 1 forbids transparency and is rejected. */
+    readonly part?: 2 | 3;
+    /** `'B'` (default) or `'U'`; level A needs a structure tree the port does not write. */
+    readonly conformance?: 'B' | 'U';
+    /** The output intent's ICC profile, such as sRGB2014.icc; RGB, CMYK or gray. */
+    readonly colorProfile: Uint8Array;
+    /** `/OutputConditionIdentifier`, by default `Custom`. */
+    readonly outputCondition?: string;
+    /** Embedded files, PDF/A-3 only. */
+    readonly attachments?: readonly PdfaAttachedFileOptions[];
+    /** RDF added to the generated XMP packet, such as `new PdfaFacturxRdf().create()`. */
+    readonly extensionRdf?: string;
+}
 export interface DocumentOptions {
     readonly title?: string | null;
     readonly author?: string | null;
@@ -16,8 +32,10 @@ export interface DocumentOptions {
     /** The port URL is used by default and appended to caller-supplied values. */
     readonly producer?: string | null;
     readonly keywords?: string | null;
-    /** Caller-supplied XMP packet, serialized as UTF-8 XML metadata. */
+    /** Caller-supplied XMP packet, serialized as UTF-8 XML metadata. Not with `pdfa`. */
     readonly xmpMetadata?: string | null;
+    /** `/CreationDate` (and, under PDF/A, the XMP dates); the time of `save()` by default. */
+    readonly creationDate?: Date | null;
     readonly pageLabels?: readonly SerializedPageLabel[];
     /** The styles pages inherit unless their own `PageTheme` names another. */
     readonly theme?: ThemeData;
@@ -38,6 +56,18 @@ export interface DocumentOptions {
     readonly compress?: boolean;
     /** Select full-program WinAnsi for lazy TrueType declarations. */
     readonly simpleTrueTypeFonts?: boolean;
+    /**
+     * Paint a color's alpha. On by default, as upstream; `false` ignores color
+     * alpha. `Opacity` and other opacity states still paint.
+     */
+    readonly colorAlpha?: boolean;
+    /**
+     * Write PDF/A-2 or PDF/A-3, level B or U: an output intent, an XMP packet
+     * matching `/Info`, a trailer `/ID` and any attachments. `save()` throws on
+     * what PDF/A forbids and the port can see: a standard Type1 font, device
+     * colour the profile does not describe. Not verified with veraPDF.
+     */
+    readonly pdfa?: DocumentPdfaOptions | null;
 }
 export interface DocumentOutlineEntry {
     readonly title: string;
@@ -75,7 +105,7 @@ export declare class Document {
     private readonly fonts;
     /** Used only if the theme's default style somehow names no font at all. */
     private readonly fallbackFont;
-    constructor({ title, author, subject, creator, producer, keywords, xmpMetadata, pageLabels, theme, font, pageMode, compress, simpleTrueTypeFonts }?: DocumentOptions);
+    constructor({ title, author, subject, creator, producer, keywords, xmpMetadata, creationDate, pageLabels, theme, font, pageMode, compress, simpleTrueTypeFonts, colorAlpha, pdfa }?: DocumentOptions);
     /** The `PdfFont` `declaration` stands for here, built once. */
     resolveFont(declaration: Font): PdfFont;
     /**
@@ -107,6 +137,7 @@ export declare class Document {
         readonly y?: number | null;
         readonly zoom?: number | null;
     }): void;
+    private outlinePages;
     private renderSections;
     save(): Uint8Array;
     /** Render and serialize to a caller-owned destination without collecting the PDF. */

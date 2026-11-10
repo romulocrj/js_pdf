@@ -130,6 +130,8 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
     if (offset < 0) throw new RangeError('PieDataSet offset must not be negative');
 
     this.value = Number(value);
+    // A NaN value made every slice bearing NaN, written out as `NaN NaN m`.
+    if (!Number.isFinite(this.value)) throw new RangeError('PieDataSet value must be a finite number');
     this.legendWidget = legendWidget;
     const fill = this.color ?? normalizePaintColor(CHART_BLUE);
     const border = this.borderColor;
@@ -185,7 +187,10 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
           children: [new TextSpan({ text: this.legend, style: this.legendStyle ?? undefined })],
           style: new TextStyle({
             color: position === 'inside'
-              ? (isLightColor(this.color ?? CHART_BLUE) ? normalizePaintColor(CHART_WHITE) : normalizePaintColor(CHART_BLACK))
+              // Readable text: black on a light slice, white on a dark one. The
+              // helper was inverted before #1980 L57; flipped with it, the
+              // output is unchanged.
+              ? (isLightColor(this.color ?? CHART_BLUE) ? normalizePaintColor(CHART_BLACK) : normalizePaintColor(CHART_WHITE))
               : null
           })
         }),

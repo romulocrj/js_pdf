@@ -16,6 +16,12 @@
  *
  * Link annotations landed in phase 5.3, form fields in phase 5.6, and phase
  * 5.7 adds the geometric annotations consumed by the remaining widgets.
+ *
+ * Under PDF/A (phase 6.11) every annotation but a link needs an `/AP` holding
+ * only `/N` (ISO 19005-2 6.3.3). The document hands markup and empty fields an
+ * empty appearance - the widget's own painted child is what shows - and drops
+ * the down and rollover states; here a push button's `/N` becomes a one-state
+ * dictionary, since `/FT /Btn` requires one.
  */
 
 import { PdfBorder } from './border.ts';
@@ -25,9 +31,9 @@ import { PdfBool } from '../format/bool.ts';
 import { PdfArray } from '../format/array.ts';
 import { PdfDict } from '../format/dict.ts';
 import { PdfName } from '../format/name.ts';
-import { PdfNum } from '../format/num.ts';
+import { PdfNum, formatNumber } from '../format/num.ts';
 import { PdfString } from '../format/string.ts';
-import { colorOperator, PdfColor } from '../color.ts';
+import { colorOperator } from '../color.ts';
 import type { PaintColor } from '../color.ts';
 import type { PdfFont } from '../font/font.ts';
 import type { PdfImage } from './image.ts';
@@ -139,6 +145,14 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
   readonly defaultAppearanceName: string | null;
   readonly appearances: PdfResolvedFormAppearances | null;
 
+  /**
+   * The field this widget displays when several widgets share its name; set
+   * by `PdfDocument`. Null means the widget is its own field, the merged form
+   * ISO 32000-1 12.7.3.1 allows only for a single-widget field.
+   */
+  parent: PdfObject<PdfDict> | null = null;
+  private readonly pdfa: boolean;
+
   constructor(
     document: PdfObjectRegistry,
     page: PdfPage,
@@ -151,6 +165,7 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
     this.annotation = annotation;
     this.defaultAppearanceName = defaultAppearanceName;
     this.appearances = appearances;
+    this.pdfa = document.settings.pdfa !== undefined;
     page.annotations.push(this);
   }
 
@@ -225,6 +240,7 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
         PdfArray.fromNum(points.flatMap(point => [point.x, point.y]))
       )));
     }
+    if (this.appearances?.normal !== undefined) this.params.set('/AP', new PdfDict([['/N', this.appearances.normal.ref()]]));
   }
 
   private prepareForm(field: PdfFormFieldAnnotation): void {
@@ -243,28 +259,33 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
     ]));
     this.params.set('/P', this.page.ref());
     this.params.set('/F', new PdfNum(4));
-    this.params.set('/FT', new PdfName(fieldNames[field.fieldType]));
-    this.params.set('/T', new PdfString(field.name));
-    this.params.set('/Ff', new PdfNum(field.fieldFlags ?? 0));
+    // The field keys go on the shared parent when there is one; the kid keeps
+    // its rectangle, page, state and appearances, and names its field by
+    // `/Parent` instead of `/T`. As upstream #1980 does.
+    const fieldParams = this.parent?.params ?? this.params;
+    fieldParams.set('/FT', new PdfName(fieldNames[field.fieldType]));
+    if (this.parent === null) this.params.set('/T', new PdfString(field.name));
+    else this.params.set('/Parent', this.parent.ref());
+    fieldParams.set('/Ff', new PdfNum(field.fieldFlags ?? 0));
 
-    if (field.alternateName) this.params.set('/TU', new PdfString(field.alternateName));
-    if (field.mappingName) this.params.set('/TM', new PdfString(field.mappingName));
+    if (field.alternateName) fieldParams.set('/TU', new PdfString(field.alternateName));
+    if (field.mappingName) fieldParams.set('/TM', new PdfString(field.mappingName));
     if (field.maxLength !== null && field.maxLength !== undefined) {
-      this.params.set('/MaxLen', new PdfNum(field.maxLength));
+      fieldParams.set('/MaxLen', new PdfNum(field.maxLength));
     }
     if (field.textAlign !== null && field.textAlign !== undefined) {
-      this.params.set('/Q', new PdfNum(['left', 'center', 'right'].indexOf(field.textAlign)));
+      fieldParams.set('/Q', new PdfNum(['left', 'center', 'right'].indexOf(field.textAlign)));
     }
     if (field.items !== undefined) {
-      this.params.set('/Opt', new PdfArray(field.items.map(item => new PdfString(item))));
+      fieldParams.set('/Opt', new PdfArray(field.items.map(item => new PdfString(item))));
     }
 
     const isButton = field.fieldType === 'checkbox' || field.fieldType === 'button';
     if (field.value) {
-      this.params.set('/V', isButton ? new PdfName(field.value) : new PdfString(field.value));
+      fieldParams.set('/V', isButton ? new PdfName(field.value) : new PdfString(field.value));
     }
     if (field.defaultValue) {
-      this.params.set('/DV', isButton
+      fieldParams.set('/DV', isButton
         ? new PdfName(field.defaultValue)
         : new PdfString(field.defaultValue));
     }
@@ -273,10 +294,10 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
     }
 
     if (this.defaultAppearanceName !== null) {
-      const color = field.textColor ?? [0, 0, 0];
-      const operator = color instanceof PdfColor ? colorOperator(color) : `${color[0]} ${color[1]} ${color[2]} rg`;
-      this.params.set('/DA', new PdfString(
-        `${this.defaultAppearanceName} ${field.fontSize ?? 12} Tf ${operator}`
+      // Through `formatNumber` like every other number the port writes, so a
+      // non-finite size or a long fraction cannot leave the operator unreadable.
+      fieldParams.set('/DA', new PdfString(
+        `${this.defaultAppearanceName} ${formatNumber(field.fontSize ?? 12)} Tf ${colorOperator(field.textColor ?? [0, 0, 0])}`
       ));
     }
 
@@ -298,7 +319,10 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
 
     if (this.appearances !== null) {
       const appearances = new PdfDict();
-      if (this.appearances.normal !== undefined) {
+      if (this.appearances.normal !== undefined && this.pdfa && field.fieldType === 'button') {
+        appearances.set('/N', new PdfDict([['/On', this.appearances.normal.ref()]]));
+        this.params.set('/AS', new PdfName('/On'));
+      } else if (this.appearances.normal !== undefined) {
         appearances.set('/N', this.appearances.normal.ref());
       } else if (this.appearances.normalStates !== undefined) {
         const states = new PdfDict();

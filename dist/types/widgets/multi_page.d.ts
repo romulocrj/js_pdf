@@ -1,6 +1,8 @@
 import type { ColorInput } from '../pdf/color.ts';
 import type { SerializedPage } from '../pdf/document.ts';
 import type { PageSize } from '../pdf/page_format.ts';
+import type { TextDirection } from './border_radius.ts';
+import type { CrossAxisAlignment } from './flex.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
 import { PageTheme } from './page_theme.ts';
 import type { PageOrientation } from './page_theme.ts';
@@ -34,6 +36,13 @@ export interface MultiPageOptions {
     readonly orientation?: PageOrientation;
     /** The styles this section's widgets inherit; defaults to the document's. */
     readonly theme?: ThemeData;
+    /** The page's text direction; see `PageThemeOptions.textDirection`. */
+    readonly textDirection?: TextDirection | null;
+    /**
+     * Where a child narrower than the body is placed. `start` and `end` follow
+     * the text direction; `stretch` is placed as `start`, as upstream does.
+     */
+    readonly crossAxisAlignment?: CrossAxisAlignment;
     readonly gap?: number;
     readonly build: (context: RenderContext) => AnyWidget[];
     readonly header?: ((context: RenderContext) => AnyWidget) | null;
@@ -48,6 +57,7 @@ export declare class MultiPage implements Section {
      * with the paper when the orientation disagrees with the declared format.
      */
     readonly pageTheme: PageTheme;
+    readonly crossAxisAlignment: CrossAxisAlignment;
     readonly gap: number;
     readonly theme: ThemeData | null;
     readonly build: (context: RenderContext) => AnyWidget[];
@@ -56,7 +66,7 @@ export declare class MultiPage implements Section {
     readonly background: ColorInput | null;
     readonly maxPages: number;
     private renderedPages;
-    constructor({ pageTheme, format, pageFormat, margin, orientation, gap, theme, build, header, footer, background, maxPages }: MultiPageOptions);
+    constructor({ pageTheme, format, pageFormat, margin, orientation, textDirection, crossAxisAlignment, gap, theme, build, header, footer, background, maxPages }: MultiPageOptions);
     /** The paper as written, with the orientation applied. */
     get format(): PageSize;
     /** Margins in the resolved orientation, rotated with the paper. */
@@ -67,4 +77,6 @@ export declare class MultiPage implements Section {
     /** Page-count placeholders which deliberately do not copy canvas content. */
     private summaries;
     private paintLayer;
+    /** A body child's x: upstream's crossAxisAlignment, against the text direction. */
+    private childX;
 }

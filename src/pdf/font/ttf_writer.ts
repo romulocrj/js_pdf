@@ -34,8 +34,10 @@
  *     a composite with a scaled component has its remaining component indices
  *     rewritten at the wrong offsets and the subset does not re-parse.
  *   - Upstream indexes `tables` with `!` over a fixed list of ten names, so a
- *     font without `OS/2` throws when the directory is written. The port writes
- *     the tables it has.
+ *     font without `OS/2` throws when the directory is written, and the records
+ *     are in layout rather than tag order. The port writes the tables it has,
+ *     sorted by tag, including the hinting tables `cvt `, `fpgm`, `prep` and
+ *     `gasp`, as PR #1980 also does.
  *   - Upstream requires a `post` table. The port synthesizes an empty one, since
  *     the version it writes (3.0) declares "no glyph names" anyway.
  *   - Glyph traversal is guarded against a composite that reaches itself.
@@ -271,8 +273,10 @@ export class TtfWriter {
     }
 
     // Tables carried over verbatim, padded to a word boundary. The declared
-    // length stays the real one; only the stored bytes are padded.
-    for (const name of [TtfTable.head, TtfTable.maxp, TtfTable.hhea, TtfTable.os2]) {
+    // length stays the real one; only the stored bytes are padded. The glyph
+    // programs keep their instructions, so the hinting tables those call come
+    // too (PR #1980); without them a subset is structurally invalid.
+    for (const name of [TtfTable.head, TtfTable.maxp, TtfTable.hhea, TtfTable.os2, 'cvt ', 'fpgm', 'prep', 'gasp']) {
       const start = ttf.tableOffsets.get(name);
       if (start === undefined) {
         continue;
@@ -384,18 +388,9 @@ export class TtfWriter {
     tables: ReadonlyMap<string, Uint8Array>,
     tablesLength: ReadonlyMap<string, number>
   ): Uint8Array {
-    const tableKeys = [
-      TtfTable.head,
-      TtfTable.hhea,
-      TtfTable.maxp,
-      TtfTable.os2,
-      TtfTable.hmtx,
-      TtfTable.cmap,
-      TtfTable.loca,
-      TtfTable.glyf,
-      TtfTable.name,
-      TtfTable.post
-    ].filter(name => tables.has(name));
+    // The spec requires the records in ascending tag order; the tables follow
+    // in the same order.
+    const tableKeys = [...tables.keys()].sort();
 
     const numTables = tableKeys.length;
     const directoryLength = 12 + numTables * 16;
@@ -411,18 +406,17 @@ export class TtfWriter {
     view.setUint32(0, 0x00010000);
     view.setUint16(4, numTables);
 
-    // searchRange / entrySelector / rangeShift are binary-search hints. These
-    // are upstream's values, which do not match the specified formulas — the
-    // range covers the padded table count and the selector is a natural
-    // logarithm rather than a base-2 one. No reader depends on them, and
-    // matching upstream keeps the two implementations byte-comparable.
-    let pot = numTables;
-    while ((pot & (pot - 1)) !== 0) {
-      pot++;
+    // searchRange / entrySelector / rangeShift are binary-search hints, from
+    // the largest power of two not above numTables. Upstream rounded up and
+    // took a natural logarithm, writing 256/2/96 where 128/3/32 is required
+    // (PR #2009).
+    let entrySelector = 0;
+    while (2 << entrySelector <= numTables) {
+      entrySelector++;
     }
-    view.setUint16(6, pot * 16);
-    view.setUint16(8, Math.trunc(Math.log(pot)));
-    view.setUint16(10, pot * 16 - numTables * 16);
+    view.setUint16(6, 16 << entrySelector);
+    view.setUint16(8, entrySelector);
+    view.setUint16(10, numTables * 16 - (16 << entrySelector));
 
     let offset = directoryLength;
     let headOffset = 0;

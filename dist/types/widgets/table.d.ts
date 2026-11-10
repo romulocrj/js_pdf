@@ -1,5 +1,7 @@
 import type { ColorInput, PaintColor } from '../pdf/color.ts';
+import type { TextDirection } from './border_radius.ts';
 import type { BoxDecorationInput } from './decoration.ts';
+import type { ThemeData } from './theme.ts';
 import { SpanningWidget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
 export type TableCellVerticalAlignment = 'bottom' | 'middle' | 'top' | 'full';
@@ -70,7 +72,7 @@ export declare class IntrinsicColumnWidth extends TableColumnWidth {
     constructor({ flex }?: {
         readonly flex?: number | null;
     });
-    layout(child: AnyWidget, context: RenderContext, constraints: Constraints): ColumnLayout;
+    layout(child: AnyWidget, context: RenderContext, _constraints: Constraints): ColumnLayout;
 }
 export declare class FixedColumnWidth extends TableColumnWidth {
     readonly width: number;
@@ -109,6 +111,12 @@ export interface TableLayoutData {
 }
 export interface TableSpanState {
     readonly nextRow: number;
+    /** Column widths resolved by an earlier fragment, and what they were resolved for. */
+    readonly widths?: {
+        readonly key: string;
+        readonly theme: ThemeData;
+        readonly columns: readonly number[];
+    };
 }
 export interface TableOptions {
     readonly children?: readonly TableRow[];
@@ -117,6 +125,11 @@ export interface TableOptions {
     readonly columnWidths?: TableColumnWidthMap | null;
     readonly defaultColumnWidth?: TableColumnWidth;
     readonly tableWidth?: TableWidth;
+    /**
+     * The order the columns are laid out in; the ambient `Directionality` when
+     * null. Pass `'ltr'` to keep a table left to right inside an rtl subtree.
+     */
+    readonly textDirection?: TextDirection | null;
 }
 /** A grid whose rows share one set of computed column tracks. */
 export declare class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
@@ -126,8 +139,28 @@ export declare class Table extends SpanningWidget<TableLayoutData, TableSpanStat
     readonly columnWidths: TableColumnWidthMap | null;
     readonly defaultColumnWidth: TableColumnWidth;
     readonly tableWidth: TableWidth;
-    constructor({ children, border, defaultVerticalAlignment, columnWidths, defaultColumnWidth, tableWidth }?: TableOptions);
+    readonly textDirection: TextDirection | null;
+    constructor({ children, border, defaultVerticalAlignment, columnWidths, defaultColumnWidth, tableWidth, textDirection }?: TableOptions);
+    /** Whether the columns run right to left; upstream PR #1980 (CHANGELOG L81). */
+    private rtl;
     private resolveWidths;
+    /**
+     * Shrinks the inflexible columns, which together overflow `maximum`, in place.
+     *
+     * Every column used to be scaled by one factor, so a short column went below
+     * the width of one word and its cell hard-split it: `ATLANTICA` became
+     * `ATLANTI` / `CA`. Each column now keeps its min-content width, and the
+     * space left over is shared in proportion to how much more each wanted. Only
+     * when even the min-content total overflows are the minimums scaled together
+     * — which is the old uniform scaling whenever no column could shrink.
+     */
+    private fitColumns;
+    /**
+     * Lays out `headers`, then this table's rows from `start`, stopping before the
+     * first row that would end below `maxHeight`. The rows after it are never
+     * measured: a MultiPage fragment used to lay out every remaining row and then
+     * keep a page's worth, which made a long table quadratic.
+     */
     private layoutRows;
     layout(context: RenderContext, constraints: Constraints): LayoutBox<TableLayoutData>;
     initialSpanState(): TableSpanState;
