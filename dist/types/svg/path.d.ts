@@ -134,6 +134,7 @@ export declare class SvgPath extends SvgOperation {
     readonly d: string;
     constructor(d: string, brush: SvgBrush, clip: SvgClipPath, transform: SvgTransform, painter: SvgPainter);
     static fromXmlElement(element: XmlElement, painter: SvgPainter, parent: SvgBrush): SvgPath;
+    /** A geometry attribute, a percentage resolving against the viewport along `axis`. */
     private static numeric;
     private static rectData;
     protected paintShape(canvas: PdfCanvas): void;

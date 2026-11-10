@@ -29,6 +29,13 @@ export interface RenderContext extends DocumentContext {
     readonly inherited?: ReadonlyMap<Function, Inherited>;
     /** Text direction scoped by `Directionality`; individual text may override it. */
     readonly textDirection?: 'ltr' | 'rtl';
+    /**
+     * Set while a `Table` measures how narrow a cell can be (CSS min-content).
+     * Text then wraps at its widest unbreakable piece; every other widget lays
+     * out as usual, so wrappers still add their padding. Upstream marks this pass
+     * with an inherited `MinContentWidth` value instead.
+     */
+    readonly minContent?: boolean;
 }
 export interface Constraints {
     readonly minWidth?: number;

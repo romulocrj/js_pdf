@@ -23,6 +23,4 @@ export declare class SvgColor {
     setFillColor(_operation: SvgOperation, canvas: PdfCanvas): void;
     setStrokeColor(_operation: SvgOperation, canvas: PdfCanvas): void;
     static fromXml(color: string | null | undefined, parser: SvgParser, currentColor?: SvgColor): SvgColor;
-    /** `#abc` to `#aabbcc`; the port's colour reader takes six digits only. */
-    private static expandHex;
 }

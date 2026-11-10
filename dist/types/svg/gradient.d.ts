@@ -32,6 +32,11 @@ export declare abstract class SvgGradient extends SvgColor {
     private applyOpacityMask;
     setFillColor(operation: SvgOperation, canvas: PdfCanvas): void;
     setStrokeColor(operation: SvgOperation, canvas: PdfCanvas): void;
+    /**
+     * `url(#g)`, `url('#g')` or `url("#g")`, possibly followed by a fallback
+     * colour, which `SvgColor.fromXml` applies when this returns null. The old
+     * pattern was anchored on `)`, so a fallback or a quote left it unpainted.
+     */
     static fromReference(value: string, parser: SvgParser): SvgGradient | null;
 }
 export declare class SvgLinearGradient extends SvgGradient {

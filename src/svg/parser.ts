@@ -23,12 +23,15 @@
  * without `findById` and `colorFilter`. The `SvgImage` widget that drives this
  * followed in phase 2.7.
  *
- * UPSTREAM COMPATIBILITY: `sizeValue` returns `value / 100` for a percentage, which is
- * upstream's behaviour and is wrong in the general case — a percentage is
- * relative to the viewport, or to the diagonal for a length with no axis. It is
- * kept because changing it would silently move every SVG that has one, and
- * because nothing in the port's corpus relies on the correct reading. Fixing it
- * needs the viewport threaded down to every attribute lookup.
+ * Percentages (SVG 1.1 7.10): `lengthIn` resolves a geometry length against
+ * the nearest viewport, which every brush inherits: its width for an x length,
+ * its height for a y length and sqrt((w² + h²) / 2) for anything else.
+ * `sizeValue` still reads a percentage as a bare fraction, which is what a
+ * gradient coordinate or a stop offset means by one. Upstream divided every
+ * percentage by 100, so `<svg width="100%">` laid out as a 1pt speck; a
+ * percentage root size is now unset and `SvgImage` sizes from its box. The
+ * viewport rides on the brush instead of upstream PR #1980's mutable painter
+ * field, because the port builds operations eagerly.
  */
 
 import type { Rgb } from '../pdf/color.ts';
@@ -64,6 +67,13 @@ const UNIT_SUFFIXES: Readonly<Record<string, SvgUnit>> = Object.freeze({
  */
 export interface SvgFontSizeContext {
   readonly fontSize: SvgNumeric | null;
+  /** The viewport a percentage geometry length is a fraction of. */
+  readonly viewport?: SvgSize | null;
+}
+
+export interface SvgSize {
+  readonly width: number;
+  readonly height: number;
 }
 
 /** A length or a colour component, with the unit it was written in. */
@@ -104,7 +114,22 @@ export class SvgNumeric {
     throw new SyntaxError(`Invalid color value ${this.value} (${this.unit})`);
   }
 
-  /** A length in PDF points. */
+  /**
+   * A geometry length: a percentage of the brush's viewport width (`x`),
+   * height (`y`) or normalized diagonal (no axis), per SVG 1.1 7.10.
+   */
+  lengthIn(axis?: 'x' | 'y'): number {
+    const viewport = this.brush?.viewport;
+    if (this.unit !== 'percent' || viewport === null || viewport === undefined) {
+      return this.sizeValue;
+    }
+    const { width, height } = viewport;
+    return this.value / 100 * (
+      axis === 'x' ? width : axis === 'y' ? height : Math.sqrt((width * width + height * height) / 2)
+    );
+  }
+
+  /** A length in PDF points; a percentage is a bare fraction here. */
   get sizeValue(): number {
     switch (this.unit) {
       case 'percent':
@@ -139,6 +164,26 @@ const PARAMETER = /[\w.-]+(px|pt|em|cm|mm|in|%|)/g;
 
 export function splitNumeric(parameters: string, brush: SvgFontSizeContext | null): SvgNumeric[] {
   return [...parameters.matchAll(PARAMETER)].map(match => SvgNumeric.parse(match[0], brush));
+}
+
+const NUMBER = /[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g;
+
+/**
+ * A strict number list (`10-5` is two numbers), or null when anything but
+ * numbers and separators is present. For values that must be skipped when
+ * malformed rather than read as their numeric prefix: transforms, nested
+ * viewBoxes.
+ */
+export function parseNumbers(text: string): number[] | null {
+  return /^[\s,]*$/.test(text.replace(NUMBER, ' ')) ? (text.match(NUMBER) ?? []).map(Number) : null;
+}
+
+/** A nested element's `viewBox`, or null when absent or unusable. */
+export function parseViewBox(value: string | null): PdfRect | null {
+  const box = value === null ? null : parseNumbers(value);
+  return box?.length === 4 && box[2]! > 0 && box[3]! > 0
+    ? { x: box[0]!, y: box[1]!, width: box[2]!, height: box[3]! }
+    : null;
 }
 
 export function splitDoubles(parameters: string): number[] {
@@ -191,7 +236,14 @@ export function getNumeric(
   return SvgNumeric.parse(attribute, brush);
 }
 
-const STYLE_DECLARATION = /([\w-]+)\s*:\s*(.*)/;
+const STYLE_DECLARATION = /([\w-]+)\s*:\s*([\s\S]*)/;
+
+/**
+ * One declaration: `;` splits only outside quotes and parentheses, so
+ * `font-family:'A;B'` and `url(data:…;base64,…)` survive. Upstream split on
+ * every semicolon.
+ */
+const STYLE_SPLIT = /(?:[^;'"(]|'[^']*'|"[^"]*"|\([^)]*\))+/g;
 
 /**
  * Flatten a `style` attribute into real attributes on the same element, so
@@ -208,10 +260,7 @@ export function convertStyle(element: XmlElement): void {
     return;
   }
 
-  for (const declaration of style.split(';')) {
-    if (declaration.trim().length === 0) {
-      continue;
-    }
+  for (const declaration of style.match(STYLE_SPLIT) ?? []) {
     const match = STYLE_DECLARATION.exec(declaration);
     if (match === null) {
       continue;
@@ -263,8 +312,14 @@ export class SvgParser {
     const root = xml.rootElement;
     const viewBoxAttribute = root.getAttribute('viewBox');
 
-    const width = getNumeric(root, 'width', null)?.sizeValue ?? null;
-    const height = getNumeric(root, 'height', null)?.sizeValue ?? null;
+    // A percentage root size is relative to a box only the caller knows, so it
+    // is unset here and `SvgImage` sizes from the viewBox or its constraints.
+    const size = (name: string): number | null => {
+      const numeric = getNumeric(root, name, null);
+      return numeric === null || numeric.unit === 'percent' ? null : numeric.sizeValue;
+    };
+    const width = size('width');
+    const height = size('height');
 
     // With no viewBox the document's own size is the coordinate system, and
     // 1000 is upstream's stand-in when it states neither.

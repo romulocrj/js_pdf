@@ -2075,8 +2075,8 @@ class Transform extends Widget {
         }
       };
     }
-    const childBox = this.child.layout(context, this.adjustLayout && this.unconstrained ? new BoxConstraints : parent);
     if (!this.adjustLayout) {
+      const childBox = this.child.layout(context, parent);
       const size = parent.constrain(childBox);
       return {
         widget: this,
@@ -2089,23 +2089,44 @@ class Transform extends Widget {
         }
       };
     }
-    const corners = [ transformPoint(this.transform, 0, 0), transformPoint(this.transform, childBox.width, 0), transformPoint(this.transform, childBox.width, childBox.height), transformPoint(this.transform, 0, childBox.height) ];
-    const minimumX = Math.min(...corners.map(point => point.x));
-    const maximumX = Math.max(...corners.map(point => point.x));
-    const minimumY = Math.min(...corners.map(point => point.y));
-    const maximumY = Math.max(...corners.map(point => point.y));
-    const size = parent.constrain({
-      width: maximumX - minimumX,
-      height: maximumY - minimumY
-    });
+    const [a, b] = this.transform;
+    let childConstraints = this.unconstrained ? new BoxConstraints : Math.abs(a) <= 1e-9 && Math.abs(b) > 1e-9 ? new BoxConstraints({
+      minWidth: parent.minHeight,
+      maxWidth: parent.maxHeight,
+      minHeight: parent.minWidth,
+      maxHeight: parent.maxWidth
+    }) : parent;
+    let childBox = this.child.layout(context, childConstraints);
+    const bounds = () => {
+      const corners = [ transformPoint(this.transform, 0, 0), transformPoint(this.transform, childBox.width, 0), transformPoint(this.transform, childBox.width, childBox.height), transformPoint(this.transform, 0, childBox.height) ];
+      const x = Math.min(...corners.map(point => point.x));
+      const y = Math.min(...corners.map(point => point.y));
+      return {
+        x,
+        y,
+        width: Math.max(...corners.map(point => point.x)) - x,
+        height: Math.max(...corners.map(point => point.y)) - y
+      };
+    };
+    let rotated = bounds();
+    if (!this.unconstrained && (rotated.width > parent.maxWidth || rotated.height > parent.maxHeight)) {
+      const scale = Math.min(rotated.width > parent.maxWidth ? parent.maxWidth / rotated.width : 1, rotated.height > parent.maxHeight ? parent.maxHeight / rotated.height : 1);
+      childConstraints = new BoxConstraints({
+        maxWidth: (childConstraints.hasBoundedWidth ? childConstraints.maxWidth : childBox.width) * scale,
+        maxHeight: (childConstraints.hasBoundedHeight ? childConstraints.maxHeight : childBox.height) * scale
+      });
+      childBox = this.child.layout(context, childConstraints);
+      rotated = bounds();
+    }
+    const size = parent.constrain(rotated);
     return {
       widget: this,
       width: size.width,
       height: size.height,
       data: {
         childBox,
-        layoutDx: -minimumX,
-        layoutDy: -minimumY
+        layoutDx: -rotated.x,
+        layoutDy: -rotated.y
       }
     };
   }
@@ -3677,7 +3698,12 @@ class Stack extends Widget {
     let width = constraints.minWidth;
     let height = constraints.minHeight;
     let hasNonPositioned = false;
-    const nonPositionedConstraints = this.fit === "loose" ? constraints.loosen() : this.fit === "expand" ? BoxConstraints.tight(constraints.biggest) : constraints;
+    const nonPositionedConstraints = this.fit === "loose" ? constraints.loosen() : this.fit === "expand" ? new BoxConstraints({
+      minWidth: constraints.hasBoundedWidth ? constraints.maxWidth : 0,
+      maxWidth: constraints.maxWidth,
+      minHeight: constraints.hasBoundedHeight ? constraints.maxHeight : 0,
+      maxHeight: constraints.maxHeight
+    }) : constraints;
     for (const child of this.children) {
       if (child instanceof Positioned) continue;
       hasNonPositioned = true;
@@ -13120,6 +13146,14 @@ class SvgNumeric {
     }
     throw new SyntaxError(`Invalid color value ${this.value} (${this.unit})`);
   }
+  lengthIn(axis) {
+    const viewport = this.brush?.viewport;
+    if (this.unit !== "percent" || viewport === null || viewport === undefined) {
+      return this.sizeValue;
+    }
+    const {width, height} = viewport;
+    return this.value / 100 * (axis === "x" ? width : axis === "y" ? height : Math.sqrt((width * width + height * height) / 2));
+  }
   get sizeValue() {
     switch (this.unit) {
      case "percent":
@@ -13157,6 +13191,22 @@ function splitNumeric(parameters, brush) {
   return [ ...parameters.matchAll(PARAMETER) ].map(match => SvgNumeric.parse(match[0], brush));
 }
 
+const NUMBER = /[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g;
+
+function parseNumbers(text) {
+  return /^[\s,]*$/.test(text.replace(NUMBER, " ")) ? (text.match(NUMBER) ?? []).map(Number) : null;
+}
+
+function parseViewBox(value) {
+  const box = value === null ? null : parseNumbers(value);
+  return box?.length === 4 && box[2] > 0 && box[3] > 0 ? {
+    x: box[0],
+    y: box[1],
+    width: box[2],
+    height: box[3]
+  } : null;
+}
+
 function splitDoubles(parameters) {
   return [ ...parameters.matchAll(PARAMETER) ].map(match => {
     const value = Number.parseFloat(match[0]);
@@ -13187,17 +13237,16 @@ function getNumeric(element, name, brush, {namespace, defaultValue = null} = {})
   return SvgNumeric.parse(attribute, brush);
 }
 
-const STYLE_DECLARATION = /([\w-]+)\s*:\s*(.*)/;
+const STYLE_DECLARATION = /([\w-]+)\s*:\s*([\s\S]*)/;
+
+const STYLE_SPLIT = /(?:[^;'"(]|'[^']*'|"[^"]*"|\([^)]*\))+/g;
 
 function convertStyle(element) {
   const style = element.getAttribute("style")?.trim();
   if (style === undefined || style === null || style.length === 0) {
     return;
   }
-  for (const declaration of style.split(";")) {
-    if (declaration.trim().length === 0) {
-      continue;
-    }
+  for (const declaration of style.match(STYLE_SPLIT) ?? []) {
     const match = STYLE_DECLARATION.exec(declaration);
     if (match === null) {
       continue;
@@ -13217,8 +13266,12 @@ class SvgParser {
   static fromXml({xml, colorFilter = null}) {
     const root = xml.rootElement;
     const viewBoxAttribute = root.getAttribute("viewBox");
-    const width = getNumeric(root, "width", null)?.sizeValue ?? null;
-    const height = getNumeric(root, "height", null)?.sizeValue ?? null;
+    const size = name => {
+      const numeric = getNumeric(root, name, null);
+      return numeric === null || numeric.unit === "percent" ? null : numeric.sizeValue;
+    };
+    const width = size("width");
+    const height = size("height");
     const parsed = viewBoxAttribute === null ? [ 0, 0, width ?? 1e3, height ?? 1e3 ] : splitDoubles(viewBoxAttribute);
     if (parsed.length === 0 || parsed.length > 4) {
       throw new SyntaxError("viewBox must contain 1..4 parameters");
@@ -13297,47 +13350,39 @@ class SvgColor {
     if (parser.colorFilter !== null) {
       return new SvgColor(parser.colorFilter);
     }
-    const named = svgColors[value.toLowerCase()];
+    const lower = value.toLowerCase();
+    if (lower === "transparent") {
+      return new SvgColor([ 0, 0, 0 ], false, 0);
+    }
+    const named = svgColors[lower];
     if (named !== undefined) {
       return new SvgColor(normalizeColor(named));
     }
-    const lower = value.toLowerCase();
-    if (lower.startsWith("rgba")) {
-      const parts = splitNumeric(functionArguments(value), null);
-      if (parts.length >= 3) {
-        return new SvgColor([ parts[0].colorValue, parts[1].colorValue, parts[2].colorValue ], false, Math.min(1, Math.max(0, parts[3]?.value ?? 1)));
+    if (/^(rgb|hsl)a?\s*\(/.test(lower)) {
+      try {
+        const parts = splitNumeric(functionArguments(value), null);
+        const [first, second, third, alpha] = parts;
+        if (third === undefined || parts.some(part => part.unit !== "direct" && part.unit !== "percent")) {
+          return SvgColor.unknown;
+        }
+        const rgb = lower.startsWith("hsl") ? hslToRgb(first.unit === "percent" ? first.value / 100 : first.value / 360, second.colorValue, third.colorValue) : [ first.colorValue, second.colorValue, third.colorValue ];
+        const opacity = alpha === undefined ? 1 : alpha.unit === "percent" ? alpha.value / 100 : alpha.value;
+        return new SvgColor(rgb, false, Math.min(1, Math.max(0, opacity)));
+      } catch {
+        return SvgColor.unknown;
       }
+    }
+    if (lower.startsWith("url(")) {
+      const fallback = value.slice(value.indexOf(")") + 1).trim();
+      return fallback === "" || !value.includes(")") ? SvgColor.unknown : SvgColor.fromXml(fallback, parser, currentColor);
+    }
+    const hex = /^(?:#([0-9a-f]{3,4})|#?([0-9a-f]{6}|[0-9a-f]{8}))$/.exec(lower);
+    if (hex === null) {
       return SvgColor.unknown;
     }
-    if (lower.startsWith("hsl")) {
-      const parts = splitNumeric(functionArguments(value), null);
-      if (parts.length >= 3) {
-        return new SvgColor(hslToRgb(parts[0].colorValue, parts[1].colorValue, parts[2].colorValue));
-      }
-      return SvgColor.unknown;
-    }
-    if (lower.startsWith("rgb")) {
-      const parts = splitNumeric(functionArguments(value), null);
-      if (parts.length >= 3) {
-        return new SvgColor([ parts[0].colorValue, parts[1].colorValue, parts[2].colorValue ]);
-      }
-      return SvgColor.unknown;
-    }
-    if (lower.startsWith("url(#")) {
-      return SvgColor.unknown;
-    }
-    try {
-      return new SvgColor(normalizeColor(SvgColor.expandHex(value)));
-    } catch {
-      return SvgColor.unknown;
-    }
-  }
-  static expandHex(value) {
-    if (/^#[0-9a-fA-F]{3}$/.test(value)) {
-      const [, r, g, b] = value;
-      return `#${r}${r}${g}${g}${b}${b}`;
-    }
-    return value;
+    const digits = hex[2] ?? hex[1].replace(/./g, "$&$&");
+    const byte = index => parseInt(digits.slice(index, index + 2), 16) / 255;
+    return new SvgColor([ byte(0), byte(2), byte(4) ], false, digits.length > 6 ? byte(6) : 1);
   }
 }
 
@@ -13375,53 +13420,24 @@ class SvgTransform {
     let matrix = identityMatrix;
     for (const match of transform.matchAll(TRANSFORM)) {
       const name = match[1];
-      const parameters = splitDoubles(match[2]);
-      switch (name) {
-       case "matrix":
-        {
-          const m = [ ...parameters, 0, 0, 0, 0, 0, 0 ].slice(0, 6);
-          matrix = multiplyMatrix(matrix, m);
-          break;
-        }
-
-       case "translate":
-        {
-          const dx = parameters[0] ?? 0;
-          const dy = parameters[1] ?? 0;
-          matrix = multiplyMatrix(matrix, translationMatrix(dx, dy));
-          break;
-        }
-
-       case "scale":
-        {
-          const sx = parameters[0] ?? 1;
-          const sy = parameters[1] ?? sx;
-          matrix = multiplyMatrix(matrix, scaleMatrix(sx, sy));
-          break;
-        }
-
-       case "rotate":
-        {
-          const degrees = parameters[0] ?? 0;
-          const ox = parameters[1] ?? 0;
-          const oy = parameters[2] ?? 0;
-          if (parameters.length > 1) {
-            matrix = multiplyMatrix(matrix, translationMatrix(ox, oy));
-          }
-          matrix = multiplyMatrix(matrix, rotationMatrix(toRadians(degrees)));
-          if (ox !== 0 || oy !== 0) {
-            matrix = multiplyMatrix(matrix, translationMatrix(-ox, -oy));
-          }
-          break;
-        }
-
-       case "skewX":
-        matrix = multiplyMatrix(matrix, skewMatrix(toRadians(parameters[0] ?? 0), 0));
-        break;
-
-       case "skewY":
-        matrix = multiplyMatrix(matrix, skewMatrix(0, toRadians(parameters[0] ?? 0)));
-        break;
+      const p = parseNumbers(match[2]) ?? [];
+      const [a = 0, b, c = 0] = p;
+      const one = p.length === 1;
+      const upToTwo = p.length === 1 || p.length === 2;
+      let step = null;
+      if (name === "matrix") {
+        step = p.length === 6 ? p : null;
+      } else if (name === "translate") {
+        step = upToTwo ? translationMatrix(a, b ?? 0) : null;
+      } else if (name === "scale") {
+        step = upToTwo ? scaleMatrix(a, b ?? a) : null;
+      } else if (name === "rotate") {
+        step = one || p.length === 3 ? multiplyMatrix(multiplyMatrix(translationMatrix(b ?? 0, c), rotationMatrix(toRadians(a))), translationMatrix(-(b ?? 0), -c)) : null;
+      } else {
+        step = one ? skewMatrix(name === "skewX" ? toRadians(a) : 0, name === "skewY" ? toRadians(a) : 0) : null;
+      }
+      if (step !== null) {
+        matrix = multiplyMatrix(matrix, step);
       }
     }
     return new SvgTransform(matrix);
@@ -13429,6 +13445,15 @@ class SvgTransform {
 }
 
 SvgTransform.none = new SvgTransform(null);
+
+function inheritedColor(element, parser) {
+  for (let node = element; node !== null; node = node.parent) {
+    convertStyle(node);
+    const color = SvgColor.fromXml(node.getAttribute("color") ?? "inherit", parser, SvgColor.unknown);
+    if (color.isNotEmpty) return color;
+  }
+  return SvgColor.defaultColor;
+}
 
 function readStops(element, parser) {
   const colors = [];
@@ -13440,7 +13465,8 @@ function readStops(element, parser) {
       continue;
     }
     convertStyle(child);
-    const color = SvgColor.fromXml(child.getAttribute("stop-color") ?? "black", parser);
+    const value = child.getAttribute("stop-color") ?? "black";
+    const color = SvgColor.fromXml(value, parser, /^\s*currentcolor\s*$/i.test(value) ? inheritedColor(child, parser) : SvgColor.defaultColor);
     const offset = Math.min(1, Math.max(previous, getNumeric(child, "offset", null, {
       defaultValue: 0
     }).sizeValue));
@@ -13539,11 +13565,11 @@ class SvgGradient extends SvgColor {
     }
   }
   static fromReference(value, parser) {
-    const match = /^url\(\s*#([^)\s]+)\s*\)$/.exec(value.trim());
+    const match = /^url\(\s*(['"]?)#([^'")\s]+)\1\s*\)/.exec(value.trim());
     if (match === null) {
       return null;
     }
-    const element = parser.findById(match[1]);
+    const element = parser.findById(match[2]);
     if (element?.name.local === "linearGradient") {
       return SvgLinearGradient.fromElement(element, parser);
     }
@@ -13731,6 +13757,8 @@ const LINE_CAPS = Object.freeze({
 
 const LINE_JOINS = Object.freeze({
   miter: "miter",
+  "miter-clip": "miter",
+  arcs: "miter",
   bevel: "bevel",
   round: "round"
 });
@@ -13762,6 +13790,8 @@ class SvgBrush {
     this.fontWeight = fields.fontWeight;
     this.textAnchor = fields.textAnchor;
     this.blendMode = fields.blendMode;
+    this.viewport = fields.viewport;
+    this.preserveSpace = fields.preserveSpace;
   }
   merge(other) {
     if (other === null) {
@@ -13794,7 +13824,9 @@ class SvgBrush {
       textAnchor: other.textAnchor ?? this.textAnchor,
       strokeLineCap: other.strokeLineCap ?? this.strokeLineCap,
       strokeLineJoin: other.strokeLineJoin ?? this.strokeLineJoin,
-      strokeMiterLimit: other.strokeMiterLimit ?? this.strokeMiterLimit
+      strokeMiterLimit: other.strokeMiterLimit ?? this.strokeMiterLimit,
+      viewport: other.viewport ?? this.viewport,
+      preserveSpace: other.preserveSpace ?? this.preserveSpace
     });
   }
   copyWith(fields) {
@@ -13817,7 +13849,9 @@ class SvgBrush {
       fontStyle: fields.fontStyle ?? this.fontStyle,
       fontWeight: fields.fontWeight ?? this.fontWeight,
       textAnchor: fields.textAnchor ?? this.textAnchor,
-      blendMode: fields.blendMode ?? this.blendMode
+      blendMode: fields.blendMode ?? this.blendMode,
+      viewport: fields.viewport ?? this.viewport,
+      preserveSpace: fields.preserveSpace ?? this.preserveSpace
     });
   }
   static fromXml(element, parent, parser) {
@@ -13825,7 +13859,8 @@ class SvgBrush {
     const strokeDashArray = element.getAttribute("stroke-dasharray");
     const fillRule = element.getAttribute("fill-rule");
     const strokeLineCap = element.getAttribute("stroke-linecap");
-    const strokeLineJoin = element.getAttribute("stroke-linejoin");
+    const strokeLineJoin = element.getAttribute("stroke-linejoin")?.trim() ?? null;
+    const space = element.getAttribute("xml:space");
     const blendMode = element.getAttribute("mix-blend-mode");
     const color = SvgColor.fromXml(element.getAttribute("color"), parser, parent.color ?? SvgColor.defaultColor);
     const currentColor = color.inherit ? parent.color ?? SvgColor.defaultColor : color;
@@ -13860,12 +13895,14 @@ class SvgBrush {
       stroke: paint(element.getAttribute("stroke")),
       strokeWidth: getNumeric(element, "stroke-width", parent),
       strokeDashArray: strokeDashArray === null ? null : strokeDashArray === "none" ? [] : splitNumeric(strokeDashArray, parent).map(n => n.value),
-      strokeDashOffset: getNumeric(element, "stroke-dashoffset", parent)?.sizeValue ?? null,
+      strokeDashOffset: getNumeric(element, "stroke-dashoffset", parent)?.lengthIn() ?? null,
       fontSize: getNumeric(element, "font-size", parent),
       fontFamily: element.getAttribute("font-family"),
       fontStyle: element.getAttribute("font-style"),
       fontWeight: element.getAttribute("font-weight"),
-      textAnchor: TEXT_ANCHORS[element.getAttribute("text-anchor") ?? ""] ?? null
+      textAnchor: TEXT_ANCHORS[element.getAttribute("text-anchor") ?? ""] ?? null,
+      viewport: null,
+      preserveSpace: space === "preserve" ? true : space === "default" ? false : null
     }));
   }
 }
@@ -13889,7 +13926,9 @@ SvgBrush.defaultContext = new SvgBrush({
   fontFamily: "sans-serif",
   fontWeight: "normal",
   fontStyle: "normal",
-  textAnchor: "start"
+  textAnchor: "start",
+  viewport: null,
+  preserveSpace: false
 });
 
 class SvgClipPath {
@@ -13954,6 +13993,7 @@ SvgClipPath.empty = new SvgClipPath([]);
 
 class SvgOperation {
   constructor(brush, clip, transform, painter) {
+    this.mask = null;
     this.brush = brush;
     this.clip = clip;
     this.transform = transform;
@@ -13961,16 +14001,17 @@ class SvgOperation {
   }
   paint(canvas) {
     canvas.saveContext();
-    this.clip.apply(canvas, this.boundingBox());
     if (this.transform.matrix !== null) {
       canvas.setTransform(this.transform.matrix);
     }
+    this.clip.apply(canvas, this.boundingBox());
     if ((this.brush.opacity ?? 1) < 1 || this.brush.blendMode !== null) {
       canvas.setGraphicState(new PdfGraphicState({
         opacity: this.brush.opacity === 1 ? null : this.brush.opacity,
         blendMode: this.brush.blendMode
       }));
     }
+    this.mask?.apply(canvas);
     this.paintShape(canvas);
     canvas.restoreContext();
   }
@@ -14702,8 +14743,8 @@ class SvgPath extends SvgOperation {
 
      case "circle":
       {
-        const cx = SvgPath.numeric(element, "cx", brush);
-        const cy = SvgPath.numeric(element, "cy", brush);
+        const cx = SvgPath.numeric(element, "cx", brush, "x");
+        const cy = SvgPath.numeric(element, "cy", brush, "y");
         const r = SvgPath.numeric(element, "r", brush);
         d = `M${cx - r},${cy}A${r},${r} 0,0,0 ${cx + r},${cy}` + `A${r},${r} 0,0,0 ${cx - r},${cy}z`;
         break;
@@ -14711,20 +14752,20 @@ class SvgPath extends SvgOperation {
 
      case "ellipse":
       {
-        const cx = SvgPath.numeric(element, "cx", brush);
-        const cy = SvgPath.numeric(element, "cy", brush);
-        const rx = SvgPath.numeric(element, "rx", brush);
-        const ry = SvgPath.numeric(element, "ry", brush);
+        const cx = SvgPath.numeric(element, "cx", brush, "x");
+        const cy = SvgPath.numeric(element, "cy", brush, "y");
+        const rx = SvgPath.numeric(element, "rx", brush, "x");
+        const ry = SvgPath.numeric(element, "ry", brush, "y");
         d = `M${cx - rx},${cy}A${rx},${ry} 0,0,0 ${cx + rx},${cy}` + `A${rx},${ry} 0,0,0 ${cx - rx},${cy}z`;
         break;
       }
 
      case "line":
       {
-        const x1 = SvgPath.numeric(element, "x1", brush);
-        const y1 = SvgPath.numeric(element, "y1", brush);
-        const x2 = SvgPath.numeric(element, "x2", brush);
-        const y2 = SvgPath.numeric(element, "y2", brush);
+        const x1 = SvgPath.numeric(element, "x1", brush, "x");
+        const y1 = SvgPath.numeric(element, "y1", brush, "y");
+        const x2 = SvgPath.numeric(element, "x2", brush, "x");
+        const y2 = SvgPath.numeric(element, "y2", brush, "y");
         d = `M${x1} ${y1} ${x2} ${y2}`;
         break;
       }
@@ -14742,18 +14783,16 @@ class SvgPath extends SvgOperation {
     }
     return new SvgPath(d, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
   }
-  static numeric(element, name, brush) {
-    return getNumeric(element, name, brush, {
-      defaultValue: 0
-    }).sizeValue;
+  static numeric(element, name, brush, axis) {
+    return getNumeric(element, name, brush)?.lengthIn(axis) ?? 0;
   }
   static rectData(element, brush) {
-    const x = SvgPath.numeric(element, "x", brush);
-    const y = SvgPath.numeric(element, "y", brush);
-    const width = SvgPath.numeric(element, "width", brush);
-    const height = SvgPath.numeric(element, "height", brush);
-    let rx = getNumeric(element, "rx", brush)?.sizeValue ?? null;
-    let ry = getNumeric(element, "ry", brush)?.sizeValue ?? null;
+    const x = SvgPath.numeric(element, "x", brush, "x");
+    const y = SvgPath.numeric(element, "y", brush, "y");
+    const width = SvgPath.numeric(element, "width", brush, "x");
+    const height = SvgPath.numeric(element, "height", brush, "y");
+    let rx = getNumeric(element, "rx", brush)?.lengthIn("x") ?? null;
+    let ry = getNumeric(element, "ry", brush)?.lengthIn("y") ?? null;
     ry = ry ?? rx ?? 0;
     rx = rx ?? ry;
     const topRight = rx !== 0 || ry !== 0 ? `a ${rx} ${ry} 0 0 1 ${rx} ${ry}` : "";
@@ -14764,13 +14803,13 @@ class SvgPath extends SvgOperation {
   }
   paintShape(canvas) {
     const fill = this.brush.fill;
-    if (fill?.isNotEmpty === true) {
+    const fillOpacity = (this.brush.fillOpacity ?? 1) * (fill?.opacity ?? 1);
+    if (fill?.isNotEmpty === true && fillOpacity > 0) {
       canvas.saveContext();
       fill.setFillColor(this, canvas);
-      const opacity = (this.brush.fillOpacity ?? 1) * fill.opacity;
-      if (opacity < 1) {
+      if (fillOpacity < 1) {
         canvas.setGraphicState(new PdfGraphicState({
-          opacity
+          opacity: fillOpacity
         }));
       }
       drawShape(canvas, this.d);
@@ -14780,10 +14819,11 @@ class SvgPath extends SvgOperation {
       canvas.restoreContext();
     }
     const stroke = this.brush.stroke;
-    if (stroke?.isNotEmpty === true) {
+    const width = this.brush.strokeWidth?.lengthIn() ?? 1;
+    const opacity = (this.brush.strokeOpacity ?? 1) * (stroke?.opacity ?? 1);
+    if (stroke?.isNotEmpty === true && width > 0 && opacity > 0) {
       canvas.saveContext();
       stroke.setStrokeColor(this, canvas);
-      const opacity = (this.brush.strokeOpacity ?? 1) * stroke.opacity;
       if (opacity < 1) {
         canvas.setGraphicState(new PdfGraphicState({
           opacity
@@ -14794,7 +14834,7 @@ class SvgPath extends SvgOperation {
       canvas.setLineJoin(this.brush.strokeLineJoin ?? "miter");
       canvas.setMiterLimit(Math.max(1, this.brush.strokeMiterLimit ?? 4));
       canvas.setLineDashPattern(this.brush.strokeDashArray ?? [], this.brush.strokeDashOffset ?? 0);
-      canvas.setLineWidth(this.brush.strokeWidth?.sizeValue ?? 1);
+      canvas.setLineWidth(width);
       canvas.strokePath();
       canvas.restoreContext();
     }
@@ -16682,6 +16722,13 @@ class RichText extends SpanningWidget {
     const softWrap = this.softWrap ?? context.theme.softWrap;
     const maxLines = this.maxLines ?? context.theme.maxLines;
     const tokens = this.inputTokens(context, contentWidth);
+    if (context.minContent === true) {
+      let widest = 1;
+      for (const token of tokens) {
+        if (token.kind === "text" || token.kind === "widget") widest = Math.max(widest, token.width);
+      }
+      contentWidth = Math.min(contentWidth, widest);
+    }
     const fallbackStyle = resolveStyle(context, context.theme.defaultTextStyle, 0, this.textScaleFactor);
     const raw = [];
     let current = {
@@ -17366,7 +17413,8 @@ class FixedAxis extends GridAxis {
       height: 0
     };
     const lastSize = last ?? {
-      width: 0
+      width: 0,
+      height: 0
     };
     const ad = this.angleDirection();
     if (direction === "horizontal") {
@@ -17387,8 +17435,8 @@ class FixedAxis extends GridAxis {
       };
     }
     const textMargin = this.margin ?? 10;
-    const marginEnd = Math.max(incoming.marginEnd, ad === 0 ? lastSize.width / 2 : ad < 0 ? lastSize.width : 0);
-    const minStart = ad === 0 ? firstSize.height / 2 : ad > 0 ? firstSize.width : 0;
+    const marginEnd = Math.max(incoming.marginEnd, ad === 0 ? lastSize.height / 2 : ad < 0 ? lastSize.height : 0);
+    const minStart = ad === 0 ? firstSize.height / 2 : ad > 0 ? firstSize.height : 0;
     const crossAxisPosition = Math.max(incoming.crossAxisPosition, minStart);
     const axisPosition = Math.max(incoming.axisPosition, maxWidth + textMargin);
     return {
@@ -17817,6 +17865,7 @@ class PieDataSet extends Dataset {
     if (innerRadius < 0) throw new RangeError("PieDataSet innerRadius must not be negative");
     if (offset < 0) throw new RangeError("PieDataSet offset must not be negative");
     this.value = Number(value);
+    if (!Number.isFinite(this.value)) throw new RangeError("PieDataSet value must be a finite number");
     this.legendWidget = legendWidget;
     const fill = this.color ?? normalizePaintColor(CHART_BLUE);
     const border = this.borderColor;
@@ -19748,7 +19797,7 @@ class GridView extends SpanningWidget {
       childMainAxis: null
     };
   }
-  fragment(context, incoming, state) {
+  fragment(context, incoming, state, spanning) {
     const parent = BoxConstraints.from(incoming);
     if (state.firstChild >= this.children.length) {
       const size = parent.constrain({
@@ -19794,7 +19843,7 @@ class GridView extends SpanningWidget {
         childMainAxis = Math.max(0, (maxMain - this.mainAxisSpacing * (neededRuns - 1)) / neededRuns);
       }
     }
-    const runCapacity = Number.isFinite(maxMain) ? Math.max(0, Math.floor((maxMain + this.mainAxisSpacing + 1e-6) / (childMainAxis + this.mainAxisSpacing))) : neededRuns;
+    const runCapacity = Number.isFinite(maxMain) ? Math.max(spanning ? 0 : 1, Math.floor((maxMain + this.mainAxisSpacing + 1e-6) / (childMainAxis + this.mainAxisSpacing))) : neededRuns;
     const childCapacity = runCapacity * this.crossAxisCount;
     const count = Math.min(remaining, childCapacity);
     const runCount = count === 0 ? 0 : Math.ceil(count / this.crossAxisCount);
@@ -19852,10 +19901,10 @@ class GridView extends SpanningWidget {
     };
   }
   layout(context, constraints) {
-    return this.fragment(context, constraints, this.initialSpanState()).box;
+    return this.fragment(context, constraints, this.initialSpanState(), false).box;
   }
   layoutSpan(context, constraints, state) {
-    return this.fragment(context, constraints, state);
+    return this.fragment(context, constraints, state, true);
   }
   paint(context, box) {
     for (const child of box.data.children) {
@@ -20223,20 +20272,39 @@ function nonNegativeNumber(value, name) {
   return resolved;
 }
 
+function optionalSize(value, name) {
+  return value === null ? null : nonNegativeNumber(value, name);
+}
+
+function boundedSize(maximum, fallback, widget, option) {
+  if (Number.isFinite(maximum)) return maximum;
+  if (fallback === null) {
+    throw new RangeError(`${widget} is unbounded; give it ${option} or a parent that constrains it`);
+  }
+  return fallback;
+}
+
 function shadeColor(color, strength) {
   return normalizeColor(new PdfColor(...normalizeColor(color)).shade(strength));
 }
 
 class CircularProgressIndicator extends Widget {
-  constructor({value, color = null, strokeWidth = 4, backgroundColor = null}) {
+  constructor({value, color = null, strokeWidth = 4, backgroundColor = null, fallbackWidth = null, fallbackHeight = null}) {
     super();
     this.value = finiteNumber(value, "CircularProgressIndicator.value");
     this.color = color;
     this.strokeWidth = nonNegativeNumber(strokeWidth, "CircularProgressIndicator.strokeWidth");
     this.backgroundColor = backgroundColor;
+    this.fallbackWidth = optionalSize(fallbackWidth, "CircularProgressIndicator.fallbackWidth");
+    this.fallbackHeight = optionalSize(fallbackHeight, "CircularProgressIndicator.fallbackHeight");
   }
   layout(_context, constraints) {
-    const size = BoxConstraints.from(constraints).biggest;
+    const parent = BoxConstraints.from(constraints);
+    const name = "CircularProgressIndicator";
+    const size = parent.constrain({
+      width: boundedSize(parent.maxWidth, this.fallbackWidth, name, "fallbackWidth"),
+      height: boundedSize(parent.maxHeight, this.fallbackHeight, name, "fallbackHeight")
+    });
     return {
       widget: this,
       width: size.width,
@@ -20301,16 +20369,17 @@ class CircularProgressIndicator extends Widget {
 }
 
 class LinearProgressIndicator extends Widget {
-  constructor({value, backgroundColor = null, valueColor = null, minHeight = null}) {
+  constructor({value, backgroundColor = null, valueColor = null, minHeight = null, fallbackWidth = null}) {
     super();
     this.value = finiteNumber(value, "LinearProgressIndicator.value");
     this.backgroundColor = backgroundColor;
     this.valueColor = valueColor;
-    this.minHeight = minHeight === null ? null : nonNegativeNumber(minHeight, "LinearProgressIndicator.minHeight");
+    this.minHeight = optionalSize(minHeight, "LinearProgressIndicator.minHeight");
+    this.fallbackWidth = optionalSize(fallbackWidth, "LinearProgressIndicator.fallbackWidth");
   }
   layout(_context, constraints) {
     const size = new BoxConstraints({
-      minWidth: Infinity,
+      minWidth: boundedSize(constraints.maxWidth, this.fallbackWidth, "LinearProgressIndicator", "fallbackWidth"),
       minHeight: this.minHeight ?? 4
     }).enforce(constraints).smallest;
     return {
@@ -20701,31 +20770,83 @@ class TextField extends Widget {
   }
 }
 
+const ALIGN = Object.freeze({
+  Min: 0,
+  Mid: .5,
+  Max: 1
+});
+
+function viewBoxTransform(viewport, viewBox, preserveAspectRatio) {
+  if (viewBox === null) {
+    return [ 1, 0, 0, 1, viewport.x, viewport.y ];
+  }
+  const words = (preserveAspectRatio ?? "").trim().split(/\s+/).filter(word => word !== "defer");
+  let sx = viewport.width / viewBox.width;
+  let sy = viewport.height / viewBox.height;
+  let ax = .5;
+  let ay = .5;
+  if (words[0] !== "none") {
+    const align = /^x(Min|Mid|Max)Y(Min|Mid|Max)$/.exec(words[0] ?? "");
+    ax = ALIGN[align?.[1] ?? "Mid"];
+    ay = ALIGN[align?.[2] ?? "Mid"];
+    sx = sy = align !== null && words[1] === "slice" ? Math.max(sx, sy) : Math.min(sx, sy);
+  }
+  return [ sx, 0, 0, sy, viewport.x + (viewport.width - viewBox.width * sx) * ax - viewBox.x * sx, viewport.y + (viewport.height - viewBox.height * sy) * ay - viewBox.y * sy ];
+}
+
 class SvgGroup extends SvgOperation {
-  constructor(children, brush, clip, transform, painter) {
+  constructor(children, brush, clip, transform, painter, viewport = null) {
     super(brush, clip, transform, painter);
     this.children = children;
+    this.viewport = viewport;
   }
-  static fromXml(element, painter, parent) {
-    const brush = SvgBrush.fromXml(element, parent, painter.parser);
+  static fromXml(element, painter, parent, size = null) {
+    let brush = SvgBrush.fromXml(element, parent, painter.parser);
+    let viewport = null;
+    if (size !== null) {
+      const outer = brush.viewport ?? PdfRect.zero;
+      const length = (name, axis, fallback) => getNumeric(element, name, brush)?.lengthIn(axis) ?? fallback;
+      const box = {
+        x: length("x", "x", 0),
+        y: length("y", "y", 0),
+        width: size.width ?? length("width", "x", outer.width),
+        height: size.height ?? length("height", "y", outer.height)
+      };
+      if (box.width <= 0 || box.height <= 0) {
+        return new SvgGroup([], brush, SvgClipPath.empty, SvgTransform.none, painter);
+      }
+      const viewBox = parseViewBox(element.getAttribute("viewBox"));
+      viewport = {
+        box,
+        matrix: viewBoxTransform(box, viewBox, element.getAttribute("preserveAspectRatio"))
+      };
+      brush = brush.copyWith({
+        viewport: viewBox ?? box
+      });
+    }
     const children = [];
     for (const child of element.elements) {
-      if (child.name.local === "symbol") {
-        continue;
-      }
       const operation = painter.operationFromXml(child, brush);
       if (operation !== null) {
         children.push(operation);
       }
     }
-    return new SvgGroup(children, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+    return new SvgGroup(children, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter, viewport);
   }
   paintShape(canvas) {
+    if (this.viewport !== null) {
+      canvas.drawBox(this.viewport.box);
+      canvas.clipPath();
+      canvas.setTransform(this.viewport.matrix);
+    }
     for (const child of this.children) {
       child.paint(canvas);
     }
   }
   drawShape(canvas) {
+    if (this.viewport !== null) {
+      canvas.setTransform(this.viewport.matrix);
+    }
     for (const child of this.children) {
       child.draw(canvas);
     }
@@ -20745,7 +20866,8 @@ class SvgGroup extends SvgOperation {
       right = Math.max(right, PdfRect.right(box));
       top = Math.max(top, PdfRect.top(box));
     }
-    return PdfRect.fromLTRB(left, bottom, right, top);
+    const [sx, , , sy, tx, ty] = this.viewport?.matrix ?? [ 1, 0, 0, 1, 0, 0 ];
+    return PdfRect.fromLTRB(left * sx + tx, bottom * sy + ty, right * sx + tx, top * sy + ty);
   }
 }
 
@@ -20798,24 +20920,22 @@ class SvgImageOperation extends SvgOperation {
   }
   static fromXml(element, painter, parent) {
     const brush = SvgBrush.fromXml(element, parent, painter.parser);
-    const width = getNumeric(element, "width", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const height = getNumeric(element, "height", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const x = getNumeric(element, "x", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const y = getNumeric(element, "y", brush, {
-      defaultValue: 0
-    }).sizeValue;
+    const length = (name, axis) => getNumeric(element, name, brush)?.lengthIn(axis) ?? 0;
     const href = element.getAttribute("href") ?? element.getAttribute("href", "http://www.w3.org/1999/xlink");
     if (href === null || !href.startsWith("data:") || !href.includes(";base64,")) {
-      throw new TypeError("SVG image href must be a base64 data URL");
+      return null;
     }
-    const bytes = decodeBase64(href.slice(href.indexOf(";base64,") + 8));
-    const image = bytes[0] === 255 && bytes[1] === 216 ? PdfImage.fromJpeg(bytes) : PdfImage.fromPng(bytes);
+    let image;
+    try {
+      const bytes = decodeBase64(href.slice(href.indexOf(";base64,") + 8));
+      image = bytes[0] === 255 && bytes[1] === 216 ? PdfImage.fromJpeg(bytes) : PdfImage.fromPng(bytes);
+    } catch {
+      return null;
+    }
+    const width = length("width", "x");
+    const height = length("height", "y");
+    const x = length("x", "x");
+    const y = length("y", "y");
     return new SvgImageOperation(x, y, width, height, image, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
   }
   paintShape(canvas) {
@@ -20836,64 +20956,31 @@ class SvgImageOperation extends SvgOperation {
   }
 }
 
-function referenceId(value) {
-  const match = /^url\(\s*#([^\s)]+)\s*\)$/.exec(value);
-  return match?.[1] ?? null;
-}
-
-class SvgMaskedOperation extends SvgOperation {
-  constructor(target, mask, painter) {
-    super(target.brush, target.clip, target.transform, painter);
-    this.target = target;
-    this.mask = mask;
+class SvgMask {
+  constructor(content, painter) {
+    this.content = content;
+    this.painter = painter;
   }
-  static fromXml(element, target, painter) {
-    const attribute = element.getAttribute("mask");
-    const id = attribute === null ? null : referenceId(attribute);
-    const maskElement = id === null ? null : painter.parser.findById(id);
-    if (maskElement === null || maskElement.name.local !== "mask") {
-      throw new RangeError(`Unable to resolve SVG mask ${attribute ?? ""}`.trim());
+  static fromXml(element, painter) {
+    const id = /^url\(\s*(['"]?)#([^'")\s]+)\1\s*\)/.exec(element.getAttribute("mask") ?? "")?.[2];
+    const mask = id === undefined ? null : painter.parser.findById(id);
+    if (mask?.name.local !== "mask") {
+      return null;
     }
-    const mask = SvgGroup.fromXml(maskElement, painter, target.brush);
-    return new SvgMaskedOperation(target, mask, painter);
+    return new SvgMask(SvgGroup.fromXml(mask, painter, painter.brushOf(mask.parent)), painter);
   }
-  paint(canvas) {
+  apply(canvas) {
     const maskCanvas = new PdfCanvas(canvas.pageHeight);
-    this.mask.paint(maskCanvas);
-    canvas.saveContext();
+    this.content.paint(maskCanvas);
     canvas.setSoftMask({
       content: maskCanvas.takeOutputBytes(),
-      boundingBox: this.boundingBox(),
+      boundingBox: this.painter.userSpaceBox(canvas),
       fonts: maskCanvas.fonts,
       graphicStates: maskCanvas.graphicStates,
       patterns: maskCanvas.patterns,
       shadings: maskCanvas.shadings,
       images: maskCanvas.images
     });
-    this.target.paint(canvas);
-    canvas.restoreContext();
-  }
-  draw(canvas) {
-    this.target.draw(canvas);
-  }
-  paintShape(_canvas) {}
-  drawShape(_canvas) {}
-  boundingBox() {
-    return this.target.boundingBox();
-  }
-}
-
-class SvgSymbol extends SvgGroup {
-  static fromXml(element, painter, parent) {
-    const brush = painter.brushFor(element, parent);
-    const children = [];
-    for (const child of element.elements) {
-      const operation = painter.operationFromXml(child, brush);
-      if (operation !== null) {
-        children.push(operation);
-      }
-    }
-    return new SvgSymbol(children, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
   }
 }
 
@@ -21230,102 +21317,134 @@ function parseXml(source) {
   return new XmlParser(source).parseDocument();
 }
 
+const TEXT_CONTENT = new Set([ "tspan", "textPath", "a" ]);
+
 class SvgText extends SvgOperation {
-  constructor(x, y, advance, text, font, fontSize, metrics, spans, brush, clip, transform, painter) {
+  constructor(runs, brush, clip, transform, painter) {
     super(brush, clip, transform, painter);
-    this.x = x;
-    this.y = y;
-    this.advance = advance;
-    this.text = text;
-    this.font = font;
-    this.fontSize = fontSize;
-    this.metrics = metrics;
-    this.spans = spans;
+    this.runs = runs;
   }
-  static fromXml(element, painter, parent, offset = {
-    x: 0,
-    y: 0
-  }) {
+  static fromXml(element, painter, parent) {
     const brush = SvgBrush.fromXml(element, parent, painter.parser);
-    const dx = getNumeric(element, "dx", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const dy = getNumeric(element, "dy", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const ownX = getNumeric(element, "x", brush)?.sizeValue;
-    const ownY = getNumeric(element, "y", brush)?.sizeValue;
-    const text = element.children.filter(child => child instanceof XmlText).map(child => child.value).join("").trim();
-    const fontSize = brush.fontSize.sizeValue;
-    const font = painter.resolveFont(brush.fontFamily, brush.fontStyle, brush.fontWeight);
-    const metrics = font.stringMetrics(text, fontSize);
-    let x = (ownX ?? offset.x) + dx;
-    const y = (ownY ?? offset.y) + dy;
-    if (brush.textAnchor === "middle") x -= metrics.width / 2; else if (brush.textAnchor === "end") x -= metrics.width;
-    let childOffset = {
-      x: x + metrics.advanceWidth,
-      y
+    const layout = {
+      x: 0,
+      y: 0,
+      space: false,
+      chunks: []
     };
-    const spans = [];
-    for (const child of element.elements) {
-      if (child.name.local !== "tspan") continue;
-      const span = SvgText.fromXml(child, painter, brush, childOffset);
-      spans.push(span);
-      childOffset = {
-        x: span.x + span.advance,
-        y: span.y
-      };
+    SvgText.walk(element, painter, brush, layout, true);
+    const runs = [];
+    for (const {anchor, runs: chunk} of layout.chunks) {
+      const width = chunk.reduce((sum, run) => sum + run.metrics.advanceWidth, 0);
+      const shift = anchor === "middle" ? -width / 2 : anchor === "end" ? -width : 0;
+      for (const run of chunk) runs.push(shift === 0 ? run : {
+        ...run,
+        x: run.x + shift
+      });
     }
-    return new SvgText(x, y, metrics.advanceWidth, text, font, fontSize, metrics, spans, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+    return new SvgText(runs, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+  }
+  static walk(element, painter, brush, layout, root) {
+    const length = (name, axis) => getNumeric(element, name, brush)?.lengthIn(axis) ?? null;
+    const x = length("x", "x");
+    const y = length("y", "y");
+    if (root || x !== null || y !== null) {
+      layout.chunks.push({
+        anchor: brush.textAnchor ?? "start",
+        runs: []
+      });
+      layout.space = false;
+    }
+    layout.x = (x ?? layout.x) + (length("dx", "x") ?? 0);
+    layout.y = (y ?? layout.y) + (length("dy", "y") ?? 0);
+    const font = painter.resolveFont(brush.fontFamily, brush.fontStyle, brush.fontWeight);
+    const fontSize = brush.fontSize.sizeValue;
+    const chunk = () => layout.chunks[layout.chunks.length - 1];
+    for (const node of element.children) {
+      if (!(node instanceof XmlText)) {
+        if (TEXT_CONTENT.has(node.name.local)) {
+          SvgText.walk(node, painter, SvgBrush.fromXml(node, brush, painter.parser), layout, false);
+        }
+        continue;
+      }
+      let text = node.value.replace(brush.preserveSpace === true ? /[\r\n\t]/g : /\s+/g, " ");
+      if (brush.preserveSpace !== true) {
+        const lead = text.startsWith(" ");
+        const trail = text.endsWith(" ");
+        text = text.trim();
+        if (text.length > 0 && (layout.space || lead) && chunk().runs.length > 0) text = ` ${text}`;
+        layout.space = text.length > 0 ? trail : layout.space || lead || trail;
+      }
+      if (text.length === 0) continue;
+      const metrics = font.stringMetrics(text, fontSize);
+      chunk().runs.push({
+        text,
+        x: layout.x,
+        y: layout.y,
+        font,
+        fontSize,
+        metrics,
+        brush
+      });
+      layout.x += metrics.advanceWidth;
+    }
   }
   paintShape(canvas) {
-    const fill = this.brush.fill;
-    const stroke = this.brush.stroke;
-    if (this.text.length > 0 && fill.isNotEmpty) {
-      canvas.saveContext();
-      fill.setFillColor(this, canvas);
-      if (this.brush.fillOpacity < 1) {
-        canvas.setGraphicState(new PdfGraphicState({
-          opacity: this.brush.fillOpacity
-        }));
+    for (const run of this.runs) {
+      const {brush} = run;
+      const fill = brush.fill;
+      const stroke = brush.stroke;
+      const fillOpacity = brush.fillOpacity * fill.opacity;
+      const strokeOpacity = brush.strokeOpacity * stroke.opacity;
+      const strokeWidth = brush.strokeWidth?.lengthIn() ?? 1;
+      if (fill.isNotEmpty && fillOpacity > 0) {
+        canvas.saveContext();
+        fill.setFillColor(this, canvas);
+        if (fillOpacity < 1) {
+          canvas.setGraphicState(new PdfGraphicState({
+            opacity: fillOpacity
+          }));
+        }
+        canvas.drawString(run.font, run.fontSize, run.text, run.x, run.y, 0);
+        canvas.restoreContext();
       }
-      canvas.drawString(this.font, this.fontSize, this.text, this.x, this.y, 0);
-      canvas.restoreContext();
-    }
-    if (this.text.length > 0 && stroke.isNotEmpty) {
-      canvas.saveContext();
-      stroke.setStrokeColor(this, canvas);
-      if (this.brush.strokeWidth !== null) canvas.setLineWidth(this.brush.strokeWidth.sizeValue);
-      if (this.brush.strokeDashArray !== null) canvas.setLineDashPattern(this.brush.strokeDashArray);
-      if (this.brush.strokeOpacity < 1) {
-        canvas.setGraphicState(new PdfGraphicState({
-          opacity: this.brush.strokeOpacity
-        }));
+      if (stroke.isNotEmpty && strokeOpacity > 0 && strokeWidth > 0) {
+        canvas.saveContext();
+        stroke.setStrokeColor(this, canvas);
+        canvas.setLineWidth(strokeWidth);
+        if (brush.strokeDashArray !== null) canvas.setLineDashPattern(brush.strokeDashArray);
+        if (strokeOpacity < 1) {
+          canvas.setGraphicState(new PdfGraphicState({
+            opacity: strokeOpacity
+          }));
+        }
+        canvas.drawString(run.font, run.fontSize, run.text, run.x, run.y, 1);
+        canvas.restoreContext();
       }
-      canvas.drawString(this.font, this.fontSize, this.text, this.x, this.y, 1);
-      canvas.restoreContext();
     }
-    for (const span of this.spans) span.paint(canvas);
   }
   drawShape(canvas) {
-    if (this.text.length > 0) {
-      canvas.drawString(this.font, this.fontSize, this.text, this.x, this.y, 7);
+    for (const run of this.runs) {
+      canvas.drawString(run.font, run.fontSize, run.text, run.x, run.y, 7);
     }
-    for (const span of this.spans) span.draw(canvas);
   }
   boundingBox() {
-    let left = this.x + this.metrics.left;
-    let bottom = this.y - this.metrics.bottom;
-    let right = this.x + this.metrics.right;
-    let top = this.y - this.metrics.top;
-    for (const span of this.spans) {
-      const box = span.boundingBox();
-      left = Math.min(left, box.x);
-      bottom = Math.min(bottom, box.y);
-      right = Math.max(right, box.x + box.width);
-      top = Math.max(top, box.y + box.height);
+    let left = Infinity;
+    let bottom = Infinity;
+    let right = -Infinity;
+    let top = -Infinity;
+    for (const {x, y, metrics} of this.runs) {
+      left = Math.min(left, x + metrics.left);
+      right = Math.max(right, x + metrics.right);
+      bottom = Math.min(bottom, y - metrics.bottom);
+      top = Math.max(top, y - metrics.top);
     }
-    return {
+    return left > right ? {
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0
+    } : {
       x: left,
       y: bottom,
       width: right - left,
@@ -21347,27 +21466,16 @@ class SvgUse extends SvgOperation {
   }
   static fromXml(element, painter, parent) {
     const brush = SvgBrush.fromXml(element, parent, painter.parser);
-    const x = getNumeric(element, "x", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const y = getNumeric(element, "y", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const width = getNumeric(element, "width", brush, {
-      defaultValue: 0
-    }).sizeValue;
-    const height = getNumeric(element, "height", brush, {
-      defaultValue: 0
-    }).sizeValue;
+    const length = (name, axis) => getNumeric(element, name, brush)?.lengthIn(axis) ?? null;
+    const width = length("width", "x");
+    const height = length("height", "y");
     const hrefAttribute = element.getAttribute("href") ?? element.getAttribute("href", XLINK);
-    let href = null;
-    if (hrefAttribute?.startsWith("#") === true) {
-      const referenced = painter.parser.findById(hrefAttribute.slice(1));
-      if (referenced !== null && referenced !== element) {
-        href = painter.operationFromXml(referenced, brush);
-      }
-    }
-    return new SvgUse(x, y, width, height, href, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
+    const referenced = hrefAttribute?.startsWith("#") === true && hrefAttribute.length > 1 ? painter.parser.findById(hrefAttribute.slice(1)) : null;
+    const href = referenced === null ? null : painter.operationFromXml(referenced, brush, {
+      width,
+      height
+    });
+    return new SvgUse(length("x", "x") ?? 0, length("y", "y") ?? 0, width ?? 0, height ?? 0, href, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
   }
   paintShape(canvas) {
     if (this.x !== 0 || this.y !== 0) {
@@ -21389,10 +21497,14 @@ class SvgUse extends SvgOperation {
 class SvgPainter {
   constructor(parser, canvas, boundingBox, fontLookup = () => PdfType1Font.helvetica()) {
     this.fonts = new Map;
+    this.building = new Set;
     this.parser = parser;
     this.canvas = canvas;
     this.boundingBox = boundingBox;
     this.fontLookup = fontLookup;
+    this.rootBrush = SvgBrush.defaultContext.copyWith({
+      viewport: parser.viewBox
+    });
   }
   resolveFont(family, style, weight) {
     const key = `${family}-${style}-${weight}`;
@@ -21403,54 +21515,86 @@ class SvgPainter {
     }
     return font;
   }
-  brushFor(element, parent) {
-    return SvgBrush.fromXml(element, parent, this.parser);
+  brushOf(element) {
+    return element === null ? this.rootBrush : SvgBrush.fromXml(element, this.brushOf(element.parent), this.parser);
   }
-  operationFromXml(element, brush) {
-    if (element.getAttribute("visibility") === "hidden" || element.getAttribute("display") === "none") {
+  userSpaceBox(canvas) {
+    const inverse = invertMatrix(canvas.getTransform());
+    if (inverse === null) return this.boundingBox;
+    const {x, y, width, height} = this.boundingBox;
+    const corners = [ [ x, y ], [ x + width, y ], [ x, y + height ], [ x + width, y + height ] ].map(([px, py]) => transformPoint(inverse, px, py));
+    const xs = corners.map(point => point.x);
+    const ys = corners.map(point => point.y);
+    return PdfRect.fromLTRB(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
+  }
+  isHidden(element) {
+    convertStyle(element);
+    return element.getAttribute("display")?.trim() === "none" || element.getAttribute("visibility")?.trim() === "hidden";
+  }
+  operationFromXml(element, brush, size = null) {
+    if (this.isHidden(element) || this.building.has(element)) {
       return null;
     }
-    let operation;
-    switch (element.name.local) {
-     case "circle":
-     case "ellipse":
-     case "line":
-     case "path":
-     case "polygon":
-     case "polyline":
-     case "rect":
-      operation = SvgPath.fromXmlElement(element, this, brush);
-      break;
+    this.building.add(element);
+    try {
+      let operation;
+      switch (element.name.local) {
+       case "circle":
+       case "ellipse":
+       case "line":
+       case "path":
+       case "polygon":
+       case "polyline":
+       case "rect":
+        operation = SvgPath.fromXmlElement(element, this, brush);
+        break;
 
-     case "g":
-     case "svg":
-      operation = SvgGroup.fromXml(element, this, brush);
-      break;
+       case "g":
+        operation = SvgGroup.fromXml(element, this, brush);
+        break;
 
-     case "symbol":
-      operation = SvgSymbol.fromXml(element, this, brush);
-      break;
+       case "svg":
+        operation = SvgGroup.fromXml(element, this, brush, size ?? {});
+        break;
 
-     case "use":
-      operation = SvgUse.fromXml(element, this, brush);
-      break;
+       case "symbol":
+        operation = size === null ? null : SvgGroup.fromXml(element, this, brush, size);
+        break;
 
-     case "text":
-     case "tspan":
-      operation = SvgText.fromXml(element, this, brush);
-      break;
+       case "use":
+        operation = SvgUse.fromXml(element, this, brush);
+        break;
 
-     case "image":
-      operation = SvgImageOperation.fromXml(element, this, brush);
-      break;
+       case "text":
+        operation = SvgText.fromXml(element, this, brush);
+        break;
 
-     default:
-      operation = null;
+       case "image":
+        operation = SvgImageOperation.fromXml(element, this, brush);
+        break;
+
+       default:
+        operation = null;
+      }
+      if (operation !== null) {
+        operation.mask = SvgMask.fromXml(element, this);
+      }
+      return operation;
+    } finally {
+      this.building.delete(element);
     }
-    return operation !== null && element.getAttribute("mask") !== null ? SvgMaskedOperation.fromXml(element, operation, this) : operation;
   }
   rootOperation() {
-    return SvgGroup.fromXml(this.parser.root, this, SvgBrush.defaultContext);
+    const root = this.parser.root;
+    if (this.isHidden(root)) {
+      return new SvgGroup([], this.rootBrush, SvgClipPath.empty, SvgTransform.none, this);
+    }
+    this.building.add(root);
+    try {
+      return SvgGroup.fromXml(root, this, this.rootBrush);
+    } finally {
+      this.building.delete(root);
+    }
   }
   paint() {
     this.rootOperation().paint(this.canvas);
@@ -21964,16 +22108,17 @@ class Table extends SpanningWidget {
     if (totalFlex > 0) {
       let fixedSpace = widths.reduce((sum, value, index) => sum + (flex[index] === 0 ? value : 0), 0);
       if (fixedSpace > maximum && fixedSpace > 0) {
-        const scale = maximum / fixedSpace;
-        for (let index = 0; index < count; index++) {
-          if (flex[index] === 0) widths[index] = widths[index] * scale;
-        }
+        this.fitColumns(context, constraints, widths, flex, maximum);
         fixedSpace = maximum;
       }
       const remaining = Math.max(0, maximum - fixedSpace);
       for (let index = 0; index < count; index++) {
         if (flex[index] > 0) widths[index] = remaining * flex[index] / totalFlex;
       }
+      return widths;
+    }
+    if (intrinsicTotal > maximum && intrinsicTotal > 0) {
+      this.fitColumns(context, constraints, widths, flex, maximum);
       return widths;
     }
     if (this.tableWidth === "max") {
@@ -21983,13 +22128,42 @@ class Table extends SpanningWidget {
       const scale = maximum / intrinsicTotal;
       return widths.map(value => value * scale);
     }
-    if (intrinsicTotal > maximum && intrinsicTotal > 0) {
-      const scale = maximum / intrinsicTotal;
-      return widths.map(value => value * scale);
-    }
     return widths;
   }
-  layoutRows(context, _constraints, columnWidths, selectedRows) {
+  fitColumns(context, constraints, widths, flex, maximum) {
+    const minContext = {
+      ...context,
+      minContent: true
+    };
+    const mins = widths.map(() => 0);
+    for (const row of this.children) {
+      for (let index = 0; index < row.children.length; index++) {
+        if (flex[index] !== 0) continue;
+        const width = widths[index];
+        const columnWidth = mappedWidth(this.columnWidths, index) ?? this.defaultColumnWidth;
+        let minimum = width;
+        if (columnWidth instanceof IntrinsicColumnWidth && columnWidth.flex === null) {
+          const box = row.children[index].layout(minContext, constraints);
+          if (Number.isFinite(box.width)) minimum = Math.min(width, Math.max(0, box.width));
+        }
+        mins[index] = Math.max(mins[index], minimum);
+      }
+    }
+    let totalMin = 0;
+    let totalMax = 0;
+    for (let index = 0; index < widths.length; index++) {
+      if (flex[index] !== 0) continue;
+      totalMin += mins[index];
+      totalMax += widths[index];
+    }
+    const share = (maximum - totalMin) / (totalMax - totalMin);
+    const scale = maximum / totalMin;
+    for (let index = 0; index < widths.length; index++) {
+      if (flex[index] !== 0) continue;
+      widths[index] = totalMin <= maximum ? mins[index] + (widths[index] - mins[index]) * share : mins[index] * scale;
+    }
+  }
+  layoutRows(context, columnWidths, headers, start, maxHeight) {
     if (columnWidths.length === 0) {
       return {
         widget: this,
@@ -22005,7 +22179,9 @@ class Table extends SpanningWidget {
     const rows = [];
     const rowHeights = [];
     let rowY = 0;
-    for (const row of selectedRows) {
+    const total = headers.length + this.children.length - start;
+    for (let position = 0; position < total; position++) {
+      const row = position < headers.length ? headers[position] : this.children[start + position - headers.length];
       const measured = [];
       let x = 0;
       let rowHeight = 0;
@@ -22025,6 +22201,7 @@ class Table extends SpanningWidget {
         rowHeight = Math.max(rowHeight, box.height);
         x += width;
       }
+      if (rowY + rowHeight > maxHeight + .001) break;
       const alignment = row.verticalAlignment ?? this.defaultVerticalAlignment;
       const cells = measured.map(cell => {
         const height = alignment === "full" ? rowHeight : cell.box.height;
@@ -22058,7 +22235,7 @@ class Table extends SpanningWidget {
   }
   layout(context, constraints) {
     const columnWidths = this.resolveWidths(context, constraints);
-    return this.layoutRows(context, constraints, columnWidths, this.children);
+    return this.layoutRows(context, columnWidths, [], 0, Infinity);
   }
   initialSpanState() {
     return Object.freeze({
@@ -22070,33 +22247,23 @@ class Table extends SpanningWidget {
     if (!Number.isInteger(nextRow) || nextRow < 0 || nextRow > this.children.length) {
       throw new RangeError("Invalid table continuation state");
     }
-    const columnWidths = this.resolveWidths(context, constraints);
-    const candidates = [];
-    for (let index = 0; index < this.children.length; index++) {
-      const row = this.children[index];
-      if (index >= nextRow || row.repeat) {
-        candidates.push({
-          row,
-          index
-        });
-      }
+    const parent = BoxConstraints.from(constraints);
+    const key = `${parent.minWidth},${parent.maxWidth},${parent.minHeight},${parent.maxHeight}`;
+    let widths = state.widths;
+    if (widths === undefined || widths.key !== key || widths.theme !== context.theme) {
+      widths = Object.freeze({
+        key,
+        theme: context.theme,
+        columns: Object.freeze(this.resolveWidths(context, constraints))
+      });
     }
-    const measured = this.layoutRows(context, constraints, columnWidths, candidates.map(candidate => candidate.row));
-    let height = 0;
-    let count = 0;
-    let followingRow = nextRow;
-    for (let index = 0; index < measured.data.rows.length; index++) {
-      const rowHeight = measured.data.rowHeights[index] ?? 0;
-      if (height + rowHeight > constraints.maxHeight + .001) {
-        break;
-      }
-      height += rowHeight;
-      count++;
-      const originalIndex = candidates[index].index;
-      if (originalIndex >= followingRow) {
-        followingRow = originalIndex + 1;
-      }
+    const columnWidths = widths.columns;
+    const headers = [];
+    for (let index = 0; index < nextRow; index++) {
+      if (this.children[index].repeat) headers.push(this.children[index]);
     }
+    const box = this.layoutRows(context, columnWidths, headers, nextRow, constraints.maxHeight);
+    const followingRow = nextRow + Math.max(0, box.data.rows.length - headers.length);
     const hasMore = followingRow < this.children.length;
     if (hasMore && followingRow === nextRow) {
       const emptyBox = {
@@ -22111,26 +22278,18 @@ class Table extends SpanningWidget {
       };
       return {
         box: emptyBox,
-        nextState: state,
+        nextState: Object.freeze({
+          nextRow,
+          widths
+        }),
         hasMore: true
       };
     }
-    const rows = measured.data.rows.slice(0, count);
-    const rowHeights = measured.data.rowHeights.slice(0, count);
-    const box = {
-      widget: this,
-      width: measured.width,
-      height,
-      data: {
-        columnWidths,
-        rowHeights,
-        rows
-      }
-    };
     return {
       box,
       nextState: Object.freeze({
-        nextRow: followingRow
+        nextRow: followingRow,
+        widths
       }),
       hasMore
     };

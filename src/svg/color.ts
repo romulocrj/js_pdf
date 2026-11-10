@@ -138,65 +138,62 @@ export class SvgColor {
       return new SvgColor(parser.colorFilter);
     }
 
-    const named = svgColors[value.toLowerCase()];
+    const lower = value.toLowerCase();
+
+    // Upstream's table gives `transparent` six hex digits, so it painted
+    // opaque white; it is black at alpha 0, which paints nothing.
+    if (lower === 'transparent') {
+      return new SvgColor([0, 0, 0], false, 0);
+    }
+
+    const named = svgColors[lower];
     if (named !== undefined) {
       return new SvgColor(normalizeColor(named));
     }
 
-    const lower = value.toLowerCase();
-
-    if (lower.startsWith('rgba')) {
-      // The alpha operand is parsed and discarded: the port's colour type has
-      // no alpha, and `/ca` would have to be set on the graphic state instead.
-      const parts = splitNumeric(functionArguments(value), null);
-      if (parts.length >= 3) {
-        return new SvgColor(
-          [parts[0]!.colorValue, parts[1]!.colorValue, parts[2]!.colorValue],
-          false,
-          Math.min(1, Math.max(0, parts[3]?.value ?? 1))
-        );
+    // Alpha, from any syntax, is carried as `opacity` and folded by the painter
+    // into fill-opacity or stroke-opacity; the canvas always gets an opaque
+    // colour, so a graphics layer that honours colour alpha cannot apply it
+    // twice.
+    if (/^(rgb|hsl)a?\s*\(/.test(lower)) {
+      try {
+        const parts = splitNumeric(functionArguments(value), null);
+        const [first, second, third, alpha] = parts;
+        if (third === undefined || parts.some(part => part.unit !== 'direct' && part.unit !== 'percent')) {
+          return SvgColor.unknown;
+        }
+        // Hue is in degrees; upstream divided it by 255.
+        const rgb: Rgb = lower.startsWith('hsl')
+          ? hslToRgb(first!.unit === 'percent' ? first!.value / 100 : first!.value / 360, second!.colorValue, third.colorValue)
+          : [first!.colorValue, second!.colorValue, third.colorValue];
+        const opacity = alpha === undefined ? 1 : alpha.unit === 'percent' ? alpha.value / 100 : alpha.value;
+        return new SvgColor(rgb, false, Math.min(1, Math.max(0, opacity)));
+      } catch {
+        // An operand that is not a number, or a length unit, is invalid paint
+        // rather than an exception out of the document (upstream threw).
+        return SvgColor.unknown;
       }
-      return SvgColor.unknown;
     }
 
-    if (lower.startsWith('hsl')) {
-      const parts = splitNumeric(functionArguments(value), null);
-      if (parts.length >= 3) {
-        return new SvgColor(hslToRgb(parts[0]!.colorValue, parts[1]!.colorValue, parts[2]!.colorValue));
-      }
-      return SvgColor.unknown;
+    if (lower.startsWith('url(')) {
+      // `SvgBrush` resolves a paint server first; reaching here means it could
+      // not be, so the fallback colour after the reference applies.
+      const fallback = value.slice(value.indexOf(')') + 1).trim();
+      return fallback === '' || !value.includes(')')
+        ? SvgColor.unknown
+        : SvgColor.fromXml(fallback, parser, currentColor);
     }
 
-    if (lower.startsWith('rgb')) {
-      const parts = splitNumeric(functionArguments(value), null);
-      if (parts.length >= 3) {
-        return new SvgColor([parts[0]!.colorValue, parts[1]!.colorValue, parts[2]!.colorValue]);
-      }
-      return SvgColor.unknown;
-    }
-
-    if (lower.startsWith('url(#')) {
-      // `SvgBrush` resolves supported paint servers before reaching this
-      // fallback. An unknown URL remains unpainted.
-      return SvgColor.unknown;
-    }
-
-    try {
-      return new SvgColor(normalizeColor(SvgColor.expandHex(value)));
-    } catch {
+    // `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa` (and the six or eight digits bare).
+    const hex = /^(?:#([0-9a-f]{3,4})|#?([0-9a-f]{6}|[0-9a-f]{8}))$/.exec(lower);
+    if (hex === null) {
       // Upstream prints the unknown colour and carries on. The port has no
       // console under ClearScript, so it carries on silently — the shape simply
       // does not paint, which is visible enough.
       return SvgColor.unknown;
     }
-  }
-
-  /** `#abc` to `#aabbcc`; the port's colour reader takes six digits only. */
-  private static expandHex(value: string): string {
-    if (/^#[0-9a-fA-F]{3}$/.test(value)) {
-      const [, r, g, b] = value;
-      return `#${r}${r}${g}${g}${b}${b}`;
-    }
-    return value;
+    const digits = hex[2] ?? hex[1]!.replace(/./g, '$&$&');
+    const byte = (index: number): number => parseInt(digits.slice(index, index + 2), 16) / 255;
+    return new SvgColor([byte(0), byte(2), byte(4)], false, digits.length > 6 ? byte(6) : 1);
   }
 }

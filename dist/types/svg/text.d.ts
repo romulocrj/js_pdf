@@ -8,23 +8,22 @@ import { SvgOperation } from './operation.ts';
 import type { SvgPainter } from './painter.ts';
 import { SvgTransform } from './transform.ts';
 import type { XmlElement } from './xml.ts';
-interface TextOffset {
-    readonly x: number;
-    readonly y: number;
-}
-export declare class SvgText extends SvgOperation {
-    readonly x: number;
-    readonly y: number;
-    readonly advance: number;
+/** One text node drawn at one place, with the style in force where it was written. */
+export interface SvgTextRun {
     readonly text: string;
+    readonly x: number;
+    readonly y: number;
     readonly font: PdfFont;
     readonly fontSize: number;
     readonly metrics: PdfFontMetrics;
-    readonly spans: readonly SvgText[];
-    constructor(x: number, y: number, advance: number, text: string, font: PdfFont, fontSize: number, metrics: PdfFontMetrics, spans: readonly SvgText[], brush: SvgBrush, clip: SvgClipPath, transform: SvgTransform, painter: SvgPainter);
-    static fromXml(element: XmlElement, painter: SvgPainter, parent: SvgBrush, offset?: TextOffset): SvgText;
+    readonly brush: SvgBrush;
+}
+export declare class SvgText extends SvgOperation {
+    readonly runs: readonly SvgTextRun[];
+    constructor(runs: readonly SvgTextRun[], brush: SvgBrush, clip: SvgClipPath, transform: SvgTransform, painter: SvgPainter);
+    static fromXml(element: XmlElement, painter: SvgPainter, parent: SvgBrush): SvgText;
+    private static walk;
     protected paintShape(canvas: PdfCanvas): void;
     protected drawShape(canvas: PdfCanvas): void;
     boundingBox(): PdfRect;
 }
-export {};

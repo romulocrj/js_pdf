@@ -1,5 +1,6 @@
 import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { BoxDecorationInput } from './decoration.ts';
+import type { ThemeData } from './theme.ts';
 import { SpanningWidget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
 export type TableCellVerticalAlignment = 'bottom' | 'middle' | 'top' | 'full';
@@ -109,6 +110,12 @@ export interface TableLayoutData {
 }
 export interface TableSpanState {
     readonly nextRow: number;
+    /** Column widths resolved by an earlier fragment, and what they were resolved for. */
+    readonly widths?: {
+        readonly key: string;
+        readonly theme: ThemeData;
+        readonly columns: readonly number[];
+    };
 }
 export interface TableOptions {
     readonly children?: readonly TableRow[];
@@ -128,6 +135,23 @@ export declare class Table extends SpanningWidget<TableLayoutData, TableSpanStat
     readonly tableWidth: TableWidth;
     constructor({ children, border, defaultVerticalAlignment, columnWidths, defaultColumnWidth, tableWidth }?: TableOptions);
     private resolveWidths;
+    /**
+     * Shrinks the inflexible columns, which together overflow `maximum`, in place.
+     *
+     * Every column used to be scaled by one factor, so a short column went below
+     * the width of one word and its cell hard-split it: `ATLANTICA` became
+     * `ATLANTI` / `CA`. Each column now keeps its min-content width, and the
+     * space left over is shared in proportion to how much more each wanted. Only
+     * when even the min-content total overflows are the minimums scaled together
+     * — which is the old uniform scaling whenever no column could shrink.
+     */
+    private fitColumns;
+    /**
+     * Lays out `headers`, then this table's rows from `start`, stopping before the
+     * first row that would end below `maxHeight`. The rows after it are never
+     * measured: a MultiPage fragment used to lay out every remaining row and then
+     * keep a page's worth, which made a long table quadratic.
+     */
     private layoutRows;
     layout(context: RenderContext, constraints: Constraints): LayoutBox<TableLayoutData>;
     initialSpanState(): TableSpanState;
