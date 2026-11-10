@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import * as pw from '../src/index.ts';
 import { TtfParser } from '../src/pdf/font/ttf_parser.ts';
 import { logicalToVisual } from '../src/pdf/font/bidi_utils.ts';
+import { wrapText } from '../src/widgets/text.ts';
 import { latin1 } from './support/pdf-text.mjs';
 
 const asset = name => new Uint8Array(readFileSync(new URL(`../examples/assets/${name}`, import.meta.url)));
@@ -194,12 +195,30 @@ test('L142: a separator the font cannot draw is measured and drawn as a space', 
   assert.ok(measure(new pw.Text('A\u2003B', { style: openSans })).width > space, 'a supported em space keeps its own advance');
 });
 
-test('L143: hyphenated words break after the hyphen', () => {
+test('L143: only a word longer than the line is cut, after a hyphen', () => {
+  // As upstream #1980: a hyphen is a cut point for a word that overflows a
+  // whole line; normal wrapping moves a hyphenated word to the next line whole.
   assert.deepEqual(lines(measure(new pw.Text('Hello-World-this-should-break', { style: courier }), 100)),
     ['Hello-World-', 'this-should-', 'break']);
   assert.deepEqual(lines(measure(new pw.Text('Hello-World', { style: courier }), 40)), ['Hello-', 'World']);
+  assert.deepEqual(lines(measure(new pw.Text('Hello-World', { style: courier }), 50)), ['Hello-', 'World']);
+  assert.deepEqual(lines(measure(new pw.Text('ab Hello-World', { style: courier }), 70)), ['ab', 'Hello-World']);
+  assert.deepEqual(lines(measure(new pw.Text('ab e-mail cd', { style: courier }), 40)), ['ab', 'e-mail', 'cd']);
   assert.deepEqual(lines(measure(new pw.Text('xx 3-4', { style: courier }), 30)), ['xx', '3-4']);
   assert.deepEqual(lines(measure(new pw.Text('ab -5', { style: courier }), 18)), ['ab', '-5']);
+  // Not before a digit and not where a word joiner follows: the width search cuts.
+  assert.deepEqual(lines(measure(new pw.Text('INV-2024-0001', { style: courier }), 50)), ['INV-2024', '-0001']);
+  assert.deepEqual(lines(measure(new pw.Text('Hello-\u2060World', { style: courier }), 50)), ['Hello-Wo', 'rld']);
+  // The phase-0 helper shares the cut.
+  assert.deepEqual(wrapText('Hello-World', 50, 10, pw.PdfType1Font.courier()), ['Hello-', 'World']);
+});
+
+test('L143: min-content is the widest piece between hyphens and soft hyphens', () => {
+  const minContent = value => new pw.Text(value, { style: courier })
+    .layout({ ...context(), minContent: true }, { maxWidth: 1000, maxHeight: 100 }).width;
+  near(minContent('Hello-World'), 36, 'Hello- is the widest piece');
+  near(minContent('Bundes\u00adrat'), 42, 'a taken soft hyphen draws a hyphen');
+  near(minContent('INV-2024'), 48, 'no cut before a digit');
 });
 
 test('L155: letter spacing is one gap per character across spans and words', () => {

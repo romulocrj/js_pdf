@@ -239,6 +239,8 @@ interface TextFlowToken {
   readonly levels?: Uint8Array | null;
   /** Offsets in `text` where a soft hyphen was: hyphenation points. */
   readonly shy?: readonly number[] | undefined;
+  /** Offsets in `text` just after a hyphen a too-long word may be cut at (L143). */
+  readonly hyphens?: readonly number[] | undefined;
 }
 
 interface WidgetFlowToken {
@@ -391,33 +393,75 @@ function resolveStyle(
   };
 }
 
-function splitLongWord(value: string, maxWidth: number, style: ResolvedTextStyle): string[] {
-  const parts: string[] = [];
-  let current = '';
-  for (const character of value) {
-    const candidate = current + character;
-    if (current !== '' && textWidth(style, candidate) - style.letterSpacing > maxWidth) {
-      parts.push(current);
-      current = character;
-    } else {
-      current = candidate;
-    }
+/**
+ * Whether a too-long word may be cut just after `code` when `next` follows. As
+ * upstream #1980 (L143): after a hyphen, but not before a digit, so `3-4` stays
+ * whole, and not before U+2060, which forbids the break. Callers exclude a
+ * word-initial hyphen, so `-5` keeps its sign.
+ */
+function cutsAfter(code: number, next: string): boolean {
+  return (code === 0x2d || code === 0x2010) && next !== '' && !/[\d\u2060]/.test(next);
+}
+
+function hyphenCuts(value: string): number[] {
+  const cuts: number[] = [];
+  for (let index = 1; index < value.length; index++) {
+    if (cutsAfter(value.charCodeAt(index), value.charAt(index + 1))) cuts.push(index + 1);
   }
-  if (current !== '') parts.push(current);
+  return cuts;
+}
+
+/**
+ * Cut a word wider than `maxWidth` into lines: after the last hyphen that fits
+ * (L143), otherwise at the widest prefix that fits. Like upstream after #1980,
+ * hyphens are not break opportunities in ordinary wrapping, which moves a
+ * hyphenated word to the next line whole; they only place the cut of a word
+ * longer than the line.
+ */
+function splitLongWord(
+  value: string,
+  maxWidth: number,
+  style: ResolvedTextStyle,
+  cuts: readonly number[] = hyphenCuts(value)
+): string[] {
+  const fits = (text: string): boolean => textWidth(style, text) - style.letterSpacing <= maxWidth;
+  const parts: string[] = [];
+  let start = 0;
+  while (start < value.length) {
+    const rest = value.slice(start);
+    if (fits(rest)) {
+      parts.push(rest);
+      break;
+    }
+    let end = start;
+    for (const cut of cuts) {
+      if (cut <= start) continue;
+      if (!fits(value.slice(start, cut))) break;
+      end = cut;
+    }
+    if (end === start) {
+      let current = '';
+      for (const character of rest) {
+        if (current !== '' && !fits(current + character)) break;
+        current += character;
+      }
+      end = start + current.length;
+    }
+    parts.push(value.slice(start, end));
+    start = end;
+  }
   return parts.length === 0 ? [''] : parts;
 }
 
 /**
- * Only printable non-space ASCII is safe to bypass the splitter, and a hyphen
- * only before a digit: anywhere else it is a break opportunity (L143). Serial
- * numbers such as `INV-2024-0001` keep the fast path.
+ * Only printable non-space ASCII is safe to bypass the splitter. Hyphens are
+ * not break opportunities (L143), so hyphenated words keep the fast path.
  */
 function isSingleAsciiWord(value: string): boolean {
   if (value.length === 0) return false;
   for (let index = 0; index < value.length; index++) {
     const code = value.charCodeAt(index);
     if (code < 0x21 || code > 0x7e) return false;
-    if (code === 0x2d && !/\d/.test(value.charAt(index + 1))) return false;
   }
   return true;
 }
@@ -431,11 +475,10 @@ const SPACES = '\\t\\v\\f\\r \\u1680\\u2000-\\u2006\\u2008-\\u200a\\u2028\\u2029
 const GAP = new RegExp(`^[${SPACES}]+$`);
 
 /**
- * Whitespace runs, plus zero-width opportunities after U+200B (L145) and after
- * a hyphen that is neither run-initial nor before a digit, so `Hello-|World`
- * breaks while `3-4` and `-5` stay whole (L143). U+2060 cancels either one.
+ * Whitespace runs, plus a zero-width opportunity after U+200B (L145) unless
+ * U+2060 follows. Hyphens are not opportunities; see `splitLongWord`.
  */
-const WORDS = new RegExp(`([${SPACES}]+)|(?<=\\u200b)(?!\\u2060)|(?<=[^${SPACES}][-\\u2010])(?![\\d\\u2060])`);
+const WORDS = new RegExp(`([${SPACES}]+)|(?<=\\u200b)(?!\\u2060)`);
 
 /** Strong RTL text, or a control that opens an RTL level: bidi has work to do. */
 const RTL = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc\u200f\u202b\u202e\u2067]/;
@@ -538,8 +581,31 @@ function sliceToken(token: TextFlowToken, start: number, end: number, suffix = '
     sliced.fill(levels[end - 1] ?? 0, end - start);
     levels = sliced;
   }
-  const shy = token.shy?.filter(offset => offset > start && offset < end).map(offset => offset - start);
-  return { ...token, text, width: textWidth(token.style, text), levels, shy: shy?.length ? shy : undefined };
+  const rebase = (offsets: readonly number[] | undefined): number[] | undefined => {
+    const inside = offsets?.filter(offset => offset > start && offset < end).map(offset => offset - start);
+    return inside?.length ? inside : undefined;
+  };
+  return {
+    ...token, text, width: textWidth(token.style, text), levels, shy: rebase(token.shy), hyphens: rebase(token.hyphens)
+  };
+}
+
+/**
+ * The widest piece of a word between its cut points, hyphens and soft hyphens,
+ * which is its CSS min-content width; a taken soft hyphen draws a hyphen.
+ */
+function narrowestPiece(token: TextFlowToken): number {
+  if (token.hyphens === undefined && token.shy === undefined) return token.width;
+  const cuts = [...token.hyphens ?? [], ...token.shy ?? []].sort((a, b) => a - b);
+  let widest = 0;
+  let start = 0;
+  for (const end of [...cuts, token.text.length]) {
+    if (end <= start) continue;
+    const piece = token.text.slice(start, end) + (token.shy?.includes(end) === true ? '-' : '');
+    widest = Math.max(widest, textWidth(token.style, piece));
+    start = end;
+  }
+  return widest;
 }
 
 /** The syllables the soft hyphens of a token mark out. */
@@ -834,6 +900,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
       let groupFont = baseStyle.font;
       let kind: 'text' | 'gap' = 'text';
       let shy: number[] = [];
+      let hyphens: number[] = [];
       const styles = new Map<PdfFont, ResolvedTextStyle>([[baseStyle.font, baseStyle]]);
       const flush = (): void => {
         if (group === '') return;
@@ -849,10 +916,12 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
           style,
           annotation,
           levels: groupLevels?.slice(0, group.length) ?? null,
-          shy: shy.length === 0 ? undefined : shy
+          shy: shy.length === 0 ? undefined : shy,
+          hyphens: hyphens.length === 0 ? undefined : hyphens
         });
         group = '';
         shy = [];
+        hyphens = [];
       };
 
       const singleWord = this.lineSplitter === null && isSingleAsciiWord(text);
@@ -918,6 +987,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
             groupFont = font;
             if (levels !== null) groupLevels?.set(levels.subarray(unit, unit + character.length), group.length);
             group += character;
+            if (at > 1 && cutsAfter(codePoint, part.charAt(at))) hyphens.push(group.length);
           }
           flush();
           offset += part.length;
@@ -946,7 +1016,8 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
       // line is the widest piece that cannot be split.
       let widest = 1;
       for (const token of tokens) {
-        if (token.kind === 'text' || token.kind === 'widget') widest = Math.max(widest, token.width);
+        if (token.kind === 'widget') widest = Math.max(widest, token.width);
+        else if (token.kind === 'text') widest = Math.max(widest, narrowestPiece(token));
       }
       contentWidth = Math.min(contentWidth, widest);
     }
@@ -1022,7 +1093,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
       }
 
       if (token.kind === 'text' && softWrap && token.width - token.style.letterSpacing > contentWidth + 0.00001) {
-        const pieces = splitLongWord(token.text, contentWidth, token.style);
+        const pieces = splitLongWord(token.text, contentWidth, token.style, token.hyphens ?? []);
         let start = 0;
         for (let index = 0; index < pieces.length; index++) {
           const part = sliceToken(token, start, start += (pieces[index] ?? '').length);

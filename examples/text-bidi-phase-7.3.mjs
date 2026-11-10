@@ -85,7 +85,7 @@ export function generateTextBidiPhase73(api = defaultApi, compress = true, arabi
             box(156, new Text('Bundes\u00adverfassungs\u00adgericht\nalpha\u200bbeta\u200bgamma\u200bdelta', { style: courier })),
             box(84, new Text('Bundes\u00adverfassungs\u00adgericht\nalpha\u200bbeta\u200bgamma\u200bdelta', { style: courier }))
           ] })),
-        panel('No-break space and hyphen', 'Left: a space splits 10 / km. Right: U+00A0 keeps 10 km whole. Both break after a hyphen.', new Row({
+        panel('No-break space and hyphen', 'Left: a space splits 10 / km. Right: U+00A0 keeps 10 km whole. A word wider than the box is cut after its hyphen.', new Row({
           crossAxisAlignment: 'start', gap: 8, children: [
             box(72, new Text('It is 10 km away.\nLightning-fast', { style: courier })),
             box(72, new Text('It is 10\u00a0km away.\nLightning-fast', { style: courier }))

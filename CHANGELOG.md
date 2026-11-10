@@ -36,9 +36,12 @@ plus several of the port's own. Upstream defects are listed in
   (a port regression). RTL fragments inside LTR paragraphs are now shaped and
   reordered. Invisible format characters are no longer drawn; soft hyphens and
   U+200B are break opportunities; no-break spaces no longer break; CR/CRLF line
-  endings, separators missing from a font, hyphenated words, letter spacing at
+  endings, separators missing from a font, letter spacing at
   span boundaries, whitespace-only text and two Arabic isolated-form aliases are
-  corrected. A lam + haraka + alef sequence no longer drops its mark.
+  corrected. As upstream after #1980, a word longer than the line is cut after
+  a hyphen (not before a digit) rather than mid-syllable, while ordinary
+  wrapping still moves hyphenated words whole. A lam + haraka + alef sequence
+  no longer drops its mark.
 - **Strings and objects:** text strings use PDFDocEncoding-safe literals or
   UTF-16BE, so `€ — ’ “ ”` in titles, bookmarks and field values read back
   correctly. Names escape UTF-8 bytes. Non-finite and huge numbers are never
@@ -81,7 +84,6 @@ plus several of the port's own. Upstream defects are listed in
   them must stop.
 - The default `textAlign` is `start`, as upstream; an explicit `left` in an
   RTL paragraph is now left-aligned.
-- Lines may break after a hyphen during normal wrapping.
 - Generated destination names changed from `outline-N` to `__dest<n>`.
 - Embedded TrueType subsets are a few kilobytes larger because they keep their
   hinting tables; ToUnicode streams use `Adobe-Identity-UCS` on every path.

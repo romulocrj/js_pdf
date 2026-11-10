@@ -107,6 +107,8 @@ interface TextFlowToken {
     readonly levels?: Uint8Array | null;
     /** Offsets in `text` where a soft hyphen was: hyphenation points. */
     readonly shy?: readonly number[] | undefined;
+    /** Offsets in `text` just after a hyphen a too-long word may be cut at (L143). */
+    readonly hyphens?: readonly number[] | undefined;
 }
 interface WidgetFlowToken {
     readonly kind: 'widget';

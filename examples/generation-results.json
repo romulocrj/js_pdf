@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-10T16:02:04.354Z",
+  "generatedAt": "2026-11-10T16:25:29.659Z",
   "results": [
     {
       "name": "hello-world",
@@ -19,7 +19,7 @@
     {
       "name": "document",
       "status": "generated",
-      "bytes": 42413
+      "bytes": 42388
     },
     {
       "name": "invoice",

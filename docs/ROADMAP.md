@@ -301,7 +301,7 @@ pull-request code is credited in NOTICE.
 
 **Example gate:** all eight upstream examples generate. Byte counts change
 for the documented reasons: hinting tables (all examples with TrueType), the
-chart axis (report, server), hyphen breaks (document, server), letter-spacing
+chart axis (report, server), letter-spacing
 centring (certificate), `Container.color` (resume) and tight tables (server).
 Each domain adds one proof, registered after phase 6.12 in `Browser.html`
 and `run-phase-examples.mjs`: `serialization-phase-7.1`, `fonts-phase-7.2`,
@@ -318,11 +318,10 @@ alignment, so that item was dropped rather than invented. Left-to-right output
 of all 48 example PDFs is unchanged; `directional-layout-phase-6.9` is
 registered between 6.8 and 6.10.
 
-**Open decisions before 1.0:** keep or narrow the hyphen-break rule (the port
-breaks after any hyphen during wrapping; upstream only cuts an overflowing
-word at a hyphen), keep hinting tables in subsets (correct but larger PDFs),
-further packing (barcode maps, SVG colours), and how to split `release/1.0`
-into reviewable PRs.
+**Decisions recorded for 1.0 (2026-11-10):** hyphens follow upstream #1980 —
+they only place the cut of a word longer than the line, never ordinary
+wrapping; subsets keep their hinting tables; no further table packing; the
+series ships as one PR.
 
 ## Phase 6 — remaining compatibility and upstream follow-up
 
