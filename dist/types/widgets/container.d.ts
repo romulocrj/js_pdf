@@ -12,6 +12,9 @@ export interface ContainerOptions {
     readonly height?: number | null;
     readonly padding?: InsetsInput;
     readonly margin?: InsetsInput;
+    /** Upstream's shorthand for `decoration: { color }`. */
+    readonly color?: ColorInput | null;
+    /** The port's original name for `color`, kept as an alias. */
     readonly background?: ColorInput | null;
     readonly borderColor?: ColorInput | null;
     readonly borderWidth?: number;
@@ -62,7 +65,7 @@ export declare class Container extends SpanningWidget<ContainerLayoutData, Conta
     readonly foregroundDecoration: BoxDecoration | null;
     readonly alignment: Alignment | null;
     get canSpan(): boolean;
-    constructor({ child, width, height, padding, margin, background, borderColor, borderWidth, decoration, foregroundDecoration, alignment }?: ContainerOptions);
+    constructor({ child, width, height, padding, margin, color, background, borderColor, borderWidth, decoration, foregroundDecoration, alignment }?: ContainerOptions);
     initialSpanState(): ContainerState;
     private finishLayout;
     layout(context: RenderContext, constraints: Constraints): LayoutBox<ContainerLayoutData>;

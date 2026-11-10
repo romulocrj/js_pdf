@@ -40,7 +40,10 @@ export interface GradientOptions {
 export declare abstract class Gradient {
     readonly colors: readonly Rgb[];
     readonly stops: readonly number[];
+    /** The colour of a one-colour gradient, alpha and colour space kept. */
+    protected readonly solid: PaintColor | null;
     constructor({ colors, stops }: GradientOptions);
+    protected paintSolid(context: RenderContext, box: PdfRect): boolean;
     abstract paint(context: RenderContext, box: PdfRect): void;
 }
 export interface LinearGradientOptions extends GradientOptions {

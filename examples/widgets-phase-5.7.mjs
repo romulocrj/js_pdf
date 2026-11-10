@@ -25,7 +25,7 @@ function card(title, child, width = 155, height = 110) {
     decoration: { color: '#ffffff', border: { color: '#cbd5e1', width: 0.7 } },
     child: new pw.Column({
       children: [
-        new pw.Text(title, { fontSize: 9, fontWeight: 'bold', color: '#1e3a8a' }),
+        new pw.Text(title, { style: new pw.TextStyle({ fontSize: 9, fontWeight: 'bold', color: '#1e3a8a' }) }),
         new pw.SizedBox({ height: 5 }),
         new pw.Expanded({ child })
       ]
@@ -40,9 +40,7 @@ function shapePage() {
       title: 'Phase 5.7 shapes and composition',
       level: 0,
       child: new pw.Text('Shapes and composition', {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: '#172554'
+        style: new pw.TextStyle({ fontSize: 22, fontWeight: 'bold', color: '#172554' })
       })
     }),
     new pw.SizedBox({ height: 12 }),
@@ -78,12 +76,12 @@ function shapePage() {
         })),
         card('Watermark', new pw.Watermark({
           angle: -Math.PI / 10,
-          child: new pw.Text('DRAFT', { fontSize: 28, fontWeight: 'bold', color: '#dbeafe' })
+          child: new pw.Text('DRAFT', { style: new pw.TextStyle({ fontSize: 28, fontWeight: 'bold', color: '#dbeafe' }) })
         }))
       ]
     }),
     new pw.SizedBox({ height: 12 }),
-    new pw.Text('ListView', { fontSize: 14, fontWeight: 'bold', color: '#172554' }),
+    new pw.Text('ListView', { style: new pw.TextStyle({ fontSize: 14, fontWeight: 'bold', color: '#172554' }) }),
     new pw.SizedBox({ height: 6 }),
     new pw.ListView({
       direction: 'horizontal',
@@ -99,7 +97,7 @@ function shapePage() {
         decoration: { color: '#f5f3ff', border: { color: '#c4b5fd', width: 1 } },
         child: new pw.Column({
           children: [
-            new pw.Text('Inseparable', { fontSize: 13, fontWeight: 'bold', color: '#5b21b6' }),
+            new pw.Text('Inseparable', { style: new pw.TextStyle({ fontSize: 13, fontWeight: 'bold', color: '#5b21b6' }) }),
             new pw.SizedBox({ height: 5 }),
             new pw.Text('This heading and its content move to the next page as one atomic block.')
           ]
@@ -117,7 +115,7 @@ function annotationPage() {
       name: 'phase-57-annotations',
       title: 'Geometric annotations',
       level: 0,
-      child: new pw.Text('Geometric annotations', { fontSize: 22, fontWeight: 'bold', color: '#172554' })
+      child: new pw.Text('Geometric annotations', { style: new pw.TextStyle({ fontSize: 22, fontWeight: 'bold', color: '#172554' }) })
     }),
     new pw.SizedBox({ height: 8 }),
     new pw.Text('The visible shapes below also emit native PDF annotation objects.', { color: '#475569' }),
@@ -162,7 +160,7 @@ function infrastructurePage() {
       name: 'phase-57-infrastructure',
       title: 'Context, grid paper and delayed widgets',
       level: 0,
-      child: new pw.Text('Context and utility widgets', { fontSize: 22, fontWeight: 'bold', color: '#172554' })
+      child: new pw.Text('Context and utility widgets', { style: new pw.TextStyle({ fontSize: 22, fontWeight: 'bold', color: '#172554' }) })
     }),
     new pw.SizedBox({ height: 12 }),
     new pw.Directionality({
@@ -177,8 +175,10 @@ function infrastructurePage() {
     new pw.InheritedWidget({
       inherited: new AccentValue('#dc2626'),
       build: context => new pw.Text('InheritedWidget: descendants can read scoped values.', {
-        color: pw.InheritedWidget.of(context, AccentValue)?.color ?? '#000000',
-        fontWeight: 'bold'
+        style: new pw.TextStyle({
+          color: pw.InheritedWidget.of(context, AccentValue)?.color ?? '#000000',
+          fontWeight: 'bold'
+        })
       })
     }),
     new pw.SizedBox({ height: 10 }),
@@ -188,7 +188,7 @@ function infrastructurePage() {
       })
     }),
     new pw.SizedBox({ height: 14 }),
-    new pw.Text('GridPaper presets', { fontSize: 14, fontWeight: 'bold', color: '#172554' }),
+    new pw.Text('GridPaper presets', { style: new pw.TextStyle({ fontSize: 14, fontWeight: 'bold', color: '#172554' }) }),
     new pw.SizedBox({ height: 8 }),
     new pw.Row({
       mainAxisAlignment: 'spaceBetween',

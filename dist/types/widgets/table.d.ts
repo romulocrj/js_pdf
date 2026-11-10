@@ -71,7 +71,7 @@ export declare class IntrinsicColumnWidth extends TableColumnWidth {
     constructor({ flex }?: {
         readonly flex?: number | null;
     });
-    layout(child: AnyWidget, context: RenderContext, constraints: Constraints): ColumnLayout;
+    layout(child: AnyWidget, context: RenderContext, _constraints: Constraints): ColumnLayout;
 }
 export declare class FixedColumnWidth extends TableColumnWidth {
     readonly width: number;

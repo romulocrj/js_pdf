@@ -2847,6 +2847,14 @@ class Gradient {
     }
     this.colors = colors.map(color => normalizeColor(color));
     this.stops = stops === null ? [] : stops.map(value => Math.min(1, Math.max(0, Number(value))));
+    this.solid = colors.length === 1 ? normalizePaintColor(colors[0]) : null;
+  }
+  paintSolid(context, box) {
+    if (this.solid === null) return false;
+    context.canvas.setFillColor(this.solid);
+    context.canvas.drawBox(box);
+    context.canvas.fillPath();
+    return true;
   }
 }
 
@@ -2861,6 +2869,7 @@ class LinearGradient extends Gradient {
     this.tileMode = tileMode;
   }
   paint(context, box) {
+    if (this.paintSolid(context, box)) return;
     const pattern = new PdfShadingPattern({
       shading: new PdfShading({
         type: "axial",
@@ -2891,6 +2900,7 @@ class RadialGradient extends Gradient {
     this.focalRadius = Math.max(0, Number(focalRadius));
   }
   paint(context, box) {
+    if (this.paintSolid(context, box)) return;
     const scale = Math.min(box.width, box.height);
     const pattern = new PdfShadingPattern({
       shading: new PdfShading({
@@ -3064,21 +3074,25 @@ class Container extends SpanningWidget {
   get canSpan() {
     return this.height === null && this.child instanceof SpanningWidget && this.child.canSpan;
   }
-  constructor({child = null, width = null, height = null, padding = 0, margin = 0, background = null, borderColor = null, borderWidth = 1, decoration = null, foregroundDecoration = null, alignment = null} = {}) {
+  constructor({child = null, width = null, height = null, padding = 0, margin = 0, color = null, background = null, borderColor = null, borderWidth = 1, decoration = null, foregroundDecoration = null, alignment = null} = {}) {
     super();
     this.child = child;
     this.width = width == null ? null : Number(width);
     this.height = height == null ? null : Number(height);
     this.padding = normalizeInsets(padding);
     this.margin = normalizeInsets(margin);
-    this.background = background == null ? null : normalizePaintColor(background);
+    if (color != null && background != null) {
+      throw new Error("Container cannot have both color and background");
+    }
+    const fill = color ?? background;
+    this.background = fill == null ? null : normalizePaintColor(fill);
     this.borderColor = borderColor == null ? null : normalizePaintColor(borderColor);
     this.borderWidth = Number(borderWidth);
     this.decoration = normalizeBoxDecoration(decoration);
     this.foregroundDecoration = normalizeBoxDecoration(foregroundDecoration);
     this.alignment = alignment === null ? null : resolveBasicAlignment(alignment);
     if (this.background !== null && this.decoration !== null) {
-      throw new Error("Container cannot have both background and decoration");
+      throw new Error("Container cannot have both a color and a decoration");
     }
   }
   initialSpanState() {
@@ -13084,15 +13098,11 @@ class SvgNumeric {
     this.brush = brush;
   }
   static parse(text, brush) {
-    const match = /([-+]?[\d.]+)\s*(px|pt|em|cm|mm|in|%|)/.exec(text);
-    if (match === null) {
+    const numeric = parseNumeric(text, brush);
+    if (numeric === null) {
       throw new SyntaxError(`Not a number: "${text}"`);
     }
-    const value = Number.parseFloat(match[1]);
-    if (!Number.isFinite(value)) {
-      throw new SyntaxError(`Not a number: "${text}"`);
-    }
-    return new SvgNumeric(value, brush, UNIT_SUFFIXES[match[2] ?? ""] ?? "direct");
+    return numeric;
   }
   get colorValue() {
     if (this.unit === "percent") {
@@ -13174,24 +13184,24 @@ function splitDoubles(parameters) {
   });
 }
 
+function parseNumeric(text, brush) {
+  const match = /([-+]?[\d.]+)\s*(px|pt|em|cm|mm|in|%|)/.exec(text);
+  const value = match === null ? NaN : Number.parseFloat(match[1]);
+  return Number.isFinite(value) ? new SvgNumeric(value, brush, UNIT_SUFFIXES[match[2] ?? ""] ?? "direct") : null;
+}
+
 function getDouble(element, name, {namespace, defaultValue = 0} = {}) {
   const attribute = element.getAttribute(name, namespace);
   if (attribute === null) {
     return defaultValue;
   }
   const value = Number.parseFloat(attribute);
-  if (!Number.isFinite(value)) {
-    throw new SyntaxError(`Attribute ${name}="${attribute}" is not a number`);
-  }
-  return value;
+  return Number.isFinite(value) ? value : defaultValue;
 }
 
 function getNumeric(element, name, brush, {namespace, defaultValue = null} = {}) {
   const attribute = element.getAttribute(name, namespace);
-  if (attribute === null) {
-    return defaultValue === null ? null : new SvgNumeric(defaultValue, null);
-  }
-  return SvgNumeric.parse(attribute, brush);
+  return (attribute === null ? null : parseNumeric(attribute, brush)) ?? (defaultValue === null ? null : new SvgNumeric(defaultValue, null));
 }
 
 const STYLE_DECLARATION = /([\w-]+)\s*:\s*([\s\S]*)/;
@@ -13441,10 +13451,12 @@ function readStops(element, parser) {
   };
 }
 
-function hrefElement(element, parser) {
+function hrefElement(element, parser, seen) {
   const xlink = [ "http:", "", "www.w3.org", "1999", "xlink" ].join("/");
   const href = element.getAttribute("href") ?? element.getAttribute("href", xlink);
-  return href?.startsWith("#") === true ? parser.findById(href.slice(1)) : null;
+  if (href?.startsWith("#") !== true) return null;
+  const id = href.slice(1);
+  return seen.includes(id) ? null : parser.findById(id);
 }
 
 class SvgGradient extends SvgColor {
@@ -13547,13 +13559,10 @@ class SvgLinearGradient extends SvgGradient {
   }
   static fromElement(element, parser, seen = []) {
     const id = element.getAttribute("id");
-    if (id !== null && seen.includes(id)) {
-      throw new SyntaxError(`Circular gradient reference: ${id}`);
-    }
     const nextSeen = id === null ? seen : [ ...seen, id ];
     const stopData = readStops(element, parser);
     const local = new SvgLinearGradient(SvgLinearGradient.units(element), getNumeric(element, "x1", null)?.sizeValue ?? null, getNumeric(element, "y1", null)?.sizeValue ?? null, getNumeric(element, "x2", null)?.sizeValue ?? null, getNumeric(element, "y2", null)?.sizeValue ?? null, SvgTransform.fromString(element.getAttribute("gradientTransform")), stopData.colors, stopData.stops, stopData.opacities, SvgLinearGradient.spread(element));
-    const inherited = hrefElement(element, parser);
+    const inherited = hrefElement(element, parser, nextSeen);
     return inherited?.name.local === "linearGradient" ? SvgLinearGradient.fromElement(inherited, parser, nextSeen).mergeWith(local) : local;
   }
   static units(element) {
@@ -13623,15 +13632,12 @@ class SvgRadialGradient extends SvgGradient {
   }
   static fromElement(element, parser, seen = []) {
     const id = element.getAttribute("id");
-    if (id !== null && seen.includes(id)) {
-      throw new SyntaxError(`Circular gradient reference: ${id}`);
-    }
     const nextSeen = id === null ? seen : [ ...seen, id ];
     const stopData = readStops(element, parser);
     const unitsValue = element.getAttribute("gradientUnits");
     const spreadValue = element.getAttribute("spreadMethod");
     const local = new SvgRadialGradient(unitsValue === "userSpaceOnUse" || unitsValue === "objectBoundingBox" ? unitsValue : null, getNumeric(element, "r", null)?.sizeValue ?? null, getNumeric(element, "cx", null)?.sizeValue ?? null, getNumeric(element, "cy", null)?.sizeValue ?? null, getNumeric(element, "fr", null)?.sizeValue ?? null, getNumeric(element, "fx", null)?.sizeValue ?? null, getNumeric(element, "fy", null)?.sizeValue ?? null, SvgTransform.fromString(element.getAttribute("gradientTransform")), stopData.colors, stopData.stops, stopData.opacities, spreadValue === "pad" || spreadValue === "reflect" || spreadValue === "repeat" ? spreadValue : null);
-    const inherited = hrefElement(element, parser);
+    const inherited = hrefElement(element, parser, nextSeen);
     return inherited?.name.local === "radialGradient" ? SvgRadialGradient.fromElement(inherited, parser, nextSeen).mergeWith(local) : local;
   }
   mergeWith(other) {
@@ -13725,6 +13731,16 @@ const TEXT_ANCHORS = Object.freeze({
   middle: "middle",
   end: "end"
 });
+
+function dashArray(value, brush) {
+  if (value === null) return null;
+  if (value === "none") return [];
+  try {
+    return splitNumeric(value, brush).map(n => n.value);
+  } catch {
+    return null;
+  }
+}
 
 class SvgBrush {
   constructor(fields) {
@@ -13851,7 +13867,7 @@ class SvgBrush {
       fillEvenOdd: fillRule === null ? null : fillRule === "evenodd",
       stroke: paint(element.getAttribute("stroke")),
       strokeWidth: getNumeric(element, "stroke-width", parent),
-      strokeDashArray: strokeDashArray === null ? null : strokeDashArray === "none" ? [] : splitNumeric(strokeDashArray, parent).map(n => n.value),
+      strokeDashArray: dashArray(strokeDashArray, parent),
       strokeDashOffset: getNumeric(element, "stroke-dashoffset", parent)?.lengthIn() ?? null,
       fontSize: getNumeric(element, "font-size", parent),
       fontFamily: element.getAttribute("font-family"),
@@ -17469,7 +17485,7 @@ class GridAxis {
   }
   angleDirection() {
     if (this.angle === 0) return 0;
-    if (this.angle % Math.PI > Math.PI / 2) return -1;
+    if ((this.angle % Math.PI + Math.PI) % Math.PI > Math.PI / 2) return -1;
     return 1;
   }
 }
@@ -19284,12 +19300,21 @@ class MultiPage {
           page.cursor += moved.height + this.gap;
           continue;
         }
+        let continued = false;
         while (true) {
           const available = page.bottom - page.cursor;
-          const fragment = child.layoutSpan(page.context, new BoxConstraints({
+          let fragment = child.layoutSpan(page.context, new BoxConstraints({
             maxWidth: page.maxWidth,
             maxHeight: available
           }), state);
+          if (continued && !fragment.hasMore) {
+            const natural = child.layoutSpan(page.context, new BoxConstraints({
+              maxWidth: page.maxWidth,
+              maxHeight: Infinity
+            }), state);
+            if (!natural.hasMore && natural.box.height <= available + .001) fragment = natural;
+          }
+          continued = true;
           const box = fragment.box;
           if (box.height > available + .001) {
             throw new RangeError("A spanning widget returned a fragment taller than its constraint");
@@ -20389,7 +20414,8 @@ function boundedSize(maximum, fallback, widget, option) {
 }
 
 function shadeColor(color, strength) {
-  return normalizeColor(new PdfColor(...normalizeColor(color)).shade(strength));
+  const [red, green, blue] = normalizeColor(new PdfColor(...normalizeColor(color)).shade(strength));
+  return new PdfColor(red, green, blue, color instanceof PdfColor ? color.alpha : 1);
 }
 
 class CircularProgressIndicator extends Widget {
@@ -22110,14 +22136,14 @@ class IntrinsicColumnWidth extends TableColumnWidth {
     super();
     this.flex = flex === null ? null : Math.max(0, assertFiniteNumber(Number(flex), "intrinsic column flex"));
   }
-  layout(child, context, constraints) {
+  layout(child, context, _constraints) {
     if (this.flex !== null) {
       return {
         width: 0,
         flex: this.flex
       };
     }
-    const box = child.layout(context, constraints);
+    const box = child.layout(context, new BoxConstraints);
     return {
       width: Number.isFinite(box.width) ? Math.max(0, box.width) : 0,
       flex: Number.isFinite(box.width) ? 0 : 1
@@ -22212,7 +22238,7 @@ class Table extends SpanningWidget {
     if (totalFlex > 0) {
       let fixedSpace = widths.reduce((sum, value, index) => sum + (flex[index] === 0 ? value : 0), 0);
       if (fixedSpace > maximum && fixedSpace > 0) {
-        this.fitColumns(context, constraints, widths, flex, maximum);
+        this.fitColumns(context, widths, flex, maximum);
         fixedSpace = maximum;
       }
       const remaining = Math.max(0, maximum - fixedSpace);
@@ -22222,7 +22248,7 @@ class Table extends SpanningWidget {
       return widths;
     }
     if (intrinsicTotal > maximum && intrinsicTotal > 0) {
-      this.fitColumns(context, constraints, widths, flex, maximum);
+      this.fitColumns(context, widths, flex, maximum);
       return widths;
     }
     if (this.tableWidth === "max") {
@@ -22234,7 +22260,7 @@ class Table extends SpanningWidget {
     }
     return widths;
   }
-  fitColumns(context, constraints, widths, flex, maximum) {
+  fitColumns(context, widths, flex, maximum) {
     const minContext = {
       ...context,
       minContent: true
@@ -22247,7 +22273,7 @@ class Table extends SpanningWidget {
         const columnWidth = mappedWidth(this.columnWidths, index) ?? this.defaultColumnWidth;
         let minimum = width;
         if (columnWidth instanceof IntrinsicColumnWidth && columnWidth.flex === null) {
-          const box = row.children[index].layout(minContext, constraints);
+          const box = row.children[index].layout(minContext, new BoxConstraints);
           if (Number.isFinite(box.width)) minimum = Math.min(width, Math.max(0, box.width));
         }
         mins[index] = Math.max(mins[index], minimum);
@@ -22352,7 +22378,7 @@ class Table extends SpanningWidget {
       throw new RangeError("Invalid table continuation state");
     }
     const parent = BoxConstraints.from(constraints);
-    const key = `${parent.minWidth},${parent.maxWidth},${parent.minHeight},${parent.maxHeight}`;
+    const key = `${parent.minWidth},${parent.maxWidth}`;
     let widths = state.widths;
     if (widths === undefined || widths.key !== key || widths.theme !== context.theme) {
       widths = Object.freeze({
