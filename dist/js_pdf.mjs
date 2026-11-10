@@ -431,591 +431,34 @@ class PdfColors {
   }
 }
 
-PdfColors.red50 = Object.freeze(PdfColor.fromInt(4294962158));
+const families = "red pink purple deepPurple indigo blue lightBlue cyan teal green lightGreen lime yellow amber orange deepOrange brown grey blueGrey".split(" ");
 
-PdfColors.red100 = Object.freeze(PdfColor.fromInt(4294954450));
+const shades = "50 100 200 300 400 500 600 700 800 900 Accent100 Accent200 Accent400 Accent700".split(" ");
 
-PdfColors.red200 = Object.freeze(PdfColor.fromInt(4293892762));
+const packed = "ffebeeffcdd2ef9a9ae57373ef5350f44336e53935d32f2fc62828b71c1cff8a80ff5252ff1744d50000fce4ecf8bbd0f48fb1f06292ec407ae91e63d81b60c2185bad1457880e4fff80abff4081f50057c51162f3e5f5e1bee7ce93d8ba68c8ab47bc9c27b08e24aa7b1fa26a1b9a4a148cea80fce040fbd500f9aa00ffede7f6d1c4e9b39ddb9575cd7e57c2673ab75e35b1512da84527a0311b92b388ff7c4dff651fff6200eae8eaf6c5cae99fa8da7986cb5c6bc03f51b53949ab303f9f2835931a237e8c9eff536dfe3d5afe304ffee3f2fdbbdefb90caf964b5f642a5f52196f31e88e51976d21565c00d47a182b1ff448aff2979ff2962ffe1f5feb3e5fc81d4fa4fc3f729b6f603a9f4039be50288d10277bd01579b80d8ff40c4ff00b0ff0091eae0f7fab2ebf280deea4dd0e126c6da00bcd400acc10097a700838f00606484ffff18ffff00e5ff00b8d4e0f2f1b2dfdb80cbc44db6ac26a69a00968800897b00796b00695c004d40a7ffeb64ffda1de9b600bfa5e8f5e9c8e6c9a5d6a781c78466bb6a4caf5043a047388e3c2e7d321b5e20b9f6ca69f0ae00e67600c853f1f8e9dcedc8c5e1a5aed5819ccc658bc34a7cb342689f38558b2f33691eccff90b2ff5976ff0364dd17f9fbe7f0f4c3e6ee9cdce775d4e157cddc39c0ca33afb42b9e9d24827717f4ff81eeff41c6ff00aeea00fffde7fff9c4fff59dfff176ffee58ffeb3bfdd835fbc02df9a825f57f17ffff8dffff00ffea00ffd600fff8e1ffecb3ffe082ffd54fffca28ffc107ffb300ffa000ff8f00ff6f00ffe57fffd740ffc400ffab00fff3e0ffe0b2ffcc80ffb74dffa726ff9800fb8c00f57c00ef6c00e65100ffd180ffab40ff9100ff6d00fbe9e7ffccbcffab91ff8a65ff7043ff5722f4511ee64a19d84315bf360cff9e80ff6e40ff3d00dd2c00efebe9d7ccc8bcaaa4a1887f8d6e637955486d4c415d40374e342e3e2723fafafaf5f5f5eeeeeee0e0e0bdbdbd9e9e9e757575616161424242212121eceff1cfd8dcb0bec590a4ae78909c607d8b546e7a455a6437474f263238ffffff000000";
 
-PdfColors.red300 = Object.freeze(PdfColor.fromInt(4293227379));
+const palette = PdfColors;
 
-PdfColors.red400 = Object.freeze(PdfColor.fromInt(4293874512));
+let offset = 0;
 
-PdfColors.red500 = Object.freeze(PdfColor.fromInt(4294198070));
+const define = name => {
+  palette[name] = Object.freeze(PdfColor.fromInt(4278190080 + parseInt(packed.slice(offset, offset += 6), 16)));
+};
 
-PdfColors.red600 = Object.freeze(PdfColor.fromInt(4293212469));
+families.forEach((family, index) => (index < 16 ? shades : shades.slice(0, 10)).forEach(shade => define(family + shade)));
 
-PdfColors.red700 = Object.freeze(PdfColor.fromInt(4292030255));
+define("white");
 
-PdfColors.red800 = Object.freeze(PdfColor.fromInt(4291176488));
+define("black");
 
-PdfColors.red900 = Object.freeze(PdfColor.fromInt(4290190364));
+families.forEach((family, index) => {
+  palette[family] = palette[family + "500"];
+  if (index < 16) palette[family + "Accent"] = palette[family + "Accent200"];
+});
 
-PdfColors.redAccent100 = Object.freeze(PdfColor.fromInt(4294937216));
+palette["primaries"] = Object.freeze(families.map(family => palette[family]));
 
-PdfColors.redAccent200 = Object.freeze(PdfColor.fromInt(4294922834));
-
-PdfColors.redAccent400 = Object.freeze(PdfColor.fromInt(4294907716));
-
-PdfColors.redAccent700 = Object.freeze(PdfColor.fromInt(4292149248));
-
-PdfColors.pink50 = Object.freeze(PdfColor.fromInt(4294763756));
-
-PdfColors.pink100 = Object.freeze(PdfColor.fromInt(4294491088));
-
-PdfColors.pink200 = Object.freeze(PdfColor.fromInt(4294217649));
-
-PdfColors.pink300 = Object.freeze(PdfColor.fromInt(4293943954));
-
-PdfColors.pink400 = Object.freeze(PdfColor.fromInt(4293673082));
-
-PdfColors.pink500 = Object.freeze(PdfColor.fromInt(4293467747));
-
-PdfColors.pink600 = Object.freeze(PdfColor.fromInt(4292352864));
-
-PdfColors.pink700 = Object.freeze(PdfColor.fromInt(4290910299));
-
-PdfColors.pink800 = Object.freeze(PdfColor.fromInt(4289533015));
-
-PdfColors.pink900 = Object.freeze(PdfColor.fromInt(4287106639));
-
-PdfColors.pinkAccent100 = Object.freeze(PdfColor.fromInt(4294934699));
-
-PdfColors.pinkAccent200 = Object.freeze(PdfColor.fromInt(4294918273));
-
-PdfColors.pinkAccent400 = Object.freeze(PdfColor.fromInt(4294246487));
-
-PdfColors.pinkAccent700 = Object.freeze(PdfColor.fromInt(4291105122));
-
-PdfColors.purple50 = Object.freeze(PdfColor.fromInt(4294174197));
-
-PdfColors.purple100 = Object.freeze(PdfColor.fromInt(4292984551));
-
-PdfColors.purple200 = Object.freeze(PdfColor.fromInt(4291728344));
-
-PdfColors.purple300 = Object.freeze(PdfColor.fromInt(4290406600));
-
-PdfColors.purple400 = Object.freeze(PdfColor.fromInt(4289415100));
-
-PdfColors.purple500 = Object.freeze(PdfColor.fromInt(4288423856));
-
-PdfColors.purple600 = Object.freeze(PdfColor.fromInt(4287505578));
-
-PdfColors.purple700 = Object.freeze(PdfColor.fromInt(4286259106));
-
-PdfColors.purple800 = Object.freeze(PdfColor.fromInt(4285143962));
-
-PdfColors.purple900 = Object.freeze(PdfColor.fromInt(4283045004));
-
-PdfColors.purpleAccent100 = Object.freeze(PdfColor.fromInt(4293558524));
-
-PdfColors.purpleAccent200 = Object.freeze(PdfColor.fromInt(4292886779));
-
-PdfColors.purpleAccent400 = Object.freeze(PdfColor.fromInt(4292149497));
-
-PdfColors.purpleAccent700 = Object.freeze(PdfColor.fromInt(4289331455));
-
-PdfColors.deepPurple50 = Object.freeze(PdfColor.fromInt(4293781494));
-
-PdfColors.deepPurple100 = Object.freeze(PdfColor.fromInt(4291937513));
-
-PdfColors.deepPurple200 = Object.freeze(PdfColor.fromInt(4289961435));
-
-PdfColors.deepPurple300 = Object.freeze(PdfColor.fromInt(4287985101));
-
-PdfColors.deepPurple400 = Object.freeze(PdfColor.fromInt(4286470082));
-
-PdfColors.deepPurple500 = Object.freeze(PdfColor.fromInt(4284955319));
-
-PdfColors.deepPurple600 = Object.freeze(PdfColor.fromInt(4284364209));
-
-PdfColors.deepPurple700 = Object.freeze(PdfColor.fromInt(4283510184));
-
-PdfColors.deepPurple800 = Object.freeze(PdfColor.fromInt(4282722208));
-
-PdfColors.deepPurple900 = Object.freeze(PdfColor.fromInt(4281408402));
-
-PdfColors.deepPurpleAccent100 = Object.freeze(PdfColor.fromInt(4289956095));
-
-PdfColors.deepPurpleAccent200 = Object.freeze(PdfColor.fromInt(4286336511));
-
-PdfColors.deepPurpleAccent400 = Object.freeze(PdfColor.fromInt(4284817407));
-
-PdfColors.deepPurpleAccent700 = Object.freeze(PdfColor.fromInt(4284612842));
-
-PdfColors.indigo50 = Object.freeze(PdfColor.fromInt(4293454582));
-
-PdfColors.indigo100 = Object.freeze(PdfColor.fromInt(4291152617));
-
-PdfColors.indigo200 = Object.freeze(PdfColor.fromInt(4288653530));
-
-PdfColors.indigo300 = Object.freeze(PdfColor.fromInt(4286154443));
-
-PdfColors.indigo400 = Object.freeze(PdfColor.fromInt(4284246976));
-
-PdfColors.indigo500 = Object.freeze(PdfColor.fromInt(4282339765));
-
-PdfColors.indigo600 = Object.freeze(PdfColor.fromInt(4281944491));
-
-PdfColors.indigo700 = Object.freeze(PdfColor.fromInt(4281352095));
-
-PdfColors.indigo800 = Object.freeze(PdfColor.fromInt(4280825235));
-
-PdfColors.indigo900 = Object.freeze(PdfColor.fromInt(4279903102));
-
-PdfColors.indigoAccent100 = Object.freeze(PdfColor.fromInt(4287405823));
-
-PdfColors.indigoAccent200 = Object.freeze(PdfColor.fromInt(4283657726));
-
-PdfColors.indigoAccent400 = Object.freeze(PdfColor.fromInt(4282211070));
-
-PdfColors.indigoAccent700 = Object.freeze(PdfColor.fromInt(4281356286));
-
-PdfColors.blue50 = Object.freeze(PdfColor.fromInt(4293128957));
-
-PdfColors.blue100 = Object.freeze(PdfColor.fromInt(4290502395));
-
-PdfColors.blue200 = Object.freeze(PdfColor.fromInt(4287679225));
-
-PdfColors.blue300 = Object.freeze(PdfColor.fromInt(4284790262));
-
-PdfColors.blue400 = Object.freeze(PdfColor.fromInt(4282557941));
-
-PdfColors.blue500 = Object.freeze(PdfColor.fromInt(4280391411));
-
-PdfColors.blue600 = Object.freeze(PdfColor.fromInt(4280191205));
-
-PdfColors.blue700 = Object.freeze(PdfColor.fromInt(4279858898));
-
-PdfColors.blue800 = Object.freeze(PdfColor.fromInt(4279592384));
-
-PdfColors.blue900 = Object.freeze(PdfColor.fromInt(4279060385));
-
-PdfColors.blueAccent100 = Object.freeze(PdfColor.fromInt(4286755327));
-
-PdfColors.blueAccent200 = Object.freeze(PdfColor.fromInt(4282682111));
-
-PdfColors.blueAccent400 = Object.freeze(PdfColor.fromInt(4280908287));
-
-PdfColors.blueAccent700 = Object.freeze(PdfColor.fromInt(4280902399));
-
-PdfColors.lightBlue50 = Object.freeze(PdfColor.fromInt(4292998654));
-
-PdfColors.lightBlue100 = Object.freeze(PdfColor.fromInt(4289979900));
-
-PdfColors.lightBlue200 = Object.freeze(PdfColor.fromInt(4286698746));
-
-PdfColors.lightBlue300 = Object.freeze(PdfColor.fromInt(4283417591));
-
-PdfColors.lightBlue400 = Object.freeze(PdfColor.fromInt(4280923894));
-
-PdfColors.lightBlue500 = Object.freeze(PdfColor.fromInt(4278430196));
-
-PdfColors.lightBlue600 = Object.freeze(PdfColor.fromInt(4278426597));
-
-PdfColors.lightBlue700 = Object.freeze(PdfColor.fromInt(4278356177));
-
-PdfColors.lightBlue800 = Object.freeze(PdfColor.fromInt(4278351805));
-
-PdfColors.lightBlue900 = Object.freeze(PdfColor.fromInt(4278278043));
-
-PdfColors.lightBlueAccent100 = Object.freeze(PdfColor.fromInt(4286634239));
-
-PdfColors.lightBlueAccent200 = Object.freeze(PdfColor.fromInt(4282434815));
-
-PdfColors.lightBlueAccent400 = Object.freeze(PdfColor.fromInt(4278235391));
-
-PdfColors.lightBlueAccent700 = Object.freeze(PdfColor.fromInt(4278227434));
-
-PdfColors.cyan50 = Object.freeze(PdfColor.fromInt(4292933626));
-
-PdfColors.cyan100 = Object.freeze(PdfColor.fromInt(4289915890));
-
-PdfColors.cyan200 = Object.freeze(PdfColor.fromInt(4286635754));
-
-PdfColors.cyan300 = Object.freeze(PdfColor.fromInt(4283289825));
-
-PdfColors.cyan400 = Object.freeze(PdfColor.fromInt(4280731354));
-
-PdfColors.cyan500 = Object.freeze(PdfColor.fromInt(4278238420));
-
-PdfColors.cyan600 = Object.freeze(PdfColor.fromInt(4278234305));
-
-PdfColors.cyan700 = Object.freeze(PdfColor.fromInt(4278228903));
-
-PdfColors.cyan800 = Object.freeze(PdfColor.fromInt(4278223759));
-
-PdfColors.cyan900 = Object.freeze(PdfColor.fromInt(4278214756));
-
-PdfColors.cyanAccent100 = Object.freeze(PdfColor.fromInt(4286906367));
-
-PdfColors.cyanAccent200 = Object.freeze(PdfColor.fromInt(4279828479));
-
-PdfColors.cyanAccent400 = Object.freeze(PdfColor.fromInt(4278248959));
-
-PdfColors.cyanAccent700 = Object.freeze(PdfColor.fromInt(4278237396));
-
-PdfColors.teal50 = Object.freeze(PdfColor.fromInt(4292932337));
-
-PdfColors.teal100 = Object.freeze(PdfColor.fromInt(4289912795));
-
-PdfColors.teal200 = Object.freeze(PdfColor.fromInt(4286630852));
-
-PdfColors.teal300 = Object.freeze(PdfColor.fromInt(4283283116));
-
-PdfColors.teal400 = Object.freeze(PdfColor.fromInt(4280723098));
-
-PdfColors.teal500 = Object.freeze(PdfColor.fromInt(4278228616));
-
-PdfColors.teal600 = Object.freeze(PdfColor.fromInt(4278225275));
-
-PdfColors.teal700 = Object.freeze(PdfColor.fromInt(4278221163));
-
-PdfColors.teal800 = Object.freeze(PdfColor.fromInt(4278217052));
-
-PdfColors.teal900 = Object.freeze(PdfColor.fromInt(4278209856));
-
-PdfColors.tealAccent100 = Object.freeze(PdfColor.fromInt(4289200107));
-
-PdfColors.tealAccent200 = Object.freeze(PdfColor.fromInt(4284809178));
-
-PdfColors.tealAccent400 = Object.freeze(PdfColor.fromInt(4280150454));
-
-PdfColors.tealAccent700 = Object.freeze(PdfColor.fromInt(4278239141));
-
-PdfColors.green50 = Object.freeze(PdfColor.fromInt(4293457385));
-
-PdfColors.green100 = Object.freeze(PdfColor.fromInt(4291356361));
-
-PdfColors.green200 = Object.freeze(PdfColor.fromInt(4289058471));
-
-PdfColors.green300 = Object.freeze(PdfColor.fromInt(4286695300));
-
-PdfColors.green400 = Object.freeze(PdfColor.fromInt(4284922730));
-
-PdfColors.green500 = Object.freeze(PdfColor.fromInt(4283215696));
-
-PdfColors.green600 = Object.freeze(PdfColor.fromInt(4282622023));
-
-PdfColors.green700 = Object.freeze(PdfColor.fromInt(4281896508));
-
-PdfColors.green800 = Object.freeze(PdfColor.fromInt(4281236786));
-
-PdfColors.green900 = Object.freeze(PdfColor.fromInt(4279983648));
-
-PdfColors.greenAccent100 = Object.freeze(PdfColor.fromInt(4290377418));
-
-PdfColors.greenAccent200 = Object.freeze(PdfColor.fromInt(4285132974));
-
-PdfColors.greenAccent400 = Object.freeze(PdfColor.fromInt(4278249078));
-
-PdfColors.greenAccent700 = Object.freeze(PdfColor.fromInt(4278241363));
-
-PdfColors.lightGreen50 = Object.freeze(PdfColor.fromInt(4294047977));
-
-PdfColors.lightGreen100 = Object.freeze(PdfColor.fromInt(4292668872));
-
-PdfColors.lightGreen200 = Object.freeze(PdfColor.fromInt(4291158437));
-
-PdfColors.lightGreen300 = Object.freeze(PdfColor.fromInt(4289648001));
-
-PdfColors.lightGreen400 = Object.freeze(PdfColor.fromInt(4288466021));
-
-PdfColors.lightGreen500 = Object.freeze(PdfColor.fromInt(4287349578));
-
-PdfColors.lightGreen600 = Object.freeze(PdfColor.fromInt(4286362434));
-
-PdfColors.lightGreen700 = Object.freeze(PdfColor.fromInt(4285046584));
-
-PdfColors.lightGreen800 = Object.freeze(PdfColor.fromInt(4283796271));
-
-PdfColors.lightGreen900 = Object.freeze(PdfColor.fromInt(4281559326));
-
-PdfColors.lightGreenAccent100 = Object.freeze(PdfColor.fromInt(4291624848));
-
-PdfColors.lightGreenAccent200 = Object.freeze(PdfColor.fromInt(4289920857));
-
-PdfColors.lightGreenAccent400 = Object.freeze(PdfColor.fromInt(4285988611));
-
-PdfColors.lightGreenAccent700 = Object.freeze(PdfColor.fromInt(4284800279));
-
-PdfColors.lime50 = Object.freeze(PdfColor.fromInt(4294573031));
-
-PdfColors.lime100 = Object.freeze(PdfColor.fromInt(4293981379));
-
-PdfColors.lime200 = Object.freeze(PdfColor.fromInt(4293324444));
-
-PdfColors.lime300 = Object.freeze(PdfColor.fromInt(4292667253));
-
-PdfColors.lime400 = Object.freeze(PdfColor.fromInt(4292141399));
-
-PdfColors.lime500 = Object.freeze(PdfColor.fromInt(4291681337));
-
-PdfColors.lime600 = Object.freeze(PdfColor.fromInt(4290824755));
-
-PdfColors.lime700 = Object.freeze(PdfColor.fromInt(4289705003));
-
-PdfColors.lime800 = Object.freeze(PdfColor.fromInt(4288584996));
-
-PdfColors.lime900 = Object.freeze(PdfColor.fromInt(4286740247));
-
-PdfColors.limeAccent100 = Object.freeze(PdfColor.fromInt(4294246273));
-
-PdfColors.limeAccent200 = Object.freeze(PdfColor.fromInt(4293852993));
-
-PdfColors.limeAccent400 = Object.freeze(PdfColor.fromInt(4291231488));
-
-PdfColors.limeAccent700 = Object.freeze(PdfColor.fromInt(4289653248));
-
-PdfColors.yellow50 = Object.freeze(PdfColor.fromInt(4294966759));
-
-PdfColors.yellow100 = Object.freeze(PdfColor.fromInt(4294965700));
-
-PdfColors.yellow200 = Object.freeze(PdfColor.fromInt(4294964637));
-
-PdfColors.yellow300 = Object.freeze(PdfColor.fromInt(4294963574));
-
-PdfColors.yellow400 = Object.freeze(PdfColor.fromInt(4294962776));
-
-PdfColors.yellow500 = Object.freeze(PdfColor.fromInt(4294961979));
-
-PdfColors.yellow600 = Object.freeze(PdfColor.fromInt(4294826037));
-
-PdfColors.yellow700 = Object.freeze(PdfColor.fromInt(4294688813));
-
-PdfColors.yellow800 = Object.freeze(PdfColor.fromInt(4294551589));
-
-PdfColors.yellow900 = Object.freeze(PdfColor.fromInt(4294278935));
-
-PdfColors.yellowAccent100 = Object.freeze(PdfColor.fromInt(4294967181));
-
-PdfColors.yellowAccent200 = Object.freeze(PdfColor.fromInt(4294967040));
-
-PdfColors.yellowAccent400 = Object.freeze(PdfColor.fromInt(4294961664));
-
-PdfColors.yellowAccent700 = Object.freeze(PdfColor.fromInt(4294956544));
-
-PdfColors.amber50 = Object.freeze(PdfColor.fromInt(4294965473));
-
-PdfColors.amber100 = Object.freeze(PdfColor.fromInt(4294962355));
-
-PdfColors.amber200 = Object.freeze(PdfColor.fromInt(4294959234));
-
-PdfColors.amber300 = Object.freeze(PdfColor.fromInt(4294956367));
-
-PdfColors.amber400 = Object.freeze(PdfColor.fromInt(4294953512));
-
-PdfColors.amber500 = Object.freeze(PdfColor.fromInt(4294951175));
-
-PdfColors.amber600 = Object.freeze(PdfColor.fromInt(4294947584));
-
-PdfColors.amber700 = Object.freeze(PdfColor.fromInt(4294942720));
-
-PdfColors.amber800 = Object.freeze(PdfColor.fromInt(4294938368));
-
-PdfColors.amber900 = Object.freeze(PdfColor.fromInt(4294930176));
-
-PdfColors.amberAccent100 = Object.freeze(PdfColor.fromInt(4294960511));
-
-PdfColors.amberAccent200 = Object.freeze(PdfColor.fromInt(4294956864));
-
-PdfColors.amberAccent400 = Object.freeze(PdfColor.fromInt(4294951936));
-
-PdfColors.amberAccent700 = Object.freeze(PdfColor.fromInt(4294945536));
-
-PdfColors.orange50 = Object.freeze(PdfColor.fromInt(4294964192));
-
-PdfColors.orange100 = Object.freeze(PdfColor.fromInt(4294959282));
-
-PdfColors.orange200 = Object.freeze(PdfColor.fromInt(4294954112));
-
-PdfColors.orange300 = Object.freeze(PdfColor.fromInt(4294948685));
-
-PdfColors.orange400 = Object.freeze(PdfColor.fromInt(4294944550));
-
-PdfColors.orange500 = Object.freeze(PdfColor.fromInt(4294940672));
-
-PdfColors.orange600 = Object.freeze(PdfColor.fromInt(4294675456));
-
-PdfColors.orange700 = Object.freeze(PdfColor.fromInt(4294278144));
-
-PdfColors.orange800 = Object.freeze(PdfColor.fromInt(4293880832));
-
-PdfColors.orange900 = Object.freeze(PdfColor.fromInt(4293284096));
-
-PdfColors.orangeAccent100 = Object.freeze(PdfColor.fromInt(4294955392));
-
-PdfColors.orangeAccent200 = Object.freeze(PdfColor.fromInt(4294945600));
-
-PdfColors.orangeAccent400 = Object.freeze(PdfColor.fromInt(4294938880));
-
-PdfColors.orangeAccent700 = Object.freeze(PdfColor.fromInt(4294929664));
-
-PdfColors.deepOrange50 = Object.freeze(PdfColor.fromInt(4294699495));
-
-PdfColors.deepOrange100 = Object.freeze(PdfColor.fromInt(4294954172));
-
-PdfColors.deepOrange200 = Object.freeze(PdfColor.fromInt(4294945681));
-
-PdfColors.deepOrange300 = Object.freeze(PdfColor.fromInt(4294937189));
-
-PdfColors.deepOrange400 = Object.freeze(PdfColor.fromInt(4294930499));
-
-PdfColors.deepOrange500 = Object.freeze(PdfColor.fromInt(4294924066));
-
-PdfColors.deepOrange600 = Object.freeze(PdfColor.fromInt(4294201630));
-
-PdfColors.deepOrange700 = Object.freeze(PdfColor.fromInt(4293282329));
-
-PdfColors.deepOrange800 = Object.freeze(PdfColor.fromInt(4292363029));
-
-PdfColors.deepOrange900 = Object.freeze(PdfColor.fromInt(4290721292));
-
-PdfColors.deepOrangeAccent100 = Object.freeze(PdfColor.fromInt(4294942336));
-
-PdfColors.deepOrangeAccent200 = Object.freeze(PdfColor.fromInt(4294929984));
-
-PdfColors.deepOrangeAccent400 = Object.freeze(PdfColor.fromInt(4294917376));
-
-PdfColors.deepOrangeAccent700 = Object.freeze(PdfColor.fromInt(4292684800));
-
-PdfColors.brown50 = Object.freeze(PdfColor.fromInt(4293913577));
-
-PdfColors.brown100 = Object.freeze(PdfColor.fromInt(4292332744));
-
-PdfColors.brown200 = Object.freeze(PdfColor.fromInt(4290554532));
-
-PdfColors.brown300 = Object.freeze(PdfColor.fromInt(4288776319));
-
-PdfColors.brown400 = Object.freeze(PdfColor.fromInt(4287458915));
-
-PdfColors.brown500 = Object.freeze(PdfColor.fromInt(4286141768));
-
-PdfColors.brown600 = Object.freeze(PdfColor.fromInt(4285353025));
-
-PdfColors.brown700 = Object.freeze(PdfColor.fromInt(4284301367));
-
-PdfColors.brown800 = Object.freeze(PdfColor.fromInt(4283315246));
-
-PdfColors.brown900 = Object.freeze(PdfColor.fromInt(4282263331));
-
-PdfColors.grey50 = Object.freeze(PdfColor.fromInt(4294638330));
-
-PdfColors.grey100 = Object.freeze(PdfColor.fromInt(4294309365));
-
-PdfColors.grey200 = Object.freeze(PdfColor.fromInt(4293848814));
-
-PdfColors.grey300 = Object.freeze(PdfColor.fromInt(4292927712));
-
-PdfColors.grey400 = Object.freeze(PdfColor.fromInt(4290624957));
-
-PdfColors.grey500 = Object.freeze(PdfColor.fromInt(4288585374));
-
-PdfColors.grey600 = Object.freeze(PdfColor.fromInt(4285887861));
-
-PdfColors.grey700 = Object.freeze(PdfColor.fromInt(4284572001));
-
-PdfColors.grey800 = Object.freeze(PdfColor.fromInt(4282532418));
-
-PdfColors.grey900 = Object.freeze(PdfColor.fromInt(4280361249));
-
-PdfColors.blueGrey50 = Object.freeze(PdfColor.fromInt(4293718001));
-
-PdfColors.blueGrey100 = Object.freeze(PdfColor.fromInt(4291811548));
-
-PdfColors.blueGrey200 = Object.freeze(PdfColor.fromInt(4289773253));
-
-PdfColors.blueGrey300 = Object.freeze(PdfColor.fromInt(4287669422));
-
-PdfColors.blueGrey400 = Object.freeze(PdfColor.fromInt(4286091420));
-
-PdfColors.blueGrey500 = Object.freeze(PdfColor.fromInt(4284513675));
-
-PdfColors.blueGrey600 = Object.freeze(PdfColor.fromInt(4283723386));
-
-PdfColors.blueGrey700 = Object.freeze(PdfColor.fromInt(4282735204));
-
-PdfColors.blueGrey800 = Object.freeze(PdfColor.fromInt(4281812815));
-
-PdfColors.blueGrey900 = Object.freeze(PdfColor.fromInt(4280693304));
-
-PdfColors.white = Object.freeze(PdfColor.fromInt(4294967295));
-
-PdfColors.black = Object.freeze(PdfColor.fromInt(4278190080));
-
-PdfColors.red = PdfColors.red500;
-
-PdfColors.redAccent = PdfColors.redAccent200;
-
-PdfColors.pink = PdfColors.pink500;
-
-PdfColors.pinkAccent = PdfColors.pinkAccent200;
-
-PdfColors.purple = PdfColors.purple500;
-
-PdfColors.purpleAccent = PdfColors.purpleAccent200;
-
-PdfColors.deepPurple = PdfColors.deepPurple500;
-
-PdfColors.deepPurpleAccent = PdfColors.deepPurpleAccent200;
-
-PdfColors.indigo = PdfColors.indigo500;
-
-PdfColors.indigoAccent = PdfColors.indigoAccent200;
-
-PdfColors.blue = PdfColors.blue500;
-
-PdfColors.blueAccent = PdfColors.blueAccent200;
-
-PdfColors.lightBlue = PdfColors.lightBlue500;
-
-PdfColors.lightBlueAccent = PdfColors.lightBlueAccent200;
-
-PdfColors.cyan = PdfColors.cyan500;
-
-PdfColors.cyanAccent = PdfColors.cyanAccent200;
-
-PdfColors.teal = PdfColors.teal500;
-
-PdfColors.tealAccent = PdfColors.tealAccent200;
-
-PdfColors.green = PdfColors.green500;
-
-PdfColors.greenAccent = PdfColors.greenAccent200;
-
-PdfColors.lightGreen = PdfColors.lightGreen500;
-
-PdfColors.lightGreenAccent = PdfColors.lightGreenAccent200;
-
-PdfColors.lime = PdfColors.lime500;
-
-PdfColors.limeAccent = PdfColors.limeAccent200;
-
-PdfColors.yellow = PdfColors.yellow500;
-
-PdfColors.yellowAccent = PdfColors.yellowAccent200;
-
-PdfColors.amber = PdfColors.amber500;
-
-PdfColors.amberAccent = PdfColors.amberAccent200;
-
-PdfColors.orange = PdfColors.orange500;
-
-PdfColors.orangeAccent = PdfColors.orangeAccent200;
-
-PdfColors.deepOrange = PdfColors.deepOrange500;
-
-PdfColors.deepOrangeAccent = PdfColors.deepOrangeAccent200;
-
-PdfColors.brown = PdfColors.brown500;
-
-PdfColors.grey = PdfColors.grey500;
-
-PdfColors.blueGrey = PdfColors.blueGrey500;
-
-PdfColors.primaries = Object.freeze([ PdfColors.red, PdfColors.pink, PdfColors.purple, PdfColors.deepPurple, PdfColors.indigo, PdfColors.blue, PdfColors.lightBlue, PdfColors.cyan, PdfColors.teal, PdfColors.green, PdfColors.lightGreen, PdfColors.lime, PdfColors.yellow, PdfColors.amber, PdfColors.orange, PdfColors.deepOrange, PdfColors.brown, PdfColors.grey, PdfColors.blueGrey ]);
-
-PdfColors.accents = Object.freeze([ PdfColors.redAccent, PdfColors.pinkAccent, PdfColors.purpleAccent, PdfColors.deepPurpleAccent, PdfColors.indigoAccent, PdfColors.blueAccent, PdfColors.lightBlueAccent, PdfColors.cyanAccent, PdfColors.tealAccent, PdfColors.greenAccent, PdfColors.lightGreenAccent, PdfColors.limeAccent, PdfColors.yellowAccent, PdfColors.amberAccent, PdfColors.orangeAccent, PdfColors.deepOrangeAccent ]);
+palette["accents"] = Object.freeze(families.slice(0, 16).map(family => palette[family + "Accent"]));
 
 class Radius {
   constructor(x, y = x) {
@@ -4941,25 +4384,35 @@ class PdfString extends PdfDataType {
   }
 }
 
-const helveticaWidths = Object.freeze([ .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .278, .278, .355, .556, .556, .889, .667, .191, .333, .333, .389, .584, .278, .333, .278, .278, .556, .556, .556, .556, .556, .556, .556, .556, .556, .556, .278, .278, .584, .584, .584, .556, 1.015, .667, .667, .722, .722, .667, .611, .778, .722, .278, .5, .667, .556, .833, .722, .778, .667, .778, .722, .667, .611, .722, .667, .944, .667, .667, .611, .278, .278, .277, .469, .556, .333, .556, .556, .5, .556, .556, .278, .556, .556, .222, .222, .5, .222, .833, .556, .556, .556, .556, .333, .5, .278, .556, .5, .722, .5, .5, .5, .334, .26, .334, .584, .5, .655, .5, .222, .278, .333, 1, .556, .556, .333, 1, .667, .25, 1, .5, .611, .5, .5, .222, .221, .333, .333, .35, .556, 1, .333, 1, .5, .25, .938, .5, .5, .667, .278, .278, .556, .556, .556, .556, .26, .556, .333, .737, .37, .448, .584, .333, .737, .333, .606, .584, .35, .35, .333, .556, .537, .278, .333, .35, .365, .448, .869, .869, .879, .556, .667, .667, .667, .667, .667, .667, 1, .722, .667, .667, .667, .667, .278, .278, .278, .278, .722, .722, .778, .778, .778, .778, .778, .584, .778, .722, .722, .722, .722, .667, .666, .611, .556, .556, .556, .556, .556, .556, .896, .5, .556, .556, .556, .556, .251, .251, .251, .251, .556, .556, .556, .556, .556, .556, .556, .584, .611, .556, .556, .556, .556, .5, .555, .5 ]);
+const widthDigits = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-const helveticaBoldWidths = Object.freeze([ .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .333, .474, .556, .556, .889, .722, .238, .333, .333, .389, .584, .278, .333, .278, .278, .556, .556, .556, .556, .556, .556, .556, .556, .556, .556, .333, .333, .584, .584, .584, .611, .975, .722, .722, .722, .722, .667, .611, .778, .722, .278, .556, .722, .611, .833, .722, .778, .667, .778, .722, .667, .611, .722, .667, .944, .667, .667, .611, .333, .278, .333, .584, .556, .333, .556, .611, .556, .611, .556, .333, .611, .611, .278, .278, .556, .278, .889, .611, .611, .611, .611, .389, .556, .333, .611, .556, .778, .556, .556, .5, .389, .28, .389, .584, .35, .556, .35, .278, .556, .5, 1, .556, .556, .333, 1, .667, .333, 1, .35, .611, .35, .35, .278, .278, .5, .5, .35, .556, 1, .333, 1, .556, .333, .944, .35, .5, .667, .278, .333, .556, .556, .556, .556, .28, .556, .333, .737, .37, .556, .584, .333, .737, .333, .4, .584, .333, .333, .333, .611, .556, .278, .333, .333, .365, .556, .834, .834, .834, .611, .722, .722, .722, .722, .722, .722, 1, .722, .667, .667, .667, .667, .278, .278, .278, .278, .722, .722, .778, .778, .778, .778, .778, .584, .778, .722, .722, .722, .722, .667, .667, .611, .556, .556, .556, .556, .556, .556, .889, .556, .556, .556, .556, .556, .278, .278, .278, .278, .611, .611, .611, .611, .611, .611, .611, .584, .611, .611, .611, .611, .611, .556, .611, .556 ]);
+function unpackWidths(packed) {
+  const widths = [];
+  for (let index = 0; index < packed.length; index += 2) {
+    widths.push((widthDigits.indexOf(packed[index]) << 6 | widthDigits.indexOf(packed[index + 1])) / 1e3);
+  }
+  return Object.freeze(widths);
+}
 
-const helveticaBoldObliqueWidths = Object.freeze([ .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .333, .474, .556, .556, .889, .722, .238, .333, .333, .389, .584, .278, .333, .278, .278, .556, .556, .556, .556, .556, .556, .556, .556, .556, .556, .333, .333, .584, .584, .584, .611, .975, .722, .722, .722, .722, .667, .611, .778, .722, .278, .556, .722, .611, .833, .722, .778, .667, .778, .722, .667, .611, .722, .667, .944, .667, .667, .611, .333, .278, .333, .584, .556, .333, .556, .611, .556, .611, .556, .333, .611, .611, .278, .278, .556, .278, .889, .611, .611, .611, .611, .389, .556, .333, .611, .556, .778, .556, .556, .5, .389, .28, .389, .584, .35, .556, .35, .278, .556, .5, 1, .556, .556, .333, 1, .667, .333, 1, .35, .611, .35, .35, .278, .278, .5, .5, .35, .556, 1, .333, 1, .556, .333, .944, .35, .5, .667, .278, .333, .556, .556, .556, .556, .28, .556, .333, .737, .37, .556, .584, .333, .737, .333, .4, .584, .333, .333, .333, .611, .556, .278, .333, .333, .365, .556, .834, .834, .834, .611, .722, .722, .722, .722, .722, .722, 1, .722, .667, .667, .667, .667, .278, .278, .278, .278, .722, .722, .778, .778, .778, .778, .778, .584, .778, .722, .722, .722, .722, .667, .667, .611, .556, .556, .556, .556, .556, .556, .889, .556, .556, .556, .556, .556, .278, .278, .278, .278, .611, .611, .611, .611, .611, .611, .611, .584, .611, .611, .611, .611, .611, .556, .611, .556 ]);
+const helveticaWidths = unpackWidths("H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0H0EWEWFjIsIsN5KbC/FNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsEWEWJIJIJIIsP3KbKbLSLSKbJjMKLSEWH0KbIsNBLSMKKbMKLSKbJjLSKbOwKbKbJjEWEWEVHVIsFNIsIsH0IsIsEWIsIsDeDeH0DeNBIsIsIsIsFNH0EWIsH0LSH0H0H0FOEEFOJIH0KPH0DeEWFNPoIsIsFNPoKbD6PoH0JjH0H0DeDdFNFNFeIsPoFNPoH0D6OqH0H0KbEWEWIsIsIsIsEEIsFNLhFyHAJIFNLhFNJeJIFeFeFNIsIZEWFNFeFtHANlNlNvIsKbKbKbKbKbKbPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKaJjIsIsIsIsIsIsOAH0IsIsIsIsD7D7D7D7IsIsIsIsIsIsIsJIJjIsIsIsIsH0IrH0");
 
-const helveticaObliqueWidths = Object.freeze([ .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .278, .355, .556, .556, .889, .667, .191, .333, .333, .389, .584, .278, .333, .278, .278, .556, .556, .556, .556, .556, .556, .556, .556, .556, .556, .278, .278, .584, .584, .584, .556, 1.015, .667, .667, .722, .722, .667, .611, .778, .722, .278, .5, .667, .556, .833, .722, .778, .667, .778, .722, .667, .611, .722, .667, .944, .667, .667, .611, .278, .278, .278, .469, .556, .333, .556, .556, .5, .556, .556, .278, .556, .556, .222, .222, .5, .222, .833, .556, .556, .556, .556, .333, .5, .278, .556, .5, .722, .5, .5, .5, .334, .26, .334, .584, .35, .556, .35, .222, .556, .333, 1, .556, .556, .333, 1, .667, .333, 1, .35, .611, .35, .35, .222, .222, .333, .333, .35, .556, 1, .333, 1, .5, .333, .944, .35, .5, .667, .278, .333, .556, .556, .556, .556, .26, .556, .333, .737, .37, .556, .584, .333, .737, .333, .4, .584, .333, .333, .333, .556, .537, .278, .333, .333, .365, .556, .834, .834, .834, .611, .667, .667, .667, .667, .667, .667, 1, .722, .667, .667, .667, .667, .278, .278, .278, .278, .722, .722, .778, .778, .778, .778, .778, .584, .778, .722, .722, .722, .722, .667, .667, .611, .556, .556, .556, .556, .556, .556, .889, .5, .556, .556, .556, .556, .278, .278, .278, .278, .556, .556, .556, .556, .556, .556, .556, .584, .611, .556, .556, .556, .556, .5, .556, .5 ]);
+const helveticaBoldWidths = unpackWidths("EWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWFNHaIsIsN5LSDuFNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsFNFNJIJIJIJjPPLSLSLSLSKbJjMKLSEWIsLSJjNBLSMKKbMKLSKbJjLSKbOwKbKbJjFNEWFNJIIsFNIsJjIsJjIsFNJjJjEWEWIsEWN5JjJjJjJjGFIsFNJjIsMKIsIsH0GFEYGFJIFeIsFeEWIsH0PoIsIsFNPoKbFNPoFeJjFeFeEWEWH0H0FeIsPoFNPoIsFNOwFeH0KbEWFNIsIsIsIsEYIsFNLhFyIsJIFNLhFNGQJIFNFNFNJjIsEWFNFNFtIsNCNCNCJjLSLSLSLSLSLSPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKbJjIsIsIsIsIsIsN5IsIsIsIsIsEWEWEWEWJjJjJjJjJjJjJjJIJjJjJjJjJjIsJjIs");
 
-const timesWidths = Object.freeze([ .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .333, .408, .5, .5, .833, .778, .18, .333, .333, .5, .564, .25, .333, .25, .278, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .278, .278, .564, .564, .564, .444, .921, .722, .667, .667, .722, .611, .556, .722, .722, .333, .389, .722, .611, .889, .722, .722, .556, .722, .667, .556, .611, .722, .722, .944, .722, .722, .611, .333, .278, .333, .469, .5, .333, .444, .5, .444, .5, .444, .333, .5, .5, .278, .278, .5, .278, .778, .5, .5, .5, .5, .333, .389, .278, .5, .5, .722, .5, .5, .444, .48, .2, .48, .541, .35, .5, .35, .333, .5, .444, 1, .5, .5, .333, 1, .556, .333, .889, .35, .611, .35, .35, .333, .333, .444, .444, .35, .5, 1, .333, .98, .389, .333, .722, .35, .444, .722, .25, .333, .5, .5, .5, .5, .2, .5, .333, .76, .276, .5, .564, .333, .76, .333, .4, .564, .3, .3, .333, .5, .453, .25, .333, .3, .31, .5, .75, .75, .75, .444, .722, .722, .722, .722, .722, .722, .889, .667, .611, .611, .611, .611, .333, .333, .333, .333, .722, .722, .722, .722, .722, .722, .722, .564, .722, .722, .722, .722, .722, .722, .556, .5, .444, .444, .444, .444, .444, .444, .667, .444, .444, .444, .444, .444, .278, .278, .278, .278, .5, .5, .5, .5, .5, .5, .5, .564, .5, .5, .5, .5, .5, .5, .5, .5 ]);
+const helveticaBoldObliqueWidths = unpackWidths("EWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWFNHaIsIsN5LSDuFNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsFNFNJIJIJIJjPPLSLSLSLSKbJjMKLSEWIsLSJjNBLSMKKbMKLSKbJjLSKbOwKbKbJjFNEWFNJIIsFNIsJjIsJjIsFNJjJjEWEWIsEWN5JjJjJjJjGFIsFNJjIsMKIsIsH0GFEYGFJIFeIsFeEWIsH0PoIsIsFNPoKbFNPoFeJjFeFeEWEWH0H0FeIsPoFNPoIsFNOwFeH0KbEWFNIsIsIsIsEYIsFNLhFyIsJIFNLhFNGQJIFNFNFNJjIsEWFNFNFtIsNCNCNCJjLSLSLSLSLSLSPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKbJjIsIsIsIsIsIsN5IsIsIsIsIsEWEWEWEWJjJjJjJjJjJjJjJIJjJjJjJjJjIsJjIs");
 
-const timesBoldWidths = Object.freeze([ .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .333, .555, .5, .5, 1, .833, .278, .333, .333, .5, .57, .25, .333, .25, .278, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .333, .333, .57, .57, .57, .5, .93, .722, .667, .722, .722, .667, .611, .778, .778, .389, .5, .778, .667, .944, .722, .778, .611, .778, .722, .556, .667, .722, .722, 1, .722, .722, .667, .333, .278, .333, .581, .5, .333, .5, .556, .444, .556, .444, .333, .5, .556, .278, .333, .556, .278, .833, .556, .5, .556, .556, .444, .389, .333, .556, .5, .722, .5, .5, .444, .394, .22, .394, .52, .35, .5, .35, .333, .5, .5, 1, .5, .5, .333, 1, .556, .333, 1, .35, .667, .35, .35, .333, .333, .5, .5, .35, .5, 1, .333, 1, .389, .333, .722, .35, .444, .722, .25, .333, .5, .5, .5, .5, .22, .5, .333, .747, .3, .5, .57, .333, .747, .333, .4, .57, .3, .3, .333, .556, .54, .25, .333, .3, .33, .5, .75, .75, .75, .5, .722, .722, .722, .722, .722, .722, 1, .722, .667, .667, .667, .667, .389, .389, .389, .389, .722, .722, .778, .778, .778, .778, .778, .57, .778, .722, .722, .722, .722, .722, .611, .556, .5, .5, .5, .5, .5, .5, .722, .444, .444, .444, .444, .444, .278, .278, .278, .278, .5, .556, .5, .5, .5, .5, .5, .57, .5, .556, .556, .556, .556, .5, .556, .5 ]);
+const helveticaObliqueWidths = unpackWidths("EWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWEWFjIsIsN5KbC/FNFNGFJIEWFNEWEWIsIsIsIsIsIsIsIsIsIsEWEWJIJIJIIsP3KbKbLSLSKbJjMKLSEWH0KbIsNBLSMKKbMKLSKbJjLSKbOwKbKbJjEWEWEWHVIsFNIsIsH0IsIsEWIsIsDeDeH0DeNBIsIsIsIsFNH0EWIsH0LSH0H0H0FOEEFOJIFeIsFeDeIsFNPoIsIsFNPoKbFNPoFeJjFeFeDeDeFNFNFeIsPoFNPoH0FNOwFeH0KbEWFNIsIsIsIsEEIsFNLhFyIsJIFNLhFNGQJIFNFNFNIsIZEWFNFNFtIsNCNCNCJjKbKbKbKbKbKbPoLSKbKbKbKbEWEWEWEWLSLSMKMKMKMKMKJIMKLSLSLSLSKbKbJjIsIsIsIsIsIsN5H0IsIsIsIsEWEWEWEWIsIsIsIsIsIsIsJIJjIsIsIsIsH0IsH0");
 
-const timesBoldItalicWidths = Object.freeze([ .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .389, .555, .5, .5, .833, .778, .278, .333, .333, .5, .57, .25, .333, .25, .278, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .333, .333, .57, .57, .57, .5, .832, .667, .667, .667, .722, .667, .667, .722, .778, .389, .5, .667, .611, .889, .722, .722, .611, .722, .667, .556, .611, .722, .667, .889, .667, .611, .611, .333, .278, .333, .57, .5, .333, .5, .5, .444, .5, .444, .333, .5, .556, .278, .278, .5, .278, .778, .556, .5, .5, .5, .389, .389, .278, .556, .444, .667, .5, .444, .389, .348, .22, .348, .57, .35, .5, .35, .333, .5, .5, 1, .5, .5, .333, 1, .556, .333, .944, .35, .611, .35, .35, .333, .333, .5, .5, .35, .5, 1, .333, 1, .389, .333, .722, .35, .389, .611, .25, .389, .5, .5, .5, .5, .22, .5, .333, .747, .266, .5, .606, .333, .747, .333, .4, .57, .3, .3, .333, .576, .5, .25, .333, .3, .3, .5, .75, .75, .75, .5, .667, .667, .667, .667, .667, .667, .944, .667, .667, .667, .667, .667, .389, .389, .389, .389, .722, .722, .722, .722, .722, .722, .722, .57, .722, .722, .722, .722, .722, .611, .611, .5, .5, .5, .5, .5, .5, .5, .722, .444, .444, .444, .444, .444, .278, .278, .278, .278, .5, .556, .5, .5, .5, .5, .5, .57, .5, .556, .556, .556, .556, .444, .5, .444 ]);
+const timesWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6FNGYH0H0NBMKC0FNFNH0I0D6FND6EWH0H0H0H0H0H0H0H0H0H0EWEWI0I0I0G8OZLSKbKbLSJjIsLSLSFNGFLSJjN5LSLSIsLSKbIsJjLSLSOwLSLSJjFNEWFNHVH0FNG8H0G8H0G8FNH0H0EWEWH0EWMKH0H0H0H0FNGFEWH0H0LSH0H0G8HgDIHgIdFeH0FeFNH0G8PoH0H0FNPoIsFNN5FeJjFeFeFNFNG8G8FeH0PoFNPUGFFNLSFeG8LSD6FNH0H0H0H0DIH0FNL4EUH0I0FNL4FNGQI0EsEsFNH0HFD6FNEsE2H0LuLuLuG8LSLSLSLSLSLSN5KbJjJjJjJjFNFNFNFNLSLSLSLSLSLSLSI0LSLSLSLSLSLSIsH0G8G8G8G8G8G8KbG8G8G8G8G8EWEWEWEWH0H0H0H0H0H0H0I0H0H0H0H0H0H0H0H0");
 
-const timesItalicWidths = Object.freeze([ .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .25, .333, .42, .5, .5, .833, .778, .214, .333, .333, .5, .675, .25, .333, .25, .278, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .333, .333, .675, .675, .675, .5, .92, .611, .611, .667, .722, .611, .611, .722, .722, .333, .444, .667, .556, .833, .667, .722, .611, .722, .611, .5, .556, .722, .611, .833, .611, .556, .556, .389, .278, .389, .422, .5, .333, .5, .5, .444, .5, .444, .278, .5, .5, .278, .278, .444, .278, .722, .5, .5, .5, .5, .389, .389, .278, .5, .444, .667, .444, .444, .389, .4, .275, .4, .541, .35, .5, .35, .333, .5, .556, .889, .5, .5, .333, 1, .5, .333, .944, .35, .556, .35, .35, .333, .333, .556, .556, .35, .5, .889, .333, .98, .389, .333, .667, .35, .389, .556, .25, .389, .5, .5, .5, .5, .275, .5, .333, .76, .276, .5, .675, .333, .76, .333, .4, .675, .3, .3, .333, .5, .523, .25, .333, .3, .31, .5, .75, .75, .75, .5, .611, .611, .611, .611, .611, .611, .889, .667, .611, .611, .611, .611, .333, .333, .333, .333, .722, .667, .722, .722, .722, .722, .722, .675, .722, .722, .722, .722, .722, .556, .611, .5, .5, .5, .5, .5, .5, .5, .667, .444, .444, .444, .444, .444, .278, .278, .278, .278, .5, .5, .5, .5, .5, .5, .5, .675, .5, .5, .5, .5, .5, .444, .5, .444 ]);
+const timesBoldWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6FNIrH0H0PoNBEWFNFNH0I6D6FND6EWH0H0H0H0H0H0H0H0H0H0FNFNI6I6I6H0OiLSKbLSLSKbJjMKMKGFH0MKKbOwLSMKJjMKLSIsKbLSLSPoLSLSKbFNEWFNJFH0FNH0IsG8IsG8FNH0IsEWFNIsEWNBIsH0IsIsG8GFFNIsH0LSH0H0G8GKDcGKIIFeH0FeFNH0H0PoH0H0FNPoIsFNPoFeKbFeFeFNFNH0H0FeH0PoFNPoGFFNLSFeG8LSD6FNH0H0H0H0DcH0FNLrEsH0I6FNLrFNGQI6EsEsFNIsIcD6FNEsFKH0LuLuLuH0LSLSLSLSLSLSPoLSKbKbKbKbGFGFGFGFLSLSMKMKMKMKMKI6MKLSLSLSLSLSJjIsH0H0H0H0H0H0LSG8G8G8G8G8EWEWEWEWH0IsH0H0H0H0H0I6H0IsIsIsIsH0IsH0");
 
-const symbolWidths = Object.freeze([ .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .25, .333, .713, .5, .549, .833, .778, .439, .333, .333, .5, .549, .25, .549, .25, .278, .5, .5, .5, .5, .5, .5, .5, .5, .5, .5, .278, .278, .549, .549, .549, .444, .549, .722, .667, .722, .612, .611, .763, .603, .722, .333, .631, .722, .686, .889, .722, .722, .768, .741, .556, .592, .611, .69, .439, .768, .645, .795, .611, .333, .863, .333, .658, .5, .5, .631, .549, .549, .494, .439, .521, .411, .603, .329, .603, .549, .549, .576, .521, .549, .549, .521, .549, .603, .439, .576, .713, .686, .493, .686, .494, .48, .2, .48, .549, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .587, .75, .62, .247, .549, .167, .713, .5, .753, .753, .753, .753, 1.042, .987, .603, .987, .603, .4, .549, .411, .549, .549, .713, .494, .46, .549, .549, .549, .549, 1, .603, 1, .658, .823, .686, .795, .987, .768, .768, .823, .768, .768, .713, .713, .713, .713, .713, .713, .713, .768, .713, .79, .79, .89, .823, .549, .25, .713, .603, .603, 1.042, .987, .603, .987, .603, .494, .329, .79, .79, .786, .713, .384, .384, .384, .384, .384, .384, .494, .494, .494, .494, .587, .329, .274, .686, .686, .686, .384, .384, .384, .384, .384, .384, .494, .494, .494, .587 ]);
+const timesBoldItalicWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6GFIrH0H0NBMKEWFNFNH0I6D6FND6EWH0H0H0H0H0H0H0H0H0H0FNFNI6I6I6H0NAKbKbKbLSKbKbLSMKGFH0KbJjN5LSLSJjLSKbIsJjLSKbN5KbJjJjFNEWFNI6H0FNH0H0G8H0G8FNH0IsEWEWH0EWMKIsH0H0H0GFGFEWIsG8KbH0G8GFFcDcFcI6FeH0FeFNH0H0PoH0H0FNPoIsFNOwFeJjFeFeFNFNH0H0FeH0PoFNPoGFFNLSFeGFJjD6GFH0H0H0H0DcH0FNLrEKH0JeFNLrFNGQI6EsEsFNJAH0D6FNEsEsH0LuLuLuH0KbKbKbKbKbKbOwKbKbKbKbKbGFGFGFGFLSLSLSLSLSLSLSI6LSLSLSLSLSJjJjH0H0H0H0H0H0H0LSG8G8G8G8G8EWEWEWEWH0IsH0H0H0H0H0I6H0IsIsIsIsG8H0G8");
 
-const zapfDingbatsWidths = Object.freeze([ .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .278, .974, .961, .974, .98, .719, .789, .79, .791, .69, .96, .939, .549, .855, .911, .933, .911, .945, .974, .755, .846, .762, .761, .571, .677, .763, .76, .759, .754, .494, .552, .537, .577, .692, .786, .788, .788, .79, .793, .794, .816, .823, .789, .841, .823, .833, .816, .831, .923, .744, .723, .749, .79, .792, .695, .776, .768, .792, .759, .707, .708, .682, .701, .826, .815, .789, .789, .707, .687, .696, .689, .786, .787, .713, .791, .785, .791, .873, .761, .762, .762, .759, .759, .892, .892, .788, .784, .438, .138, .277, .415, .392, .392, .668, .668, .746, .39, .39, .317, .317, .276, .276, .509, .509, .41, .41, .234, .234, .334, .334, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .746, .732, .544, .544, .91, .667, .76, .76, .776, .595, .694, .626, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .788, .894, .838, 1.016, .458, .748, .924, .748, .918, .927, .928, .928, .834, .873, .828, .924, .924, .917, .93, .931, .463, .883, .836, .836, .867, .867, .696, .696, .874, .746, .874, .76, .946, .771, .865, .771, .888, .967, .888, .831, .873, .927, .97, .918, .746 ]);
+const timesItalicWidths = unpackWidths("D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6D6FNGkH0H0NBMKDWFNFNH0KjD6FND6EWH0H0H0H0H0H0H0H0H0H0FNFNKjKjKjH0OYJjJjKbLSJjJjLSLSFNG8KbIsNBKbLSJjLSJjH0IsLSJjNBJjIsIsGFEWGFGmH0FNH0H0G8H0G8EWH0H0EWEWG8EWLSH0H0H0H0GFGFEWH0G8KbG8G8GFGQETGQIdFeH0FeFNH0IsN5H0H0FNPoH0FNOwFeIsFeFeFNFNIsIsFeH0N5FNPUGFFNKbFeGFIsD6GFH0H0H0H0ETH0FNL4EUH0KjFNL4FNGQKjEsEsFNH0ILD6FNEsE2H0LuLuLuH0JjJjJjJjJjJjN5KbJjJjJjJjFNFNFNFNLSKbLSLSLSLSLSKjLSLSLSLSLSIsJjH0H0H0H0H0H0H0KbG8G8G8G8G8EWEWEWEWH0H0H0H0H0H0H0KjH0H0H0H0H0G8H0G8");
+
+const symbolWidths = unpackWidths("JLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLD6FNLJH0IlNBMKG3FNFNH0IlD6IlD6EWH0H0H0H0H0H0H0H0H0H0EWEWIlIlIlG8IlLSKbLSJkJjL7JbLSFNJ3LSKuN5LSLSMALlIsJQJjKyG3MAKFMbJjFNNfFNKSH0H0J3IlIlHuG3IJGbJbFJJbIlIlJAIJIlIlIJIlJbG3JALJKuHtKuHuHgDIHgIlJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLJLLuJsD3IlCnLJH0LxLxLxLxQSPbJbPbJbGQIlGbIlIlLJHuHMIlIlIlIlPoJbPoKSM3KuMbPbMAMAM3MAMALJLJLJLJLJLJLJMALJMWMWN6M3IlD6LJJbJbQSPbJbPbJbHuFJMWMWMSLJGAGAGAGAGAGAHuHuHuHuJLFJESKuKuKuGAGAGAGAGAGAHuHuHuJL");
+
+const zapfDingbatsWidths = unpackWidths("LqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqEWPOPBPOPULPMVMWMXKyPAOrIlNXOPOlOPOxPOLzNOL6L5I7KlL7L4L3LyHuIoIZJBK0MSMUMUMWMZMaMwM3MVNJM3NBMwM/ObLoLTLtMWMYK3MIMAMYL3LDLEKqK9M6MvMVMVLDKvK4KxMSMTLJMXMRMXNpL5L6L6L3L3N8N8MUMQG2CKEVGfGIGIKcKcLqGGGGE9E9EUEUH9H9GaGaDqDqFOFOLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLqLcIgIgOOKbL4L4MIJTK2JyMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUMUN+NGP4HKLsOcLsOWOfOgOgNCNpM8OcOcOVOiOjHPNzNENENjNjK4K4NqLqNqL4OyMDNhMDN4PHN4M/NpOfPKOWLq");
 
 class PdfType1Font {
   constructor({fontName, ascent, descent, widths = [], missingWidth = .6}) {
@@ -7867,7 +7320,17 @@ const stopWord = 260649;
 
 const paddingCodeword = 900;
 
-const codewords = [ [ 120256, 125680, 128380, 120032, 125560, 128318, 108736, 119920, 108640, 86080, 108592, 86048, 110016, 120560, 125820, 109792, 120440, 125758, 88256, 109680, 88160, 89536, 110320, 120700, 89312, 110200, 120638, 89200, 110140, 89840, 110460, 89720, 110398, 89980, 128506, 119520, 125304, 128190, 107712, 119408, 125244, 107616, 119352, 84032, 107568, 119324, 84e3, 107544, 83984, 108256, 119672, 125374, 85184, 108144, 119612, 85088, 108088, 119582, 85040, 108060, 85728, 108408, 119742, 85616, 108348, 85560, 108318, 85880, 108478, 85820, 85790, 107200, 119152, 125116, 107104, 119096, 125086, 83008, 107056, 119068, 82976, 107032, 82960, 82952, 83648, 107376, 119228, 83552, 107320, 119198, 83504, 107292, 83480, 83468, 83824, 107452, 83768, 107422, 83740, 83900, 106848, 118968, 125022, 82496, 106800, 118940, 82464, 106776, 118926, 82448, 106764, 82440, 106758, 82784, 106936, 119006, 82736, 106908, 82712, 106894, 82700, 82694, 106974, 82830, 82240, 106672, 118876, 82208, 106648, 118862, 82192, 106636, 82184, 106630, 82180, 82352, 82328, 82316, 82080, 118830, 106572, 106566, 82050, 117472, 124280, 127678, 103616, 117360, 124220, 103520, 117304, 124190, 75840, 103472, 75808, 104160, 117624, 124350, 76992, 104048, 117564, 76896, 103992, 76848, 76824, 77536, 104312, 117694, 77424, 104252, 77368, 77340, 77688, 104382, 77628, 77758, 121536, 126320, 128700, 121440, 126264, 128670, 111680, 121392, 126236, 111648, 121368, 126222, 111632, 121356, 103104, 117104, 124092, 112320, 103008, 117048, 124062, 112224, 121656, 126366, 93248, 74784, 102936, 117006, 93216, 112152, 93200, 75456, 103280, 117180, 93888, 75360, 103224, 117150, 93792, 112440, 121758, 93744, 75288, 93720, 75632, 103356, 94064, 75576, 103326, 94008, 112542, 93980, 75708, 94140, 75678, 94110, 121184, 126136, 128606, 111168, 121136, 126108, 111136, 121112, 126094, 111120, 121100, 111112, 111108, 102752, 116920, 123998, 111456, 102704, 116892, 91712, 74272, 121244, 116878, 91680, 74256, 102668, 91664, 111372, 102662, 74244, 74592, 102840, 116958, 92e3, 74544, 102812, 91952, 111516, 102798, 91928, 74508, 74502, 74680, 102878, 92088, 74652, 92060, 74638, 92046, 92126, 110912, 121008, 126044, 110880, 120984, 126030, 110864, 120972, 110856, 120966, 110852, 110850, 74048, 102576, 116828, 90944, 74016, 102552, 116814, 90912, 111e3, 121038, 90896, 73992, 102534, 90888, 110982, 90884, 74160, 102620, 91056, 74136, 102606, 91032, 111054, 91020, 74118, 91014, 91100, 91086, 110752, 120920, 125998, 110736, 120908, 110728, 120902, 110724, 110722, 73888, 102488, 116782, 90528, 73872, 102476, 90512, 110796, 102470, 90504, 73860, 90500, 73858, 73944, 90584, 90572, 90566, 120876, 120870, 110658, 102444, 73800, 90312, 90308, 90306, 101056, 116080, 123580, 100960, 116024, 70720, 100912, 115996, 70688, 100888, 70672, 70664, 71360, 101232, 116156, 71264, 101176, 116126, 71216, 101148, 71192, 71180, 71536, 101308, 71480, 101278, 71452, 71612, 71582, 118112, 124600, 127838, 105024, 118064, 124572, 104992, 118040, 124558, 104976, 118028, 104968, 118022, 100704, 115896, 123486, 105312, 100656, 115868, 79424, 70176, 118172, 115854, 79392, 105240, 100620, 79376, 70152, 79368, 70496, 100792, 115934, 79712, 70448, 118238, 79664, 105372, 100750, 79640, 70412, 79628, 70584, 100830, 79800, 70556, 79772, 70542, 70622, 79838, 122176, 126640, 128860, 122144, 126616, 128846, 122128, 126604, 122120, 126598, 122116, 104768, 117936, 124508, 113472, 104736, 126684, 124494, 113440, 122264, 126670, 113424, 104712, 117894, 113416, 122246, 104706, 69952, 100528, 115804, 78656, 69920, 100504, 115790, 96064, 78624, 104856, 117966, 96032, 113560, 122318, 100486, 96016, 78600, 104838, 96008, 69890, 70064, 100572, 78768, 70040, 100558, 96176, 78744, 104910, 96152, 113614, 70022, 78726, 70108, 78812, 70094, 96220, 78798, 122016, 126552, 128814, 122e3, 126540, 121992, 126534, 121988, 121986, 104608, 117848, 124462, 113056, 104592, 126574, 113040, 122060, 117830, 113032, 104580, 113028, 104578, 113026, 69792, 100440, 115758, 78240, 69776, 100428, 95136, 78224, 104652, 100422, 95120, 113100, 69764, 95112, 78212, 69762, 78210, 69848, 100462, 78296, 69836, 95192, 78284, 69830, 95180, 78278, 69870, 95214, 121936, 126508, 121928, 126502, 121924, 121922, 104528, 117804, 112848, 104520, 117798, 112840, 121958, 112836, 104514, 112834, 69712, 100396, 78032, 69704, 100390, 94672, 78024, 104550, 94664, 112870, 69698, 94660, 78018, 94658, 78060, 94700, 94694, 126486, 121890, 117782, 104484, 104482, 69672, 77928, 94440, 69666, 77922, 99680, 68160, 99632, 68128, 99608, 115342, 68112, 99596, 68104, 99590, 68448, 99768, 115422, 68400, 99740, 68376, 99726, 68364, 68358, 68536, 99806, 68508, 68494, 68574, 101696, 116400, 123740, 101664, 116376, 101648, 116364, 101640, 116358, 101636, 67904, 99504, 115292, 72512, 67872, 116444, 115278, 72480, 101784, 116430, 72464, 67848, 99462, 72456, 101766, 67842, 68016, 99548, 72624, 67992, 99534, 72600, 101838, 72588, 67974, 68060, 72668, 68046, 72654, 118432, 124760, 127918, 118416, 124748, 118408, 124742, 118404, 118402, 101536, 116312, 105888, 101520, 116300, 105872, 118476, 116294, 105864, 101508, 105860, 101506, 105858, 67744, 99416, 72096, 67728, 116334, 80800, 72080, 101580, 99398, 80784, 105932, 67716, 80776, 72068, 67714, 72066, 67800, 99438, 72152, 67788, 80856, 72140, 67782, 80844, 72134, 67822, 72174, 80878, 126800, 128940, 126792, 128934, 126788, 126786, 118352, 124716, 122576, 126828, 124710, 122568, 126822, 122564, 118338, 122562, 101456, 116268, 105680, 101448, 116262, 114128, 105672, 118374, 114120, 122598, 101442, 114116, 105666, 114114, 67664, 99372, 71888, 67656, 99366, 80336, 71880, 101478, 97232, 80328, 105702, 67650, 97224, 114150, 71874, 97220, 67692, 71916, 67686, 80364, 71910, 97260, 80358, 97254, 126760, 128918, 126756, 126754, 118312, 124694, 122472, 126774, 122468, 118306, 122466, 101416, 116246, 105576, 101412, 113896, 105572, 101410, 113892, 105570, 113890, 67624, 99350, 71784, 101430, 80104, 71780, 67618, 96744, 80100, 71778, 96740, 80098, 96738, 71798, 96758, 126738, 122420, 122418, 105524, 113780, 113778, 71732, 79988, 96500, 96498, 66880, 66848, 98968, 66832, 66824, 66820, 66992, 66968, 66956, 66950, 67036, 67022, 1e5, 99984, 115532, 99976, 115526, 99972, 99970, 66720, 98904, 69024, 100056, 98892, 69008, 100044, 69e3, 100038, 68996, 66690, 68994, 66776, 98926, 69080, 100078, 69068, 66758, 69062, 66798, 69102, 116560, 116552, 116548, 116546, 99920, 102096, 116588, 115494, 102088, 116582, 102084, 99906, 102082, 66640, 68816, 66632, 98854, 73168, 68808, 66628, 73160, 68804, 66626, 73156, 68802, 66668, 68844, 66662, 73196, 68838, 73190, 124840, 124836, 124834, 116520, 118632, 124854, 118628, 116514, 118626, 99880, 115478, 101992, 116534, 106216, 101988, 99874, 106212, 101986, 106210, 66600, 98838, 68712, 99894, 72936, 68708, 66594, 81384, 72932, 68706, 81380, 72930, 66614, 68726, 72950, 81398, 128980, 128978, 124820, 126900, 124818, 126898, 116500, 118580, 116498, 122740, 118578, 122738, 99860, 101940, 99858, 106100, 101938, 114420 ], [ 128352, 129720, 125504, 128304, 129692, 125472, 128280, 129678, 125456, 128268, 125448, 128262, 125444, 125792, 128440, 129758, 120384, 125744, 128412, 120352, 125720, 128398, 120336, 125708, 120328, 125702, 120324, 120672, 125880, 128478, 110144, 120624, 125852, 110112, 120600, 125838, 110096, 120588, 110088, 120582, 110084, 110432, 120760, 125918, 89664, 110384, 120732, 89632, 110360, 120718, 89616, 110348, 89608, 110342, 89952, 110520, 120798, 89904, 110492, 89880, 110478, 89868, 90040, 110558, 90012, 89998, 125248, 128176, 129628, 125216, 128152, 129614, 125200, 128140, 125192, 128134, 125188, 125186, 119616, 125360, 128220, 119584, 125336, 128206, 119568, 125324, 119560, 125318, 119556, 119554, 108352, 119728, 125404, 108320, 119704, 125390, 108304, 119692, 108296, 119686, 108292, 108290, 85824, 108464, 119772, 85792, 108440, 119758, 85776, 108428, 85768, 108422, 85764, 85936, 108508, 85912, 108494, 85900, 85894, 85980, 85966, 125088, 128088, 129582, 125072, 128076, 125064, 128070, 125060, 125058, 119200, 125144, 128110, 119184, 125132, 119176, 125126, 119172, 119170, 107424, 119256, 125166, 107408, 119244, 107400, 119238, 107396, 107394, 83872, 107480, 119278, 83856, 107468, 83848, 107462, 83844, 83842, 83928, 107502, 83916, 83910, 83950, 125008, 128044, 125e3, 128038, 124996, 124994, 118992, 125036, 118984, 125030, 118980, 118978, 106960, 119020, 106952, 119014, 106948, 106946, 82896, 106988, 82888, 106982, 82884, 82882, 82924, 82918, 124968, 128022, 124964, 124962, 118888, 124982, 118884, 118882, 106728, 118902, 106724, 106722, 82408, 106742, 82404, 82402, 124948, 124946, 118836, 118834, 106612, 106610, 124224, 127664, 129372, 124192, 127640, 129358, 124176, 127628, 124168, 127622, 124164, 124162, 117568, 124336, 127708, 117536, 124312, 127694, 117520, 124300, 117512, 124294, 117508, 117506, 104256, 117680, 124380, 104224, 117656, 124366, 104208, 117644, 104200, 117638, 104196, 104194, 77632, 104368, 117724, 77600, 104344, 117710, 77584, 104332, 77576, 104326, 77572, 77744, 104412, 77720, 104398, 77708, 77702, 77788, 77774, 128672, 129880, 93168, 128656, 129868, 92664, 128648, 129862, 92412, 128644, 128642, 124064, 127576, 129326, 126368, 124048, 129902, 126352, 128716, 127558, 126344, 124036, 126340, 124034, 126338, 117152, 124120, 127598, 121760, 117136, 124108, 121744, 126412, 124102, 121736, 117124, 121732, 117122, 121730, 103328, 117208, 124142, 112544, 103312, 117196, 112528, 121804, 117190, 112520, 103300, 112516, 103298, 112514, 75680, 103384, 117230, 94112, 75664, 103372, 94096, 112588, 103366, 94088, 75652, 94084, 75650, 75736, 103406, 94168, 75724, 94156, 75718, 94150, 75758, 128592, 129836, 91640, 128584, 129830, 91388, 128580, 91262, 128578, 123984, 127532, 126160, 123976, 127526, 126152, 128614, 126148, 123970, 126146, 116944, 124012, 121296, 116936, 124006, 121288, 126182, 121284, 116930, 121282, 102864, 116972, 111568, 102856, 116966, 111560, 121318, 111556, 102850, 111554, 74704, 102892, 92112, 74696, 102886, 92104, 111590, 92100, 74690, 92098, 74732, 92140, 74726, 92134, 128552, 129814, 90876, 128548, 90750, 128546, 123944, 127510, 126056, 128566, 126052, 123938, 126050, 116840, 123958, 121064, 116836, 121060, 116834, 121058, 102632, 116854, 111080, 121078, 111076, 102626, 111074, 74216, 102646, 91112, 74212, 91108, 74210, 91106, 74230, 91126, 128532, 90494, 128530, 123924, 126004, 123922, 126002, 116788, 120948, 116786, 120946, 102516, 110836, 102514, 110834, 73972, 90612, 73970, 90610, 128522, 123914, 125978, 116762, 120890, 102458, 110714, 123552, 127320, 129198, 123536, 127308, 123528, 127302, 123524, 123522, 116128, 123608, 127342, 116112, 123596, 116104, 123590, 116100, 116098, 101280, 116184, 123630, 101264, 116172, 101256, 116166, 101252, 101250, 71584, 101336, 116206, 71568, 101324, 71560, 101318, 71556, 71554, 71640, 101358, 71628, 71622, 71662, 127824, 129452, 79352, 127816, 129446, 79100, 127812, 78974, 127810, 123472, 127276, 124624, 123464, 127270, 124616, 127846, 124612, 123458, 124610, 115920, 123500, 118224, 115912, 123494, 118216, 124646, 118212, 115906, 118210, 100816, 115948, 105424, 100808, 115942, 105416, 118246, 105412, 100802, 105410, 70608, 100844, 79824, 70600, 100838, 79816, 105446, 79812, 70594, 79810, 70636, 79852, 70630, 79846, 129960, 95728, 113404, 129956, 95480, 113278, 129954, 95356, 95294, 127784, 129430, 78588, 128872, 129974, 95996, 78462, 128868, 127778, 95870, 128866, 123432, 127254, 124520, 123428, 126696, 128886, 123426, 126692, 124514, 126690, 115816, 123446, 117992, 115812, 122344, 117988, 115810, 122340, 117986, 122338, 100584, 115830, 104936, 100580, 113640, 104932, 100578, 113636, 104930, 113634, 70120, 100598, 78824, 70116, 96232, 78820, 70114, 96228, 78818, 96226, 70134, 78838, 129940, 94968, 113022, 129938, 94844, 94782, 127764, 78206, 128820, 127762, 95102, 128818, 123412, 124468, 123410, 126580, 124466, 126578, 115764, 117876, 115762, 122100, 117874, 122098, 100468, 104692, 100466, 113140, 104690, 113138, 69876, 78324, 69874, 95220, 78322, 95218, 129930, 94588, 94526, 127754, 128794, 123402, 124442, 126522, 115738, 117818, 121978, 100410, 104570, 112890, 69754, 78074, 94714, 94398, 123216, 127148, 123208, 127142, 123204, 123202, 115408, 123244, 115400, 123238, 115396, 115394, 99792, 115436, 99784, 115430, 99780, 99778, 68560, 99820, 68552, 99814, 68548, 68546, 68588, 68582, 127400, 129238, 72444, 127396, 72318, 127394, 123176, 127126, 123752, 123172, 123748, 123170, 123746, 115304, 123190, 116456, 115300, 116452, 115298, 116450, 99560, 115318, 101864, 99556, 101860, 99554, 101858, 68072, 99574, 72680, 68068, 72676, 68066, 72674, 68086, 72694, 129492, 80632, 105854, 129490, 80508, 80446, 127380, 72062, 127924, 127378, 80766, 127922, 123156, 123700, 123154, 124788, 123698, 124786, 115252, 116340, 115250, 118516, 116338, 118514, 99444, 101620, 99442, 105972, 101618, 105970, 67828, 72180, 67826, 80884, 72178, 80882, 97008, 114044, 96888, 113982, 96828, 96798, 129482, 80252, 130010, 97148, 80190, 97086, 127370, 127898, 128954, 123146, 123674, 124730, 126842, 115226, 116282, 118394, 122618, 99386, 101498, 105722, 114170, 67706, 71930, 80378, 96632, 113854, 96572, 96542, 80062, 96702, 96444, 96414, 96350, 123048, 123044, 123042, 115048, 123062, 115044, 115042, 99048, 115062, 99044, 99042, 67048, 99062, 67044, 67042, 67062, 127188, 68990, 127186, 123028, 123316, 123026, 123314, 114996, 115572, 114994, 115570, 98932, 100084, 98930, 100082, 66804, 69108, 66802, 69106, 129258, 73084, 73022, 127178, 127450, 123018, 123290, 123834, 114970, 115514, 116602, 98874, 99962, 102138, 66682, 68858, 73210, 81272, 106174, 81212, 81182, 72894, 81342, 97648, 114364, 97592, 114334, 97564, 97550, 81084, 97724, 81054, 97694, 97464, 114270, 97436, 97422, 80990, 97502, 97372, 97358, 97326, 114868, 114866, 98676, 98674, 66292, 66290, 123098, 114842, 115130, 98618, 99194, 66170, 67322, 69310, 73404, 73374, 81592, 106334, 81564, 81550, 73310, 81630, 97968, 114524, 97944, 114510, 97932, 97926, 81500, 98012, 81486, 97998, 97880, 114478, 97868, 97862, 81454, 97902, 97836, 97830, 69470, 73564, 73550, 81752, 106414, 81740, 81734, 73518, 81774, 81708, 81702 ], [ 109536, 120312, 86976, 109040, 120060, 86496, 108792, 119934, 86256, 108668, 86136, 129744, 89056, 110072, 129736, 88560, 109820, 129732, 88312, 109694, 129730, 88188, 128464, 129772, 89592, 128456, 129766, 89340, 128452, 89214, 128450, 125904, 128492, 125896, 128486, 125892, 125890, 120784, 125932, 120776, 125926, 120772, 120770, 110544, 120812, 110536, 120806, 110532, 84928, 108016, 119548, 84448, 107768, 119422, 84208, 107644, 84088, 107582, 84028, 129640, 85488, 108284, 129636, 85240, 108158, 129634, 85116, 85054, 128232, 129654, 85756, 128228, 85630, 128226, 125416, 128246, 125412, 125410, 119784, 125430, 119780, 119778, 108520, 119798, 108516, 108514, 83424, 107256, 119166, 83184, 107132, 83064, 107070, 83004, 82974, 129588, 83704, 107390, 129586, 83580, 83518, 128116, 83838, 128114, 125172, 125170, 119284, 119282, 107508, 107506, 82672, 106876, 82552, 106814, 82492, 82462, 129562, 82812, 82750, 128058, 125050, 119034, 82296, 106686, 82236, 82206, 82366, 82108, 82078, 76736, 103920, 117500, 76256, 103672, 117374, 76016, 103548, 75896, 103486, 75836, 129384, 77296, 104188, 129380, 77048, 104062, 129378, 76924, 76862, 127720, 129398, 77564, 127716, 77438, 127714, 124392, 127734, 124388, 124386, 117736, 124406, 117732, 117730, 104424, 117750, 104420, 104418, 112096, 121592, 126334, 92608, 111856, 121468, 92384, 111736, 121406, 92272, 111676, 92216, 111646, 92188, 75232, 103160, 117118, 93664, 74992, 103036, 93424, 112252, 102974, 93304, 74812, 93244, 74782, 93214, 129332, 75512, 103294, 129908, 129330, 93944, 75388, 129906, 93820, 75326, 93758, 127604, 75646, 128756, 127602, 94078, 128754, 124148, 126452, 124146, 126450, 117236, 121844, 117234, 121842, 103412, 103410, 91584, 111344, 121212, 91360, 111224, 121150, 91248, 111164, 91192, 111134, 91164, 91150, 74480, 102780, 91888, 74360, 102718, 91768, 111422, 91708, 74270, 91678, 129306, 74620, 129850, 92028, 74558, 91966, 127546, 128634, 124026, 126202, 116986, 121338, 102906, 90848, 110968, 121022, 90736, 110908, 90680, 110878, 90652, 90638, 74104, 102590, 91e3, 74044, 90940, 74014, 90910, 74174, 91070, 90480, 110780, 90424, 110750, 90396, 90382, 73916, 90556, 73886, 90526, 90296, 110686, 90268, 90254, 73822, 90334, 90204, 90190, 71136, 101112, 116094, 70896, 100988, 70776, 100926, 70716, 70686, 129204, 71416, 101246, 129202, 71292, 71230, 127348, 71550, 127346, 123636, 123634, 116212, 116210, 101364, 101362, 79296, 105200, 118140, 79072, 105080, 118078, 78960, 105020, 78904, 104990, 78876, 78862, 70384, 100732, 79600, 70264, 100670, 79480, 105278, 79420, 70174, 79390, 129178, 70524, 129466, 79740, 70462, 79678, 127290, 127866, 123514, 124666, 115962, 118266, 100858, 113376, 122232, 126654, 95424, 113264, 122172, 95328, 113208, 122142, 95280, 113180, 95256, 113166, 95244, 78560, 104824, 117950, 95968, 78448, 104764, 95856, 113468, 104734, 95800, 78364, 95772, 78350, 95758, 70008, 100542, 78712, 69948, 96120, 78652, 69918, 96060, 78622, 96030, 70078, 78782, 96190, 94912, 113008, 122044, 94816, 112952, 122014, 94768, 112924, 94744, 112910, 94732, 94726, 78192, 104636, 95088, 78136, 104606, 95032, 113054, 95004, 78094, 94990, 69820, 78268, 69790, 95164, 78238, 95134, 94560, 112824, 121950, 94512, 112796, 94488, 112782, 94476, 94470, 78008, 104542, 94648, 77980, 94620, 77966, 94606, 69726, 78046, 94686, 94384, 112732, 94360, 112718, 94348, 94342, 77916, 94428, 77902, 94414, 94296, 112686, 94284, 94278, 77870, 94318, 94252, 94246, 68336, 99708, 68216, 99646, 68156, 68126, 68476, 68414, 127162, 123258, 115450, 99834, 72416, 101752, 116414, 72304, 101692, 72248, 101662, 72220, 72206, 67960, 99518, 72568, 67900, 72508, 67870, 72478, 68030, 72638, 80576, 105840, 118460, 80480, 105784, 118430, 80432, 105756, 80408, 105742, 80396, 80390, 72048, 101564, 80752, 71992, 101534, 80696, 71964, 80668, 71950, 80654, 67772, 72124, 67742, 80828, 72094, 80798, 114016, 122552, 126814, 96832, 113968, 122524, 96800, 113944, 122510, 96784, 113932, 96776, 113926, 96772, 80224, 105656, 118366, 97120, 80176, 105628, 97072, 114076, 105614, 97048, 80140, 97036, 80134, 97030, 71864, 101470, 80312, 71836, 97208, 80284, 71822, 97180, 80270, 97166, 67678, 71902, 80350, 97246, 96576, 113840, 122460, 96544, 113816, 122446, 96528, 113804, 96520, 113798, 96516, 96514, 80048, 105564, 96688, 80024, 105550, 96664, 113870, 96652, 80006, 96646, 71772, 80092, 71758, 96732, 80078, 96718, 96416, 113752, 122414, 96400, 113740, 96392, 113734, 96388, 96386, 79960, 105518, 96472, 79948, 96460, 79942, 96454, 71726, 79982, 96494, 96336, 113708, 96328, 113702, 96324, 96322, 79916, 96364, 79910, 96358, 96296, 113686, 96292, 96290, 79894, 96310, 66936, 99006, 66876, 66846, 67006, 68976, 100028, 68920, 99998, 68892, 68878, 66748, 69052, 66718, 69022, 73056, 102072, 116574, 73008, 102044, 72984, 102030, 72972, 72966, 68792, 99934, 73144, 68764, 73116, 68750, 73102, 66654, 68830, 73182, 81216, 106160, 118620, 81184, 106136, 118606, 81168, 106124, 81160, 106118, 81156, 81154, 72880, 101980, 81328, 72856, 101966, 81304, 106190, 81292, 72838, 81286, 68700, 72924, 68686, 81372, 72910, 81358, 114336, 122712, 126894, 114320, 122700, 114312, 122694, 114308, 114306, 81056, 106072, 118574, 97696, 81040, 106060, 97680, 114380, 106054, 97672, 81028, 97668, 81026, 97666, 72792, 101934, 81112, 72780, 97752, 81100, 72774, 97740, 81094, 97734, 68654, 72814, 81134, 97774, 114256, 122668, 114248, 122662, 114244, 114242, 80976, 106028, 97488, 80968, 106022, 97480, 114278, 97476, 80962, 97474, 72748, 81004, 72742, 97516, 80998, 97510, 114216, 122646, 114212, 114210, 80936, 106006, 97384, 80932, 97380, 80930, 97378, 72726, 80950, 97398, 114196, 114194, 80916, 97332, 80914, 97330, 66236, 66206, 67256, 99166, 67228, 67214, 66142, 67294, 69296, 100188, 69272, 100174, 69260, 69254, 67164, 69340, 67150, 69326, 73376, 102232, 116654, 73360, 102220, 73352, 102214, 73348, 73346, 69208, 100142, 73432, 102254, 73420, 69190, 73414, 67118, 69230, 73454, 106320, 118700, 106312, 118694, 106308, 106306, 73296, 102188, 81616, 106348, 102182, 81608, 73284, 81604, 73282, 81602, 69164, 73324, 69158, 81644, 73318, 81638, 122792, 126934, 122788, 122786, 106280, 118678, 114536, 106276, 114532, 106274, 114530, 73256, 102166, 81512, 73252, 98024, 81508, 73250, 98020, 81506, 98018, 69142, 73270, 81526, 98038, 122772, 122770, 106260, 114484, 106258, 114482, 73236, 81460, 73234, 97908, 81458, 97906, 122762, 106250, 114458, 73226, 81434, 97850, 66396, 66382, 67416, 99246, 67404, 67398, 66350, 67438, 69456, 100268, 69448, 100262, 69444, 69442, 67372, 69484, 67366, 69478, 102312, 116694, 102308, 102306, 69416, 100246, 73576, 102326, 73572, 69410, 73570, 67350, 69430, 73590, 118740, 118738, 102292, 106420, 102290, 106418, 69396, 73524, 69394, 81780, 73522, 81778, 118730, 102282, 106394, 69386, 73498, 81722, 66476, 66470, 67496, 99286, 67492, 67490, 66454, 67510, 100308, 100306, 67476, 69556, 67474, 69554, 116714 ] ];
+const digits = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+const packedClusters = [ "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" ];
+
+const codewords = packedClusters.map(packed => {
+  const cluster = [];
+  for (let index = 0; index < packed.length; index += 3) {
+    cluster.push(digits.indexOf(packed[index]) << 12 | digits.indexOf(packed[index + 1]) << 6 | digits.indexOf(packed[index + 2]));
+  }
+  return cluster;
+});
 
 const correctionFactors = [ [ 27, 917 ], [ 522, 568, 723, 809 ], [ 237, 308, 436, 284, 646, 653, 428, 379 ], [ 274, 562, 232, 755, 599, 524, 801, 132, 295, 116, 442, 428, 295, 42, 176, 65 ], [ 361, 575, 922, 525, 176, 586, 640, 321, 536, 742, 677, 742, 687, 284, 193, 517, 273, 494, 263, 147, 593, 800, 571, 320, 803, 133, 231, 390, 685, 330, 63, 410 ], [ 539, 422, 6, 93, 862, 771, 453, 106, 610, 287, 107, 505, 733, 877, 381, 612, 723, 476, 462, 172, 430, 609, 858, 822, 543, 376, 511, 400, 672, 762, 283, 184, 440, 35, 519, 31, 460, 594, 225, 535, 517, 352, 605, 158, 651, 201, 488, 502, 648, 733, 717, 83, 404, 97, 280, 771, 840, 629, 4, 381, 843, 623, 264, 543 ], [ 521, 310, 864, 547, 858, 580, 296, 379, 53, 779, 897, 444, 400, 925, 749, 415, 822, 93, 217, 208, 928, 244, 583, 620, 246, 148, 447, 631, 292, 908, 490, 704, 516, 258, 457, 907, 594, 723, 674, 292, 272, 96, 684, 432, 686, 606, 860, 569, 193, 219, 129, 186, 236, 287, 192, 775, 278, 173, 40, 379, 712, 463, 646, 776, 171, 491, 297, 763, 156, 732, 95, 270, 447, 90, 507, 48, 228, 821, 808, 898, 784, 663, 627, 378, 382, 262, 380, 602, 754, 336, 89, 614, 87, 432, 670, 616, 157, 374, 242, 726, 600, 269, 375, 898, 845, 454, 354, 130, 814, 587, 804, 34, 211, 330, 539, 297, 827, 865, 37, 517, 834, 315, 550, 86, 801, 4, 108, 539 ], [ 524, 894, 75, 766, 882, 857, 74, 204, 82, 586, 708, 250, 905, 786, 138, 720, 858, 194, 311, 913, 275, 190, 375, 850, 438, 733, 194, 280, 201, 280, 828, 757, 710, 814, 919, 89, 68, 569, 11, 204, 796, 605, 540, 913, 801, 700, 799, 137, 439, 418, 592, 668, 353, 859, 370, 694, 325, 240, 216, 257, 284, 549, 209, 884, 315, 70, 329, 793, 490, 274, 877, 162, 749, 812, 684, 461, 334, 376, 849, 521, 307, 291, 803, 712, 19, 358, 399, 908, 103, 511, 51, 8, 517, 225, 289, 470, 637, 731, 66, 255, 917, 269, 463, 830, 730, 433, 848, 585, 136, 538, 906, 90, 2, 290, 743, 199, 655, 903, 329, 49, 802, 580, 355, 588, 188, 462, 10, 134, 628, 320, 479, 130, 739, 71, 263, 318, 374, 601, 192, 605, 142, 673, 687, 234, 722, 384, 177, 752, 607, 640, 455, 193, 689, 707, 805, 641, 48, 60, 732, 621, 895, 544, 261, 852, 655, 309, 697, 755, 756, 60, 231, 773, 434, 421, 726, 528, 503, 118, 49, 795, 32, 144, 500, 238, 836, 394, 280, 566, 319, 9, 647, 550, 73, 914, 342, 126, 32, 681, 331, 792, 620, 60, 609, 441, 180, 791, 893, 754, 605, 383, 228, 749, 760, 213, 54, 297, 134, 54, 834, 299, 922, 191, 910, 532, 609, 829, 189, 20, 167, 29, 872, 449, 83, 402, 41, 656, 505, 579, 481, 173, 404, 251, 688, 95, 497, 555, 642, 543, 307, 159, 924, 558, 648, 55, 497, 10 ], [ 352, 77, 373, 504, 35, 599, 428, 207, 409, 574, 118, 498, 285, 380, 350, 492, 197, 265, 920, 155, 914, 299, 229, 643, 294, 871, 306, 88, 87, 193, 352, 781, 846, 75, 327, 520, 435, 543, 203, 666, 249, 346, 781, 621, 640, 268, 794, 534, 539, 781, 408, 390, 644, 102, 476, 499, 290, 632, 545, 37, 858, 916, 552, 41, 542, 289, 122, 272, 383, 800, 485, 98, 752, 472, 761, 107, 784, 860, 658, 741, 290, 204, 681, 407, 855, 85, 99, 62, 482, 180, 20, 297, 451, 593, 913, 142, 808, 684, 287, 536, 561, 76, 653, 899, 729, 567, 744, 390, 513, 192, 516, 258, 240, 518, 794, 395, 768, 848, 51, 610, 384, 168, 190, 826, 328, 596, 786, 303, 570, 381, 415, 641, 156, 237, 151, 429, 531, 207, 676, 710, 89, 168, 304, 402, 40, 708, 575, 162, 864, 229, 65, 861, 841, 512, 164, 477, 221, 92, 358, 785, 288, 357, 850, 836, 827, 736, 707, 94, 8, 494, 114, 521, 2, 499, 851, 543, 152, 729, 771, 95, 248, 361, 578, 323, 856, 797, 289, 51, 684, 466, 533, 820, 669, 45, 902, 452, 167, 342, 244, 173, 35, 463, 651, 51, 699, 591, 452, 578, 37, 124, 298, 332, 552, 43, 427, 119, 662, 777, 475, 850, 764, 364, 578, 911, 283, 711, 472, 420, 245, 288, 594, 394, 511, 327, 589, 777, 699, 688, 43, 408, 842, 383, 721, 521, 560, 644, 714, 559, 62, 145, 873, 663, 713, 159, 672, 729, 624, 59, 193, 417, 158, 209, 563, 564, 343, 693, 109, 608, 563, 365, 181, 772, 677, 310, 248, 353, 708, 410, 579, 870, 617, 841, 632, 860, 289, 536, 35, 777, 618, 586, 424, 833, 77, 597, 346, 269, 757, 632, 695, 751, 331, 247, 184, 45, 787, 680, 18, 66, 407, 369, 54, 492, 228, 613, 830, 922, 437, 519, 644, 905, 789, 420, 305, 441, 207, 300, 892, 827, 141, 537, 381, 662, 513, 56, 252, 341, 242, 797, 838, 837, 720, 224, 307, 631, 61, 87, 560, 310, 756, 665, 397, 808, 851, 309, 473, 795, 378, 31, 647, 915, 459, 806, 590, 731, 425, 216, 548, 249, 321, 881, 699, 535, 673, 782, 210, 815, 905, 303, 843, 922, 281, 73, 469, 791, 660, 162, 498, 308, 155, 422, 907, 817, 187, 62, 16, 425, 535, 336, 286, 437, 375, 273, 610, 296, 183, 923, 116, 667, 751, 353, 62, 366, 691, 379, 687, 842, 37, 357, 720, 742, 330, 5, 39, 923, 311, 424, 242, 749, 321, 54, 669, 316, 342, 299, 534, 105, 667, 488, 640, 672, 576, 540, 316, 486, 721, 610, 46, 656, 447, 171, 616, 464, 190, 531, 297, 321, 762, 752, 533, 175, 134, 14, 381, 433, 717, 45, 111, 20, 596, 284, 736, 138, 646, 411, 877, 669, 141, 919, 45, 780, 407, 164, 332, 899, 165, 726, 600, 325, 498, 655, 357, 752, 768, 223, 849, 647, 63, 310, 863, 251, 366, 304, 282, 738, 675, 410, 389, 244, 31, 121, 303, 263 ] ];
 
