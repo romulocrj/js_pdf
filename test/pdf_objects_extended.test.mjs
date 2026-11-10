@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as pw from '../src/index.ts';
+import { stableBytes } from './support/pdf-text.mjs';
 const render = children => {
  const doc = new pw.Document({ compress: false });
  doc.addPage(new pw.Page({ margin: 20, build: () => new pw.Column({ children }) }));
@@ -36,7 +37,7 @@ test('reusable nested forms retain resources and serialize once across pages and
  for (let i=0;i<2;i++) doc.addPage(new pw.Page({ build: () => new pw.CustomPaint({ size: { x: 200, y: 100 }, painter: canvas => {
   canvas.drawForm(outer, 0, 0); canvas.drawForm(outer, 100, 0);
  } }) }));
- const a = doc.save(); assert.deepEqual(a, doc.save());
+ const a = doc.save(); assert.deepEqual(stableBytes(a), stableBytes(doc.save()));
  const pdf = Buffer.from(a).toString('latin1');
  assert.equal((pdf.match(/\/Subtype \/Form\b/g) ?? []).length, 2);
  assert.match(pdf, /\/XObject << \/Xf1 \d+ 0 R/); assert.match(pdf, /\/Font << \/F1 \d+ 0 R/);

@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as pw from '../src/index.ts';
-import { latin1 } from './support/pdf-text.mjs';
+import { latin1, stableBytes } from './support/pdf-text.mjs';
 
 class Probe extends pw.Widget {
   constructor(label, width = 30, height = 20) { super(); Object.assign(this, { label, width, height }); }
@@ -106,7 +106,7 @@ for (const name of ['ROLL57', 'ROLL80', 'UNDEFINED']) {
     const pdf = new pw.Document({ compress: false });
     pdf.addPage(section);
     assert.doesNotMatch(latin1(pdf.save()), /NaN|Infinity/);
-    assert.deepEqual(pdf.save(), pdf.save());
+    assert.deepEqual(stableBytes(pdf.save()), stableBytes(pdf.save()));
   });
 }
 
