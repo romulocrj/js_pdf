@@ -35,9 +35,27 @@ const CP1252: Readonly<Record<number, number>> = Object.freeze({
   0x0153: 0x9c, 0x017e: 0x9e, 0x0178: 0x9f
 });
 
+/**
+ * Code point to WinAnsi byte, `?` when the encoding has no glyph for it. The
+ * C1 controls U+0080..U+009F are among those: their bytes hold CP1252's
+ * typographic glyphs, so writing them through would draw a euro for U+0080.
+ */
 export function toWinAnsiByte(codePoint: number): number {
-  if (codePoint <= 0xff) return codePoint;
+  if (codePoint <= 0xff && (codePoint & 0xe0) !== 0x80) return codePoint;
   return CP1252[codePoint] ?? 0x3f;
+}
+
+/** WinAnsi byte to code point, `?` for the five bytes CP1252 leaves undefined. */
+const WIN_ANSI_RUNES = Array.from({ length: 256 }, (_, byte) => ((byte & 0xe0) === 0x80 ? 0x3f : byte));
+for (const [rune, byte] of Object.entries(CP1252)) WIN_ANSI_RUNES[byte] = Number(rune);
+
+export function winAnsiRune(byte: number): number {
+  return WIN_ANSI_RUNES[byte] ?? 0x3f;
+}
+
+/** Whether `/WinAnsiEncoding` has a glyph for `codePoint`. */
+export function isWinAnsiRune(codePoint: number): boolean {
+  return winAnsiRune(toWinAnsiByte(codePoint)) === codePoint;
 }
 
 /**

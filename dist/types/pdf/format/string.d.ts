@@ -1,6 +1,14 @@
 import { PdfDataType } from './base.ts';
 import type { PdfStream } from './stream.ts';
+/**
+ * Code point to WinAnsi byte, `?` when the encoding has no glyph for it. The
+ * C1 controls U+0080..U+009F are among those: their bytes hold CP1252's
+ * typographic glyphs, so writing them through would draw a euro for U+0080.
+ */
 export declare function toWinAnsiByte(codePoint: number): number;
+export declare function winAnsiRune(byte: number): number;
+/** Whether `/WinAnsiEncoding` has a glyph for `codePoint`. */
+export declare function isWinAnsiRune(codePoint: number): boolean;
 /**
  * A PDF literal string `(...)`, escaped and down-converted to WinAnsi.
  *

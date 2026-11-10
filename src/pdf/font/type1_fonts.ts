@@ -21,7 +21,7 @@ import { PdfFontMetrics } from './font_metrics.ts';
 import type { PdfFont } from './font.ts';
 import { PdfDict } from '../format/dict.ts';
 import { PdfName } from '../format/name.ts';
-import { pdfLiteral, toWinAnsiByte } from '../format/string.ts';
+import { isWinAnsiRune, pdfLiteral, toWinAnsiByte } from '../format/string.ts';
 
 // SIZE: every AFM width is a whole number of thousandths, so each table below is
 // packed as two base-64 digits per code (`A`-`Z`, `a`-`z`, `0`-`9`, `+`, `/`)
@@ -218,6 +218,15 @@ export class PdfType1Font implements PdfFont {
       descent: -0.143,
       widths: zapfDingbatsWidths
     });
+  }
+
+  /**
+   * Whether `/WinAnsiEncoding`, which every standard font here declares, has a
+   * glyph for `rune`. Upstream tests Latin-1, so an en dash or a curly quote went
+   * to the fallback font while U+0080..U+009F drew CP1252's glyphs (issue #1989).
+   */
+  isRuneSupported(rune: number): boolean {
+    return isWinAnsiRune(rune);
   }
 
   glyphMetrics(charCode: number): PdfFontMetrics {

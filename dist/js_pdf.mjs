@@ -4315,8 +4315,22 @@ const CP1252 = Object.freeze({
 });
 
 function toWinAnsiByte(codePoint) {
-  if (codePoint <= 255) return codePoint;
+  if (codePoint <= 255 && (codePoint & 224) !== 128) return codePoint;
   return CP1252[codePoint] ?? 63;
+}
+
+const WIN_ANSI_RUNES = Array.from({
+  length: 256
+}, (_, byte) => (byte & 224) === 128 ? 63 : byte);
+
+for (const [rune, byte] of Object.entries(CP1252)) WIN_ANSI_RUNES[byte] = Number(rune);
+
+function winAnsiRune(byte) {
+  return WIN_ANSI_RUNES[byte] ?? 63;
+}
+
+function isWinAnsiRune(codePoint) {
+  return winAnsiRune(toWinAnsiByte(codePoint)) === codePoint;
 }
 
 function pdfLiteral(value) {
@@ -4529,6 +4543,9 @@ class PdfType1Font {
       descent: -.143,
       widths: zapfDingbatsWidths
     });
+  }
+  isRuneSupported(rune) {
+    return isWinAnsiRune(rune);
   }
   glyphMetrics(charCode) {
     const advanceWidth = this.widths[charCode] ?? this.missingWidth;
@@ -10112,102 +10129,104 @@ class TtfParser {
     return macintoshName;
   }
   parseCMap() {
-    const basePosition = this.tableOffset(TtfTable.cmap);
-    const numSubTables = this.view.getUint16(basePosition + 2);
-    for (let i = 0; i < numSubTables; i++) {
-      const offset = this.view.getUint32(basePosition + i * 8 + 8);
-      const format = this.view.getUint16(basePosition + offset);
-      switch (format) {
-       case 0:
-        this.parseCMapFormat0(basePosition + offset + 2);
-        break;
-
-       case 4:
-        this.parseCMapFormat4(basePosition + offset + 2);
-        break;
-
-       case 6:
-        this.parseCMapFormat6(basePosition + offset + 2);
-        break;
-
-       case 12:
-        this.parseCMapFormat12(basePosition + offset + 2);
-        break;
+    const base = this.tableOffset(TtfTable.cmap);
+    const map = this.charToGlyphIndexMap;
+    const records = Math.min(this.view.getUint16(base + 2), this.bytes.length - base - 4 >> 3);
+    const subtables = [];
+    for (let i = 0; i < records; i++) {
+      const record = base + 4 + i * 8;
+      const start = base + this.view.getUint32(record + 4);
+      const rank = start + 2 <= this.bytes.length ? cmapRank(this.view.getUint16(record), this.view.getUint16(record + 2), this.view.getUint16(start)) : 0;
+      if (rank > 0) subtables.push([ rank, start ]);
+    }
+    const best = Math.max(0, ...subtables.map(([rank]) => rank));
+    for (const [, start] of subtables.filter(([rank]) => best > 2 ? rank > 2 : rank === best).sort((a, b) => a[0] - b[0])) {
+      this.parseCMapSubtable(start);
+    }
+    if (best === 2) {
+      for (const [code, glyph] of map) {
+        if (code >= 61440 && code <= 61695 && !map.has(code & 255)) map.set(code & 255, glyph);
       }
+    } else if (best === 1) {
+      for (const code of map.keys()) if (code >= 128) map.delete(code);
     }
     for (const [basic, isolated] of basicToIsolatedMappings) {
-      const glyph = this.charToGlyphIndexMap.get(basic);
-      if (glyph !== undefined && !this.charToGlyphIndexMap.has(isolated)) {
-        this.charToGlyphIndexMap.set(isolated, glyph);
+      const glyph = map.get(basic);
+      if (glyph !== undefined && !map.has(isolated)) {
+        map.set(isolated, glyph);
       }
     }
   }
-  parseCMapFormat0(basePosition) {
-    for (let i = 0; i < 256; i++) {
-      const glyphIndex = this.view.getUint8(basePosition + i + 2);
-      if (glyphIndex > 0) {
-        this.charToGlyphIndexMap.set(i, glyphIndex);
+  parseCMapSubtable(start) {
+    const view = this.view;
+    const map = this.charToGlyphIndexMap;
+    const length = this.bytes.length;
+    const fits = end => end <= length;
+    switch (view.getUint16(start)) {
+     case 0:
+      if (!fits(start + 262)) return;
+      for (let code = 0; code < 256; code++) {
+        const glyph = view.getUint8(start + 6 + code);
+        if (glyph > 0) map.set(code, glyph);
       }
-    }
-  }
-  parseCMapFormat4(basePosition) {
-    const segCount = Math.floor(this.view.getUint16(basePosition + 4) / 2);
-    const endCodes = [];
-    for (let i = 0; i < segCount; i++) {
-      endCodes.push(this.view.getUint16(basePosition + i * 2 + 12));
-    }
-    const startCodes = [];
-    for (let i = 0; i < segCount; i++) {
-      startCodes.push(this.view.getUint16(basePosition + (segCount + i) * 2 + 14));
-    }
-    const idDeltas = [];
-    for (let i = 0; i < segCount; i++) {
-      idDeltas.push(this.view.getUint16(basePosition + (segCount * 2 + i) * 2 + 14));
-    }
-    const idRangeOffsetBasePos = basePosition + segCount * 6 + 14;
-    const idRangeOffsets = [];
-    for (let i = 0; i < segCount; i++) {
-      idRangeOffsets.push(this.view.getUint16(idRangeOffsetBasePos + i * 2));
-    }
-    for (let s = 0; s < segCount - 1; s++) {
-      const startCode = startCodes[s];
-      const endCode = endCodes[s];
-      const idDelta = idDeltas[s];
-      const idRangeOffset = idRangeOffsets[s];
-      const idRangeOffsetAddress = idRangeOffsetBasePos + s * 2;
-      for (let c = startCode; c <= endCode; c++) {
-        let glyphIndex;
-        if (idRangeOffset === 0) {
-          glyphIndex = (idDelta + c) % 65536;
-        } else {
-          const glyphIndexAddress = idRangeOffset + 2 * (c - startCode) + idRangeOffsetAddress;
-          if (glyphIndexAddress + 1 >= this.bytes.length) {
-            continue;
+      return;
+
+     case 4:
+      {
+        if (!fits(start + 14)) return;
+        const segments = view.getUint16(start + 6) >> 1;
+        const ends = start + 14;
+        const starts = ends + segments * 2 + 2;
+        const deltas = starts + segments * 2;
+        const ranges = deltas + segments * 2;
+        if (!fits(ranges + segments * 2)) return;
+        for (let s = 0; s < segments - 1; s++) {
+          const end = view.getUint16(ends + s * 2);
+          const first = view.getUint16(starts + s * 2);
+          const delta = view.getUint16(deltas + s * 2);
+          const range = view.getUint16(ranges + s * 2);
+          for (let code = first; code <= end; code++) {
+            let glyph = code + delta & 65535;
+            if (range !== 0) {
+              const address = ranges + s * 2 + range + 2 * (code - first);
+              if (!fits(address + 2)) continue;
+              glyph = view.getUint16(address);
+              if (glyph !== 0) glyph = glyph + delta & 65535;
+            }
+            if (glyph !== 0) map.set(code, glyph);
           }
-          glyphIndex = this.view.getUint16(glyphIndexAddress);
         }
-        this.charToGlyphIndexMap.set(c, glyphIndex);
+        return;
       }
-    }
-  }
-  parseCMapFormat6(basePosition) {
-    const firstCode = this.view.getUint16(basePosition + 4);
-    const entryCount = this.view.getUint16(basePosition + 6);
-    for (let i = 0; i < entryCount; i++) {
-      const glyphIndex = this.view.getUint16(basePosition + i * 2 + 8);
-      if (glyphIndex > 0) {
-        this.charToGlyphIndexMap.set(firstCode + i, glyphIndex);
+
+     case 6:
+      {
+        if (!fits(start + 10)) return;
+        const first = view.getUint16(start + 6);
+        const count = view.getUint16(start + 8);
+        if (!fits(start + 10 + count * 2)) return;
+        for (let i = 0; i < count; i++) {
+          const glyph = view.getUint16(start + 10 + i * 2);
+          if (glyph > 0) map.set(first + i, glyph);
+        }
+        return;
       }
-    }
-  }
-  parseCMapFormat12(basePosition) {
-    const numGroups = this.view.getUint32(basePosition + 10);
-    for (let i = 0; i < numGroups; i++) {
-      const startCharCode = this.view.getUint32(basePosition + i * 12 + 14);
-      const endCharCode = this.view.getUint32(basePosition + i * 12 + 18);
-      const startGlyphID = this.view.getUint32(basePosition + i * 12 + 22);
-      for (let j = startCharCode; j <= endCharCode; j++) {
-        this.charToGlyphIndexMap.set(j, startGlyphID + j - startCharCode);
+
+     case 12:
+      {
+        if (!fits(start + 16)) return;
+        const groups = view.getUint32(start + 12);
+        if (!fits(start + 16 + groups * 12)) return;
+        for (let i = 0; i < groups; i++) {
+          const group = start + 16 + i * 12;
+          const first = view.getUint32(group);
+          const end = view.getUint32(group + 4);
+          const glyph = view.getUint32(group + 8) - first;
+          if (end > 1114111) continue;
+          for (let code = first; code <= end; code++) {
+            if (glyph + code !== 0) map.set(code, glyph + code);
+          }
+        }
       }
     }
   }
@@ -10284,7 +10303,7 @@ class TtfParser {
     const glyfOffset = this.tableOffset(TtfTable.glyf);
     const start = glyfOffset + this.glyphOffsets[index];
     const glyfEnd = glyfOffset + (this.tableSize.get(TtfTable.glyf) ?? 0);
-    if (start >= glyfEnd || start === 0 || this.glyphSizes[index] === 0) {
+    if (start >= glyfEnd || start === 0 || this.glyphSizes[index] <= 0) {
       return {
         index,
         data: new Uint8Array(0),
@@ -10293,6 +10312,9 @@ class TtfParser {
     }
     const numberOfContours = this.view.getInt16(start);
     return numberOfContours === -1 ? this.readCompoundGlyph(index, start, start + 10) : this.readSimpleGlyph(index, start, start + 10, numberOfContours);
+  }
+  glyphBytes(glyph, start, end) {
+    return this.bytes.subarray(start, Math.min(end, start + this.glyphSizes[glyph]));
   }
   readSimpleGlyph(glyph, start, offset, numberOfContours) {
     const xIsByte = 2;
@@ -10309,7 +10331,7 @@ class TtfParser {
     if (numberOfContours === 0) {
       return {
         index: glyph,
-        data: this.bytes.subarray(start, offset),
+        data: this.glyphBytes(glyph, start, offset),
         compounds: []
       };
     }
@@ -10341,7 +10363,7 @@ class TtfParser {
     }
     return {
       index: glyph,
-      data: this.bytes.subarray(start, offset),
+      data: this.glyphBytes(glyph, start, offset),
       compounds: []
     };
   }
@@ -10375,7 +10397,7 @@ class TtfParser {
     }
     return {
       index: glyph,
-      data: this.bytes.subarray(start, offset),
+      data: this.glyphBytes(glyph, start, offset),
       compounds: components
     };
   }
@@ -10419,6 +10441,13 @@ class TtfParser {
       sizeOffset += 48;
     }
   }
+}
+
+function cmapRank(platform, encoding, format) {
+  if (format !== 0 && format !== 4 && format !== 6 && format !== 12) return 0;
+  if (platform === 0) return encoding === 4 || encoding === 6 ? 5 : 3;
+  if (platform === 3) return encoding === 10 ? 6 : encoding === 1 ? 4 : encoding === 0 ? 2 : 0;
+  return platform === 1 && encoding === 0 ? 1 : 0;
 }
 
 function decodeUtf16Be(bytes) {
@@ -10600,7 +10629,7 @@ class TtfWriter {
     } else {
       locaView.setUint32(locaIndex, glyphOffset);
     }
-    for (const name of [ TtfTable.head, TtfTable.maxp, TtfTable.hhea, TtfTable.os2 ]) {
+    for (const name of [ TtfTable.head, TtfTable.maxp, TtfTable.hhea, TtfTable.os2, "cvt ", "fpgm", "prep", "gasp" ]) {
       const start = ttf.tableOffsets.get(name);
       if (start === undefined) {
         continue;
@@ -10681,7 +10710,7 @@ class TtfWriter {
     return this.writeFile(tables, tablesLength);
   }
   writeFile(tables, tablesLength) {
-    const tableKeys = [ TtfTable.head, TtfTable.hhea, TtfTable.maxp, TtfTable.os2, TtfTable.hmtx, TtfTable.cmap, TtfTable.loca, TtfTable.glyf, TtfTable.name, TtfTable.post ].filter(name => tables.has(name));
+    const tableKeys = [ ...tables.keys() ].sort();
     const numTables = tableKeys.length;
     const directoryLength = 12 + numTables * 16;
     let total = directoryLength;
@@ -10692,13 +10721,13 @@ class TtfWriter {
     const view = viewOf(output);
     view.setUint32(0, 65536);
     view.setUint16(4, numTables);
-    let pot = numTables;
-    while ((pot & pot - 1) !== 0) {
-      pot++;
+    let entrySelector = 0;
+    while (2 << entrySelector <= numTables) {
+      entrySelector++;
     }
-    view.setUint16(6, pot * 16);
-    view.setUint16(8, Math.trunc(Math.log(pot)));
-    view.setUint16(10, pot * 16 - numTables * 16);
+    view.setUint16(6, 16 << entrySelector);
+    view.setUint16(8, entrySelector);
+    view.setUint16(10, numTables * 16 - (16 << entrySelector));
     let offset = directoryLength;
     let headOffset = 0;
     let count = 0;
@@ -11312,23 +11341,30 @@ class PdfObjectStream extends PdfObject {
   }
 }
 
-function hex4(value) {
-  return value.toString(16).toUpperCase().padStart(4, "0");
-}
+const hex4 = value => value.toString(16).toUpperCase().padStart(4, "0");
 
-function unicodeCmapStream(cmap, protect = false) {
-  const values = protect ? cmap.map((value, index) => index === 0 ? value : 32) : cmap;
-  let output = "/CIDInit/ProcSet\nfindresource begin\n" + "12 dict begin\n" + "begincmap\n" + "/CIDSystemInfo<<\n" + "/Registry (Adobe)\n" + "/Ordering (UCS)\n" + "/Supplement 0\n" + ">> def\n" + "/CMapName/Adobe-Identity-UCS def\n" + "/CMapType 2 def\n" + "1 begincodespacerange\n" + "<0000> <FFFF>\n" + "endcodespacerange\n" + `${values.length} beginbfchar\n`;
-  for (let key = 0; key < values.length; key++) {
-    output += `<${hex4(key)}> <${hex4(values[key] ?? 0)}>\n`;
+function fontCmap(values, protect = false, cid = false, simple = false, ros = {
+  registry: "Adobe",
+  ordering: "UCS",
+  supplement: 0
+}) {
+  let result = "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n" + `/CIDSystemInfo << /Registry ${pdfLiteral(ros.registry)} /Ordering ${pdfLiteral(ros.ordering)} /Supplement ${ros.supplement} >> def\n` + `/CMapName /${cid ? "JsPdfEncoding" : "Adobe-Identity-UCS"} def\n/CMapType ${cid ? 1 : 2} def\n` + (cid ? "/WMode 0 def\n" : "") + `1 begincodespacerange\n<${simple ? "00> <FF" : "0000> <FFFF"}>\nendcodespacerange\n`;
+  for (let start = 0; start < values.length; start += 100) {
+    const end = Math.min(start + 100, values.length);
+    result += `${end - start} begin${cid ? "cid" : "bf"}char\n`;
+    for (let index = start; index < end; index++) {
+      const rune = protect && index !== 0 ? 32 : values[index];
+      const destination = rune <= 65535 ? hex4(rune) : hex4(55296 + (rune - 65536 >> 10)) + hex4(56320 + (rune - 65536 & 1023));
+      result += `<${simple ? index.toString(16).padStart(2, "0") : hex4(index)}> ${cid ? rune : "<" + destination + ">"}\n`;
+    }
+    result += `end${cid ? "cid" : "bf"}char\n`;
   }
-  output += "endbfchar\n" + "endcmap\n" + "CMapName currentdict /CMap defineresource pop\n" + "end\n" + "end";
-  return output;
+  return result + "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend";
 }
 
 class PdfUnicodeCmap extends PdfObjectStream {
-  constructor(document, cmap, protect = false) {
-    super(document, encodeLatin1(unicodeCmapStream(cmap, protect)));
+  constructor(document, cmap, protect = false, simple = false) {
+    super(document, encodeLatin1(fontCmap(cmap, protect, false, simple)));
   }
 }
 
@@ -11359,7 +11395,7 @@ class PdfTtfFont {
     return this.font.unitsPerEm;
   }
   isRuneSupported(codePoint) {
-    return (this.isComposite || winAnsiRune(toWinAnsiByte(codePoint)) === codePoint) && this.font.charToGlyphIndexMap.has(codePoint);
+    return (this.isComposite || isWinAnsiRune(codePoint)) && this.font.charToGlyphIndexMap.has(codePoint);
   }
   getBitmap(codePoint) {
     return this.font.getBitmap(codePoint);
@@ -11446,9 +11482,9 @@ class PdfTtfFont {
         const rune = winAnsiRune(index + 32);
         return Math.trunc(this.glyphMetrics(rune).advanceWidth * 1e3);
       });
-      return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/TrueType") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfName("/WinAnsiEncoding") ], [ "/FontDescriptor", descriptor.ref() ], [ "/FirstChar", new PdfNum(32) ], [ "/LastChar", new PdfNum(255) ], [ "/Widths", PdfArray.fromNum(widths) ], [ "/ToUnicode", new PdfObjectStream(document, encodeLatin1(fontCmap(Array.from({
+      return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/TrueType") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfName("/WinAnsiEncoding") ], [ "/FontDescriptor", descriptor.ref() ], [ "/FirstChar", new PdfNum(32) ], [ "/LastChar", new PdfNum(255) ], [ "/Widths", PdfArray.fromNum(widths) ], [ "/ToUnicode", new PdfUnicodeCmap(document, Array.from({
         length: 256
-      }, (_, i) => winAnsiRune(i)), this.protect, false, true))).ref() ] ]);
+      }, (_, i) => winAnsiRune(i)), this.protect, true).ref() ] ]);
     }
     const {registry, ordering, supplement} = this.cffMetadata;
     const encoding = fontCmap(this.cmap.map(rune => this.cffMetadata.cids[this.font.charToGlyphIndexMap.get(rune) ?? 0] ?? 0), false, true, false, {
@@ -11466,41 +11502,8 @@ class PdfTtfFont {
       widths.add(PdfArray.fromNum([ Math.trunc(this.glyphMetrics(rune).advanceWidth * 1e3) ]));
     }
     const descendant = new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/CIDFontType0") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/FontDescriptor", descriptor.ref() ], [ "/W", widths ], [ "/CIDSystemInfo", new PdfDict([ [ "/Registry", new PdfString(registry) ], [ "/Ordering", new PdfString(ordering) ], [ "/Supplement", new PdfNum(supplement) ] ]) ] ]);
-    return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/Type0") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfObjectStream(document, encodeLatin1(encoding)).ref() ], [ "/DescendantFonts", new PdfArray([ descendant ]) ], [ "/ToUnicode", new PdfObjectStream(document, encodeLatin1(fontCmap(this.cmap, this.protect))).ref() ] ]);
+    return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/Type0") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfObjectStream(document, encodeLatin1(encoding)).ref() ], [ "/DescendantFonts", new PdfArray([ descendant ]) ], [ "/ToUnicode", new PdfUnicodeCmap(document, this.cmap, this.protect).ref() ] ]);
   }
-}
-
-function winAnsiRune(byte) {
-  return WIN_ANSI_RUNES[byte] ?? 63;
-}
-
-const WIN_ANSI_RUNES = Array.from({
-  length: 256
-}, (_, byte) => byte);
-
-for (let rune = 256; rune <= 8482; rune++) {
-  const byte = toWinAnsiByte(rune);
-  if (byte !== 63) WIN_ANSI_RUNES[byte] = rune;
-}
-
-function fontCmap(values, protect = false, cid = false, simple = false, ros = {
-  registry: "Adobe",
-  ordering: "Identity",
-  supplement: 0
-}) {
-  const hex = n => n.toString(16).toUpperCase().padStart(4, "0");
-  let result = "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n" + `/CIDSystemInfo << /Registry ${pdfLiteral(ros.registry)} /Ordering ${pdfLiteral(ros.ordering)} /Supplement ${ros.supplement} >> def\n` + `/CMapName /JsPdf${cid ? "Encoding" : "Unicode"} def\n/CMapType ${cid ? 1 : 2} def\n` + (cid ? "/WMode 0 def\n" : "") + `1 begincodespacerange\n<${simple ? "00> <FF" : "0000> <FFFF"}>\nendcodespacerange\n`;
-  for (let start = 0; start < values.length; start += 100) {
-    const end = Math.min(start + 100, values.length);
-    result += `${end - start} begin${cid ? "cid" : "bf"}char\n`;
-    for (let index = start; index < end; index++) {
-      const rune = protect && index !== 0 ? 32 : values[index];
-      const destination = rune <= 65535 ? hex(rune) : hex(55296 + (rune - 65536 >> 10)) + hex(56320 + (rune - 65536 & 1023));
-      result += `<${simple ? index.toString(16).padStart(2, "0") : hex(index)}> ${cid ? rune : "<" + destination + ">"}\n`;
-    }
-    result += `end${cid ? "cid" : "bf"}char\n`;
-  }
-  return result + "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend";
 }
 
 class BitReader {

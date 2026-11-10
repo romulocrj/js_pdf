@@ -64,7 +64,7 @@ export declare class TtfParser {
     private readonly view;
     readonly tableOffsets: Map<string, number>;
     readonly tableSize: Map<string, number>;
-    /** Codepoint to glyph index, built from every `cmap` subtable understood. */
+    /** Unicode code point to glyph index, from the ranked `cmap` subtables. */
     readonly charToGlyphIndexMap: Map<number, number>;
     readonly glyphOffsets: number[];
     readonly glyphSizes: number[];
@@ -97,11 +97,27 @@ export declare class TtfParser {
     getBitmap(codePoint: number): TtfBitmapInfo | null;
     /** https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6name.html */
     getNameID(nameID: number): string | null;
+    /**
+     * The character map, from the subtables whose keys are Unicode.
+     *
+     * Upstream merged every subtable it understood, in record order, but a Mac
+     * Roman (1,0) subtable is keyed by Mac Roman bytes and a symbol (3,0) one by
+     * 0xF0xx codes, while everything downstream reads the map as Unicode. Each
+     * subtable is ranked instead. The Unicode ones are merged weakest first, so
+     * the strongest wins a conflict and a weaker one only adds coverage; a symbol
+     * or Mac Roman subtable is read only when the font has no Unicode one.
+     * PR #1980 picks the single best subtable; merging the Unicode ones keeps any
+     * coverage a font splits across them.
+     */
     private parseCMap;
-    private parseCMapFormat0;
-    private parseCMapFormat4;
-    private parseCMapFormat6;
-    private parseCMapFormat12;
+    /**
+     * One subtable, `start` pointing at its format field. Every array is
+     * bounds-checked against the file before it is read, so a truncated subtable
+     * is skipped whole rather than throwing; upstream asserts, or reads past the
+     * table. Glyph 0 is `.notdef`, never coverage, in every format: recording it
+     * would make `isRuneSupported` true and skip the fallback font.
+     */
+    private parseCMapSubtable;
     /**
      * `loca` holds `numGlyphs + 1` offsets into `glyf`; each glyph's size is the
      * gap to the next one, and a zero-length gap means a blank glyph such as
@@ -129,6 +145,11 @@ export declare class TtfParser {
      * http://stevehanov.ca/blog/?id=143
      */
     readGlyph(index: number): TtfGlyphInfo;
+    /**
+     * A glyph's bytes, never more than `loca` declares for it, so a malformed
+     * `loca` cannot hand back the start of the neighbouring outline.
+     */
+    private glyphBytes;
     private readSimpleGlyph;
     private readCompoundGlyph;
     /** Parse PNG-backed bitmap strikes, matching upstream's CBLC format-1 path. */
