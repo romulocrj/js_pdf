@@ -75,8 +75,9 @@ test('RYB corners, upstream luminance threshold and harmony offsets are retained
   assert.equal(c.monochromatic.length, 3);
   assert.equal(c.monochromatic[0].alpha, 1);
   near(new pw.PdfColor(1,1,1).luminance, 1);
-  assert.equal(new pw.PdfColor(1,1,1).isDark, true);
-  assert.equal(new pw.PdfColor(0,0,0).isLight, true);
+  // #1980 L57: the getters used to be each other's opposite.
+  assert.equal(new pw.PdfColor(1,1,1).isLight, true);
+  assert.equal(new pw.PdfColor(0,0,0).isDark, true);
   rgb(new pw.PdfColor(1,0,0).shade(0.5), [1,0,0]);
 });
 

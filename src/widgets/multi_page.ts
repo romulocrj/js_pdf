@@ -182,7 +182,7 @@ export class MultiPage implements Section {
       if (pages.length >= this.maxPages) {
         throw new RangeError(`MultiPage exceeded its ${this.maxPages} page limit`);
       }
-      const canvas = new PdfCanvas(this.format.height);
+      const canvas = new PdfCanvas(this.format.height, documentContext.document.settings);
       if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
 
       const pageNumber = documentContext.pageOffset + pages.length + 1;

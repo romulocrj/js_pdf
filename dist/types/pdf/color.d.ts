@@ -7,15 +7,22 @@ export declare function normalizeColor(value: ColorInput | null | undefined, fal
 /** Upstream `PdfColor.luminance`: the WCAG relative luminance of a color. */
 export declare function colorLuminance(color: ColorInput): number;
 /**
- * Upstream `PdfColor.isLight`, quirk included: the test is
- * `(luminance + .05)² > .15`, which puts the cut at a luminance near .337 and
- * not the .5 the name suggests. Chart labels choose their color with this, so
- * the threshold is rendered output, not taste.
+ * Upstream `PdfColor.isLight`: Flutter's `estimateBrightnessForColor`, whose
+ * test `(luminance + .05)² > .15` puts the cut at a luminance near .337 and not
+ * the .5 the name suggests. Chart labels choose their color with this, so the
+ * threshold is rendered output, not taste. Before #1980 L57 this body was
+ * returned from `isDark`, so both getters answered the opposite question.
  */
 export declare function isLightColor(color: ColorInput): boolean;
-/** Select the RGB, gray or CMYK fill/stroke operator without applying alpha. */
+/**
+ * Select the RGB, gray or CMYK fill/stroke operator. Alpha is not part of a
+ * color operator; `PdfCanvas` paints it separately through an `/ExtGState`.
+ */
 export declare function colorOperator(color: ColorInput, stroke?: boolean): string;
-/** RGB color value; alpha is retained for composition, not applied by color operators. */
+/**
+ * RGB color value. A canvas paints its alpha as constant alpha unless the
+ * document sets `colorAlpha: false`; `flatten()` bakes it into an opaque color.
+ */
 export declare class PdfColor {
     readonly red: number;
     readonly green: number;

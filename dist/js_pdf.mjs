@@ -153,7 +153,7 @@ function colorLuminance(color) {
 
 function isLightColor(color) {
   const relative = colorLuminance(color) + .05;
-  return !(relative * relative > .15);
+  return relative * relative > .15;
 }
 
 function colorOperator(color, stroke = false) {
@@ -235,10 +235,10 @@ class PdfColor {
     return colorLuminance(this);
   }
   get isLight() {
-    return !this.isDark;
+    return isLightColor(this);
   }
   get isDark() {
-    return (this.luminance + .05) ** 2 > .15;
+    return !this.isLight;
   }
   shade(strength) {
     const hsl = this.toHsl();
@@ -4713,7 +4713,7 @@ function compositeTextOperand(font, text, wordSpacing, fontSize) {
 }
 
 class PdfCanvas {
-  constructor(pageHeight) {
+  constructor(pageHeight, {colorAlpha = true} = {}) {
     this.content = new PdfStream;
     this.formNames = new Map;
     this.commandCount = 0;
@@ -4735,7 +4735,10 @@ class PdfCanvas {
     this.currentWordSpacing = 0;
     this.textSpacingStack = [];
     this.textSpacingDirty = false;
+    this.alphas = [ 1, 1, 1, 1 ];
+    this.alphaStack = [];
     this.pageHeight = pageHeight;
+    this.colorAlpha = colorAlpha;
   }
   push(command) {
     if (this.commandCount > 0) {
@@ -4850,16 +4853,19 @@ class PdfCanvas {
     this.transformStack.push(this.currentTransform);
     this.textSpacingStack.push([ this.currentLetterSpacing, this.currentWordSpacing ]);
     this.softMaskStack.push(this.currentSoftMask);
+    this.alphaStack.push(this.alphas.slice());
   }
   restoreContext() {
     const restored = this.transformStack.pop();
     const spacing = this.textSpacingStack.pop();
     const softMask = this.softMaskStack.pop();
+    const alphas = this.alphaStack.pop();
     if (restored === undefined) {
       return;
     }
     this.push("Q");
     this.currentTransform = restored;
+    this.alphas = alphas;
     if (spacing !== undefined) {
       this.currentLetterSpacing = spacing[0];
       this.currentWordSpacing = spacing[1];
@@ -4883,6 +4889,32 @@ class PdfCanvas {
     if (state.isEmpty) {
       return null;
     }
+    const alphas = this.alphas;
+    const fill = state.fillOpacity === null ? null : alphas[0] * state.fillOpacity;
+    const stroke = state.strokeOpacity === null ? null : alphas[1] * state.strokeOpacity;
+    const name = this.emitGraphicState(fill === state.fillOpacity && stroke === state.strokeOpacity ? state : new PdfGraphicState({
+      fillOpacity: fill,
+      strokeOpacity: stroke,
+      blendMode: state.blendMode
+    }));
+    if (fill !== null) alphas[0] = alphas[2] = fill;
+    if (stroke !== null) alphas[1] = alphas[3] = stroke;
+    return name;
+  }
+  setColorAlpha(color, stroke) {
+    if (!this.colorAlpha) return;
+    const alphas = this.alphas;
+    const index = stroke ? 1 : 0;
+    const alpha = alphas[index] * (color instanceof PdfColor ? color.alpha : 1);
+    if (Math.abs(alpha - alphas[index + 2]) < 1e-9) return;
+    this.emitGraphicState(new PdfGraphicState(stroke ? {
+      strokeOpacity: alpha
+    } : {
+      fillOpacity: alpha
+    }));
+    alphas[index + 2] = alpha;
+  }
+  emitGraphicState(state) {
     const existing = this.stateNames.get(state.key);
     if (existing !== undefined) {
       this.push(`${existing} gs`);
@@ -5042,11 +5074,9 @@ class PdfCanvas {
       return;
     }
     if (phi !== 0) {
-      const dx = x2 - x1;
-      const dy = y2 - y1;
-      const cos = Math.cos(-phi);
-      const sin = Math.sin(-phi);
-      this.endToCenterParameters(0, 0, cos * dx - sin * dy, sin * dx + cos * dy, large, sweep, rx, ry);
+      const cos = Math.cos(phi);
+      const sin = Math.sin(phi);
+      this.endToCenterParameters(cos * x1 + sin * y1, cos * y1 - sin * x1, cos * x2 + sin * y2, cos * y2 - sin * x2, large, sweep, rx, ry, [ cos, sin, -sin, cos, 0, 0 ]);
     } else {
       this.endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry);
     }
@@ -5062,7 +5092,7 @@ class PdfCanvas {
     c = Math.acos(c);
     return Math.sign(c) === Math.sign(s) ? c : -c;
   }
-  endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry) {
+  endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry, rotation) {
     rx = Math.abs(rx);
     ry = Math.abs(ry);
     const x1d = .5 * (x1 - x2);
@@ -5072,7 +5102,7 @@ class PdfCanvas {
       const rr = Math.sqrt(r);
       rx *= rr;
       ry *= rr;
-      r = x1d * x1d / (rx * rx) + y1d * y1d / (ry * ry);
+      r = 0;
     } else if (r !== 0) {
       r = 1 / r - 1;
     }
@@ -5098,9 +5128,9 @@ class PdfCanvas {
     } else if (sweep && dTheta < 0) {
       dTheta += tau;
     }
-    this.bezierArcFromCentre(cx, cy, rx, ry, -theta, -dTheta);
+    this.bezierArcFromCentre(cx, cy, rx, ry, -theta, -dTheta, rotation);
   }
-  bezierArcFromCentre(cx, cy, rx, ry, startAngle, extent) {
+  bezierArcFromCentre(cx, cy, rx, ry, startAngle, extent, rotation) {
     let fragmentsCount;
     let fragmentsAngle;
     if (Math.abs(extent) <= Math.PI / 2) {
@@ -5128,7 +5158,15 @@ class PdfCanvas {
       theta = startFragment + i * fragmentsAngle;
       c1 = Math.cos(theta);
       s1 = Math.sin(theta);
-      this.curveTo(cx + rx * (c0 - kappa * s0), cy - ry * (s0 + kappa * c0), cx + rx * (c1 + kappa * s1), cy - ry * (s1 - kappa * c1), cx + rx * c1, cy - ry * s1);
+      const points = [ cx + rx * (c0 - kappa * s0), cy - ry * (s0 + kappa * c0), cx + rx * (c1 + kappa * s1), cy - ry * (s1 - kappa * c1), cx + rx * c1, cy - ry * s1 ];
+      if (rotation !== undefined) {
+        for (let j = 0; j < 6; j += 2) {
+          const point = transformPoint(rotation, points[j], points[j + 1]);
+          points[j] = point.x;
+          points[j + 1] = point.y;
+        }
+      }
+      this.push(`${operands(points)} c`);
     }
   }
   fillPath({evenOdd = false} = {}) {
@@ -5163,9 +5201,11 @@ class PdfCanvas {
   }
   setFillColor(color) {
     this.push(colorOperator(color));
+    this.setColorAlpha(color, false);
   }
   setStrokeColor(color) {
     this.push(colorOperator(color, true));
+    this.setColorAlpha(color, true);
   }
   setColor(color) {
     this.setFillColor(color);
@@ -5173,10 +5213,12 @@ class PdfCanvas {
   }
   fillRect(x, top, width, height, color) {
     const bottom = this.pageHeight - top - height;
+    this.setColorAlpha(color, false);
     this.push(`${colorOperator(color)} ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re f`);
   }
   strokeRect(x, top, width, height, color, lineWidth = 1) {
     const bottom = this.pageHeight - top - height;
+    this.setColorAlpha(color, true);
     this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re S`);
   }
   text(text, x, baselineFromTop, style) {
@@ -5207,6 +5249,7 @@ class PdfCanvas {
     }
     const usesTextArray = font.isComposite === true && wordSpacing !== 0;
     const textOperand = usesTextArray ? compositeTextOperand(font, text, wordSpacing, fontSize) : font.encodeText(text);
+    this.setColorAlpha(style.color, false);
     const command = [ "BT", this.addFont(font), formatNumber(fontSize), "Tf", colorOperator(style.color), ...spacingOperators, "1 0 0 1", formatNumber(x), formatNumber(baseline), "Tm", textOperand, usesTextArray ? "TJ" : "Tj", "ET" ].join(" ");
     this.push(command);
   }
@@ -5217,6 +5260,7 @@ class PdfCanvas {
   line(x1, top1, x2, top2, color = "#000000", lineWidth = 1) {
     const y1 = this.pageHeight - top1;
     const y2 = this.pageHeight - top2;
+    this.setColorAlpha(color, true);
     this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x1)} ${formatNumber(y1)} m ${formatNumber(x2)} ${formatNumber(y2)} l S`);
   }
   circle(cx, topCenter, radius, {fill = null, stroke = null, lineWidth = 1} = {}) {
@@ -5225,6 +5269,8 @@ class PdfCanvas {
     const ox = radius * k;
     const oy = radius * k;
     const path = [ `${formatNumber(cx + radius)} ${formatNumber(cy)} m`, `${formatNumber(cx + radius)} ${formatNumber(cy + oy)} ${formatNumber(cx + ox)} ${formatNumber(cy + radius)} ${formatNumber(cx)} ${formatNumber(cy + radius)} c`, `${formatNumber(cx - ox)} ${formatNumber(cy + radius)} ${formatNumber(cx - radius)} ${formatNumber(cy + oy)} ${formatNumber(cx - radius)} ${formatNumber(cy)} c`, `${formatNumber(cx - radius)} ${formatNumber(cy - oy)} ${formatNumber(cx - ox)} ${formatNumber(cy - radius)} ${formatNumber(cx)} ${formatNumber(cy - radius)} c`, `${formatNumber(cx + ox)} ${formatNumber(cy - radius)} ${formatNumber(cx + radius)} ${formatNumber(cy - oy)} ${formatNumber(cx + radius)} ${formatNumber(cy)} c` ].join(" ");
+    if (fill) this.setColorAlpha(fill, false);
+    if (stroke || !fill) this.setColorAlpha(stroke, true);
     if (fill && stroke) {
       this.push(`${colorOperator(fill)} ${colorOperator(stroke, true)} ${formatNumber(lineWidth)} w ${path} B`);
     } else if (fill) {
@@ -12020,7 +12066,7 @@ function parseJpeg(bytes) {
   let height = 0;
   let bitsPerComponent = 0;
   let components = 0;
-  let adobeTransform = null;
+  let adobe = false;
   let orientation = "topLeft";
   let foundFrame = false;
   while (offset < bytes.length) {
@@ -12049,8 +12095,8 @@ function parseJpeg(bytes) {
       foundFrame = true;
     } else if (marker === 225) {
       orientation = exifOrientation(bytes, dataStart, dataEnd) ?? orientation;
-    } else if (marker === 238 && length >= 14 && bytes[dataStart] === 65 && bytes[dataStart + 1] === 100 && bytes[dataStart + 2] === 111 && bytes[dataStart + 3] === 98 && bytes[dataStart + 4] === 101) {
-      adobeTransform = bytes[dataStart + 11];
+    } else if (marker === 238 && length >= 7 && bytes[dataStart] === 65 && bytes[dataStart + 1] === 100 && bytes[dataStart + 2] === 111 && bytes[dataStart + 3] === 98 && bytes[dataStart + 4] === 101) {
+      adobe = true;
     }
     offset = dataEnd;
   }
@@ -12065,7 +12111,7 @@ function parseJpeg(bytes) {
     bitsPerComponent,
     components,
     colorSpace,
-    inverted: colorSpace === "cmyk" && adobeTransform !== 0,
+    inverted: colorSpace === "cmyk" && adobe,
     orientation
   };
 }
@@ -16240,7 +16286,7 @@ class MemoryImage extends ImageProvider {
 class RawImage extends ImageProvider {
   constructor({bytes, width, height, orientation = "topLeft", dpi = null}) {
     const image = new PdfImage({
-      pixels: bytes.slice(),
+      pixels: bytes,
       width,
       height,
       orientation,
@@ -17811,7 +17857,7 @@ class PieDataSet extends Dataset {
           style: this.legendStyle ?? undefined
         }) ],
         style: new TextStyle({
-          color: position === "inside" ? isLightColor(this.color ?? CHART_BLUE) ? normalizePaintColor(CHART_WHITE) : normalizePaintColor(CHART_BLACK) : null
+          color: position === "inside" ? isLightColor(this.color ?? CHART_BLUE) ? normalizePaintColor(CHART_BLACK) : normalizePaintColor(CHART_WHITE) : null
         })
       }),
       textAlign: align
@@ -18848,7 +18894,8 @@ class Page {
   render(documentContext) {
     let format = this.pageTheme.resolvedFormat;
     const margin = this.pageTheme.margin;
-    let canvas = new PdfCanvas(Number.isFinite(format.height) ? format.height : 0);
+    const settings = documentContext.document.settings;
+    let canvas = new PdfCanvas(Number.isFinite(format.height) ? format.height : 0, settings);
     let context = {
       ...documentContext,
       canvas,
@@ -18877,7 +18924,7 @@ class Page {
       if (!Number.isFinite(format.width) || !Number.isFinite(format.height) || format.width <= 0 || format.height <= 0) {
         throw new RangeError("Page content must resolve to positive finite dimensions");
       }
-      canvas = new PdfCanvas(format.height);
+      canvas = new PdfCanvas(format.height, settings);
       context = {
         ...context,
         canvas,
@@ -19004,7 +19051,7 @@ class MultiPage {
       if (pages.length >= this.maxPages) {
         throw new RangeError(`MultiPage exceeded its ${this.maxPages} page limit`);
       }
-      const canvas = new PdfCanvas(this.format.height);
+      const canvas = new PdfCanvas(this.format.height, documentContext.document.settings);
       if (this.background) canvas.fillRect(0, 0, this.format.width, this.format.height, this.background);
       const pageNumber = documentContext.pageOffset + pages.length + 1;
       const context = {
@@ -19497,7 +19544,7 @@ class DefaultTextStyle extends InheritedTheme {
 const MAX_OUTLINE_REPLAYS = 4;
 
 class Document {
-  constructor({title = null, author = null, subject = null, creator = null, producer = null, keywords = null, xmpMetadata = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none", compress = true, simpleTrueTypeFonts = false} = {}) {
+  constructor({title = null, author = null, subject = null, creator = null, producer = null, keywords = null, xmpMetadata = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none", compress = true, simpleTrueTypeFonts = false, colorAlpha = true} = {}) {
     this.sections = [];
     this.outlineEntries = [];
     this.destinationEntries = [];
@@ -19518,7 +19565,8 @@ class Document {
     };
     this.settings = {
       compress,
-      simpleTrueTypeFonts
+      simpleTrueTypeFonts,
+      colorAlpha
     };
     for (const {pageIndex, label} of pageLabels) this.setPageLabel(pageIndex, label);
     this.theme = theme ?? (font === undefined ? ThemeData.base() : ThemeData.withFont({
@@ -20333,7 +20381,9 @@ function resolvedStyle(context, style) {
 }
 
 function appearanceFor(context, width, height, child) {
-  const canvas = new PdfCanvas(height);
+  const canvas = new PdfCanvas(height, {
+    colorAlpha: context.canvas.colorAlpha
+  });
   const scoped = {
     ...context,
     canvas,

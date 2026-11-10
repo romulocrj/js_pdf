@@ -12,6 +12,11 @@ export interface PdfSettings {
      * images pays real milliseconds for a very large saving.
      */
     readonly compress: boolean;
+    /**
+     * Paint a `PdfColor`'s alpha as constant alpha; on unless `false`. Pages
+     * read it when they create their canvas — see `PdfCanvasOptions`.
+     */
+    readonly colorAlpha?: boolean;
 }
 export declare const DEFAULT_PDF_SETTINGS: PdfSettings;
 /**

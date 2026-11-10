@@ -38,6 +38,11 @@ export interface DocumentOptions {
     readonly compress?: boolean;
     /** Select full-program WinAnsi for lazy TrueType declarations. */
     readonly simpleTrueTypeFonts?: boolean;
+    /**
+     * Paint a color's alpha. On by default, as upstream; `false` ignores color
+     * alpha, which PDF/A-1 requires. `Opacity` and other opacity states still paint.
+     */
+    readonly colorAlpha?: boolean;
 }
 export interface DocumentOutlineEntry {
     readonly title: string;
@@ -75,7 +80,7 @@ export declare class Document {
     private readonly fonts;
     /** Used only if the theme's default style somehow names no font at all. */
     private readonly fallbackFont;
-    constructor({ title, author, subject, creator, producer, keywords, xmpMetadata, pageLabels, theme, font, pageMode, compress, simpleTrueTypeFonts }?: DocumentOptions);
+    constructor({ title, author, subject, creator, producer, keywords, xmpMetadata, pageLabels, theme, font, pageMode, compress, simpleTrueTypeFonts, colorAlpha }?: DocumentOptions);
     /** The `PdfFont` `declaration` stands for here, built once. */
     resolveFont(declaration: Font): PdfFont;
     /**

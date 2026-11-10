@@ -61,7 +61,9 @@ test('parseJpeg recognizes grayscale and CMYK Adobe transforms', () => {
     adobeDirect
   ));
   assert.equal(cmyk.colorSpace, 'cmyk');
-  assert.equal(cmyk.inverted, false);
+  // #1980 L66: an Adobe writer stores CMYK inverted whatever the transform byte.
+  assert.equal(cmyk.inverted, true);
+  assert.equal(Pdf.parseJpeg(jpeg(sof(0xc0, 31, 23, 4))).inverted, false, 'no Adobe marker');
 
   const ycck = Pdf.parseJpeg(jpeg(
     segment(0xee, [65, 100, 111, 98, 101, 0, 100, 0, 0, 0, 0, 2]),

@@ -78,6 +78,11 @@ export interface DocumentOptions {
   readonly compress?: boolean;
   /** Select full-program WinAnsi for lazy TrueType declarations. */
   readonly simpleTrueTypeFonts?: boolean;
+  /**
+   * Paint a color's alpha. On by default, as upstream; `false` ignores color
+   * alpha, which PDF/A-1 requires. `Opacity` and other opacity states still paint.
+   */
+  readonly colorAlpha?: boolean;
 }
 
 export interface DocumentOutlineEntry {
@@ -134,10 +139,11 @@ export class Document {
     font = undefined,
     pageMode = 'none',
     compress = true,
-    simpleTrueTypeFonts = false
+    simpleTrueTypeFonts = false,
+    colorAlpha = true
   }: DocumentOptions = {}) {
     this.metadata = { title, author, subject, creator, producer, keywords, xmpMetadata };
-    this.settings = { compress, simpleTrueTypeFonts };
+    this.settings = { compress, simpleTrueTypeFonts, colorAlpha };
     for (const { pageIndex, label } of pageLabels) this.setPageLabel(pageIndex, label);
     this.theme = theme
       ?? (font === undefined
