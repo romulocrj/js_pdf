@@ -255,11 +255,17 @@ export class IntrinsicColumnWidth extends TableColumnWidth {
       : Math.max(0, assertFiniteNumber(Number(flex), 'intrinsic column flex'));
   }
 
-  override layout(child: AnyWidget, context: RenderContext, constraints: Constraints): ColumnLayout {
+  /*
+   * Measured unbounded, as upstream does (`const BoxConstraints()`). The table's
+   * own constraints used to be passed down, so under a tight width - inside a
+   * `SizedBox(width:)`, an `Expanded` or a stretched `Column` - every cell came
+   * back as wide as the table and the columns all turned out equal.
+   */
+  override layout(child: AnyWidget, context: RenderContext, _constraints: Constraints): ColumnLayout {
     if (this.flex !== null) {
       return { width: 0, flex: this.flex };
     }
-    const box = child.layout(context, constraints);
+    const box = child.layout(context, new BoxConstraints());
     return {
       width: Number.isFinite(box.width) ? Math.max(0, box.width) : 0,
       flex: Number.isFinite(box.width) ? 0 : 1
@@ -418,7 +424,7 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
         0
       );
       if (fixedSpace > maximum && fixedSpace > 0) {
-        this.fitColumns(context, constraints, widths, flex, maximum);
+        this.fitColumns(context, widths, flex, maximum);
         fixedSpace = maximum;
       }
       const remaining = Math.max(0, maximum - fixedSpace);
@@ -429,7 +435,7 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
     }
 
     if (intrinsicTotal > maximum && intrinsicTotal > 0) {
-      this.fitColumns(context, constraints, widths, flex, maximum);
+      this.fitColumns(context, widths, flex, maximum);
       return widths;
     }
 
@@ -455,7 +461,6 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
    */
   private fitColumns(
     context: RenderContext,
-    constraints: Constraints,
     widths: number[],
     flex: readonly number[],
     maximum: number
@@ -470,7 +475,7 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
         // Only intrinsic columns measure content; any other kind is as unbreakable as it is wide.
         let minimum = width;
         if (columnWidth instanceof IntrinsicColumnWidth && columnWidth.flex === null) {
-          const box = row.children[index]!.layout(minContext, constraints);
+          const box = row.children[index]!.layout(minContext, new BoxConstraints());
           if (Number.isFinite(box.width)) minimum = Math.min(width, Math.max(0, box.width));
         }
         mins[index] = Math.max(mins[index]!, minimum);
@@ -587,13 +592,14 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
     }
 
     /*
-     * Column widths depend on the constraints (an intrinsic cell is measured
-     * against them) and the theme, so they are reused only for the same pair.
-     * Every page after the first has the same constraints, and the measure pass
-     * then runs once instead of once per page.
+     * Column widths depend on the width constraints and the theme, so they are
+     * reused only for the same pair; intrinsic cells are measured unbounded, so
+     * the height plays no part. Every page has the same width, and the measure
+     * pass then runs once instead of once per page - and not again when
+     * MultiPage lays the last fragment out unbounded.
      */
     const parent = BoxConstraints.from(constraints);
-    const key = `${parent.minWidth},${parent.maxWidth},${parent.minHeight},${parent.maxHeight}`;
+    const key = `${parent.minWidth},${parent.maxWidth}`;
     let widths = state.widths;
     if (widths === undefined || widths.key !== key || widths.theme !== context.theme) {
       widths = Object.freeze({

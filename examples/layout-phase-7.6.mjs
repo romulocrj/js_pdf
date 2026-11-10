@@ -122,5 +122,36 @@ export function generateLayoutPhase76(api = defaultApi, compress = true) {
       border: TableBorder.all({ width: 0.25, color: '#94a3b8' })
     })]
   }));
+
+  // Phase 7.7: a table under a tight width, and the tail of a split Container.
+  const tight = columnWidths => new SizedBox({ width: 240, child: new Table({
+    border: TableBorder.all({ width: 0.5, color: '#64748b' }),
+    columnWidths,
+    children: [['Qty', 'Description'], ['12', 'Hex bolts, zinc plated, M8 x 40']].map(cells =>
+      new TableRow({ children: cells.map(value => new Text(value, { style: cellStyle })) }))
+  }) });
+  document.addPage(new MultiPage({ pageFormat: PageFormat.A4, margin: 32, maxPages: 5,
+    build: () => [
+      heading('A table in a SizedBox keeps its intrinsic columns (phase 7.7)'),
+      new SizedBox({ height: 6 }),
+      new Row({ gap: 24, crossAxisAlignment: 'start', children: [
+        side('Before (reproduced): the tight width made every column equal',
+          tight({ 0: new FlexColumnWidth(), 1: new FlexColumnWidth() })),
+        side('After: cells are measured unbounded, as upstream', tight(null))
+      ] }),
+      new SizedBox({ height: 14 }),
+      heading('The last fragment of a split Container takes only its content height'),
+      new SizedBox({ height: 6 }),
+      new Container({
+        alignment: 'topLeft',
+        padding: 6,
+        decoration: { color: '#e0f2fe', border: { color: '#0284c7', width: 0.5 } },
+        child: new Column({ children: Array.from({ length: 80 }, (_, index) =>
+          new Text(`Aligned Container, line ${index + 1} of 80`, { style: cellStyle })) })
+      }),
+      new SizedBox({ height: 6 }),
+      caption('This caption follows the tinted box on the same page. The tail fragment used to fill the rest of the page and push it onto a new one.')
+    ]
+  }));
   return document.save();
 }

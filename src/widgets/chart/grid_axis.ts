@@ -146,7 +146,8 @@ export abstract class GridAxis {
   /** Upstream `_angleDirection`. */
   protected angleDirection(): number {
     if (this.angle === 0) return 0;
-    if (this.angle % Math.PI > Math.PI / 2) return -1;
+    // Dart's `%` is never negative; JavaScript's keeps the sign of a negative angle.
+    if ((this.angle % Math.PI + Math.PI) % Math.PI > Math.PI / 2) return -1;
     return 1;
   }
 

@@ -85,6 +85,20 @@ const TEXT_ANCHORS: Readonly<Record<string, SvgTextAnchor>> = Object.freeze({
   end: 'end'
 });
 
+/*
+ * A dash list with a malformed entry is invalid as a whole and counts as
+ * absent, so the stroke stays solid; upstream threw out of the document.
+ */
+function dashArray(value: string | null, brush: SvgBrush): readonly number[] | null {
+  if (value === null) return null;
+  if (value === 'none') return [];
+  try {
+    return splitNumeric(value, brush).map(n => n.value);
+  } catch {
+    return null;
+  }
+}
+
 export interface SvgBrushFields {
   readonly color: SvgColor | null;
   readonly opacity: number | null;
@@ -301,9 +315,7 @@ export class SvgBrush implements SvgBrushFields {
       fillEvenOdd: fillRule === null ? null : fillRule === 'evenodd',
       stroke: paint(element.getAttribute('stroke')),
       strokeWidth: getNumeric(element, 'stroke-width', parent),
-      strokeDashArray: strokeDashArray === null
-        ? null
-        : (strokeDashArray === 'none' ? [] : splitNumeric(strokeDashArray, parent).map(n => n.value)),
+      strokeDashArray: dashArray(strokeDashArray, parent),
       strokeDashOffset: getNumeric(element, 'stroke-dashoffset', parent)?.lengthIn() ?? null,
       fontSize: getNumeric(element, 'font-size', parent),
       fontFamily: element.getAttribute('font-family'),

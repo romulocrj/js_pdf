@@ -40,6 +40,9 @@ export interface ContainerOptions {
   readonly height?: number | null;
   readonly padding?: InsetsInput;
   readonly margin?: InsetsInput;
+  /** Upstream's shorthand for `decoration: { color }`. */
+  readonly color?: ColorInput | null;
+  /** The port's original name for `color`, kept as an alias. */
   readonly background?: ColorInput | null;
   readonly borderColor?: ColorInput | null;
   readonly borderWidth?: number;
@@ -129,6 +132,7 @@ export class Container extends SpanningWidget<ContainerLayoutData, ContainerStat
     height = null,
     padding = 0,
     margin = 0,
+    color = null,
     background = null,
     borderColor = null,
     borderWidth = 1,
@@ -142,14 +146,22 @@ export class Container extends SpanningWidget<ContainerLayoutData, ContainerStat
     this.height = height == null ? null : Number(height);
     this.padding = normalizeInsets(padding);
     this.margin = normalizeInsets(margin);
-    this.background = background == null ? null : normalizePaintColor(background);
+    /*
+     * `color` is upstream's name; the port only read `background`, so an
+     * upstream `Container(color: ...)` silently lost its fill.
+     */
+    if (color != null && background != null) {
+      throw new Error('Container cannot have both color and background');
+    }
+    const fill = color ?? background;
+    this.background = fill == null ? null : normalizePaintColor(fill);
     this.borderColor = borderColor == null ? null : normalizePaintColor(borderColor);
     this.borderWidth = Number(borderWidth);
     this.decoration = normalizeBoxDecoration(decoration);
     this.foregroundDecoration = normalizeBoxDecoration(foregroundDecoration);
     this.alignment = alignment === null ? null : resolveBasicAlignment(alignment);
     if (this.background !== null && this.decoration !== null) {
-      throw new Error('Container cannot have both background and decoration');
+      throw new Error('Container cannot have both a color and a decoration');
     }
   }
 

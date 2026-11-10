@@ -90,17 +90,11 @@ export class SvgNumeric {
 
   /** `12`, `1.5em`, `-3.5%`. Upstream's `SvgNumeric(String, SvgBrush?)`. */
   static parse(text: string, brush: SvgFontSizeContext | null): SvgNumeric {
-    const match = /([-+]?[\d.]+)\s*(px|pt|em|cm|mm|in|%|)/.exec(text);
-    if (match === null) {
+    const numeric = parseNumeric(text, brush);
+    if (numeric === null) {
       throw new SyntaxError(`Not a number: "${text}"`);
     }
-
-    const value = Number.parseFloat(match[1]!);
-    if (!Number.isFinite(value)) {
-      throw new SyntaxError(`Not a number: "${text}"`);
-    }
-
-    return new SvgNumeric(value, brush, UNIT_SUFFIXES[match[2] ?? ''] ?? 'direct');
+    return numeric;
   }
 
   /** A colour component in 0..1: `128` is a byte, `50%` is a half. */
@@ -196,6 +190,20 @@ export function splitDoubles(parameters: string): number[] {
   });
 }
 
+function parseNumeric(text: string, brush: SvgFontSizeContext | null): SvgNumeric | null {
+  const match = /([-+]?[\d.]+)\s*(px|pt|em|cm|mm|in|%|)/.exec(text);
+  const value = match === null ? NaN : Number.parseFloat(match[1]!);
+  return Number.isFinite(value)
+    ? new SvgNumeric(value, brush, UNIT_SUFFIXES[match![2] ?? ''] ?? 'direct')
+    : null;
+}
+
+/*
+ * A malformed number in an attribute counts as absent, so it falls back to the
+ * attribute's default instead of aborting the whole drawing - the same rule
+ * upstream PR #1980 applies to a malformed `transform` argument. Upstream's
+ * `double.parse` threw a FormatException out of `pdf.save()`.
+ */
 export interface GetDoubleOptions {
   readonly namespace?: string;
   readonly defaultValue?: number | null;
@@ -212,10 +220,7 @@ export function getDouble(
   }
 
   const value = Number.parseFloat(attribute);
-  if (!Number.isFinite(value)) {
-    throw new SyntaxError(`Attribute ${name}="${attribute}" is not a number`);
-  }
-  return value;
+  return Number.isFinite(value) ? value : defaultValue;
 }
 
 export interface GetNumericOptions {
@@ -230,10 +235,8 @@ export function getNumeric(
   { namespace, defaultValue = null }: GetNumericOptions = {}
 ): SvgNumeric | null {
   const attribute = element.getAttribute(name, namespace);
-  if (attribute === null) {
-    return defaultValue === null ? null : new SvgNumeric(defaultValue, null);
-  }
-  return SvgNumeric.parse(attribute, brush);
+  return (attribute === null ? null : parseNumeric(attribute, brush))
+    ?? (defaultValue === null ? null : new SvgNumeric(defaultValue, null));
 }
 
 const STYLE_DECLARATION = /([\w-]+)\s*:\s*([\s\S]*)/;

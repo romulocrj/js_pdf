@@ -142,6 +142,8 @@ export interface GradientOptions {
 export abstract class Gradient {
   readonly colors: readonly Rgb[];
   readonly stops: readonly number[];
+  /** The colour of a one-colour gradient, alpha and colour space kept. */
+  protected readonly solid: PaintColor | null;
 
   constructor({ colors, stops = null }: GradientOptions) {
     if (colors.length === 0) throw new RangeError('A gradient needs at least one colour');
@@ -150,6 +152,20 @@ export abstract class Gradient {
     }
     this.colors = colors.map(color => normalizeColor(color));
     this.stops = stops === null ? [] : stops.map(value => Math.min(1, Math.max(0, Number(value))));
+    this.solid = colors.length === 1 ? normalizePaintColor(colors[0]) : null;
+  }
+
+  /*
+   * One colour is a flat fill, as in upstream PR #1980: no shading object, and
+   * the colour's alpha is painted. A shading function carries no alpha, so the
+   * stops of a gradient of two or more colours still paint opaque.
+   */
+  protected paintSolid(context: RenderContext, box: PdfRect): boolean {
+    if (this.solid === null) return false;
+    context.canvas.setFillColor(this.solid);
+    context.canvas.drawBox(box);
+    context.canvas.fillPath();
+    return true;
   }
 
   abstract paint(context: RenderContext, box: PdfRect): void;
@@ -181,6 +197,7 @@ export class LinearGradient extends Gradient {
   }
 
   override paint(context: RenderContext, box: PdfRect): void {
+    if (this.paintSolid(context, box)) return;
     const pattern = new PdfShadingPattern({
       shading: new PdfShading({
         type: 'axial',
@@ -232,6 +249,7 @@ export class RadialGradient extends Gradient {
   }
 
   override paint(context: RenderContext, box: PdfRect): void {
+    if (this.paintSolid(context, box)) return;
     const scale = Math.min(box.width, box.height);
     const pattern = new PdfShadingPattern({
       shading: new PdfShading({

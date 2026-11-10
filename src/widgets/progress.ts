@@ -16,7 +16,7 @@
  */
 
 import { normalizeColor, PdfColor } from '../pdf/color.ts';
-import type { ColorInput, Rgb } from '../pdf/color.ts';
+import type { ColorInput } from '../pdf/color.ts';
 import { BoxConstraints } from './geometry.ts';
 import { Widget } from './widget.ts';
 import type { Constraints, LayoutBox, PositionedBox, RenderContext } from './widget.ts';
@@ -57,9 +57,14 @@ function boundedSize(maximum: number, fallback: number | null, widget: string, o
   return fallback;
 }
 
-/** Use the public upstream color conversion, including its achromatic guard. */
-function shadeColor(color: ColorInput, strength: number): Rgb {
-  return normalizeColor(new PdfColor(...normalizeColor(color)).shade(strength));
+/**
+ * Use the public upstream color conversion, including its achromatic guard.
+ * `shade` drops the alpha, upstream too; the track keeps the value colour's,
+ * now that a fill paints it, so a translucent bar is not laid on an opaque track.
+ */
+function shadeColor(color: ColorInput, strength: number): PdfColor {
+  const [red, green, blue] = normalizeColor(new PdfColor(...normalizeColor(color)).shade(strength));
+  return new PdfColor(red, green, blue, color instanceof PdfColor ? color.alpha : 1);
 }
 
 export interface CircularProgressIndicatorOptions {

@@ -275,12 +275,28 @@ export class MultiPage implements Section {
           continue;
         }
 
+        let continued = false;
         while (true) {
           const available = page.bottom - page.cursor;
-          const fragment = child.layoutSpan(page.context, new BoxConstraints({
+          let fragment = child.layoutSpan(page.context, new BoxConstraints({
             maxWidth: page.maxWidth,
             maxHeight: available
           }), state);
+          if (continued && !fragment.hasMore) {
+            /*
+             * Upstream lays what is left out against an unbounded height and
+             * keeps that box whenever it fits, so the last fragment takes only
+             * its content's height. Against the height left on the page, a
+             * Column (`mainAxisSize: max`) or an aligned Container filled the
+             * page and pushed the next widget onto a new one.
+             */
+            const natural = child.layoutSpan(page.context, new BoxConstraints({
+              maxWidth: page.maxWidth,
+              maxHeight: Infinity
+            }), state);
+            if (!natural.hasMore && natural.box.height <= available + 0.001) fragment = natural;
+          }
+          continued = true;
           const box = fragment.box;
 
           if (box.height > available + 0.001) {
