@@ -10,10 +10,11 @@ canonical `dist/js_pdf.min.mjs`.
 | v0.2.0 | 450,928 | 138,393 | 111,811 |
 | After phase 7.0 (table packing) | 422,764 | 135,763 | 110,972 |
 | Before PDF/A (`c0a913f`) | 435,345 | 141,519 | 115,631 |
-| **1.0.0** | **449,820** | **146,910** | **119,904** |
+| Before PR #15 review (`b20c924`) | 449,820 | 146,910 | 119,904 |
+| **1.0.0 with PR #15 review fixes** | **450,154** | **147,061** | **119,979** |
 
-1.0.0 is **1,108 bytes smaller (−0.25%)** than v0.2.0 when minified, and
-**8,517 bytes (+6.15%)** larger under gzip. The target agreed for 1.0 was at
+1.0.0 is **774 bytes smaller (−0.17%)** than v0.2.0 when minified, and
+**8,668 bytes (+6.26%)** larger under gzip. The target agreed for 1.0 was at
 most about +5% minified; the user then chose to include every pertinent fix
 and PDF/A whatever the size, and to review the result afterwards.
 
@@ -39,6 +40,7 @@ Integration order and running minified size:
 | Hyphen cuts as upstream | 435,077 | +713 |
 | Translucent gradient stops | 435,345 | +268 |
 | 6.11 PDF/A | 449,820 | +14,475 |
+| PR #15 review: alpha isolation, tspan opacity, directional margins | 450,154 | +334 |
 
 The font fixes are net negative because ToUnicode generation was unified.
 PDF/A is the largest single addition: five ported modules, the validation that

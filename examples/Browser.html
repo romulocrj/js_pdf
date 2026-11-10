@@ -732,6 +732,7 @@ import { generateTextBidiPhase73 } from './text-bidi-phase-7.3.mjs';
 import { generateSvgPhase74 } from './svg-phase-7.4.mjs';
 import { generateGraphicsPhase75 } from './graphics-phase-7.5.mjs';
 import { generateLayoutPhase76 } from './layout-phase-7.6.mjs';
+import { generateReviewPr15 } from './review-pr15.mjs';
 import { generateProductionPaginationExample } from './production-pagination.mjs';
 import { createSalesReport } from './create-sales-report.mjs';
 
@@ -1159,6 +1160,11 @@ const groups = [
         id: 'layout-phase-7.6', title: 'Tables & layout guards', file: 'layout-phase-7.6.mjs', badge: 'PHASE 7.6',
         description: 'Whole words in overflowing tables, rotated boxes, chart axis labels, bounded stacks and progress, and a long table.',
         generate: () => generateLayoutPhase76()
+      },
+      {
+        id: 'review-pr15', title: 'PR 15 review regressions', file: 'review-pr15.mjs', badge: 'REGRESSION',
+        description: 'Transparent backgrounds leave images and gradients visible, nested tspan opacity composes, and directional margins reserve space.',
+        generate: () => generateReviewPr15()
       },
       {
         id: 'production-pagination',

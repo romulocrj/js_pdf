@@ -8,18 +8,26 @@ Coverage of `DavBfr/dart_pdf` (`pdf/lib/`) by this port.
 pull requests filed since `b97c4a63dc` (chiefly #1980); this is an audit
 reference, not a claim that all changes through that revision are ported.
 Image DPI fixes incorporate `e2e3974f32`, `94e93729fc` and `b9b34aebf9`.
-**Ported:** 157 `.ts` files, 40,330 lines (TypeScript)
+**Ported:** 157 `.ts` files, 40,357 lines (TypeScript)
 
 **Phase-6 status:** phases 6.1–6.8, 6.10 and 6.12 are merged (PRs #5–#12).
 Phase 6.9 (directional geometry and RTL layout) is in 1.0.0; baseline
 alignment was dropped because upstream has none. Phase 6.11 (PDF/A-2 and
-PDF/A-3, levels B and U) is in 1.0.0; its output is checked structurally by
-tests and has not been verified with veraPDF.
+PDF/A-3, levels B and U) is in 1.0.0; structural tests cover the feature set,
+and its PDF/A-3B example passed veraPDF 1.30.4 during PR #15 review. See the
+[sample validation record](../examples/benchmarks/pdfa-review-pr15.json);
+production output still needs validation.
 
 **1.0.0:** phases 7.0–7.7 fix the
 defects found in the 2026-11-10 audit and pack three static tables. The rows
 below describe 1.0.0; per-defect details are in
 [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md) and the CHANGELOG.
+
+**PR #15 review follow-up (on `release/1.0`, not yet merged):** colour alpha
+no longer leaks into images, patterns, direct shadings or reusable forms;
+nested SVG tspans compose their opacity; `Text`/`RichText` and `Flex` margins
+resolve directional sides during layout and painting. Seven regression tests
+and the shared `review-pr15` browser/Node proof cover these corrections.
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
 **stub** — placeholder with a known-wrong implementation · **—** — not started
@@ -105,7 +113,7 @@ each one.
 | `page_format.dart` | 171 | `src/pdf/page_format.ts` | partial — all upstream paper presets and margins; public `PageUnit` including `dp`; `PdfPageFormat` value class, units, orientation, copy/margin/dimension/equality helpers |
 | `color.dart` | 725 | `src/pdf/color.ts` | done — `PdfColor`, gray/CMYK/HSV/HSL values, RYB conversion, factories, harmony/shade/luminance helpers; `equals` replaces Dart equality; corrected achromatic/CMYK conversions; `isLight`/`isDark` corrected (7.5) |
 | `colors.dart` | 406 | `src/pdf/colors.ts` | done — complete named Material palette, aliases, primaries/accents and deterministic `getColor`; values packed into one string (7.0) |
-| `graphics.dart` | 1415 | `src/pdf/graphics.ts`, `src/svg/path.ts` | partial — full path API (`m`/`l`/`c`/`h`/`re`, ellipses, rounded rects, elliptical arcs), SVG path drawing, fill rules, clipping, CTM, cap/join/miter/dash, RGB/DeviceGray/CMYK solid colors, `gs`, image XObjects, shading-pattern paint and direct `sh` shadings; colour alpha painted through `/ExtGState` with the `colorAlpha` opt-out, multiplied opacity, exact and rotated `bezierArc` (7.5) |
+| `graphics.dart` | 1415 | `src/pdf/graphics.ts`, `src/svg/path.ts` | partial — full path API (`m`/`l`/`c`/`h`/`re`, ellipses, rounded rects, elliptical arcs), SVG path drawing, fill rules, clipping, CTM, cap/join/miter/dash, RGB/DeviceGray/CMYK solid colors, `gs`, image XObjects, shading-pattern paint and direct `sh` shadings; colour alpha painted through `/ExtGState` with the `colorAlpha` opt-out, multiplied opacity, exact and rotated `bezierArc` (7.5); colour alpha isolated from images, patterns, shadings and forms (PR #15 review) |
 | `graphic_state.dart` | 194 | `src/pdf/graphic_state.ts`, `src/pdf/soft_mask.ts` | partial — `/ca`, `/CA`, `/BM`, deduplicated per page, and luminosity `/SMask` form groups; no `PdfGraphicStates` document object or `/TR` |
 | *(no upstream file — `vector_math`)* | — | `src/pdf/matrix.ts` | done — the 2×3 affine `cm` operand, composition, inversion and the y-down conjugation |
 | `document.dart` | 289 | `src/pdf/document.ts` | partial — synchronous `save`/`write`, `PdfDocument` object registry carrying `PdfSettings` (compression/simple TrueType selection); one font/image/soft-mask form object per distinct resource, created on first use; `colorAlpha` setting and widgets sharing a field name grouped under one parent field (7.1, 7.5); `pdfa` setting: XMP, output intent, attachments, early checks and a 16-byte content-derived `/ID` instead of upstream's random one (6.11) |
@@ -179,7 +187,7 @@ both the grammar and the shape factories landed in phase 2.5.
 | `svg/brush.dart`, `color.dart`, `colors.dart` | 609 | `src/svg/brush.ts`, `color.ts`, `colors.ts` — partial: complete named table, functional/hex colours, `currentColor`, inherited solid and gradient paint, stroke state; colour alpha folded into opacity, `transparent`, `url()` fallbacks (7.4) |
 | `svg/clip_path.dart`, `mask_path.dart` | 148 | `src/svg/clip_path.ts`, `mask_path.ts` — done: `clipPath`, `clip-rule`, user-space/object-bounding-box units, nested scopes and luminosity soft-mask forms; masks applied after the element transform (7.4) |
 | `svg/gradient.dart` | 436 | `src/svg/gradient.ts` — done: linear/radial gradients, stops, transforms, units, inherited references, per-stop luminosity masks and bounded repeat/reflect ramps; `href` cycles treated as unresolved, `currentColor` stops (7.4, 7.7) |
-| `svg/text.dart` | 221 | `src/svg/text.ts` — partial: positions, anchors, tspans, standard/custom fonts, fill/stroke and clipping; runs in document order on one pen, white-space collapsing, chunk anchors by advance (7.4) |
+| `svg/text.dart` | 221 | `src/svg/text.ts` — partial: positions, anchors, tspans, standard/custom fonts, fill/stroke and clipping; runs in document order on one pen, white-space collapsing, chunk anchors by advance (7.4); nested tspan opacity composes once with outer text/group and fill/stroke opacity (PR #15 review) |
 | `svg/image.dart` | 150 | `src/svg/image.ts` — done: host-free base64 data URLs for PNG and JPEG; undecodable payloads skipped (7.4) |
 | *(no upstream file — the `xml` package)* | — | `src/svg/xml.ts` — done: elements, attributes, text, CDATA, comments, entities, namespaces; no DTD subset, no validation |
 
@@ -189,8 +197,8 @@ both the grammar and the shape factories landed in phase 2.5.
 |---|---:|---|---|
 | `widgets/widget.dart` | 444 | `src/widgets/widget.ts` | done — pure layout protocol, spanning `StatelessWidget`, immutable continuation state, `Inherited`/`InheritedWidget`, `DelayedWidget` and `Inseparable` |
 | `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — `BoxConstraints` with factories/transforms and unchanged-enforce reuse, `EdgeInsets`, `Alignment`, `inscribe`; `EdgeInsetsDirectional`, `AlignmentDirectional`, `resolveInsets`/`resolveAlignment` (6.9) |
-| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts`, `src/widgets/directionality.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, scoped `Directionality`, font-metric line boxes, inherited per-run styles, annotations and fallback fonts, CBLC/CBDT colour emoji, wrapping, custom `LineSplitter`, printable ASCII single-word fast path, caller-supplied hyphenation, immutable page continuation, UAX #9 RTL/Arabic shaping, justification, backgrounds and combined decorations; logical-order breaking with per-line bidi, ignorable characters, soft hyphen and ZWSP breaks, no-break spaces, letter spacing per glyph (7.3) |
-| `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — full `Flex`/`Row`/`Column` allocation and vertical continuation without child sublist copies, all main/cross alignments, `mainAxisSize`, vertical direction, `Expanded`, `Flexible`, proportional `Spacer`, eager/builder/separated `ListView`, plus `gap`/weighted-row extensions; both axes follow the ambient text direction (6.9); no baseline alignment, as upstream |
+| `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts`, `src/widgets/directionality.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, scoped `Directionality`, font-metric line boxes, inherited per-run styles, annotations and fallback fonts, CBLC/CBDT colour emoji, wrapping, custom `LineSplitter`, printable ASCII single-word fast path, caller-supplied hyphenation, immutable page continuation, UAX #9 RTL/Arabic shaping, justification, backgrounds and combined decorations; logical-order breaking with per-line bidi, ignorable characters, soft hyphen and ZWSP breaks, no-break spaces, letter spacing per glyph (7.3); directional margins through wrapping and pagination (PR #15 review) |
+| `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — full `Flex`/`Row`/`Column` allocation and vertical continuation without child sublist copies, all main/cross alignments, `mainAxisSize`, vertical direction, `Expanded`, `Flexible`, proportional `Spacer`, eager/builder/separated `ListView`, plus `gap`/weighted-row extensions; both axes follow the ambient text direction (6.9); directional margins resolved per layout (PR #15 review); no baseline alignment, as upstream |
 | `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts`, `decoration.ts`, `box_border.ts` | partial — spanning `Container`, `DecoratedBox`, background/foreground `BoxDecoration`, DPI-aware fitted/clipped decoration images, per-side/dashed borders, axial/radial gradients and vector shadows; upstream `color` option (7.7); translucent gradient stops through a luminosity soft mask (1.0.0); directional margin, padding, alignment and gradients (6.9) |
 | `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground, margin clipping, content-fitted infinite dimensions; **one document may mix orientations and paper sizes**, per section; `textDirection` and directional margins (6.9) |
 | `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — global page totals, post-processed header/footer, `NewPage` with validated remaining-space thresholds, atomic page breaks, intrinsic-first spanning children, `maxPages`, per-section `orientation`, finite-paper validation and clipping across all fragments/layers; `crossAxisAlignment` (6.9); last fragment laid out unbounded (7.7) |

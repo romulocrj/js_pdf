@@ -72,6 +72,10 @@ split containers).
 
 `npm run examples` now generates the complete 8/8 upstream set.
 
+`review-pr15.mjs`, also in the browser gallery and `npm run phase-examples`,
+reproduces the release review corrections: transparent backgrounds before
+images/gradients, nested tspan opacity, and directional text/flex margins.
+
 ## Roadmap gates
 
 Each example is the acceptance test for a specific roadmap phase: the phase that

@@ -256,6 +256,12 @@ The remaining notes were reclassified explicitly as upstream parity,
 compatibility behaviour, serialization choices, deliberate divergences,
 runtime scope or format limits; no unresolved port-gap marker remains.
 
+**PR #15 review — on `release/1.0`, not yet merged.** Corrected colour-alpha
+leaks into images, gradients, direct shadings and forms, ignored nested tspan
+opacity, and dropped directional margins on text and flex widgets. Seven
+regression tests cover paint operators, state restoration, wrapping and
+pagination. `examples/review-pr15.mjs` is the shared browser/Node visual proof.
+
 **1.0.0 — 2026-11-10.** Phases 7.0–7.7 fix the
 defects found by comparing the port with open upstream pull requests and add
 packed static tables; phase 6.9 adds directional layout and phase 6.11 PDF/A
@@ -266,13 +272,15 @@ output. See [Phase 7](#phase-7--100-upstream-audit-fixes) and
 
 > **Next: publish 1.0.0, then post-1.0 work.**
 > Phases 7.0–7.7, 6.9 and 6.11 are prepared as version 1.0.0 in a single
-> release PR from `release/1.0`, at the user's request. After it merges: tag
+> release PR from `release/1.0`, at the user's request. Its review follow-up
+> fixes colour-alpha isolation, tspan opacity and directional text/flex
+> margins; these remain on the branch for approval. After it merges: tag
 > `v1.0.0` on `main` and run `npm publish` (`prepublishOnly` runs `verify`); the
 > CDN links in README, AI_USAGE and the gallery already pin `1.0.0`. The
-> minified bundle is 449,820 bytes, 0.25% smaller than 0.2.0 (see
-> [BUNDLE-SIZE.md](BUNDLE-SIZE.md)). After 1.0: validate the
-> [PDF/A example](../examples/pdfa-phase-6.11.mjs) with veraPDF (checked
-> structurally only so far) and decide on GSUB-only Arabic fonts. From 1.0.0,
+> minified bundle is 450,154 bytes, 0.17% smaller than 0.2.0 (see
+> [BUNDLE-SIZE.md](BUNDLE-SIZE.md)). After 1.0: expand external PDF/A validation
+> beyond the [PDF/A-3B example](../examples/pdfa-phase-6.11.mjs), which passed
+> veraPDF 1.30.4 during this review, and decide on GSUB-only Arabic fonts. From 1.0.0,
 > breaking changes to the package exports wait for 2.0.0. Do not merge
 > automatically.
 
@@ -616,7 +624,8 @@ new Document({ theme, creationDate, pdfa: {
 - **Left to the caller and a validator:** characters a font lacks (drawn as
   `.notdef`), zero-advance Arabic marks whose widths differ from the font
   program, simple-TrueType `cmap` requirements and the content of
-  `extensionRdf`. Conformance has **not** been verified with veraPDF.
+  `extensionRdf`. The PDF/A-3B example passed veraPDF 1.30.4 during PR #15
+  review; this does not establish conformance of every generated document.
 
 `test/support/icc-profile.mjs` generates a port-authored sRGB-like ICC v2
 display profile, committed as `examples/assets/JsPdfSrgbExample.icc` for the

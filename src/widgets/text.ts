@@ -36,10 +36,10 @@ import type { PdfFontBitmap } from '../pdf/font/font.ts';
 import { shapeArabicRange } from '../pdf/font/arabic.ts';
 import { unicodeBidi } from '../pdf/font/unicode_bidi.ts';
 import { defaultPdfFont } from '../pdf/font/type1_fonts.ts';
-import { BoxConstraints, normalizeInsets } from './geometry.ts';
-import type { Insets, InsetsInput } from './geometry.ts';
+import { BoxConstraints, normalizeInsetsGeometry } from './geometry.ts';
+import type { InsetsGeometry, InsetsInput } from './geometry.ts';
 import type { AnnotationBuilder } from './annotations.ts';
-import { Directionality } from './directionality.ts';
+import { Directionality, insetsIn } from './directionality.ts';
 import { Image } from './image.ts';
 import { MemoryImage } from './image_provider.ts';
 import { DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT, TextStyle } from './text_style.ts';
@@ -805,7 +805,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
   readonly textScaleFactor: number;
   readonly maxLines: number | null;
   readonly overflow: TextOverflow | null;
-  readonly margin: Insets;
+  readonly margin: InsetsGeometry;
 
   constructor({
     lineSplitter = null,
@@ -831,7 +831,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
     this.textScaleFactor = assertFiniteNumber(Number(textScaleFactor), 'textScaleFactor');
     this.maxLines = maxLines;
     this.overflow = overflow;
-    this.margin = normalizeInsets(margin);
+    this.margin = normalizeInsetsGeometry(margin);
   }
 
   override initialSpanState(): RichTextState {
@@ -1144,16 +1144,17 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
     spanning: boolean
   ): SpanLayout<RichTextLayoutData, RichTextState> {
     const parent = BoxConstraints.from(constraints);
-    const contentWidth = Math.max(1, parent.maxWidth - this.margin.left - this.margin.right);
-    const minContentWidth = Math.max(0, parent.minWidth - this.margin.left - this.margin.right);
+    const margin = insetsIn(context, this.margin);
+    const contentWidth = Math.max(1, parent.maxWidth - margin.left - margin.right);
+    const minContentWidth = Math.max(0, parent.minWidth - margin.left - margin.right);
     const all = this.allLines(context, contentWidth, minContentWidth);
-    const topMargin = lineIndex === 0 ? this.margin.top : 0;
+    const topMargin = lineIndex === 0 ? margin.top : 0;
     const availableHeight = Math.max(0, parent.maxHeight - topMargin);
     let end = lineIndex;
     let height = 0;
     while (end < all.length) {
       const nextHeight = all[end]?.height ?? 0;
-      const finalBottom = end === all.length - 1 ? this.margin.bottom : 0;
+      const finalBottom = end === all.length - 1 ? margin.bottom : 0;
       if (spanning && height + nextHeight + finalBottom > availableHeight + 0.00001) break;
       height += nextHeight;
       end++;
@@ -1161,13 +1162,13 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
     }
     if (!spanning) end = all.length;
     const isFinal = end >= all.length;
-    const bottomMargin = isFinal ? this.margin.bottom : 0;
+    const bottomMargin = isFinal ? margin.bottom : 0;
     const lineTop = all[lineIndex]?.y ?? 0;
     const selected = rebaseLines(all.slice(lineIndex, end), lineTop - topMargin);
     const widest = Math.max(0, ...selected.map(line => line.width));
     const naturalHeight = topMargin + selected.reduce((sum, line) => sum + line.height, 0) + bottomMargin;
     const size = parent.constrain({
-      width: widest + this.margin.left + this.margin.right,
+      width: widest + margin.left + margin.right,
       height: naturalHeight
     });
     const effectiveOverflow = this.overflow ?? context.theme.overflow;
@@ -1178,7 +1179,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
         height: size.height,
         data: {
           lines: selected,
-          contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
+          contentWidth: Math.max(0, size.width - margin.left - margin.right),
           clip: effectiveOverflow === 'clip' || naturalHeight > size.height + 0.00001,
           textDirection: this.textDirection ?? Directionality.of(context)
         }
@@ -1202,6 +1203,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
 
   override paint(context: RenderContext, box: PositionedBox<RichTextLayoutData>): void {
     const { canvas } = context;
+    const margin = insetsIn(context, this.margin);
     if (box.data.clip) {
       canvas.saveContext();
       canvas.drawRect(box.x, canvas.pageHeight - box.y - box.height, box.width, box.height);
@@ -1210,7 +1212,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
 
     for (const line of box.data.lines) {
       for (const run of line.runs) {
-        const x = box.x + this.margin.left + run.x;
+        const x = box.x + margin.left + run.x;
         const y = box.y + run.y;
         if (run.annotation !== null && run.width > 0 && run.height > 0) {
           run.annotation.build(context, { x, y, width: run.width, height: run.height });
@@ -1223,7 +1225,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
 
     for (const line of box.data.lines) {
       for (const run of line.runs) {
-        const x = box.x + this.margin.left + run.x;
+        const x = box.x + margin.left + run.x;
         if (run.kind === 'text') {
           canvas.text(run.text, x, box.y + run.baseline, {
             font: run.style.font,
@@ -1245,7 +1247,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
     for (const line of box.data.lines) {
       for (const run of line.runs) {
         if (run.style.decorations.length === 0 || run.width <= 0) continue;
-        const x = box.x + this.margin.left + run.x;
+        const x = box.x + margin.left + run.x;
         const width = Math.max(0.25, run.style.fontSize * 0.05 * run.style.decorationThickness);
         for (const decoration of run.style.decorations) {
           const top = decoration === 'underline'

@@ -1,4 +1,4 @@
-import type { Insets, InsetsInput } from './geometry.ts';
+import type { InsetsGeometry, InsetsInput } from './geometry.ts';
 import { SpanningWidget, StatelessWidget, Widget } from './widget.ts';
 import type { AnyLayoutBox, AnyWidget, Constraints, LayoutBox, PositionedBox, RenderContext, SpanLayout } from './widget.ts';
 export type Axis = 'horizontal' | 'vertical';
@@ -84,7 +84,7 @@ export declare class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
     readonly crossAxisAlignment: CrossAxisAlignment;
     readonly verticalDirection: VerticalDirection;
     readonly gap: number;
-    readonly margin: Insets;
+    readonly margin: InsetsGeometry;
     readonly widths: readonly number[] | null;
     get canSpan(): boolean;
     constructor({ direction, children, mainAxisAlignment, mainAxisSize, crossAxisAlignment, verticalDirection, gap, margin, widths }: FlexOptions);

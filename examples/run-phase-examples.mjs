@@ -35,6 +35,7 @@ import { generateTextBidiPhase73 } from './text-bidi-phase-7.3.mjs';
 import { generateSvgPhase74 } from './svg-phase-7.4.mjs';
 import { generateGraphicsPhase75 } from './graphics-phase-7.5.mjs';
 import { generateLayoutPhase76 } from './layout-phase-7.6.mjs';
+import { generateReviewPr15 } from './review-pr15.mjs';
 import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
 import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
 import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
@@ -103,7 +104,8 @@ const examples = [
   ['text-bidi-phase-7.3', () => generateTextBidiPhase73(undefined, true, arabicFont)],
   ['svg-phase-7.4', () => generateSvgPhase74()],
   ['graphics-phase-7.5', () => generateGraphicsPhase75()],
-  ['layout-phase-7.6', () => generateLayoutPhase76()]
+  ['layout-phase-7.6', () => generateLayoutPhase76()],
+  ['review-pr15', () => generateReviewPr15()]
 ];
 
 const outputDirectory = new URL('./out/', import.meta.url);

@@ -21,10 +21,10 @@
  * on top of the upstream flex allocation algorithm.
  */
 
-import { BoxConstraints, normalizeInsets } from './geometry.ts';
-import type { Insets, InsetsInput } from './geometry.ts';
+import { BoxConstraints, normalizeInsetsGeometry } from './geometry.ts';
+import type { InsetsGeometry, InsetsInput } from './geometry.ts';
 import { Padding, SizedBox } from './basic.ts';
-import { Directionality } from './directionality.ts';
+import { Directionality, insetsIn } from './directionality.ts';
 import { SpanningWidget, StatelessWidget, Widget } from './widget.ts';
 import type {
   AnyLayoutBox,
@@ -225,7 +225,7 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
   readonly crossAxisAlignment: CrossAxisAlignment;
   readonly verticalDirection: VerticalDirection;
   readonly gap: number;
-  readonly margin: Insets;
+  readonly margin: InsetsGeometry;
   readonly widths: readonly number[] | null;
 
   override get canSpan(): boolean {
@@ -268,7 +268,7 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
     this.crossAxisAlignment = crossAxisAlignment;
     this.verticalDirection = verticalDirection;
     this.gap = finiteNonNegative(Number(gap), 'gap');
-    this.margin = normalizeInsets(margin);
+    this.margin = normalizeInsetsGeometry(margin);
     this.widths = widths;
   }
 
@@ -301,7 +301,7 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
     }
 
     const outer = BoxConstraints.from(incoming);
-    const constraints = outer.deflate(this.margin);
+    const constraints = outer.deflate(insetsIn(context, this.margin));
     const [, childMaxCross] = this.crossConstraints(constraints);
     const childMinCross = this.crossAxisAlignment === 'stretch' && Number.isFinite(childMaxCross)
       ? childMaxCross
@@ -358,7 +358,8 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
   ): LayoutBox<FlexLayoutData> {
     const count = lastChild - firstChild;
     const outer = BoxConstraints.from(incoming);
-    const constraints = outer.deflate(this.margin);
+    const margin = insetsIn(context, this.margin);
+    const constraints = outer.deflate(margin);
     const horizontal = this.direction === 'horizontal';
     const maxMain = horizontal ? constraints.maxWidth : constraints.maxHeight;
     const minMain = horizontal ? constraints.minWidth : constraints.minHeight;
@@ -494,8 +495,8 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
       const mainPosition = reverse ? cursor - main : cursor;
       children.push({
         box,
-        dx: this.margin.left + (horizontal ? mainPosition : crossPosition),
-        dy: this.margin.top + (horizontal ? crossPosition : mainPosition)
+        dx: margin.left + (horizontal ? mainPosition : crossPosition),
+        dy: margin.top + (horizontal ? crossPosition : mainPosition)
       });
       cursor += reverse ? -(main + between) : main + between;
     }
@@ -503,8 +504,8 @@ export class Flex extends SpanningWidget<FlexLayoutData, FlexState> {
     const innerWidth = horizontal ? actualMain : actualCross;
     const innerHeight = horizontal ? actualCross : actualMain;
     const size = outer.constrain({
-      width: innerWidth + this.margin.left + this.margin.right,
-      height: innerHeight + this.margin.top + this.margin.bottom
+      width: innerWidth + margin.left + margin.right,
+      height: innerHeight + margin.top + margin.bottom
     });
     return { widget: this, width: size.width, height: size.height, data: { children } };
   }

@@ -3278,7 +3278,16 @@ class PdfCanvas {
       name = `/Xf${this.formNames.size + 1}`;
       this.formNames.set(form, name);
     }
-    this.push(`q ${formatNumber(width / form.width)} 0 0 ${formatNumber(height / form.height)} ${formatNumber(x)} ${formatNumber(y)} cm ${name} Do Q`);
+    const command = `${formatNumber(width / form.width)} 0 0 ${formatNumber(height / form.height)} ${formatNumber(x)} ${formatNumber(y)} cm ${name} Do`;
+    if (this.alphas[2] !== this.alphas[0] || this.alphas[3] !== this.alphas[1]) {
+      this.saveContext();
+      this.setColorAlpha(null, false);
+      this.setColorAlpha(null, true);
+      this.push(command);
+      this.restoreContext();
+    } else {
+      this.push(`q ${command} Q`);
+    }
   }
   get images() {
     return this.imageNames;
@@ -3450,11 +3459,13 @@ class PdfCanvas {
   }
   setFillPattern(pattern) {
     const name = this.addPattern(pattern);
+    this.setColorAlpha(null, false);
     this.push(`/Pattern cs ${name} scn`);
     return name;
   }
   setStrokePattern(pattern) {
     const name = this.addPattern(pattern);
+    this.setColorAlpha(null, true);
     this.push(`/Pattern CS ${name} SCN`);
     return name;
   }
@@ -3467,7 +3478,13 @@ class PdfCanvas {
       this.shadingNames.set(key, name);
       this.shadingDicts.set(name, dict);
     }
+    const resetAlpha = this.alphas[2] !== this.alphas[0];
+    if (resetAlpha) {
+      this.saveContext();
+      this.setColorAlpha(null, false);
+    }
     this.push(`${name} sh`);
+    if (resetAlpha) this.restoreContext();
     return name;
   }
   drawImage(image, x, y, width = image.width, height) {
@@ -3507,10 +3524,11 @@ class PdfCanvas {
       matrix = [ width, 0, 0, resolvedHeight, x, y ];
       break;
     }
-    this.push("q");
+    this.saveContext();
+    this.setColorAlpha(null, false);
     this.push(`${operands(matrix)} cm`);
     this.push(`${name} Do`);
-    this.push("Q");
+    this.restoreContext();
   }
   moveTo(x, y) {
     this.push(`${operands([ x, y ])} m`);
@@ -4494,7 +4512,7 @@ class Flex extends SpanningWidget {
     this.crossAxisAlignment = crossAxisAlignment;
     this.verticalDirection = verticalDirection;
     this.gap = finiteNonNegative$1(Number(gap), "gap");
-    this.margin = normalizeInsets(margin);
+    this.margin = normalizeInsetsGeometry(margin);
     this.widths = widths;
   }
   crossConstraints(constraints) {
@@ -4521,7 +4539,7 @@ class Flex extends SpanningWidget {
       };
     }
     const outer = BoxConstraints.from(incoming);
-    const constraints = outer.deflate(this.margin);
+    const constraints = outer.deflate(insetsIn(context, this.margin));
     const [, childMaxCross] = this.crossConstraints(constraints);
     const childMinCross = this.crossAxisAlignment === "stretch" && Number.isFinite(childMaxCross) ? childMaxCross : 0;
     const available = constraints.maxHeight;
@@ -4559,7 +4577,8 @@ class Flex extends SpanningWidget {
   layoutRange(context, incoming, firstChild, lastChild) {
     const count = lastChild - firstChild;
     const outer = BoxConstraints.from(incoming);
-    const constraints = outer.deflate(this.margin);
+    const margin = insetsIn(context, this.margin);
+    const constraints = outer.deflate(margin);
     const horizontal = this.direction === "horizontal";
     const maxMain = horizontal ? constraints.maxWidth : constraints.maxHeight;
     const minMain = horizontal ? constraints.minWidth : constraints.minHeight;
@@ -4662,16 +4681,16 @@ class Flex extends SpanningWidget {
       const mainPosition = reverse ? cursor - main : cursor;
       children.push({
         box,
-        dx: this.margin.left + (horizontal ? mainPosition : crossPosition),
-        dy: this.margin.top + (horizontal ? crossPosition : mainPosition)
+        dx: margin.left + (horizontal ? mainPosition : crossPosition),
+        dy: margin.top + (horizontal ? crossPosition : mainPosition)
       });
       cursor += reverse ? -(main + between) : main + between;
     }
     const innerWidth = horizontal ? actualMain : actualCross;
     const innerHeight = horizontal ? actualCross : actualMain;
     const size = outer.constrain({
-      width: innerWidth + this.margin.left + this.margin.right,
-      height: innerHeight + this.margin.top + this.margin.bottom
+      width: innerWidth + margin.left + margin.right,
+      height: innerHeight + margin.top + margin.bottom
     });
     return {
       widget: this,
@@ -16867,7 +16886,7 @@ class RichText extends SpanningWidget {
     this.textScaleFactor = assertFiniteNumber(Number(textScaleFactor), "textScaleFactor");
     this.maxLines = maxLines;
     this.overflow = overflow;
-    this.margin = normalizeInsets(margin);
+    this.margin = normalizeInsetsGeometry(margin);
   }
   initialSpanState() {
     return {
@@ -17159,16 +17178,17 @@ class RichText extends SpanningWidget {
   }
   fragment(context, constraints, lineIndex, spanning) {
     const parent = BoxConstraints.from(constraints);
-    const contentWidth = Math.max(1, parent.maxWidth - this.margin.left - this.margin.right);
-    const minContentWidth = Math.max(0, parent.minWidth - this.margin.left - this.margin.right);
+    const margin = insetsIn(context, this.margin);
+    const contentWidth = Math.max(1, parent.maxWidth - margin.left - margin.right);
+    const minContentWidth = Math.max(0, parent.minWidth - margin.left - margin.right);
     const all = this.allLines(context, contentWidth, minContentWidth);
-    const topMargin = lineIndex === 0 ? this.margin.top : 0;
+    const topMargin = lineIndex === 0 ? margin.top : 0;
     const availableHeight = Math.max(0, parent.maxHeight - topMargin);
     let end = lineIndex;
     let height = 0;
     while (end < all.length) {
       const nextHeight = all[end]?.height ?? 0;
-      const finalBottom = end === all.length - 1 ? this.margin.bottom : 0;
+      const finalBottom = end === all.length - 1 ? margin.bottom : 0;
       if (spanning && height + nextHeight + finalBottom > availableHeight + 1e-5) break;
       height += nextHeight;
       end++;
@@ -17176,13 +17196,13 @@ class RichText extends SpanningWidget {
     }
     if (!spanning) end = all.length;
     const isFinal = end >= all.length;
-    const bottomMargin = isFinal ? this.margin.bottom : 0;
+    const bottomMargin = isFinal ? margin.bottom : 0;
     const lineTop = all[lineIndex]?.y ?? 0;
     const selected = rebaseLines(all.slice(lineIndex, end), lineTop - topMargin);
     const widest = Math.max(0, ...selected.map(line => line.width));
     const naturalHeight = topMargin + selected.reduce((sum, line) => sum + line.height, 0) + bottomMargin;
     const size = parent.constrain({
-      width: widest + this.margin.left + this.margin.right,
+      width: widest + margin.left + margin.right,
       height: naturalHeight
     });
     const effectiveOverflow = this.overflow ?? context.theme.overflow;
@@ -17193,7 +17213,7 @@ class RichText extends SpanningWidget {
         height: size.height,
         data: {
           lines: selected,
-          contentWidth: Math.max(0, size.width - this.margin.left - this.margin.right),
+          contentWidth: Math.max(0, size.width - margin.left - margin.right),
           clip: effectiveOverflow === "clip" || naturalHeight > size.height + 1e-5,
           textDirection: this.textDirection ?? Directionality.of(context)
         }
@@ -17212,6 +17232,7 @@ class RichText extends SpanningWidget {
   }
   paint(context, box) {
     const {canvas} = context;
+    const margin = insetsIn(context, this.margin);
     if (box.data.clip) {
       canvas.saveContext();
       canvas.drawRect(box.x, canvas.pageHeight - box.y - box.height, box.width, box.height);
@@ -17219,7 +17240,7 @@ class RichText extends SpanningWidget {
     }
     for (const line of box.data.lines) {
       for (const run of line.runs) {
-        const x = box.x + this.margin.left + run.x;
+        const x = box.x + margin.left + run.x;
         const y = box.y + run.y;
         if (run.annotation !== null && run.width > 0 && run.height > 0) {
           run.annotation.build(context, {
@@ -17236,7 +17257,7 @@ class RichText extends SpanningWidget {
     }
     for (const line of box.data.lines) {
       for (const run of line.runs) {
-        const x = box.x + this.margin.left + run.x;
+        const x = box.x + margin.left + run.x;
         if (run.kind === "text") {
           canvas.text(run.text, x, box.y + run.baseline, {
             font: run.style.font,
@@ -17257,7 +17278,7 @@ class RichText extends SpanningWidget {
     for (const line of box.data.lines) {
       for (const run of line.runs) {
         if (run.style.decorations.length === 0 || run.width <= 0) continue;
-        const x = box.x + this.margin.left + run.x;
+        const x = box.x + margin.left + run.x;
         const width = Math.max(.25, run.style.fontSize * .05 * run.style.decorationThickness);
         for (const decoration of run.style.decorations) {
           const top = decoration === "underline" ? box.y + run.baseline + run.style.fontSize * .08 : decoration === "overline" ? box.y + run.baseline - run.style.fontSize : box.y + run.baseline - run.style.fontSize * .35;
@@ -22094,7 +22115,7 @@ class SvgText extends SvgOperation {
     }
     return new SvgText(runs, brush, SvgClipPath.fromXml(element, painter, brush), SvgTransform.fromXml(element), painter);
   }
-  static walk(element, painter, brush, layout, root) {
+  static walk(element, painter, brush, layout, root, opacity = 1) {
     const length = (name, axis) => getNumeric(element, name, brush)?.lengthIn(axis) ?? null;
     const x = length("x", "x");
     const y = length("y", "y");
@@ -22113,7 +22134,8 @@ class SvgText extends SvgOperation {
     for (const node of element.children) {
       if (!(node instanceof XmlText)) {
         if (TEXT_CONTENT.has(node.name.local)) {
-          SvgText.walk(node, painter, SvgBrush.fromXml(node, brush, painter.parser), layout, false);
+          const childBrush = SvgBrush.fromXml(node, brush, painter.parser);
+          SvgText.walk(node, painter, childBrush, layout, false, opacity * (childBrush.opacity ?? 1));
         }
         continue;
       }
@@ -22134,7 +22156,8 @@ class SvgText extends SvgOperation {
         font,
         fontSize,
         metrics,
-        brush
+        brush,
+        opacity
       });
       layout.x += metrics.advanceWidth;
     }
@@ -22144,8 +22167,8 @@ class SvgText extends SvgOperation {
       const {brush} = run;
       const fill = brush.fill;
       const stroke = brush.stroke;
-      const fillOpacity = brush.fillOpacity * fill.opacity;
-      const strokeOpacity = brush.strokeOpacity * stroke.opacity;
+      const fillOpacity = brush.fillOpacity * fill.opacity * (run.opacity ?? 1);
+      const strokeOpacity = brush.strokeOpacity * stroke.opacity * (run.opacity ?? 1);
       const strokeWidth = brush.strokeWidth?.lengthIn() ?? 1;
       if (fill.isNotEmpty && fillOpacity > 0) {
         canvas.saveContext();

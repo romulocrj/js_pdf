@@ -297,7 +297,16 @@ export class PdfCanvas {
     if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) throw new RangeError('Invalid form placement');
     let name = this.formNames.get(form);
     if (name === undefined) { name = `/Xf${this.formNames.size + 1}`; this.formNames.set(form, name); }
-    this.push(`q ${formatNumber(width / form.width)} 0 0 ${formatNumber(height / form.height)} ${formatNumber(x)} ${formatNumber(y)} cm ${name} Do Q`);
+    const command = `${formatNumber(width / form.width)} 0 0 ${formatNumber(height / form.height)} ${formatNumber(x)} ${formatNumber(y)} cm ${name} Do`;
+    if (this.alphas[2] !== this.alphas[0] || this.alphas[3] !== this.alphas[1]) {
+      this.saveContext();
+      this.setColorAlpha(null, false);
+      this.setColorAlpha(null, true);
+      this.push(command);
+      this.restoreContext();
+    } else {
+      this.push(`q ${command} Q`);
+    }
   }
 
   /** The images this page drew with, mapped to page-local `/I…` names. */
@@ -520,12 +529,14 @@ export class PdfCanvas {
 
   setFillPattern(pattern: PdfShadingPattern): string {
     const name = this.addPattern(pattern);
+    this.setColorAlpha(null, false);
     this.push(`/Pattern cs ${name} scn`);
     return name;
   }
 
   setStrokePattern(pattern: PdfShadingPattern): string {
     const name = this.addPattern(pattern);
+    this.setColorAlpha(null, true);
     this.push(`/Pattern CS ${name} SCN`);
     return name;
   }
@@ -540,7 +551,15 @@ export class PdfCanvas {
       this.shadingNames.set(key, name);
       this.shadingDicts.set(name, dict);
     }
+    // A shading has no solid colour alpha. Keep enclosing opacity and restore
+    // the selected colour afterwards, just as placing an image or form does.
+    const resetAlpha = this.alphas[2] !== this.alphas[0];
+    if (resetAlpha) {
+      this.saveContext();
+      this.setColorAlpha(null, false);
+    }
     this.push(`${name} sh`);
+    if (resetAlpha) this.restoreContext();
     return name;
   }
 
@@ -575,10 +594,11 @@ export class PdfCanvas {
         matrix = [width, 0, 0, resolvedHeight, x, y];
         break;
     }
-    this.push('q');
+    this.saveContext();
+    this.setColorAlpha(null, false);
     this.push(`${operands(matrix)} cm`);
     this.push(`${name} Do`);
-    this.push('Q');
+    this.restoreContext();
   }
 
   // ------------------------------------------------------------ path building

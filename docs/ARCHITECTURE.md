@@ -133,7 +133,9 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   Form and geometric annotation arrays use `PdfArray.fromColor`. Colour alpha
   is painted through constant-alpha `/ExtGState` entries that `PdfGraphics`
   tracks per saved state and multiplies by the inherited opacity; the
-  `colorAlpha` setting turns it off.
+  `colorAlpha` setting turns it off. Patterns select the enclosing opacity;
+  images, direct shadings and reusable forms scope that selection so a prior
+  solid colour's alpha cannot hide them or change their caller's paint state.
 - **`page_format.ts`** — upstream paper presets, margins and public physical-unit constants in PDF points.
 - **`font/font_metrics.ts`** — glyph and string bounding metrics, including
   ascent, descent, bearings and advance width.
@@ -170,7 +172,8 @@ licensed Dart `qr` implementation is neither ported nor distributed.
   when clamping changes none of its values.
 - **`text.ts`** — greedy line breaker, custom segment/hyphenation callbacks,
   `Text` and `RichText` with immutable measured runs. Printable ASCII words
-  bypass splitting when no custom splitter is supplied.
+  bypass splitting when no custom splitter is supplied. Text and flex margins
+  keep directional values until layout/paint resolves the ambient direction.
 - **`text_style.ts` / `theme.ts` / `font.ts`** — `TextStyle` and its four font
   slots, `ThemeData` and the widgets that scope it, and the lazy `Font`
   declaration a style names.

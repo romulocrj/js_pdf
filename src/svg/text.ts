@@ -54,6 +54,8 @@ export interface SvgTextRun {
   readonly fontSize: number;
   readonly metrics: PdfFontMetrics;
   readonly brush: SvgBrush;
+  /** Opacity of nested text elements; the outer text's is applied by its operation. */
+  readonly opacity?: number;
 }
 
 interface TextChunk {
@@ -111,7 +113,8 @@ export class SvgText extends SvgOperation {
     painter: SvgPainter,
     brush: SvgBrush,
     layout: TextLayout,
-    root: boolean
+    root: boolean,
+    opacity = 1
   ): void {
     const length = (name: string, axis: 'x' | 'y'): number | null =>
       getNumeric(element, name, brush)?.lengthIn(axis) ?? null;
@@ -131,7 +134,8 @@ export class SvgText extends SvgOperation {
     for (const node of element.children) {
       if (!(node instanceof XmlText)) {
         if (TEXT_CONTENT.has(node.name.local)) {
-          SvgText.walk(node, painter, SvgBrush.fromXml(node, brush, painter.parser), layout, false);
+          const childBrush = SvgBrush.fromXml(node, brush, painter.parser);
+          SvgText.walk(node, painter, childBrush, layout, false, opacity * (childBrush.opacity ?? 1));
         }
         continue;
       }
@@ -147,7 +151,7 @@ export class SvgText extends SvgOperation {
       if (text.length === 0) continue;
 
       const metrics = font.stringMetrics(text, fontSize);
-      chunk().runs.push({ text, x: layout.x, y: layout.y, font, fontSize, metrics, brush });
+      chunk().runs.push({ text, x: layout.x, y: layout.y, font, fontSize, metrics, brush, opacity });
       layout.x += metrics.advanceWidth;
     }
   }
@@ -158,8 +162,8 @@ export class SvgText extends SvgOperation {
       const fill = brush.fill!;
       const stroke = brush.stroke!;
       // Colour alpha folds into the opacities; the canvas gets an opaque colour.
-      const fillOpacity = brush.fillOpacity! * fill.opacity;
-      const strokeOpacity = brush.strokeOpacity! * stroke.opacity;
+      const fillOpacity = brush.fillOpacity! * fill.opacity * (run.opacity ?? 1);
+      const strokeOpacity = brush.strokeOpacity! * stroke.opacity * (run.opacity ?? 1);
       const strokeWidth = brush.strokeWidth?.lengthIn() ?? 1;
       if (fill.isNotEmpty && fillOpacity > 0) {
         canvas.saveContext();

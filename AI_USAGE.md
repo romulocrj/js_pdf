@@ -293,8 +293,9 @@ or `MultiPage`; it defaults to left-to-right.
 
 - `EdgeInsetsDirectional.only({ start, top, end, bottom })`, `.all`,
   `.symmetric`, `.fromSTEB(start, top, end, bottom)` and `.zero` are accepted
-  wherever insets are: `Padding`, `Container` margin/padding, `GridView`
-  padding, page margins and more.
+  by widget insets: `Padding`, `Container` margin/padding, `Text`/`RichText`
+  and `Row`/`Column`/`Flex` margins, `GridView` padding, page margins and more.
+  Raw `BoxConstraints.deflate` takes physical insets; use `resolveInsets` first.
 - `AlignmentDirectional.topStart` … `bottomEnd` (or the names `'topStart'`,
   `'centerEnd'`, …) are accepted wherever alignments are, including gradients
   and images.
@@ -738,6 +739,9 @@ painted: fills and strokes emit a constant-alpha `/ExtGState`, multiplied by any
 enclosing `Opacity`, and nested `Opacity` widgets multiply. Pass
 `colorAlpha: false` to `Document`/`createPdf` (or `PdfDocument`) to ignore color
 alpha. Gradient stops paint their alpha too, through a luminosity soft mask.
+An image, pattern, direct shading or reusable form keeps its enclosing opacity
+without inheriting the previous solid colour's alpha. Nested SVG `tspan`
+opacity multiplies once with its text/group and fill/stroke opacity.
 DeviceCMYK paint embeds no ICC profile; under [PDF/A](#pdfa) it needs a CMYK
 output intent profile.
 Upstream's `isLight`/`isDark` threshold and harmony offsets are retained, with
@@ -843,8 +847,9 @@ const doc = new pw.Document({
 - Not checked: characters a font cannot draw (they reference `.notdef`; give
   `fontFallback` fonts that cover the text), Arabic marks with zero advance,
   simple-TrueType `cmap` requirements and the content of `extensionRdf`.
-- **Conformance has not been verified with veraPDF.** Validate production
-  output with a PDF/A validator.
+- The PDF/A-3B example passed veraPDF 1.30.4 during PR #15 review; see the
+  [sample validation record](examples/benchmarks/pdfa-review-pr15.json).
+  This covers that sample. Validate production output with a PDF/A validator.
 
 `PdfaRdf({ title, …, part, conformance }).create()` returns an XMP packet
 string and `PdfaFacturxRdf().create()` the Factur-X RDF; both escape their
@@ -863,8 +868,8 @@ values. See the [PDF/A example](examples/pdfa-phase-6.11.mjs).
 - Progress indicators on an unbounded axis need `fallbackWidth` (and
   `fallbackHeight` for the circular one) or they throw a `RangeError`
   (*1.0.0*).
-- PDF/A output is limited to parts 2 and 3, levels B and U, and has not been
-  verified with veraPDF; supplying your own XMP or using CMYK without `pdfa`
+- PDF/A output is limited to parts 2 and 3, levels B and U; the PDF/A-3B
+  example passed veraPDF 1.30.4. Supplying your own XMP or using CMYK without `pdfa`
   does not establish conformance. See [PDF/A](#pdfa).
 - Reading or rasterizing existing PDFs is not supported.
 - Encryption, digital signatures and `Signature` are out of scope.

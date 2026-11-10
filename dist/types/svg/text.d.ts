@@ -17,6 +17,8 @@ export interface SvgTextRun {
     readonly fontSize: number;
     readonly metrics: PdfFontMetrics;
     readonly brush: SvgBrush;
+    /** Opacity of nested text elements; the outer text's is applied by its operation. */
+    readonly opacity?: number;
 }
 export declare class SvgText extends SvgOperation {
     readonly runs: readonly SvgTextRun[];

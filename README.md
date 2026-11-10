@@ -60,10 +60,11 @@ breaking changes wait for 2.0.0. Modules reached by deep paths into `dist/` or
 - PDF/A-2 and PDF/A-3 (levels B and U) through `Document({ pdfa })`, with an
   output intent, matching XMP, a trailer `/ID`, PDF/A-3 attachments such as
   Factur-X, and early errors for fonts or colours PDF/A forbids. The output
-  has been checked structurally, not with an external validator such as veraPDF.
+  has structural tests; the PDF/A-3B example passed veraPDF 1.30.4 during PR #15
+  review. Production output still needs validation.
 - Color alpha is now painted, including gradient stops, with a
   `colorAlpha: false` opt-out.
-- The minified bundle is **449,820 bytes**, 0.25% smaller than 0.2.0: three
+- The minified bundle is **450,154 bytes**, 0.17% smaller than 0.2.0: three
   literal tables are packed into strings, which pays for the fixes, the
   directional layout and PDF/A. Compressed, it is 6.2% larger (gzip).
 
@@ -244,8 +245,8 @@ covers, in [AI_USAGE.md](AI_USAGE.md).
 - Reading existing PDFs, rasterizing PDFs, encryption and digital signatures
   are out of scope.
 - PDF/A output (`Document({ pdfa })`, parts 2 and 3, levels B and U) is
-  checked structurally by the test suite but has not been verified with
-  veraPDF. PDF/A-1 and level A are not supported. The caller supplies the ICC
+  covered by structural tests; the PDF/A-3B example passed veraPDF 1.30.4.
+  Validate production output. PDF/A-1 and level A are not supported. The caller supplies the ICC
   profile; the example's port-authored profile is not meant for production.
 - OpenType layout tables (GSUB/GPOS) are not read. Arabic shaping uses the
   font's presentation-form code points, so fonts that join only through GSUB
@@ -373,3 +374,7 @@ Noto Sans Arabic subset under the SIL OFL),
 [SVG viewports and robustness](examples/svg-phase-7.4.mjs) (7.4),
 [colour alpha and arcs](examples/graphics-phase-7.5.mjs) (7.5) and
 [tables and layout guards](examples/layout-phase-7.6.mjs) (7.6, extended by 7.7).
+
+The PR #15 review adds a shared [regression proof](examples/review-pr15.mjs)
+for colour-alpha isolation, nested tspan opacity and directional text/flex
+margins. It is available in the browser gallery and the phase example runner.

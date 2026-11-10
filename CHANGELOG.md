@@ -41,12 +41,18 @@ plus several of the port's own. Upstream defects are listed in
   Type1 fonts, device colour the profile does not describe. The upstream
   parity classes `PdfaRdf`, `PdfaFacturxRdf`, `PdfaColorProfile`,
   `PdfaAttachedFile` and `PdfaAttachedFiles` are exported, with #1980's
-  corrections. **Conformance has not been verified with veraPDF.** Documents
+  corrections. The PDF/A-3B example passed veraPDF 1.30.4 during PR #15
+  review; validate production output separately. Documents
   without `pdfa` are byte-identical.
 - `creationDate` option on `Document` for a fixed `/CreationDate`.
 
 ### Fixed
 
+- **PR #15 review:** a transparent solid colour no longer hides later images,
+  gradients, direct shadings or reusable forms. Explicit enclosing opacity is
+  preserved. Nested SVG `tspan` opacity composes without affecting siblings,
+  and `Text`/`RichText` and `Flex`/`Row`/`Column` directional margins reserve
+  space during wrapping, painting and pagination.
 - **Text:** wrapped right-to-left paragraphs were emitted with their lines in
   reverse order, and justified or fallback-font runs inside them were mirrored
   (a port regression). RTL fragments inside LTR paragraphs are now shaped and

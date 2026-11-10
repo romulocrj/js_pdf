@@ -1,6 +1,6 @@
 import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
-import type { Insets, InsetsInput } from './geometry.ts';
+import type { InsetsGeometry, InsetsInput } from './geometry.ts';
 import type { AnnotationBuilder } from './annotations.ts';
 import { DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT, TextStyle } from './text_style.ts';
 import type { TextDecorationName } from './text_style.ts';
@@ -177,7 +177,7 @@ export declare class RichText extends SpanningWidget<RichTextLayoutData, RichTex
     readonly textScaleFactor: number;
     readonly maxLines: number | null;
     readonly overflow: TextOverflow | null;
-    readonly margin: Insets;
+    readonly margin: InsetsGeometry;
     constructor({ lineSplitter, hyphenation, text, textAlign, textDirection, softWrap, tightBounds, textScaleFactor, maxLines, overflow, margin }: RichTextOptions);
     initialSpanState(): RichTextState;
     protected inputTokens(context: RenderContext, maxWidth: number): Paragraph;
