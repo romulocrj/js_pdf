@@ -31,7 +31,9 @@ for (const rich of [false, true]) {
 
 test('whitespace splitter reproduces default layout and operators, including repeated spaces', () => {
   for (const value of ['a  b cdefgh ij', '  a\tb\u00a0c  ', 'one\r\ntwo\rthree\n\n', '']) {
-    const lineSplitter = line => line.split(/\s/u);
+    // Phase 7.3 (L141): the default never breaks at U+00A0, U+2007 or U+202F,
+    // so the equivalent splitter is breakable whitespace, not all of `\s`.
+    const lineSplitter = line => line.split(/[^\S\u00a0\u2007\u202f]/u);
     const plain = measure(text(value), 48);
     const custom = measure(text(value, { lineSplitter }), 48);
     assert.deepEqual(custom.data, plain.data);
