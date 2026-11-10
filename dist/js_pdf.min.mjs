@@ -1,5 +1,5 @@
 /*!
- * @license romulocrj/js_pdf v0.2.0
+ * @license romulocrj/js_pdf v1.0.0
  *
  * An independent JavaScript port of DavBfr/dart_pdf.
  *

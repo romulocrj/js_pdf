@@ -16,10 +16,16 @@
       "brotliBytes": 110972
     },
     {
+      "ref": "c0a913f",
+      "rawBytes": 435345,
+      "gzipBytes": 141519,
+      "brotliBytes": 115631
+    },
+    {
       "ref": "working-tree",
-      "rawBytes": 434364,
-      "gzipBytes": 140884,
-      "brotliBytes": 115362
+      "rawBytes": 449820,
+      "gzipBytes": 146910,
+      "brotliBytes": 119904
     }
   ]
 }

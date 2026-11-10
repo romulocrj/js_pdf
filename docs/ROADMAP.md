@@ -256,26 +256,27 @@ The remaining notes were reclassified explicitly as upstream parity,
 compatibility behaviour, serialization choices, deliberate divergences,
 runtime scope or format limits; no unresolved port-gap marker remains.
 
-**1.0 series — on branch `release/1.0`, 2026-11-10.** Phases 7.0–7.7 fix the
+**1.0.0 — 2026-11-10.** Phases 7.0–7.7 fix the
 defects found by comparing the port with open upstream pull requests and add
 packed static tables; phase 6.9 adds directional layout and phase 6.11 PDF/A
-output. See [Phase 7](#phase-7--10-series-upstream-audit-fixes) and
+output. See [Phase 7](#phase-7--100-upstream-audit-fixes) and
 [6.11](#611-pdfa--output-intent-xmp-id-and-attachments) below.
 
 ## Next step
 
-> **Next: 1.0 size and scope review, then the 1.0 release.**
-> Phases 7.0–7.7, 6.9 and 6.11 are implemented on branch `release/1.0`, which
-> is not yet merged to `main`. The minified bundle was 434,364 bytes (−3.67%
-> against 0.2.0; see [BUNDLE-SIZE.md](BUNDLE-SIZE.md)) before PDF/A, which adds
-> about 14 KB. Decide whether to run veraPDF on the
-> [PDF/A example](../examples/pdfa-phase-6.11.mjs) before 1.0 — the port's
-> PDF/A output has only been checked structurally. Review the size, decide what
-> else enters 1.0, choose how to split the branch into reviewable PRs, then
-> freeze the public API. GSUB-only Arabic fonts are deferred until after 1.0.
-> Do not merge automatically.
+> **Next: publish 1.0.0, then post-1.0 work.**
+> Phases 7.0–7.7, 6.9 and 6.11 are prepared as version 1.0.0 in a single
+> release PR from `release/1.0`, at the user's request. After it merges: tag
+> `v1.0.0` on `main` and run `npm publish` (`prepublishOnly` runs `verify`); the
+> CDN links in README, AI_USAGE and the gallery already pin `1.0.0`. The
+> minified bundle is 449,820 bytes, 0.25% smaller than 0.2.0 (see
+> [BUNDLE-SIZE.md](BUNDLE-SIZE.md)). After 1.0: validate the
+> [PDF/A example](../examples/pdfa-phase-6.11.mjs) with veraPDF (checked
+> structurally only so far) and decide on GSUB-only Arabic fonts. From 1.0.0,
+> breaking changes to the package exports wait for 2.0.0. Do not merge
+> automatically.
 
-## Phase 7 — 1.0 series: upstream audit fixes
+## Phase 7 — 1.0.0: upstream audit fixes
 
 Audit of 2026-11-10: upstream master moved from `b97c4a63dc` only to
 `277b367` (README), and the three upstream PRs merged since the previous audit
@@ -294,14 +295,14 @@ pull-request code is credited in NOTICE.
 
 | Order | Domain | State |
 |---|---|---|
-| 7.0 | Size headroom: pack the palette, PDF417 codewords and Type1 widths (−28,164 bytes, output identical) | On branch `release/1.0` |
-| 7.1 | Serialization and PDF objects: numbers, text strings, names, destinations, outlines, page labels, shared fields, TOC replay | On branch `release/1.0` |
-| 7.2 | Fonts: cmap ranking and formats, glyph clamping, hinting tables, sfnt header, ToUnicode, WinAnsi coverage | On branch `release/1.0` |
-| 7.3 | Text: logical-order breaking with per-line bidi, ignorables, soft hyphen, ZWSP, NBSP, separators, letter spacing | On branch `release/1.0` |
-| 7.4 | SVG: crash fixes, display/visibility, percentages, viewports and preserveAspectRatio, tspan runs, alpha | On branch `release/1.0` |
-| 7.5 | Graphics: painted colour alpha with `colorAlpha`, composed opacity, `isDark`/`isLight`, arcs, Adobe CMYK | On branch `release/1.0` |
-| 7.6 | Layout: linear table pagination, min-content columns, rotateBox, axis labels, infinity guards | On branch `release/1.0` |
-| 7.7 | Follow-ups: `Container.color`, split tails, tight tables, axis modulo, SVG robustness, translucent tracks | On branch `release/1.0` |
+| 7.0 | Size headroom: pack the palette, PDF417 codewords and Type1 widths (−28,164 bytes, output identical) | In 1.0.0 |
+| 7.1 | Serialization and PDF objects: numbers, text strings, names, destinations, outlines, page labels, shared fields, TOC replay | In 1.0.0 |
+| 7.2 | Fonts: cmap ranking and formats, glyph clamping, hinting tables, sfnt header, ToUnicode, WinAnsi coverage | In 1.0.0 |
+| 7.3 | Text: logical-order breaking with per-line bidi, ignorables, soft hyphen, ZWSP, NBSP, separators, letter spacing | In 1.0.0 |
+| 7.4 | SVG: crash fixes, display/visibility, percentages, viewports and preserveAspectRatio, tspan runs, alpha | In 1.0.0 |
+| 7.5 | Graphics: painted colour alpha with `colorAlpha`, composed opacity, `isDark`/`isLight`, arcs, Adobe CMYK | In 1.0.0 |
+| 7.6 | Layout: linear table pagination, min-content columns, rotateBox, axis labels, infinity guards | In 1.0.0 |
+| 7.7 | Follow-ups: `Container.color`, split tails, tight tables, axis modulo, SVG robustness, translucent tracks | In 1.0.0 |
 
 **Example gate:** all eight upstream examples generate. Byte counts change
 for the documented reasons: hinting tables (all examples with TrueType), the
@@ -328,7 +329,7 @@ PDF/A-2 and PDF/A-3, levels B and U, as a `Document({ pdfa })` option, with
 example PDFs are byte-identical; see
 [6.11](#611-pdfa--output-intent-xmp-id-and-attachments).
 
-**Decisions recorded for 1.0 (2026-11-10):** hyphens follow upstream #1980 —
+**Decisions recorded for 1.0.0 (2026-11-10):** hyphens follow upstream #1980 —
 they only place the cut of a word longer than the line, never ordinary
 wrapping; subsets keep their hinting tables; no further table packing; the
 series ships as one PR.
@@ -361,9 +362,9 @@ credits and licenses alongside the example.
 | 6.6 | Performance: unchanged `BoxConstraints` reuse, Flex copies, ASCII single-word path; benchmark in V8 | Merged in PR #10 |
 | 6.7 | Colors: color value types, named constants, DeviceGray, CMYK and upstream color conversions | Merged in PR #11 |
 | 6.8 | Fonts: simple TrueType compatibility mode and CFF/PostScript support | Merged together in PR #12 |
-| 6.9 | Layout: directional geometry, RTL Flex/tables (baseline alignment dropped: upstream has none) | On branch `release/1.0` |
+| 6.9 | Layout: directional geometry, RTL Flex/tables (baseline alignment dropped: upstream has none) | In 1.0.0 |
 | 6.10 | PDF objects: text-note annotations, complete annotation borders and public generic form XObjects | Merged together in PR #12 |
-| 6.11 | PDF/A: output intent, XMP agreeing with `/Info`, trailer `/ID`, PDF/A-3 attachments and the checks that are cheap (parts 2–3, levels B/U) | On branch `release/1.0` |
+| 6.11 | PDF/A: output intent, XMP agreeing with `/Info`, trailer `/ID`, PDF/A-3 attachments and the checks that are cheap (parts 2–3, levels B/U) | In 1.0.0 |
 | 6.12 | API conveniences: `DefaultTextStyle.merge` and the remaining listed compatibility aliases | Merged together in PR #12 |
 
 The boundaries may be split into smaller PRs within the same domain where
@@ -584,7 +585,7 @@ and [usage details](../AI_USAGE.md#font-compatibility-and-cff).
 
 ### 6.11 PDF/A — output intent, XMP, `/ID` and attachments
 
-On branch `release/1.0`. Translates `pdf/lib/src/pdf/obj/pdfa/` — the colour
+Released in 1.0.0. Translates `pdf/lib/src/pdf/obj/pdfa/` — the colour
 profile, `PdfaRdf`, `PdfaFacturxRdf`, the date format and the attached files —
 with #1980's fixes by Baghdady92 from the start: byte `/Params /Size`, a sorted
 and escaped name tree, escaped XMP values and no literal `null`. Upstream

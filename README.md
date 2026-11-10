@@ -29,9 +29,9 @@ Read the full history: [I ported dart_pdf to pure JavaScript](https://daily.dev/
 ## Status
 
 The base port is complete through phase 5.7. Compatibility work from phases
-6.1–6.8, 6.10 and 6.12 is released in 0.2.0. The unreleased 1.0 series on
-branch `release/1.0` adds directional layout (6.9), PDF/A-2 and PDF/A-3
-output (6.11) and the phase-7 fixes from the 2026-11-10 upstream audit.
+6.1–6.8, 6.10 and 6.12 was released in 0.2.0. Version 1.0.0 adds directional
+layout (6.9), PDF/A-2 and PDF/A-3 output (6.11) and the phase-7 fixes from the
+2026-11-10 upstream audit.
 
 The library includes the PDF object model, standard Type1 fonts, embedded
 TrueType and OpenType CFF1 fonts, declarative layout and pagination, SVG,
@@ -39,14 +39,16 @@ raster images, tables, charts, barcodes, annotations, forms, reusable form
 XObjects, page labels, metadata/XMP and PDF/A-2/3 (levels B and U) with
 PDF/A-3 attachments. All eight retained upstream examples
 generate end to end; the base port was also exercised under bare ClearScript
-V8. The `release/1.0` branch passes 756 tests and generates 39 phase examples
-under Node.js.
+V8. Version 1.0.0 passes 756 tests and generates 39 phase examples under
+Node.js.
 
 Version 0.1.6 was the first release candidate and the first version published
-to npm. Version 0.2.0 includes the additions listed below; installing 0.1.6
-does not include them. The public API is not frozen until 1.0.0.
+to npm. From **1.0.0** the public API — everything exported by the package entry
+point, `@romulocrj/js_pdf` — follows [semantic versioning](https://semver.org/):
+breaking changes wait for 2.0.0. Modules reached by deep paths into `dist/` or
+`src/` are internal and may change in any release.
 
-### In the unreleased 1.0 series
+### New in 1.0.0
 
 - Directional layout: `EdgeInsetsDirectional`, `AlignmentDirectional`,
   `PositionedDirectional`, right-to-left Flex, Wrap, Stack, GridView and Table,
@@ -54,10 +56,16 @@ does not include them. The public API is not frozen until 1.0.0.
 - About sixty fixes found by comparing the port with open upstream pull
   requests, plus several port regressions — among them wrapped right-to-left
   paragraphs emitted in reverse line order. See the
-  [CHANGELOG](CHANGELOG.md#unreleased).
-- Color alpha is now painted, with a `colorAlpha: false` opt-out.
-- The minified bundle is **434,364 bytes**, 3.67% smaller than 0.2.0, because
-  three literal tables are packed into strings.
+  [CHANGELOG](CHANGELOG.md#100---2026-11-10).
+- PDF/A-2 and PDF/A-3 (levels B and U) through `Document({ pdfa })`, with an
+  output intent, matching XMP, a trailer `/ID`, PDF/A-3 attachments such as
+  Factur-X, and early errors for fonts or colours PDF/A forbids. The output
+  has been checked structurally, not with an external validator such as veraPDF.
+- Color alpha is now painted, including gradient stops, with a
+  `colorAlpha: false` opt-out.
+- The minified bundle is **449,820 bytes**, 0.25% smaller than 0.2.0: three
+  literal tables are packed into strings, which pays for the fixes, the
+  directional layout and PDF/A. Compressed, it is 6.2% larger (gzip).
 
 ### New in 0.2.0
 
@@ -125,11 +133,11 @@ Pinning the version is recommended — the unpinned URL follows whatever the
 latest published release is:
 
 ```js
-import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs';
+import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs';
 ```
 
 unpkg serves the same file at
-`https://unpkg.com/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs`.
+`https://unpkg.com/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs`.
 
 ## Use
 
@@ -156,7 +164,7 @@ Browser, via importmap (cdn or vendoring) — no build step on the consumer side
 
 ```html
 <script type="importmap">
-  { "imports": { "@romulocrj/js_pdf": "https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs" } }
+  { "imports": { "@romulocrj/js_pdf": "https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs" } }
 </script>
 <script type="module">
   import * as pw from '@romulocrj/js_pdf';
@@ -356,7 +364,7 @@ and `MultiPage.crossAxisAlignment`
 ([generator](examples/directional-layout-phase-6.9.mjs)). See
 [directional layout usage](AI_USAGE.md#directional-layout).
 
-The **1.0 series** adds one proof per phase-7 domain after phase 6.12, each
+Version **1.0.0** adds one proof per phase-7 domain after phase 6.12, each
 shared by the browser gallery and `npm run phase-examples`:
 [strings, names and navigation](examples/serialization-phase-7.1.mjs) (7.1),
 [font tables and coverage](examples/fonts-phase-7.2.mjs) (7.2),

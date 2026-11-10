@@ -9,11 +9,11 @@ below.
 
 ## Version scope
 
-This guide describes version 0.2.0, including phases 6.1–6.8, 6.10
-and 6.12, and the unreleased 1.0 series on branch `release/1.0` (phase 6.9
-and phases 7.0–7.7) and PDF/A output (phase 6.11). Additions marked *1.0
-series* are not in 0.2.0 or earlier; check the installed package version and
-declarations before using them.
+This guide describes version 1.0.0: phases 6.1–6.8, 6.10 and 6.12 (released
+in 0.2.0), directional layout (6.9), PDF/A output (6.11) and the phase-7 fixes.
+Additions marked *1.0.0* are not in 0.2.0 or earlier; check the installed
+package version and declarations before using them. From 1.0.0 the exports of
+the package entry point follow semantic versioning; deep imports are internal.
 
 ## Install and import specifier
 
@@ -33,9 +33,9 @@ Use the specifier that matches the host, and do not mix them up:
 | Node, or any bundler | `import * as pw from '@romulocrj/js_pdf';` |
 | Minified build | `import * as pw from '@romulocrj/js_pdf/min';` |
 | Browser importmap | whatever the importmap maps — the examples map `@romulocrj/js_pdf` |
-| Browser, no install | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs';` |
-| ClearScript | the module file resolved from `SearchPath` or customLoader with `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs';` |
-| Deno | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@0.2.0/dist/js_pdf.min.mjs';` |
+| Browser, no install | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs';` |
+| ClearScript | the module file resolved from `SearchPath` or customLoader with `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs';` |
+| Deno | `import * as pw from 'https://cdn.jsdelivr.net/npm/@romulocrj/js_pdf@1.0.0/dist/js_pdf.min.mjs';` |
 
 A bare `'js_pdf'` only resolves where a host maps it. For an installed package
 it is always the scoped name.
@@ -281,13 +281,13 @@ Insets accept a single number or a structural object such as
 `{ top: 8, right: 12, bottom: 8, left: 12 }`. Colors accept hexadecimal strings
 or normalized RGB arrays.
 
-`Container` takes upstream's `color` for a solid background (*1.0 series*;
+`Container` takes upstream's `color` for a solid background (*1.0.0*;
 `background` is the older alias and still works). Do not combine either with
 `decoration`.
 
 ## Directional layout
 
-*1.0 series.* Layout follows the ambient text direction, as in dart_pdf.
+*1.0.0.* Layout follows the ambient text direction, as in dart_pdf.
 Set it with `Directionality`, or with `textDirection` on `PageTheme`, `Page`
 or `MultiPage`; it defaults to left-to-right.
 
@@ -796,7 +796,7 @@ recompressed, and the XMP metadata packet is always left plain.
 
 ## PDF/A
 
-*1.0 series.* Pass `pdfa` to `Document` (or to `createPdf`'s options) to write
+*1.0.0.* Pass `pdfa` to `Document` (or to `createPdf`'s options) to write
 PDF/A-2 or PDF/A-3, level B or U:
 
 ```js
@@ -862,7 +862,7 @@ values. See the [PDF/A example](examples/pdfa-phase-6.11.mjs).
   fonts that join only through GSUB are unsupported.
 - Progress indicators on an unbounded axis need `fallbackWidth` (and
   `fallbackHeight` for the circular one) or they throw a `RangeError`
-  (*1.0 series*).
+  (*1.0.0*).
 - PDF/A output is limited to parts 2 and 3, levels B and U, and has not been
   verified with veraPDF; supplying your own XMP or using CMYK without `pdfa`
   does not establish conformance. See [PDF/A](#pdfa).

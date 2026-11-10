@@ -1,19 +1,21 @@
 # Bundle size
 
-## 1.0 series — phases 7.0–7.7 and 6.9
+## 1.0.0 — phases 7.0–7.7, 6.9 and 6.11
 
-Measured 2026-11-10 on branch `release/1.0` against **v0.2.0** (`961db0d`).
-Values are bytes of the canonical `dist/js_pdf.min.mjs`.
+Measured 2026-11-10 against **v0.2.0** (`961db0d`). Values are bytes of the
+canonical `dist/js_pdf.min.mjs`.
 
 | Revision | Minified, uncompressed | gzip level 9 | Brotli quality 11 |
 |---|---:|---:|---:|
 | v0.2.0 | 450,928 | 138,393 | 111,811 |
 | After phase 7.0 (table packing) | 422,764 | 135,763 | 110,972 |
-| 1.0 series (7.0–7.7 + 6.9) | 434,364 | 140,884 | 115,362 |
+| Before PDF/A (`c0a913f`) | 435,345 | 141,519 | 115,631 |
+| **1.0.0** | **449,820** | **146,910** | **119,904** |
 
-The complete series is **16,564 bytes smaller (−3.67%)** than v0.2.0 when
-minified, and **2,491 bytes (+1.80%)** larger under gzip. The target agreed for
-1.0 was at most about +5% minified.
+1.0.0 is **1,108 bytes smaller (−0.25%)** than v0.2.0 when minified, and
+**8,517 bytes (+6.15%)** larger under gzip. The target agreed for 1.0 was at
+most about +5% minified; the user then chose to include every pertinent fix
+and PDF/A whatever the size, and to review the result afterwards.
 
 Phase 7.0 packs three literal tables into strings with no behaviour change —
 the Material palette (~10.6 KB), the PDF417 codeword clusters (~9.7 KB) and the
@@ -34,11 +36,15 @@ Integration order and running minified size:
 | 7.3 text, bidi and Arabic | 431,690 | +2,351 |
 | 7.7 follow-ups | 432,112 | +422 |
 | 6.9 directional layout | 434,364 | +2,252 |
+| Hyphen cuts as upstream | 435,077 | +713 |
+| Translucent gradient stops | 435,345 | +268 |
+| 6.11 PDF/A | 449,820 | +14,475 |
 
-The font fixes are net negative because ToUnicode generation was unified. The
-largest additions are the SVG viewport/text/alpha work and the per-line bidi
-reordering. Remaining packing candidates, not applied: the barcode lookup
-maps (~7 KB minified) and the SVG named colours.
+The font fixes are net negative because ToUnicode generation was unified.
+PDF/A is the largest single addition: five ported modules, the validation that
+rejects non-conforming fonts, colours and profiles, the deterministic `/ID`
+hash and their error messages. Remaining packing candidates, not applied by
+decision: the barcode lookup maps (~7 KB minified) and the SVG named colours.
 
 Output size also changes: embedded TrueType subsets now keep their hinting
 tables (`cvt `, `fpgm`, `prep`, `gasp`), adding roughly 1–6 KB per embedded
@@ -49,7 +55,7 @@ Reproduce with:
 
 ```sh
 npm run build
-node examples/measure-bundle-size.mjs 961db0d 9cb031c
+node examples/measure-bundle-size.mjs 961db0d 9cb031c c0a913f
 ```
 
 The retained report is

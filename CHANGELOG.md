@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Version numbers below 1.0.0 do not guarantee a stable public API.
 
-## [Unreleased]
+## [1.0.0] - 2026-11-10
 
-The 1.0 series. A comparison with upstream master `277b367` and with the open
+**First stable release.** From 1.0.0 the public API — the exports of the
+package entry point — follows semantic versioning; deep imports into `dist/`
+or `src/` are internal. No public export was removed since 0.2.0.
+
+A comparison with upstream master `277b367` and with the open
 upstream pull requests filed after the previous audit (chiefly
 DavBfr/dart_pdf#1980) found about sixty defects that also affect this port,
 plus several of the port's own. Upstream defects are listed in
@@ -105,8 +109,9 @@ plus several of the port's own. Upstream defects are listed in
 - Progress indicators on an unbounded axis without a fallback size throw a
   `RangeError` instead of writing a broken PDF.
 - The minified bundle is smaller: the Material palette, PDF417 codewords and
-  Type1 widths are packed into strings: 434,364 bytes against 450,928 in 0.2.0
-  (−3.67%); gzip grows 1.80%. See [BUNDLE-SIZE.md](docs/BUNDLE-SIZE.md).
+  Type1 widths are packed into strings: 449,820 bytes against 450,928 in 0.2.0
+  (−0.25%), including PDF/A; gzip grows 6.15%. See
+  [BUNDLE-SIZE.md](docs/BUNDLE-SIZE.md).
 - Under `textDirection: 'rtl'`, tables run right to left; pass
   `textDirection: 'ltr'` to keep a table's column order. `PositionedDirectional`
   defaults to the ambient direction instead of left-to-right.
@@ -228,6 +233,7 @@ were never published to npm. They are recorded here for provenance only.
 - Third-party font licenses and notices added for the bundled example
   resources.
 
+[1.0.0]: https://github.com/romulocrj/js_pdf/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/romulocrj/js_pdf/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/romulocrj/js_pdf/releases/tag/v0.1.6
 [0.1.5]: https://github.com/romulocrj/js_pdf/compare/v0.1.4...v0.1.5

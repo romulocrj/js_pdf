@@ -11,15 +11,14 @@ Image DPI fixes incorporate `e2e3974f32`, `94e93729fc` and `b9b34aebf9`.
 **Ported:** 157 `.ts` files, 40,330 lines (TypeScript)
 
 **Phase-6 status:** phases 6.1–6.8, 6.10 and 6.12 are merged (PRs #5–#12).
-Phase 6.9 (directional geometry and RTL layout) is implemented on branch
-`release/1.0`; baseline alignment was dropped because upstream has none.
-Phase 6.11 (PDF/A-2 and PDF/A-3, levels B and U) is implemented on the same
-branch; its output is checked structurally by tests and has not been verified
-with veraPDF.
+Phase 6.9 (directional geometry and RTL layout) is in 1.0.0; baseline
+alignment was dropped because upstream has none. Phase 6.11 (PDF/A-2 and
+PDF/A-3, levels B and U) is in 1.0.0; its output is checked structurally by
+tests and has not been verified with veraPDF.
 
-**1.0 series (branch `release/1.0`, not yet merged):** phases 7.0–7.7 fix the
+**1.0.0:** phases 7.0–7.7 fix the
 defects found in the 2026-11-10 audit and pack three static tables. The rows
-below describe that branch; per-defect details are in
+below describe 1.0.0; per-defect details are in
 [ORIGINAL-ISSUES.md](../ORIGINAL-ISSUES.md) and the CHANGELOG.
 
 Legend: **done** · **partial** — usable but materially narrower than upstream ·
@@ -192,7 +191,7 @@ both the grammar and the shape factories landed in phase 2.5.
 | `widgets/geometry.dart` | 1018 | `src/widgets/geometry.ts` | partial — `BoxConstraints` with factories/transforms and unchanged-enforce reuse, `EdgeInsets`, `Alignment`, `inscribe`; `EdgeInsetsDirectional`, `AlignmentDirectional`, `resolveInsets`/`resolveAlignment` (6.9) |
 | `widgets/text.dart`, `text_style.dart` | 1846 | `src/widgets/text.ts`, `src/widgets/text_style.ts`, `src/widgets/directionality.ts` | partial — `InlineSpan`, `TextSpan`, `WidgetSpan`, `RichText`, scoped `Directionality`, font-metric line boxes, inherited per-run styles, annotations and fallback fonts, CBLC/CBDT colour emoji, wrapping, custom `LineSplitter`, printable ASCII single-word fast path, caller-supplied hyphenation, immutable page continuation, UAX #9 RTL/Arabic shaping, justification, backgrounds and combined decorations; logical-order breaking with per-line bidi, ignorable characters, soft hyphen and ZWSP breaks, no-break spaces, letter spacing per glyph (7.3) |
 | `widgets/flex.dart` | 727 | `src/widgets/flex.ts` | partial — full `Flex`/`Row`/`Column` allocation and vertical continuation without child sublist copies, all main/cross alignments, `mainAxisSize`, vertical direction, `Expanded`, `Flexible`, proportional `Spacer`, eager/builder/separated `ListView`, plus `gap`/weighted-row extensions; both axes follow the ambient text direction (6.9); no baseline alignment, as upstream |
-| `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts`, `decoration.ts`, `box_border.ts` | partial — spanning `Container`, `DecoratedBox`, background/foreground `BoxDecoration`, DPI-aware fitted/clipped decoration images, per-side/dashed borders, axial/radial gradients and vector shadows; upstream `color` option (7.7); translucent gradient stops through a luminosity soft mask (1.0 series); directional margin, padding, alignment and gradients (6.9) |
+| `widgets/container.dart`, `decoration.dart`, `box_border.dart` | 881 | `src/widgets/container.ts`, `decoration.ts`, `box_border.ts` | partial — spanning `Container`, `DecoratedBox`, background/foreground `BoxDecoration`, DPI-aware fitted/clipped decoration images, per-side/dashed borders, axial/radial gradients and vector shadows; upstream `color` option (7.7); translucent gradient stops through a luminosity soft mask (1.0.0); directional margin, padding, alignment and gradients (6.9) |
 | `widgets/page.dart`, `page_theme.dart` | 395 | `src/widgets/page.ts`, `src/widgets/page_theme.ts` | partial — `PageTheme` with theme, margins, orientation, background and foreground, margin clipping, content-fitted infinite dimensions; **one document may mix orientations and paper sizes**, per section; `textDirection` and directional margins (6.9) |
 | `widgets/multi_page.dart` | 678 | `src/widgets/multi_page.ts` | partial — global page totals, post-processed header/footer, `NewPage` with validated remaining-space thresholds, atomic page breaks, intrinsic-first spanning children, `maxPages`, per-section `orientation`, finite-paper validation and clipping across all fragments/layers; `crossAxisAlignment` (6.9); last fragment laid out unbounded (7.7) |
 | `widgets/document.dart` | 153 | `src/widgets/document.ts` | partial — synchronous `save()`/`write(output)`, metadata/XMP, page labels, theme and per-document font cache; loading is out of scope; `colorAlpha`; TOC replay until page numbers settle (7.1, 7.5); `creationDate` and the validated `pdfa` option (6.11) |
