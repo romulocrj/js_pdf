@@ -62,17 +62,21 @@ export function colorLuminance(color: ColorInput): number {
 }
 
 /**
- * Upstream `PdfColor.isLight`, quirk included: the test is
- * `(luminance + .05)² > .15`, which puts the cut at a luminance near .337 and
- * not the .5 the name suggests. Chart labels choose their color with this, so
- * the threshold is rendered output, not taste.
+ * Upstream `PdfColor.isLight`: Flutter's `estimateBrightnessForColor`, whose
+ * test `(luminance + .05)² > .15` puts the cut at a luminance near .337 and not
+ * the .5 the name suggests. Chart labels choose their color with this, so the
+ * threshold is rendered output, not taste. Before #1980 L57 this body was
+ * returned from `isDark`, so both getters answered the opposite question.
  */
 export function isLightColor(color: ColorInput): boolean {
   const relative = colorLuminance(color) + 0.05;
-  return !(relative * relative > 0.15);
+  return relative * relative > 0.15;
 }
 
-/** Select the RGB, gray or CMYK fill/stroke operator without applying alpha. */
+/**
+ * Select the RGB, gray or CMYK fill/stroke operator. Alpha is not part of a
+ * color operator; `PdfCanvas` paints it separately through an `/ExtGState`.
+ */
 export function colorOperator(color: ColorInput, stroke = false): string {
   const operator = color instanceof PdfColorCmyk ? (stroke ? 'K' : 'k')
     : color instanceof PdfColorGrey ? (stroke ? 'G' : 'g') : (stroke ? 'RG' : 'rg');
@@ -92,7 +96,10 @@ function hueValue(value: number): number {
 
 function wrapHue(value: number): number { return ((value % 360) + 360) % 360; }
 
-/** RGB color value; alpha is retained for composition, not applied by color operators. */
+/**
+ * RGB color value. A canvas paints its alpha as constant alpha unless the
+ * document sets `colorAlpha: false`; `flatten()` bakes it into an opaque color.
+ */
 export class PdfColor {
   readonly red: number;
   readonly green: number;
@@ -144,8 +151,8 @@ export class PdfColor {
   toHsv(): PdfColorHsv { return PdfColorHsv.fromRgb(this.red, this.green, this.blue, this.alpha); }
   toHsl(): PdfColorHsl { return PdfColorHsl.fromRgb(this.red, this.green, this.blue, this.alpha); }
   get luminance(): number { return colorLuminance(this); }
-  get isLight(): boolean { return !this.isDark; }
-  get isDark(): boolean { return (this.luminance + 0.05) ** 2 > 0.15; }
+  get isLight(): boolean { return isLightColor(this); }
+  get isDark(): boolean { return !this.isLight; }
   shade(strength: number): PdfColor {
     const hsl = this.toHsl();
     return new PdfColorHsl(hsl.hue, hsl.saturation, clamp(hsl.lightness * (1.5 - strength), 0, 1));

@@ -110,7 +110,8 @@ export class Page implements Section {
     let format = this.pageTheme.resolvedFormat;
     const margin = this.pageTheme.margin;
 
-    let canvas = new PdfCanvas(Number.isFinite(format.height) ? format.height : 0);
+    const settings = documentContext.document.settings;
+    let canvas = new PdfCanvas(Number.isFinite(format.height) ? format.height : 0, settings);
 
     let context: RenderContext = {
       ...documentContext,
@@ -143,7 +144,7 @@ export class Page implements Section {
         throw new RangeError('Page content must resolve to positive finite dimensions');
       }
       // Layout is pure. Paint the measured box on a canvas with the final height.
-      canvas = new PdfCanvas(format.height);
+      canvas = new PdfCanvas(format.height, settings);
       context = { ...context, canvas, pageFormat: format };
     }
 

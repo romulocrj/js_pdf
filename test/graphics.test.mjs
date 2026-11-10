@@ -201,15 +201,19 @@ test('restoring with nothing saved writes no Q', () => {
 
 test('equal graphic states share one name and one dictionary', () => {
   const canvas = new PdfCanvas(842);
-  const first = canvas.setGraphicState(new PdfGraphicState({ opacity: 0.5 }));
-  const second = canvas.setGraphicState(new PdfGraphicState({ opacity: 0.5 }));
-  const third = canvas.setGraphicState(new PdfGraphicState({ opacity: 0.25 }));
+  // Each in its own q/Q: an opacity multiplies the one already in force.
+  const [first, second, third] = [0.5, 0.5, 0.25].map(opacity => {
+    canvas.saveContext();
+    const name = canvas.setGraphicState(new PdfGraphicState({ opacity }));
+    canvas.restoreContext();
+    return name;
+  });
 
   assert.equal(first, '/g1');
   assert.equal(second, '/g1');
   assert.equal(third, '/g2');
   assert.equal(canvas.graphicStates.size, 2);
-  assert.equal(flat(canvas), '/g1 gs /g1 gs /g2 gs');
+  assert.equal(flat(canvas), 'q /g1 gs Q q /g1 gs Q q /g2 gs Q');
 });
 
 test('an empty graphic state is not written', () => {

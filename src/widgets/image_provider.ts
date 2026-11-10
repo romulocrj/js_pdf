@@ -234,7 +234,10 @@ export class RawImage extends ImageProvider {
     orientation = 'topLeft',
     dpi = null
   }: RawImageOptions) {
-    const image = new PdfImage({ pixels: bytes.slice(), width, height, orientation, hasAlpha: true });
+    // No defensive copy: PdfImage splits the RGBA buffer into RGB and alpha
+    // channels of its own and keeps no reference to `bytes`, so a copy here
+    // would only double the peak memory of a large raster.
+    const image = new PdfImage({ pixels: bytes, width, height, orientation, hasAlpha: true });
     super(width, height, orientation, dpi);
     this.image = image;
   }

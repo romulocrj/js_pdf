@@ -185,7 +185,10 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
           children: [new TextSpan({ text: this.legend, style: this.legendStyle ?? undefined })],
           style: new TextStyle({
             color: position === 'inside'
-              ? (isLightColor(this.color ?? CHART_BLUE) ? normalizePaintColor(CHART_WHITE) : normalizePaintColor(CHART_BLACK))
+              // Readable text: black on a light slice, white on a dark one. The
+              // helper was inverted before #1980 L57; flipped with it, the
+              // output is unchanged.
+              ? (isLightColor(this.color ?? CHART_BLUE) ? normalizePaintColor(CHART_BLACK) : normalizePaintColor(CHART_WHITE))
               : null
           })
         }),

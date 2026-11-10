@@ -31,9 +31,13 @@
  * A widget reaching for the path API converts with `toPdfY`, and a widget
  * setting a transform conjugates it with `flipMatrix` from `matrix.ts`.
  *
+ * Constant alpha follows upstream PR #1980 (Baghdady92): a `PdfColor`'s alpha
+ * is painted through an `/ExtGState`, multiplied by the opacity an enclosing
+ * `setGraphicState` established, and an opacity state multiplies the one in
+ * force instead of replacing it. A fully opaque page writes no `gs` at all.
  */
 
-import { colorOperator } from './color.ts';
+import { colorOperator, PdfColor } from './color.ts';
 import type { ColorInput } from './color.ts';
 import type { PdfFont } from './font/font.ts';
 import { defaultPdfFont } from './font/type1_fonts.ts';
@@ -42,7 +46,7 @@ import { PdfStream } from './format/stream.ts';
 import { PdfSoftMaskReference } from './soft_mask.ts';
 import type { PdfSoftMask } from './soft_mask.ts';
 import { formatNumber } from './format/num.ts';
-import type { PdfGraphicState } from './graphic_state.ts';
+import { PdfGraphicState } from './graphic_state.ts';
 import type { PdfShadingPattern } from './obj/pattern.ts';
 import type { PdfShading } from './obj/shading.ts';
 import type { PdfBorderOptions } from './obj/border.ts';
@@ -165,6 +169,15 @@ export interface BezierArcOptions {
   readonly phi?: number;
 }
 
+export interface PdfCanvasOptions {
+  /**
+   * Paint a `PdfColor`'s alpha as constant alpha. On by default, as upstream;
+   * `false` ignores it, as the port did before 1.0. PDF/A-1 forbids
+   * transparency. `PdfSettings` carries the same flag for a document.
+   */
+  readonly colorAlpha?: boolean;
+}
+
 /**
  * Content-stream builder for one page.
  *
@@ -200,9 +213,20 @@ export class PdfCanvas {
   private currentWordSpacing = 0;
   private readonly textSpacingStack: Array<readonly [number, number]> = [];
   private textSpacingDirty = false;
+  readonly colorAlpha: boolean;
 
-  constructor(pageHeight: number) {
+  /**
+   * Upstream's `_PdfGraphicsContext` alphas: the fill and stroke opacity an
+   * enclosing `setGraphicState` established, which a colour's alpha multiplies,
+   * then the fill and stroke constant alpha currently in force, so a redundant
+   * `gs` is never written. Saved and restored with the CTM.
+   */
+  private alphas = [1, 1, 1, 1];
+  private readonly alphaStack: number[][] = [];
+
+  constructor(pageHeight: number, { colorAlpha = true }: PdfCanvasOptions = {}) {
     this.pageHeight = pageHeight;
+    this.colorAlpha = colorAlpha;
   }
 
   push(command: string): void {
@@ -368,6 +392,7 @@ export class PdfCanvas {
     this.transformStack.push(this.currentTransform);
     this.textSpacingStack.push([this.currentLetterSpacing, this.currentWordSpacing]);
     this.softMaskStack.push(this.currentSoftMask);
+    this.alphaStack.push(this.alphas.slice());
   }
 
   /** `Q`, restoring the CTM this canvas last saved. A no-op if nothing was saved. */
@@ -375,11 +400,13 @@ export class PdfCanvas {
     const restored = this.transformStack.pop();
     const spacing = this.textSpacingStack.pop();
     const softMask = this.softMaskStack.pop();
+    const alphas = this.alphaStack.pop();
     if (restored === undefined) {
       return;
     }
     this.push('Q');
     this.currentTransform = restored;
+    this.alphas = alphas!;
     if (spacing !== undefined) {
       this.currentLetterSpacing = spacing[0];
       this.currentWordSpacing = spacing[1];
@@ -408,12 +435,44 @@ export class PdfCanvas {
   /**
    * `gs`, selecting an `/ExtGState`. States with equal values share one name,
    * so a page that draws fifty half-transparent boxes writes one dictionary.
+   *
+   * `gs` sets constant alpha absolutely, so an opacity is multiplied here by
+   * the one already established: an `Opacity` inside an `Opacity` composes
+   * instead of replacing it (#1980 L56).
    */
   setGraphicState(state: PdfGraphicState): string | null {
     if (state.isEmpty) {
       return null;
     }
 
+    const alphas = this.alphas;
+    const fill = state.fillOpacity === null ? null : alphas[0]! * state.fillOpacity;
+    const stroke = state.strokeOpacity === null ? null : alphas[1]! * state.strokeOpacity;
+    const name = this.emitGraphicState(fill === state.fillOpacity && stroke === state.strokeOpacity
+      ? state
+      : new PdfGraphicState({ fillOpacity: fill, strokeOpacity: stroke, blendMode: state.blendMode }));
+    if (fill !== null) alphas[0] = alphas[2] = fill;
+    if (stroke !== null) alphas[1] = alphas[3] = stroke;
+    return name;
+  }
+
+  /**
+   * Put a colour's alpha in force. PDF carries constant alpha only in an
+   * `/ExtGState`, never in `rg`/`k`/`g`, so without this every translucent fill
+   * and stroke painted opaque (#1980 L54). Anything that is not a `PdfColor`,
+   * including a null from plain JS, counts as opaque.
+   */
+  private setColorAlpha(color: ColorInput | null | undefined, stroke: boolean): void {
+    if (!this.colorAlpha) return;
+    const alphas = this.alphas;
+    const index = stroke ? 1 : 0;
+    const alpha = alphas[index]! * (color instanceof PdfColor ? color.alpha : 1);
+    if (Math.abs(alpha - alphas[index + 2]!) < 1e-9) return;
+    this.emitGraphicState(new PdfGraphicState(stroke ? { strokeOpacity: alpha } : { fillOpacity: alpha }));
+    alphas[index + 2] = alpha;
+  }
+
+  private emitGraphicState(state: PdfGraphicState): string {
     const existing = this.stateNames.get(state.key);
     if (existing !== undefined) {
       this.push(`${existing} gs`);
@@ -618,13 +677,17 @@ export class PdfCanvas {
     }
 
     if (phi !== 0) {
-      // The centre-parameter form cannot express a rotated ellipse, so move the
-      // start point to the origin, undo the rotation, and arc there instead.
-      const dx = x2 - x1;
-      const dy = y2 - y1;
-      const cos = Math.cos(-phi);
-      const sin = Math.sin(-phi);
-      this.endToCenterParameters(0, 0, cos * dx - sin * dy, sin * dx + cos * dy, large, sweep, rx, ry);
+      // The centre-parameter form cannot express a rotated ellipse, so solve
+      // the arc with both endpoints rotated into the ellipse's own axes and
+      // rotate every emitted point back. Upstream moves the start point to the
+      // origin and undoes the rotation but never maps the curve back, so a
+      // rotated arc was drawn near the origin; the port inherited that.
+      const cos = Math.cos(phi);
+      const sin = Math.sin(phi);
+      this.endToCenterParameters(
+        cos * x1 + sin * y1, cos * y1 - sin * x1, cos * x2 + sin * y2, cos * y2 - sin * x2,
+        large, sweep, rx, ry, [cos, sin, -sin, cos, 0, 0]
+      );
     } else {
       this.endToCenterParameters(x1, y1, x2, y2, large, sweep, rx, ry);
     }
@@ -653,7 +716,8 @@ export class PdfCanvas {
     large: boolean,
     sweep: boolean,
     rx: number,
-    ry: number
+    ry: number,
+    rotation?: PdfMatrix
   ): void {
     rx = Math.abs(rx);
     ry = Math.abs(ry);
@@ -666,7 +730,11 @@ export class PdfCanvas {
       const rr = Math.sqrt(r);
       rx *= rr;
       ry *= rr;
-      r = (x1d * x1d) / (rx * rx) + (y1d * y1d) / (ry * ry);
+      // #1980 L94: the scaled ellipse passes through both endpoints, so the
+      // centre lies on the chord and its factor is 0. Recomputing the ratio
+      // left it at 1 and put the centre a whole radius away, which made every
+      // half circle that rounds over 1 miss its end point.
+      r = 0;
     } else if (r !== 0) {
       r = 1 / r - 1;
     }
@@ -702,7 +770,7 @@ export class PdfCanvas {
       dTheta += tau;
     }
 
-    this.bezierArcFromCentre(cx, cy, rx, ry, -theta, -dTheta);
+    this.bezierArcFromCentre(cx, cy, rx, ry, -theta, -dTheta, rotation);
   }
 
   private bezierArcFromCentre(
@@ -711,7 +779,8 @@ export class PdfCanvas {
     rx: number,
     ry: number,
     startAngle: number,
-    extent: number
+    extent: number,
+    rotation?: PdfMatrix
   ): void {
     let fragmentsCount: number;
     let fragmentsAngle: number;
@@ -745,14 +814,22 @@ export class PdfCanvas {
       theta = startFragment + i * fragmentsAngle;
       c1 = Math.cos(theta);
       s1 = Math.sin(theta);
-      this.curveTo(
+      const points = [
         cx + rx * (c0 - kappa * s0),
         cy - ry * (s0 + kappa * c0),
         cx + rx * (c1 + kappa * s1),
         cy - ry * (s1 - kappa * c1),
         cx + rx * c1,
         cy - ry * s1
-      );
+      ];
+      if (rotation !== undefined) {
+        for (let j = 0; j < 6; j += 2) {
+          const point = transformPoint(rotation, points[j]!, points[j + 1]!);
+          points[j] = point.x;
+          points[j + 1] = point.y;
+        }
+      }
+      this.push(`${operands(points)} c`);
     }
   }
 
@@ -806,10 +883,12 @@ export class PdfCanvas {
 
   setFillColor(color: ColorInput): void {
     this.push(colorOperator(color));
+    this.setColorAlpha(color, false);
   }
 
   setStrokeColor(color: ColorInput): void {
     this.push(colorOperator(color, true));
+    this.setColorAlpha(color, true);
   }
 
   setColor(color: ColorInput): void {
@@ -819,13 +898,18 @@ export class PdfCanvas {
 
   // ---------------------------------------------------- widget-space helpers
 
+  // The one-command helpers put a colour's alpha in force before the command
+  // that paints with it; an opaque colour writes nothing extra.
+
   fillRect(x: number, top: number, width: number, height: number, color: ColorInput): void {
     const bottom = this.pageHeight - top - height;
+    this.setColorAlpha(color, false);
     this.push(`${colorOperator(color)} ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re f`);
   }
 
   strokeRect(x: number, top: number, width: number, height: number, color: ColorInput, lineWidth = 1): void {
     const bottom = this.pageHeight - top - height;
+    this.setColorAlpha(color, true);
     this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x)} ${formatNumber(bottom)} ${formatNumber(width)} ${formatNumber(height)} re S`);
   }
 
@@ -862,6 +946,7 @@ export class PdfCanvas {
       ? compositeTextOperand(font, text, wordSpacing, fontSize)
       : font.encodeText(text);
 
+    this.setColorAlpha(style.color, false);
     const command = [
       'BT',
       this.addFont(font), formatNumber(fontSize), 'Tf',
@@ -897,6 +982,7 @@ export class PdfCanvas {
   line(x1: number, top1: number, x2: number, top2: number, color: ColorInput = '#000000', lineWidth = 1): void {
     const y1 = this.pageHeight - top1;
     const y2 = this.pageHeight - top2;
+    this.setColorAlpha(color, true);
     this.push(`${colorOperator(color, true)} ${formatNumber(lineWidth)} w ${formatNumber(x1)} ${formatNumber(y1)} m ${formatNumber(x2)} ${formatNumber(y2)} l S`);
   }
 
@@ -913,6 +999,8 @@ export class PdfCanvas {
       `${formatNumber(cx + ox)} ${formatNumber(cy - radius)} ${formatNumber(cx + radius)} ${formatNumber(cy - oy)} ${formatNumber(cx + radius)} ${formatNumber(cy)} c`
     ].join(' ');
 
+    if (fill) this.setColorAlpha(fill, false);
+    if (stroke || !fill) this.setColorAlpha(stroke, true);
     if (fill && stroke) {
       this.push(`${colorOperator(fill)} ${colorOperator(stroke, true)} ${formatNumber(lineWidth)} w ${path} B`);
     } else if (fill) {

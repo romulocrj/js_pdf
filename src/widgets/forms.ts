@@ -101,7 +101,7 @@ function appearanceFor(
   height: number,
   child: AnyWidget
 ): PdfFormAppearance {
-  const canvas = new PdfCanvas(height);
+  const canvas = new PdfCanvas(height, { colorAlpha: context.canvas.colorAlpha });
   const scoped: RenderContext = {
     ...context,
     canvas,
