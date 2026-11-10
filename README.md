@@ -30,16 +30,16 @@ Read the full history: [I ported dart_pdf to pure JavaScript](https://daily.dev/
 
 The base port is complete through phase 5.7. Compatibility work from phases
 6.1–6.8, 6.10 and 6.12 is released in 0.2.0. The unreleased 1.0 series on
-branch `release/1.0` adds directional layout (6.9) and the phase-7 fixes from
-the 2026-11-10 upstream audit. PDF/A integration (6.11) is deferred until
-after 1.0.
+branch `release/1.0` adds directional layout (6.9), PDF/A-2 and PDF/A-3
+output (6.11) and the phase-7 fixes from the 2026-11-10 upstream audit.
 
 The library includes the PDF object model, standard Type1 fonts, embedded
 TrueType and OpenType CFF1 fonts, declarative layout and pagination, SVG,
 raster images, tables, charts, barcodes, annotations, forms, reusable form
-XObjects, page labels and metadata/XMP. All eight retained upstream examples
+XObjects, page labels, metadata/XMP and PDF/A-2/3 (levels B and U) with
+PDF/A-3 attachments. All eight retained upstream examples
 generate end to end; the base port was also exercised under bare ClearScript
-V8. The `release/1.0` branch passes 727 tests and generates 38 phase examples
+V8. The `release/1.0` branch passes 756 tests and generates 39 phase examples
 under Node.js.
 
 Version 0.1.6 was the first release candidate and the first version published
@@ -235,8 +235,10 @@ covers, in [AI_USAGE.md](AI_USAGE.md).
 
 - Reading existing PDFs, rasterizing PDFs, encryption and digital signatures
   are out of scope.
-- PDF/A integration, including output intents and the required conformance
-  handling, is not implemented (phase 6.11, deferred until after 1.0).
+- PDF/A output (`Document({ pdfa })`, parts 2 and 3, levels B and U) is
+  checked structurally by the test suite but has not been verified with
+  veraPDF. PDF/A-1 and level A are not supported. The caller supplies the ICC
+  profile; the example's port-authored profile is not meant for production.
 - OpenType layout tables (GSUB/GPOS) are not read. Arabic shaping uses the
   font's presentation-form code points, so fonts that join only through GSUB
   are not supported.

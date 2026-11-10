@@ -266,14 +266,24 @@ export class PdfTtfFont implements PdfFont {
       seen.add(cid);
       widths.add(new PdfNum(cid)); widths.add(PdfArray.fromNum([Math.trunc(this.glyphMetrics(rune).advanceWidth * 1000)]));
     }
+    const systemInfo = new PdfDict([['/Registry', new PdfString(registry)], ['/Ordering', new PdfString(ordering)], ['/Supplement', new PdfNum(supplement)]]);
     const descendant = new PdfDict([
       ['/Type', new PdfName('/Font')], ['/Subtype', new PdfName('/CIDFontType0')],
       ['/BaseFont', new PdfName(`/${this.fontName}`)], ['/FontDescriptor', descriptor.ref()], ['/W', widths],
-      ['/CIDSystemInfo', new PdfDict([['/Registry', new PdfString(registry)], ['/Ordering', new PdfString(ordering)], ['/Supplement', new PdfNum(supplement)]])]
+      ['/CIDSystemInfo', systemInfo]
     ]);
+    const cmap = new PdfObjectStream(document, encodeLatin1(encoding));
+    // ISO 32000-1 Table 120 requires these keys, and PDF/A validators compare
+    // the CIDSystemInfo with the CIDFont's (ISO 19005-2 6.2.11.3.1). Written
+    // under PDF/A only, which keeps every other file byte for byte as before.
+    if (document.settings.pdfa !== undefined) {
+      cmap.params.set('/Type', new PdfName('/CMap'));
+      cmap.params.set('/CMapName', new PdfName('/JsPdfEncoding'));
+      cmap.params.set('/CIDSystemInfo', systemInfo);
+    }
     return new PdfDict([
       ['/Type', new PdfName('/Font')], ['/Subtype', new PdfName('/Type0')], ['/BaseFont', new PdfName(`/${this.fontName}`)],
-      ['/Encoding', new PdfObjectStream(document, encodeLatin1(encoding)).ref()],
+      ['/Encoding', cmap.ref()],
       ['/DescendantFonts', new PdfArray([descendant])],
       ['/ToUnicode', new PdfUnicodeCmap(document, this.cmap, this.protect).ref()]
     ]);

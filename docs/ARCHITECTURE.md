@@ -157,6 +157,10 @@ licensed Dart `qr` implementation is neither ported nor distributed.
 - **`document.ts`** — the object registry, xref table and trailer. Produces the
   final `Uint8Array` through `save()`, or writes directly to a supplied
   `PdfStream` through `write(output)`.
+- **`obj/pdfa/`** — PDF/A objects: the ICC output intent, the XMP packet,
+  Factur-X RDF and PDF/A-3 attachments. `document.ts` creates them from
+  `PdfSettings.pdfa` and, under PDF/A only, checks fonts and device colour
+  against the output intent and writes the trailer `/ID`.
 
 ### `src/widgets/` — the layout tree
 
@@ -297,6 +301,7 @@ divergences or narrower compatibility gaps between the port and upstream.
 | Page clipping | `Page.paint` scopes a margin clip; `MultiPage._paintChild` omits it | Both section types clip every widget/layer paint when `PageTheme.clip` is true; layer layout remains full-page |
 | Pagination | `SpanningWidget` saves mutable widget context between pages | Direct spanning children return immutable continuation state; indivisible widgets or rows taller than a full content area still throw `RangeError` |
 | Decoration shadows | Temporary raster images produced by the raster subsystem | Concentric vector fills with scoped opacity; other decoration features are direct ports |
+| PDF/A | `PdfaColorProfile`/`PdfaAttachedFiles` attached to `pdf.document`, caller-built `PdfaRdf` metadata, random trailer `/ID` on every file | `Document({ pdfa })`, because each save builds a fresh `PdfDocument`; generated XMP agreeing with `/Info`; content-derived `/ID` under PDF/A only; early checks (fonts, device colour, annotations, limits) |
 | Async | `save()` returns a `Future` | `save()` returns `Uint8Array` |
 
 Two rows left this table rather than moving: font metrics and text encoding.

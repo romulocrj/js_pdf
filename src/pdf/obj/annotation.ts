@@ -16,6 +16,12 @@
  *
  * Link annotations landed in phase 5.3, form fields in phase 5.6, and phase
  * 5.7 adds the geometric annotations consumed by the remaining widgets.
+ *
+ * Under PDF/A (phase 6.11) every annotation but a link needs an `/AP` holding
+ * only `/N` (ISO 19005-2 6.3.3). The document hands markup and empty fields an
+ * empty appearance - the widget's own painted child is what shows - and drops
+ * the down and rollover states; here a push button's `/N` becomes a one-state
+ * dictionary, since `/FT /Btn` requires one.
  */
 
 import { PdfBorder } from './border.ts';
@@ -145,6 +151,7 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
    * ISO 32000-1 12.7.3.1 allows only for a single-widget field.
    */
   parent: PdfObject<PdfDict> | null = null;
+  private readonly pdfa: boolean;
 
   constructor(
     document: PdfObjectRegistry,
@@ -158,6 +165,7 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
     this.annotation = annotation;
     this.defaultAppearanceName = defaultAppearanceName;
     this.appearances = appearances;
+    this.pdfa = document.settings.pdfa !== undefined;
     page.annotations.push(this);
   }
 
@@ -232,6 +240,7 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
         PdfArray.fromNum(points.flatMap(point => [point.x, point.y]))
       )));
     }
+    if (this.appearances?.normal !== undefined) this.params.set('/AP', new PdfDict([['/N', this.appearances.normal.ref()]]));
   }
 
   private prepareForm(field: PdfFormFieldAnnotation): void {
@@ -310,7 +319,10 @@ export class PdfAnnotation extends PdfObject<PdfDict> {
 
     if (this.appearances !== null) {
       const appearances = new PdfDict();
-      if (this.appearances.normal !== undefined) {
+      if (this.appearances.normal !== undefined && this.pdfa && field.fieldType === 'button') {
+        appearances.set('/N', new PdfDict([['/On', this.appearances.normal.ref()]]));
+        this.params.set('/AS', new PdfName('/On'));
+      } else if (this.appearances.normal !== undefined) {
         appearances.set('/N', this.appearances.normal.ref());
       } else if (this.appearances.normalStates !== undefined) {
         const states = new PdfDict();

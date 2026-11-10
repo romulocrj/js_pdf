@@ -258,18 +258,22 @@ runtime scope or format limits; no unresolved port-gap marker remains.
 
 **1.0 series — on branch `release/1.0`, 2026-11-10.** Phases 7.0–7.7 fix the
 defects found by comparing the port with open upstream pull requests and add
-packed static tables; phase 6.9 adds directional layout. See
-[Phase 7](#phase-7--10-series-upstream-audit-fixes) below.
+packed static tables; phase 6.9 adds directional layout and phase 6.11 PDF/A
+output. See [Phase 7](#phase-7--10-series-upstream-audit-fixes) and
+[6.11](#611-pdfa--output-intent-xmp-id-and-attachments) below.
 
 ## Next step
 
 > **Next: 1.0 size and scope review, then the 1.0 release.**
-> Phases 7.0–7.7 and 6.9 are implemented on branch `release/1.0`, which is not
-> yet merged to `main`. The minified bundle is 434,364 bytes (−3.67% against
-> 0.2.0; see [BUNDLE-SIZE.md](BUNDLE-SIZE.md)). Review the size, decide what
+> Phases 7.0–7.7, 6.9 and 6.11 are implemented on branch `release/1.0`, which
+> is not yet merged to `main`. The minified bundle was 434,364 bytes (−3.67%
+> against 0.2.0; see [BUNDLE-SIZE.md](BUNDLE-SIZE.md)) before PDF/A, which adds
+> about 14 KB. Decide whether to run veraPDF on the
+> [PDF/A example](../examples/pdfa-phase-6.11.mjs) before 1.0 — the port's
+> PDF/A output has only been checked structurally. Review the size, decide what
 > else enters 1.0, choose how to split the branch into reviewable PRs, then
-> freeze the public API. PDF/A (6.11) and GSUB-only Arabic fonts are deferred
-> until after 1.0. Do not merge automatically.
+> freeze the public API. GSUB-only Arabic fonts are deferred until after 1.0.
+> Do not merge automatically.
 
 ## Phase 7 — 1.0 series: upstream audit fixes
 
@@ -318,6 +322,12 @@ alignment, so that item was dropped rather than invented. Left-to-right output
 of all 48 example PDFs is unchanged; `directional-layout-phase-6.9` is
 registered between 6.8 and 6.10.
 
+**6.11 PDF/A**, deferred at the audit, then landed on the same branch:
+PDF/A-2 and PDF/A-3, levels B and U, as a `Document({ pdfa })` option, with
+#1980's four `pdfa/` corrections applied from the start. The 49 existing
+example PDFs are byte-identical; see
+[6.11](#611-pdfa--output-intent-xmp-id-and-attachments).
+
 **Decisions recorded for 1.0 (2026-11-10):** hyphens follow upstream #1980 —
 they only place the cut of a word longer than the line, never ordinary
 wrapping; subsets keep their hinting tables; no further table packing; the
@@ -353,7 +363,7 @@ credits and licenses alongside the example.
 | 6.8 | Fonts: simple TrueType compatibility mode and CFF/PostScript support | Merged together in PR #12 |
 | 6.9 | Layout: directional geometry, RTL Flex/tables (baseline alignment dropped: upstream has none) | On branch `release/1.0` |
 | 6.10 | PDF objects: text-note annotations, complete annotation borders and public generic form XObjects | Merged together in PR #12 |
-| 6.11 | PDF/A: output intents and required conformance integration over the font/color work | Deferred until after 1.0 |
+| 6.11 | PDF/A: output intent, XMP agreeing with `/Info`, trailer `/ID`, PDF/A-3 attachments and the checks that are cheap (parts 2–3, levels B/U) | On branch `release/1.0` |
 | 6.12 | API conveniences: `DefaultTextStyle.merge` and the remaining listed compatibility aliases | Merged together in PR #12 |
 
 The boundaries may be split into smaller PRs within the same domain where
@@ -571,6 +581,53 @@ fonts are external assets, never part of dist. Font specimens were rendered
 and their accented/Euro/Greek text extracted; form stamps were rendered and
 extracted twice on each of two pages. See [bundle measurements](BUNDLE-SIZE.md)
 and [usage details](../AI_USAGE.md#font-compatibility-and-cff).
+
+### 6.11 PDF/A — output intent, XMP, `/ID` and attachments
+
+On branch `release/1.0`. Translates `pdf/lib/src/pdf/obj/pdfa/` — the colour
+profile, `PdfaRdf`, `PdfaFacturxRdf`, the date format and the attached files —
+with #1980's fixes by Baghdady92 from the start: byte `/Params /Size`, a sorted
+and escaped name tree, escaped XMP values and no literal `null`. Upstream
+attaches those objects to `pdf.document`; the widget `Document` builds a fresh
+`PdfDocument` on every save, so the port exposes them as one option:
+
+```js
+new Document({ theme, creationDate, pdfa: {
+  part: 3, conformance: 'B', colorProfile: iccBytes, outputCondition: 'sRGB',
+  attachments: [{ name: 'factur-x.xml', data: xml, relationship: 'Alternative' }],
+  extensionRdf: new PdfaFacturxRdf().create()
+} });
+```
+
+- **Written:** `/OutputIntents` `/GTS_PDFA1` with the ICC stream, `/N` from
+  its header; the XMP packet from the document metadata, with the same
+  cleaned values and the same instant as `/Info` (`/ModDate` too, both UTC);
+  a 16-byte trailer `/ID` hashed from the objects, so `save()` is repeatable;
+  `/EmbeddedFiles`, `/AF`, `/AFRelationship`, MIME `/Subtype` and `/Params`;
+  an end-of-line before every `endstream`; a normal-only `/AP` on every
+  annotation but a link (an empty one for markup and empty fields, a one-state
+  dictionary for push buttons); CMap dictionary keys for CFF encodings.
+- **Refused early:** part 1 (transparency), level A (structure tree), a
+  malformed or unsuitable ICC profile, attachments in part 2, `xmpMetadata`
+  with `pdfa`; at `save()`, standard Type1 fonts, DeviceCMYK under an RGB
+  intent and the reverse, annotation colours without an RGB intent, `protect`
+  fonts under level U, page sizes outside 3–14,400 and `q` nesting beyond 28.
+- **Left to the caller and a validator:** characters a font lacks (drawn as
+  `.notdef`), zero-advance Arabic marks whose widths differ from the font
+  program, simple-TrueType `cmap` requirements and the content of
+  `extensionRdf`. Conformance has **not** been verified with veraPDF.
+
+`test/support/icc-profile.mjs` generates a port-authored sRGB-like ICC v2
+display profile, committed as `examples/assets/JsPdfSrgbExample.icc` for the
+example; it is not in dist, and production PDF/A should embed a standard
+profile such as the ICC's sRGB2014. Tests parse the generated files.
+
+**Example gate:** all eight upstream examples generate, and they and the
+other 41 existing example PDFs are byte-identical with dates normalised: nothing
+changes without `pdfa`. `examples/pdfa-phase-6.11.mjs` is a two-page PDF/A-3B invoice with an
+embedded Factur-X XML, followed by the errors `save()` raises for five
+forbidden documents; it is registered between 6.10 and 6.12 in `Browser.html`
+and `run-phase-examples.mjs`.
 
 Phase 5.7 is complete: the remaining retained widgets are in, `Signature` stays
 out of scope, and the complete upstream example set still generates end to end.
