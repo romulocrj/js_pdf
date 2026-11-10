@@ -32,7 +32,7 @@ function base64Bytes(source) {
 export function generateGraphicsPhase75(api = defaultApi, compress = true) {
   const { Document, Page, PageFormat, Text, TextStyle, Column, Row, Container, BoxDecoration,
     CustomPaint, Opacity, Chart, PieGrid, PieDataSet, CircularProgressIndicator, Image, MemoryImage,
-    PdfColor, PdfColors } = api;
+    PdfColor, PdfColors, SizedBox, LinearProgressIndicator, LinearGradient } = api;
   const document = new Document({ compress, title: 'Graphics, colours and images', author: 'Romulo Campos' });
   const ink = PdfColors.blueGrey900;
   const text = (value, fontSize = 9, color = PdfColors.blueGrey700) =>
@@ -152,7 +152,16 @@ export function generateGraphicsPhase75(api = defaultApi, compress = true) {
       tile(new Image(new MemoryImage(cmyk), { width: 60, height: 120 }), 'DCT pass-through: DeviceCMYK + /Decode', 120),
       tile(new Image(new MemoryImage(cmyk), { width: 60, height: 120, dpi: 36 }), 'Decoded and re-encoded as RGB', 120)
     ] }),
-    text('Both must show the same gradient: dark top left, green bottom left. The viewer converts the DeviceCMYK copy with its own profile, so its tones are softer. Without the inverting /Decode array it printed as a near-black negative.')
+    text('Both must show the same gradient: dark top left, green bottom left. The viewer converts the DeviceCMYK copy with its own profile, so its tones are softer. Without the inverting /Decode array it printed as a near-black negative.'),
+
+    heading('A translucent progress bar and a one-colour gradient (phase 7.7)'),
+    new Row({ gap: 16, children: [
+      tile(overChecker(new SizedBox({ width: 150, child: new LinearProgressIndicator({ value: 0.6, minHeight: 16,
+        valueColor: PdfColors.indigo.withAlpha(0.5) }) })), 'valueColor alpha 0.5, default track', 160),
+      tile(overChecker(new Container({ width: 72, height: 36, decoration: new BoxDecoration({
+        gradient: new LinearGradient({ colors: [PdfColors.red.withAlpha(0.4)] }) }) })), 'one-colour gradient, alpha 0.4', 90)
+    ] }),
+    text('The checkerboard must show through both. The track derived from a translucent value colour used to be opaque, and a one-colour gradient became an opaque shading.')
   ] }) }));
   return document.save();
 }

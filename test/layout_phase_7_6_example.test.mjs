@@ -20,5 +20,10 @@ test('layout phase 7.6 example produces the same PDF from source and bundled API
   assert.match(pdf, /\(ATLANTI\) Tj/);
   const pages = (pdf.match(/\/Type \/Page\b/g) ?? []).length;
   assert.ok(pages >= 5, `${pages} pages`);
-  assert.equal((pdf.match(/\(Category\) Tj/g) ?? []).length, pages - 1);
+  // The cover page and the two phase 7.7 pages carry no table header.
+  assert.equal((pdf.match(/\(Category\) Tj/g) ?? []).length, pages - 3);
+  // Phase 7.7: the caption after the split Container shares the tail's page.
+  const streams = [...pdf.matchAll(/stream\n([\s\S]*?)\nendstream/g)].map(match => match[1]);
+  const tail = streams.find(stream => /line 80 of 80/.test(stream));
+  assert.match(tail, /\(This caption follows/);
 });

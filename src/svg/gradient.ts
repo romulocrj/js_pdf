@@ -98,10 +98,17 @@ function readStops(element: XmlElement, parser: SvgParser): GradientStops {
   return { colors, stops, opacities };
 }
 
-function hrefElement(element: XmlElement, parser: SvgParser): XmlElement | null {
+/*
+ * The gradient an `href` inherits from. One already in the chain makes a cycle,
+ * which threw here and recursed without end upstream; like a `<use>` cycle in
+ * upstream PR #1980 it is left unresolved, so the chain stops at that link.
+ */
+function hrefElement(element: XmlElement, parser: SvgParser, seen: readonly string[]): XmlElement | null {
   const xlink = ['http:', '', 'www.w3.org', '1999', 'xlink'].join('/');
   const href = element.getAttribute('href') ?? element.getAttribute('href', xlink);
-  return href?.startsWith('#') === true ? parser.findById(href.slice(1)) : null;
+  if (href?.startsWith('#') !== true) return null;
+  const id = href.slice(1);
+  return seen.includes(id) ? null : parser.findById(id);
 }
 
 export abstract class SvgGradient extends SvgColor {
@@ -276,9 +283,6 @@ export class SvgLinearGradient extends SvgGradient {
     seen: readonly string[] = []
   ): SvgLinearGradient {
     const id = element.getAttribute('id');
-    if (id !== null && seen.includes(id)) {
-      throw new SyntaxError(`Circular gradient reference: ${id}`);
-    }
     const nextSeen = id === null ? seen : [...seen, id];
     const stopData = readStops(element, parser);
     const local = new SvgLinearGradient(
@@ -293,7 +297,7 @@ export class SvgLinearGradient extends SvgGradient {
       stopData.opacities,
       SvgLinearGradient.spread(element)
     );
-    const inherited = hrefElement(element, parser);
+    const inherited = hrefElement(element, parser, nextSeen);
     return inherited?.name.local === 'linearGradient'
       ? SvgLinearGradient.fromElement(inherited, parser, nextSeen).mergeWith(local)
       : local;
@@ -403,9 +407,6 @@ export class SvgRadialGradient extends SvgGradient {
     seen: readonly string[] = []
   ): SvgRadialGradient {
     const id = element.getAttribute('id');
-    if (id !== null && seen.includes(id)) {
-      throw new SyntaxError(`Circular gradient reference: ${id}`);
-    }
     const nextSeen = id === null ? seen : [...seen, id];
     const stopData = readStops(element, parser);
     const unitsValue = element.getAttribute('gradientUnits');
@@ -426,7 +427,7 @@ export class SvgRadialGradient extends SvgGradient {
         ? spreadValue
         : null
     );
-    const inherited = hrefElement(element, parser);
+    const inherited = hrefElement(element, parser, nextSeen);
     return inherited?.name.local === 'radialGradient'
       ? SvgRadialGradient.fromElement(inherited, parser, nextSeen).mergeWith(local)
       : local;

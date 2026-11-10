@@ -203,7 +203,8 @@ test('L100: the shrink is shared by what each column wanted beyond its longest w
   });
   const constraints = { maxWidth: 200, maxHeight: 500 };
   const box = table.layout(ctx, constraints);
-  const max = table.children[0].children.map(cell => cell.layout(ctx, constraints).width);
+  // Max-content is measured unbounded, as upstream PR #1980 does (phase 7.7).
+  const max = table.children[0].children.map(cell => cell.layout(ctx, new Pdf.BoxConstraints()).width);
   const min = [`${words[0]} ${LOREM}`, `${words[1]} ${LOREM.slice(0, 60)}`].map(widestWord);
   const share = (200 - min[0] - min[1]) / (max[0] + max[1] - min[0] - min[1]);
   const expected = [min[0] + (max[0] - min[0]) * share, min[1] + (max[1] - min[1]) * share];
