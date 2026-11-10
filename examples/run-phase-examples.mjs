@@ -27,6 +27,11 @@ import { generateSynchronousOutputPhase65 } from './synchronous-output-phase-6.5
 import { generateLayoutPerformancePhase66 } from './layout-performance-phase-6.6.mjs';
 import { generateColorsPhase67 } from './colors-phase-6.7.mjs';
 import { generateFontsPhase68, generateObjectsPhase610, generateApiPhase612 } from './fonts-objects-api-phases.mjs';
+import { generateSerializationPhase71 } from './serialization-phase-7.1.mjs';
+import { generateFontsPhase72 } from './fonts-phase-7.2.mjs';
+import { generateSvgPhase74 } from './svg-phase-7.4.mjs';
+import { generateGraphicsPhase75 } from './graphics-phase-7.5.mjs';
+import { generateLayoutPhase76 } from './layout-phase-7.6.mjs';
 import { generateChartsPhase51 } from './charts-phase-5.1.mjs';
 import { generateBarcodePhase52 } from './barcode-phase-5.2.mjs';
 import { generateAnnotationsPhase53 } from './annotations-phase-5.3.mjs';
@@ -81,7 +86,12 @@ const examples = [
   ['colors-phase-6.7', () => generateColorsPhase67()],
   ['fonts-phase-6.8', () => generateFontsPhase68(compatibilityFonts)],
   ['objects-phase-6.10', () => generateObjectsPhase610()],
-  ['api-phase-6.12', () => generateApiPhase612()]
+  ['api-phase-6.12', () => generateApiPhase612()],
+  ['serialization-phase-7.1', () => generateSerializationPhase71()],
+  ['fonts-phase-7.2', () => generateFontsPhase72({ openSans: compatibilityFonts.ttf, cjk: cjkFont, icons: materialIcons })],
+  ['svg-phase-7.4', () => generateSvgPhase74()],
+  ['graphics-phase-7.5', () => generateGraphicsPhase75()],
+  ['layout-phase-7.6', () => generateLayoutPhase76()]
 ];
 
 const outputDirectory = new URL('./out/', import.meta.url);
