@@ -232,10 +232,20 @@ export class Stack extends Widget<StackLayoutData> {
     let width = constraints.minWidth;
     let height = constraints.minHeight;
     let hasNonPositioned = false;
+    /*
+     * `expand` tightens only the bounded axes, as upstream PR #1980 does: inside
+     * a Row the width is unbounded, and a tight infinite constraint reached the
+     * clip rectangle as `Infinity`.
+     */
     const nonPositionedConstraints = this.fit === 'loose'
       ? constraints.loosen()
       : this.fit === 'expand'
-        ? BoxConstraints.tight(constraints.biggest)
+        ? new BoxConstraints({
+          minWidth: constraints.hasBoundedWidth ? constraints.maxWidth : 0,
+          maxWidth: constraints.maxWidth,
+          minHeight: constraints.hasBoundedHeight ? constraints.maxHeight : 0,
+          maxHeight: constraints.maxHeight
+        })
         : constraints;
 
     for (const child of this.children) {

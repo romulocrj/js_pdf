@@ -239,10 +239,15 @@ export class FixedAxis extends GridAxis {
     }
 
     const textMargin = this.margin ?? 10;
-    // Upstream measures the vertical axis' end margin against the last label's
-    // *width*; kept as-is so the grid box matches dart_pdf to the point.
-    const marginEnd = Math.max(incoming.marginEnd, ad === 0 ? lastSize.width / 2 : (ad < 0 ? lastSize.width : 0));
-    const minStart = ad === 0 ? firstSize.height / 2 : (ad > 0 ? firstSize.width : 0);
+    /*
+     * The start and end margins are distances *along* the axis, so a vertical
+     * axis needs its labels' heights there. Upstream copied the horizontal
+     * branch without that swap and reserved the last label's width (and, for
+     * rotated labels, the first one's width); fixed as in upstream PR #1980.
+     * Every chart with a vertical axis now loses the over-reserved top margin.
+     */
+    const marginEnd = Math.max(incoming.marginEnd, ad === 0 ? lastSize.height / 2 : (ad < 0 ? lastSize.height : 0));
+    const minStart = ad === 0 ? firstSize.height / 2 : (ad > 0 ? firstSize.height : 0);
     const crossAxisPosition = Math.max(incoming.crossAxisPosition, minStart);
     const axisPosition = Math.max(incoming.axisPosition, maxWidth + textMargin);
 

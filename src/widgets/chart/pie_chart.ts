@@ -130,6 +130,8 @@ export class PieDataSet extends Dataset<PieSliceLayout> {
     if (offset < 0) throw new RangeError('PieDataSet offset must not be negative');
 
     this.value = Number(value);
+    // A NaN value made every slice bearing NaN, written out as `NaN NaN m`.
+    if (!Number.isFinite(this.value)) throw new RangeError('PieDataSet value must be a finite number');
     this.legendWidget = legendWidget;
     const fill = this.color ?? normalizePaintColor(CHART_BLUE);
     const border = this.borderColor;
