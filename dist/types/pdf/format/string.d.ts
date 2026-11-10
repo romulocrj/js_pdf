@@ -24,6 +24,11 @@ export declare function pdfLiteral(value: string): string;
  * literal escaping rules above do not apply at all.
  */
 export declare function pdfHexString(values: readonly number[], digits?: number): string;
+/**
+ * The bytes `PdfString` writes for `value`, one character per byte. Name-tree
+ * keys are ordered by these (ISO 32000-1 7.9.6), not by locale collation.
+ */
+export declare function pdfTextBytes(value: string): string;
 /** PDF text string encoded as UTF-16BE, including its required marker. */
 export declare function pdfUnicodeString(value: string): string;
 /** A PDF string object. */

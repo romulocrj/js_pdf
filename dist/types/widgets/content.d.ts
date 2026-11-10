@@ -32,6 +32,14 @@ export declare class Header extends StatelessWidget {
     readonly outlineColor: Rgb | null;
     readonly outlineStyle: PdfOutlineStyle;
     constructor({ level, text, child, decoration, margin, padding, textStyle, title, outlineColor, outlineStyle }?: HeaderOptions);
+    /**
+     * A heading moves to the next page whole, as upstream's does: there it is an
+     * `Outline`, which never spans. Split, its filling Container painted an
+     * empty fragment at the foot of the page, spent a whole page on its one
+     * line, and registered its outline once per fragment, so the bookmark and
+     * its TableOfContent row appeared twice.
+     */
+    get canSpan(): boolean;
     build(context: RenderContext): AnyWidget;
     paint(context: RenderContext, box: PositionedBox<StatelessLayoutData>): void;
 }

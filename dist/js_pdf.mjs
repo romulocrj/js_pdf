@@ -106,7 +106,11 @@ class PdfDataType {
   }
 }
 
+const LIMIT = 3403e35;
+
 function formatNumber(value) {
+  if (!Number.isFinite(value)) return "0";
+  if (Math.abs(value) >= 1e21) return BigInt(Math.min(LIMIT, Math.max(-LIMIT, value))).toString();
   const rounded = Math.abs(value) < 1e-6 ? 0 : value;
   return Number(rounded.toFixed(4)).toString();
 }
@@ -884,6 +888,84 @@ class PdfDict extends PdfDataType {
   }
 }
 
+function codeUnits(text) {
+  const units = new Uint16Array(text.length);
+  for (let i = 0; i < text.length; i++) units[i] = text.charCodeAt(i);
+  return units;
+}
+
+function utf8Encode(text) {
+  const bytes = new Uint8Array(text.length * 3);
+  let length = 0;
+  for (const character of text) {
+    let point = character.codePointAt(0) ?? 65533;
+    if (point >= 55296 && point <= 57343) point = 65533;
+    if (point < 128) {
+      bytes[length++] = point;
+    } else if (point < 2048) {
+      bytes[length++] = 192 | point >> 6;
+      bytes[length++] = 128 | point & 63;
+    } else if (point < 65536) {
+      bytes[length++] = 224 | point >> 12;
+      bytes[length++] = 128 | point >> 6 & 63;
+      bytes[length++] = 128 | point & 63;
+    } else {
+      bytes[length++] = 240 | point >> 18;
+      bytes[length++] = 128 | point >> 12 & 63;
+      bytes[length++] = 128 | point >> 6 & 63;
+      bytes[length++] = 128 | point & 63;
+    }
+  }
+  return bytes.subarray(0, length).slice();
+}
+
+function utf8Decode(bytes) {
+  let text = "";
+  for (let i = 0; i < bytes.length; ) {
+    const first = bytes[i];
+    let point;
+    let length;
+    if (first < 128) {
+      point = first;
+      length = 1;
+    } else if ((first & 224) === 192) {
+      point = first & 31;
+      length = 2;
+    } else if ((first & 240) === 224) {
+      point = first & 15;
+      length = 3;
+    } else if ((first & 248) === 240) {
+      point = first & 7;
+      length = 4;
+    } else {
+      text += "�";
+      i++;
+      continue;
+    }
+    if (i + length > bytes.length) {
+      text += "�";
+      break;
+    }
+    let valid = true;
+    for (let n = 1; n < length; n++) {
+      const byte = bytes[i + n];
+      if ((byte & 192) !== 128) {
+        valid = false;
+        break;
+      }
+      point = point << 6 | byte & 63;
+    }
+    if (!valid || point > 1114111) {
+      text += "�";
+      i++;
+      continue;
+    }
+    text += String.fromCodePoint(point);
+    i += length;
+  }
+  return text;
+}
+
 class PdfName extends PdfDataType {
   constructor(value) {
     super();
@@ -893,8 +975,10 @@ class PdfName extends PdfDataType {
     this.value = value;
   }
   output(s) {
-    for (let index = 0; index < this.value.length; index++) {
-      const code = this.value.charCodeAt(index);
+    const bytes = /[^\x00-\x7f]/.test(this.value) ? utf8Encode(this.value) : null;
+    const length = bytes === null ? this.value.length : bytes.length;
+    for (let index = 0; index < length; index++) {
+      const code = bytes === null ? this.value.charCodeAt(index) : bytes[index];
       if (code < 33 || code > 126 || code === 35 || code === 47 && index > 0 || code === 91 || code === 93 || code === 40 || code === 41 || code === 60 || code === 62) {
         s.putString(`#${code.toString(16).padStart(2, "0")}`);
       } else {
@@ -4360,12 +4444,22 @@ function pdfHexString(values, digits = 4) {
   return `<${output}>`;
 }
 
-function fitsWinAnsi(value) {
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
-    if (codePoint > 255 && CP1252[codePoint] === undefined) return false;
+function fitsPdfDocEncoding(value) {
+  for (let index = 0; index < value.length; index++) {
+    const unit = value.charCodeAt(index);
+    if (unit < 32 ? unit !== 9 && unit !== 10 && unit !== 13 : unit > 126 && unit < 161 || unit === 173 || unit > 255) return false;
   }
   return true;
+}
+
+function pdfTextBytes(value) {
+  if (fitsPdfDocEncoding(value)) return value;
+  let bytes = "þÿ";
+  for (let index = 0; index < value.length; index++) {
+    const unit = value.charCodeAt(index);
+    bytes += String.fromCharCode(unit >> 8, unit & 255);
+  }
+  return bytes;
 }
 
 function pdfUnicodeString(value) {
@@ -4394,7 +4488,7 @@ class PdfString extends PdfDataType {
     return new PdfString(`D:${year}${month}${day}${hour}${minute}${second}Z`);
   }
   output(s) {
-    s.putString(fitsWinAnsi(this.value) ? pdfLiteral(this.value) : pdfUnicodeString(this.value));
+    s.putString(fitsPdfDocEncoding(this.value) ? pdfLiteral(this.value) : pdfUnicodeString(this.value));
   }
 }
 
@@ -5889,84 +5983,6 @@ PdfPageFormat.cm = PageUnit.cm;
 PdfPageFormat.mm = PageUnit.mm;
 
 PdfPageFormat.dp = PageUnit.dp;
-
-function codeUnits(text) {
-  const units = new Uint16Array(text.length);
-  for (let i = 0; i < text.length; i++) units[i] = text.charCodeAt(i);
-  return units;
-}
-
-function utf8Encode(text) {
-  const bytes = new Uint8Array(text.length * 3);
-  let length = 0;
-  for (const character of text) {
-    let point = character.codePointAt(0) ?? 65533;
-    if (point >= 55296 && point <= 57343) point = 65533;
-    if (point < 128) {
-      bytes[length++] = point;
-    } else if (point < 2048) {
-      bytes[length++] = 192 | point >> 6;
-      bytes[length++] = 128 | point & 63;
-    } else if (point < 65536) {
-      bytes[length++] = 224 | point >> 12;
-      bytes[length++] = 128 | point >> 6 & 63;
-      bytes[length++] = 128 | point & 63;
-    } else {
-      bytes[length++] = 240 | point >> 18;
-      bytes[length++] = 128 | point >> 12 & 63;
-      bytes[length++] = 128 | point >> 6 & 63;
-      bytes[length++] = 128 | point & 63;
-    }
-  }
-  return bytes.subarray(0, length).slice();
-}
-
-function utf8Decode(bytes) {
-  let text = "";
-  for (let i = 0; i < bytes.length; ) {
-    const first = bytes[i];
-    let point;
-    let length;
-    if (first < 128) {
-      point = first;
-      length = 1;
-    } else if ((first & 224) === 192) {
-      point = first & 31;
-      length = 2;
-    } else if ((first & 240) === 224) {
-      point = first & 15;
-      length = 3;
-    } else if ((first & 248) === 240) {
-      point = first & 7;
-      length = 4;
-    } else {
-      text += "�";
-      i++;
-      continue;
-    }
-    if (i + length > bytes.length) {
-      text += "�";
-      break;
-    }
-    let valid = true;
-    for (let n = 1; n < length; n++) {
-      const byte = bytes[i + n];
-      if ((byte & 192) !== 128) {
-        valid = false;
-        break;
-      }
-      point = point << 6 | byte & 63;
-    }
-    if (!valid || point > 1114111) {
-      text += "�";
-      i++;
-      continue;
-    }
-    text += String.fromCodePoint(point);
-    i += length;
-  }
-  return text;
-}
 
 class BarcodeException extends Error {
   constructor(message) {
@@ -12365,7 +12381,12 @@ class PdfPageLabels extends PdfObject {
   }
   prepare() {
     const nums = new PdfArray;
-    for (const key of [ ...this.labels.keys() ].sort((a, b) => a - b)) {
+    const keys = [ ...this.labels.keys() ].sort((a, b) => a - b);
+    if (keys.length > 0 && keys[0] !== 0) {
+      nums.add(new PdfNum(0));
+      nums.add(PdfPageLabel.arabic().toDict());
+    }
+    for (const key of keys) {
       const label = this.labels.get(key);
       if (label === undefined) continue;
       nums.add(new PdfNum(key));
@@ -16896,6 +16917,9 @@ class Header extends StatelessWidget {
     this.outlineColor = outlineColor === null ? null : normalizeColor(outlineColor);
     this.outlineStyle = outlineStyle;
   }
+  get canSpan() {
+    return false;
+  }
   build(context) {
     const millimeter = PageUnit.mm;
     let margin = this.margin;
@@ -18260,11 +18284,13 @@ class PdfNull extends PdfDataType {
 class PdfNames extends PdfObject {
   constructor(document) {
     super(document, new PdfDict);
-    this.destinations = [];
+    this.destinations = new Map;
+  }
+  has(name) {
+    return this.destinations.has(name);
   }
   addDestination(name, page, {x = null, y = null, zoom = null} = {}) {
-    this.destinations.push({
-      name,
+    this.destinations.set(name, {
       page,
       x,
       y,
@@ -18272,10 +18298,14 @@ class PdfNames extends PdfObject {
     });
   }
   prepare() {
-    const sorted = [ ...this.destinations ].sort((a, b) => a.name.localeCompare(b.name));
+    const sorted = [ ...this.destinations ].map(([name, destination]) => ({
+      key: pdfTextBytes(name),
+      name,
+      destination
+    })).sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
     const values = new PdfArray;
-    for (const destination of sorted) {
-      values.add(new PdfString(destination.name));
+    for (const {name, destination} of sorted) {
+      values.add(new PdfString(name));
       values.add(new PdfDict([ [ "/D", new PdfArray([ destination.page.ref(), new PdfName("/XYZ"), destination.x === null ? new PdfNull : new PdfNum(destination.x), destination.y === null ? new PdfNull : new PdfNum(destination.y), destination.zoom === null ? new PdfNull : new PdfNum(destination.zoom) ]) ] ]));
     }
     const destinations = new PdfDict;
@@ -18308,9 +18338,6 @@ class PdfOutline extends PdfObject {
     child.parent = this;
     this.children.push(child);
   }
-  descendantCount() {
-    return this.children.reduce((count, child) => count + 1 + child.descendantCount(), 0);
-  }
   prepare() {
     if (this.parent !== null) {
       this.params.set("/Title", new PdfString(this.title ?? ""));
@@ -18323,8 +18350,7 @@ class PdfOutline extends PdfObject {
       if (index + 1 < this.parent.children.length) {
         this.params.set("/Next", this.parent.children[index + 1].ref());
       }
-      const descendants = this.descendantCount();
-      if (descendants > 0) this.params.set("/Count", new PdfNum(-descendants));
+      if (this.children.length > 0) this.params.set("/Count", new PdfNum(-this.children.length));
     } else {
       this.params.set("/Count", new PdfNum(this.children.length));
     }
@@ -18338,6 +18364,7 @@ class PdfOutline extends PdfObject {
 class PdfAnnotation extends PdfObject {
   constructor(document, page, annotation, defaultAppearanceName = null, appearances = null) {
     super(document, new PdfDict([ [ "/Type", new PdfName("/Annot") ] ]));
+    this.parent = null;
     this.page = page;
     this.annotation = annotation;
     this.defaultAppearanceName = defaultAppearanceName;
@@ -18417,34 +18444,33 @@ class PdfAnnotation extends PdfObject {
     this.params.set("/Rect", PdfArray.fromNum([ field.rect.x, field.rect.y, field.rect.x + field.rect.width, field.rect.y + field.rect.height ]));
     this.params.set("/P", this.page.ref());
     this.params.set("/F", new PdfNum(4));
-    this.params.set("/FT", new PdfName(fieldNames[field.fieldType]));
-    this.params.set("/T", new PdfString(field.name));
-    this.params.set("/Ff", new PdfNum(field.fieldFlags ?? 0));
-    if (field.alternateName) this.params.set("/TU", new PdfString(field.alternateName));
-    if (field.mappingName) this.params.set("/TM", new PdfString(field.mappingName));
+    const fieldParams = this.parent?.params ?? this.params;
+    fieldParams.set("/FT", new PdfName(fieldNames[field.fieldType]));
+    if (this.parent === null) this.params.set("/T", new PdfString(field.name)); else this.params.set("/Parent", this.parent.ref());
+    fieldParams.set("/Ff", new PdfNum(field.fieldFlags ?? 0));
+    if (field.alternateName) fieldParams.set("/TU", new PdfString(field.alternateName));
+    if (field.mappingName) fieldParams.set("/TM", new PdfString(field.mappingName));
     if (field.maxLength !== null && field.maxLength !== undefined) {
-      this.params.set("/MaxLen", new PdfNum(field.maxLength));
+      fieldParams.set("/MaxLen", new PdfNum(field.maxLength));
     }
     if (field.textAlign !== null && field.textAlign !== undefined) {
-      this.params.set("/Q", new PdfNum([ "left", "center", "right" ].indexOf(field.textAlign)));
+      fieldParams.set("/Q", new PdfNum([ "left", "center", "right" ].indexOf(field.textAlign)));
     }
     if (field.items !== undefined) {
-      this.params.set("/Opt", new PdfArray(field.items.map(item => new PdfString(item))));
+      fieldParams.set("/Opt", new PdfArray(field.items.map(item => new PdfString(item))));
     }
     const isButton = field.fieldType === "checkbox" || field.fieldType === "button";
     if (field.value) {
-      this.params.set("/V", isButton ? new PdfName(field.value) : new PdfString(field.value));
+      fieldParams.set("/V", isButton ? new PdfName(field.value) : new PdfString(field.value));
     }
     if (field.defaultValue) {
-      this.params.set("/DV", isButton ? new PdfName(field.defaultValue) : new PdfString(field.defaultValue));
+      fieldParams.set("/DV", isButton ? new PdfName(field.defaultValue) : new PdfString(field.defaultValue));
     }
     if (field.fieldType === "checkbox") {
       this.params.set("/AS", new PdfName(field.value ?? "/Off"));
     }
     if (this.defaultAppearanceName !== null) {
-      const color = field.textColor ?? [ 0, 0, 0 ];
-      const operator = color instanceof PdfColor ? colorOperator(color) : `${color[0]} ${color[1]} ${color[2]} rg`;
-      this.params.set("/DA", new PdfString(`${this.defaultAppearanceName} ${field.fontSize ?? 12} Tf ${operator}`));
+      fieldParams.set("/DA", new PdfString(`${this.defaultAppearanceName} ${formatNumber(field.fontSize ?? 12)} Tf ${colorOperator(field.textColor ?? [ 0, 0, 0 ])}`));
     }
     const appearance = new PdfDict;
     if (field.borderColor !== null && field.borderColor !== undefined) {
@@ -18501,6 +18527,7 @@ class PdfDocument {
     this.formObjects = new Map;
     this.softMaskObjects = new Map;
     this.formFontNames = new Map;
+    this.formFieldKids = new Map;
     this.settings = settings;
     const catalogSerial = this.genSerial();
     this.pageList = new PdfPageList(this);
@@ -18661,10 +18688,28 @@ class PdfDocument {
       }
       const appearances = annotation.kind === "form" ? this.resolveFormAppearances(annotation.appearances) : null;
       const object = new PdfAnnotation(this, page, annotation, appearanceName, appearances);
-      if (annotation.kind === "form") this.catalog.formFields.push(object);
+      if (annotation.kind === "form") this.addFormField(object, annotation.name);
     }
     page.contents.push(stream);
     return page;
+  }
+  addFormField(widget, name) {
+    const kids = this.formFieldKids.get(name);
+    if (kids === undefined) {
+      this.formFieldKids.set(name, [ widget ]);
+      this.catalog.formFields.push(widget);
+      return;
+    }
+    const first = kids[0];
+    let parent = first.parent;
+    if (parent === null) {
+      parent = new PdfObject(this, new PdfDict([ [ "/T", new PdfString(name) ] ]));
+      first.parent = parent;
+      this.catalog.formFields[this.catalog.formFields.indexOf(first)] = parent;
+    }
+    widget.parent = parent;
+    kids.push(widget);
+    parent.params.set("/Kids", PdfArray.fromObjects(kids));
   }
   addNavigation(outlines, pageMode, destinations = []) {
     const names = outlines.length > 0 || destinations.length > 0 ? new PdfNames(this) : null;
@@ -18684,7 +18729,7 @@ class PdfDocument {
       for (const entry of outlines) {
         const page = this.pageList.pages[entry.page - 1];
         if (page === undefined) continue;
-        names?.addDestination(entry.anchor, page, {
+        if (names !== null && !names.has(entry.anchor)) names.addDestination(entry.anchor, page, {
           y: entry.y
         });
         const node = new PdfOutline(this, {
@@ -19449,6 +19494,8 @@ class DefaultTextStyle extends InheritedTheme {
   }
 }
 
+const MAX_OUTLINE_REPLAYS = 4;
+
 class Document {
   constructor({title = null, author = null, subject = null, creator = null, producer = null, keywords = null, xmpMetadata = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none", compress = true, simpleTrueTypeFonts = false} = {}) {
     this.sections = [];
@@ -19527,29 +19574,17 @@ class Document {
   }
   registerOutline({title, level, pageNumber, y, anchor = null, color = null, style = "normal"}) {
     const page = pageNumber;
-    if (this.outlineReplay) {
-      const existing = this.outlineEntries[this.outlineCursor];
-      if (existing !== undefined) {
-        existing.page = page;
-        existing.y = y;
-      } else {
-        this.outlineEntries.push({
-          title,
-          level,
-          anchor: anchor ?? `outline-${this.outlineCursor + 1}`,
-          page,
-          y,
-          color,
-          style
-        });
-      }
-      this.outlineCursor++;
+    const index = this.outlineReplay ? this.outlineCursor++ : this.outlineEntries.length;
+    const existing = this.outlineEntries[index];
+    if (this.outlineReplay && existing !== undefined) {
+      existing.page = page;
+      existing.y = y;
       return;
     }
     this.outlineEntries.push({
       title,
       level,
-      anchor: anchor ?? `outline-${this.outlineEntries.length + 1}`,
+      anchor: anchor ?? `__dest${index}`,
       page,
       y,
       color,
@@ -19564,6 +19599,9 @@ class Document {
       y,
       zoom
     });
+  }
+  outlinePages() {
+    return this.outlineEntries.map(entry => entry.page).join();
   }
   renderSections(replay, expectedPagesCount = 0) {
     this.outlineReplay = replay;
@@ -19605,8 +19643,11 @@ class Document {
     this.outlineEntries.length = 0;
     this.outlineRerenderRequested = false;
     let pages = this.renderSections(false);
-    if (this.outlineRerenderRequested) {
+    for (let replay = 0; this.outlineRerenderRequested && replay < MAX_OUTLINE_REPLAYS; replay++) {
+      const before = this.outlinePages();
       pages = this.renderSections(true, pages.length);
+      this.outlineEntries.length = this.outlineCursor;
+      if (this.outlinePages() === before) break;
     }
     if (pages.length === 0) {
       throw new Error("Document must contain at least one page");

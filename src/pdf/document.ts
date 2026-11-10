@@ -32,6 +32,7 @@ import { PdfDict } from './format/dict.ts';
 import { PdfArray } from './format/array.ts';
 import { PdfNum } from './format/num.ts';
 import { PdfName } from './format/name.ts';
+import { PdfString } from './format/string.ts';
 import { PdfStream, encodeLatin1 } from './format/stream.ts';
 import { PdfXrefTable } from './format/xref.ts';
 import type { PdfFont } from './font/font.ts';
@@ -152,6 +153,7 @@ export class PdfDocument {
   private readonly formObjects = new Map<PdfFormXObject, PdfXObject>();
   private readonly softMaskObjects = new Map<PdfSoftMask, PdfXObject>();
   private readonly formFontNames = new Map<PdfFont, string>();
+  private readonly formFieldKids = new Map<string, PdfAnnotation[]>();
 
   readonly settings: PdfSettings;
 
@@ -393,11 +395,40 @@ export class PdfDocument {
         ? this.resolveFormAppearances(annotation.appearances)
         : null;
       const object = new PdfAnnotation(this, page, annotation, appearanceName, appearances);
-      if (annotation.kind === 'form') this.catalog.formFields.push(object);
+      if (annotation.kind === 'form') this.addFormField(object, annotation.name);
     }
 
     page.contents.push(stream);
     return page;
+  }
+
+  /**
+   * List a widget in `/AcroForm`, grouping widgets that share a field name.
+   *
+   * Each widget used to be its own merged field-and-widget dictionary, so a
+   * `TextField` in a `MultiPage` header became one root field per page, all
+   * named alike with values of their own. ISO 32000-1 12.7.3.1 allows the
+   * merged form only for a single widget, so from the second widget on the
+   * name gets one parent field with the widgets as `/Kids` - upstream #1980's
+   * `prepareAcroForm`, done as pages arrive. A name used once is unchanged.
+   */
+  private addFormField(widget: PdfAnnotation, name: string): void {
+    const kids = this.formFieldKids.get(name);
+    if (kids === undefined) {
+      this.formFieldKids.set(name, [widget]);
+      this.catalog.formFields.push(widget);
+      return;
+    }
+    const first = kids[0]!;
+    let parent = first.parent;
+    if (parent === null) {
+      parent = new PdfObject(this, new PdfDict([['/T', new PdfString(name)]]));
+      first.parent = parent;
+      this.catalog.formFields[this.catalog.formFields.indexOf(first)] = parent;
+    }
+    widget.parent = parent;
+    kids.push(widget);
+    parent.params.set('/Kids', PdfArray.fromObjects(kids));
   }
 
   addNavigation(
@@ -424,7 +455,10 @@ export class PdfDocument {
       for (const entry of outlines) {
         const page = this.pageList.pages[entry.page - 1];
         if (page === undefined) continue;
-        names?.addDestination(entry.anchor, page, { y: entry.y });
+        // An `Outline` widget is an `Anchor` and has already registered its
+        // destination, with its x and zoom; registering it again wrote the
+        // name twice. A `Header` registers none, so its outline does it here.
+        if (names !== null && !names.has(entry.anchor)) names.addDestination(entry.anchor, page, { y: entry.y });
         const node = new PdfOutline(this, {
           title: entry.title,
           anchor: entry.anchor,

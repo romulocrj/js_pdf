@@ -92,6 +92,7 @@ export declare class PdfDocument {
     private readonly formObjects;
     private readonly softMaskObjects;
     private readonly formFontNames;
+    private readonly formFieldKids;
     readonly settings: PdfSettings;
     constructor(metadata: DocumentMetadata, settings?: PdfSettings);
     get objects(): readonly PdfObjectBase<PdfDataType>[];
@@ -121,6 +122,17 @@ export declare class PdfDocument {
      * passes nothing and gets no `/Resources` at all, as upstream does.
      */
     addPage(format: PageSize, content: string | Uint8Array, fonts?: ReadonlyMap<PdfFont, string>, graphicStates?: ReadonlyMap<string, PdfDict>, patterns?: ReadonlyMap<string, PdfDict>, shadings?: ReadonlyMap<string, PdfDict>, images?: ReadonlyMap<PdfImage, string>, annotations?: readonly PdfAnnotationSpec[], forms?: ReadonlyMap<PdfFormXObject, string>): PdfPage;
+    /**
+     * List a widget in `/AcroForm`, grouping widgets that share a field name.
+     *
+     * Each widget used to be its own merged field-and-widget dictionary, so a
+     * `TextField` in a `MultiPage` header became one root field per page, all
+     * named alike with values of their own. ISO 32000-1 12.7.3.1 allows the
+     * merged form only for a single widget, so from the second widget on the
+     * name gets one parent field with the widgets as `/Kids` - upstream #1980's
+     * `prepareAcroForm`, done as pages arrive. A name used once is unchanged.
+     */
+    private addFormField;
     addNavigation(outlines: readonly SerializedOutline[], pageMode: PdfPageMode, destinations?: readonly SerializedDestination[]): void;
     addPageLabels(labels: readonly SerializedPageLabel[]): void;
     save(): Uint8Array;

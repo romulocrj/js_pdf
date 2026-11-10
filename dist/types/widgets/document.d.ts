@@ -107,6 +107,7 @@ export declare class Document {
         readonly y?: number | null;
         readonly zoom?: number | null;
     }): void;
+    private outlinePages;
     private renderSections;
     save(): Uint8Array;
     /** Render and serialize to a caller-owned destination without collecting the PDF. */

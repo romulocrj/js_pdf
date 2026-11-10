@@ -20,8 +20,12 @@
  * every delimiter in a name to be hex-escaped. No name the port emits today
  * contains one, so this changes no output; it stops a future one from being
  * silently wrong.
+ *
+ * The escapes are over UTF-8 bytes, as upstream #1980 fixed: escaping UTF-16
+ * code units wrote `/中` as `/#4e2d`, where `#` must take exactly two digits.
  */
 
+import { utf8Encode } from '../../base/utf8.ts';
 import { PdfDataType } from './base.ts';
 import type { PdfStream } from './stream.ts';
 
@@ -41,8 +45,12 @@ export class PdfName extends PdfDataType {
   }
 
   override output(s: PdfStream): void {
-    for (let index = 0; index < this.value.length; index++) {
-      const code = this.value.charCodeAt(index);
+    // ASCII is its own UTF-8, and nearly every name is ASCII: only the rest
+    // pays for an encoded copy.
+    const bytes = /[^\x00-\x7f]/.test(this.value) ? utf8Encode(this.value) : null;
+    const length = bytes === null ? this.value.length : bytes.length;
+    for (let index = 0; index < length; index++) {
+      const code = bytes === null ? this.value.charCodeAt(index) : bytes[index]!;
 
       // Delimiters, whitespace and `#` itself have to be hex-escaped. A `/` is
       // literal only in the leading position.

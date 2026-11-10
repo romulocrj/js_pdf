@@ -67,10 +67,6 @@ export class PdfOutline extends PdfObject<PdfDict> {
     this.children.push(child);
   }
 
-  descendantCount(): number {
-    return this.children.reduce((count, child) => count + 1 + child.descendantCount(), 0);
-  }
-
   override prepare(): void {
     if (this.parent !== null) {
       this.params.set('/Title', new PdfString(this.title ?? ''));
@@ -84,8 +80,11 @@ export class PdfOutline extends PdfObject<PdfDict> {
       if (index + 1 < this.parent.children.length) {
         this.params.set('/Next', this.parent.children[index + 1]!.ref());
       }
-      const descendants = this.descendantCount();
-      if (descendants > 0) this.params.set('/Count', new PdfNum(-descendants));
+      // Closed by default. ISO 32000-1 Table 153: the magnitude of a negative
+      // /Count is how many items reopening this one shows, and reopening does
+      // not reopen its children - so the immediate children, not the subtree
+      // this used to count. Upstream #1980 fixes the same.
+      if (this.children.length > 0) this.params.set('/Count', new PdfNum(-this.children.length));
     } else {
       // Nested nodes are closed by their negative /Count, so only the root's
       // direct children are initially visible.
