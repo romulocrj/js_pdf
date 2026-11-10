@@ -13,6 +13,7 @@
  *
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/widgets/page.dart
+ *   - pdf/lib/src/widgets/multi_page.dart
  */
 
 import type { SerializedPage } from '../pdf/document.ts';
@@ -24,6 +25,9 @@ import type { PageOrientation } from './page_theme.ts';
 import type { AnyWidget, DocumentContext, PositionedBox, RenderContext } from './widget.ts';
 import type { InsetsInput } from './geometry.ts';
 import { BoxConstraints } from './geometry.ts';
+import type { TextDirection } from './border_radius.ts';
+import { crossOffset } from './flex.ts';
+import type { CrossAxisAlignment } from './flex.ts';
 import type { ThemeData } from './theme.ts';
 
 /**
@@ -63,6 +67,9 @@ export interface PageOptions {
    */
   readonly orientation?: PageOrientation;
 
+  /** The page's text direction; see `PageThemeOptions.textDirection`. */
+  readonly textDirection?: TextDirection | null;
+
   readonly build: (context: RenderContext) => AnyWidget;
   readonly background?: ColorInput | null;
 }
@@ -83,6 +90,7 @@ export class Page implements Section {
     margin = undefined,
     theme = undefined,
     orientation = undefined,
+    textDirection = undefined,
     build,
     background = null
   }: PageOptions) {
@@ -95,7 +103,8 @@ export class Page implements Section {
       pageFormat: pageFormat ?? format,
       margin,
       theme,
-      orientation
+      orientation,
+      textDirection
     });
 
     this.build = build;
@@ -120,7 +129,8 @@ export class Page implements Section {
       pageNumber: documentContext.pageOffset + 1,
       pageLabel: documentContext.document.pageLabel(documentContext.pageOffset),
       pagesCount: documentContext.pagesCount || documentContext.pageOffset + 1,
-      theme: this.pageTheme.theme ?? documentContext.document.theme
+      theme: this.pageTheme.theme ?? documentContext.document.theme,
+      textDirection: this.pageTheme.textDirection
     };
 
     const maxWidth = format.width - margin.left - margin.right;
@@ -151,7 +161,12 @@ export class Page implements Section {
     if (this.background) canvas.fillRect(0, 0, format.width, format.height, this.background);
     // Layers retain full-page layout; clip limits their painting when requested.
     this.paintLayer(this.pageTheme.buildBackground, context, format);
-    paintPageChild(this.pageTheme, context, widget, { ...box, x: margin.left, y: margin.top });
+    paintPageChild(this.pageTheme, context, widget, {
+      ...box,
+      // The final format: an infinite one has been measured by now.
+      x: pageChildX(this.pageTheme, margin.left, format.width - margin.left - margin.right, box.width),
+      y: margin.top
+    });
 
     this.paintLayer(this.pageTheme.buildForeground, context, format);
 
@@ -182,8 +197,29 @@ export class Page implements Section {
       maxWidth: format.width,
       maxHeight: format.height
     }));
-    paintPageChild(this.pageTheme, context, widget, { ...box, x: 0, y: 0 });
+    paintPageChild(this.pageTheme, context, widget, {
+      ...box,
+      x: pageChildX(this.pageTheme, 0, format.width, box.width),
+      y: 0
+    });
   }
+}
+
+/**
+ * Where a page child narrower than its area is placed. Upstream puts every
+ * layer of an rtl page against the right edge (`Page.paint`, and the `isRTL`
+ * branches of `MultiPage.postProcess`); `MultiPage` also passes its
+ * `crossAxisAlignment`, whose start and end follow the same direction and
+ * whose `stretch` is placed as `start`.
+ */
+export function pageChildX(
+  theme: PageTheme,
+  left: number,
+  available: number,
+  width: number,
+  alignment: CrossAxisAlignment = 'start'
+): number {
+  return left + crossOffset(alignment, available - width, theme.textDirection === 'rtl');
 }
 
 /** Shared page paint scope, translated from Page.paint in the Dart source. */

@@ -31,7 +31,9 @@ import { assertFiniteNumber } from '../base/assert.ts';
 import { normalizePaintColor } from '../pdf/color.ts';
 import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import { BoxConstraints } from './geometry.ts';
+import type { TextDirection } from './border_radius.ts';
 import { normalizeBoxDecoration } from './decoration.ts';
+import { Directionality } from './directionality.ts';
 import type { BoxDecorationInput } from './decoration.ts';
 import type { ThemeData } from './theme.ts';
 import { SpanningWidget } from './widget.ts';
@@ -361,6 +363,11 @@ export interface TableOptions {
   readonly columnWidths?: TableColumnWidthMap | null;
   readonly defaultColumnWidth?: TableColumnWidth;
   readonly tableWidth?: TableWidth;
+  /**
+   * The order the columns are laid out in; the ambient `Directionality` when
+   * null. Pass `'ltr'` to keep a table left to right inside an rtl subtree.
+   */
+  readonly textDirection?: TextDirection | null;
 }
 
 /** A grid whose rows share one set of computed column tracks. */
@@ -371,6 +378,7 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
   readonly columnWidths: TableColumnWidthMap | null;
   readonly defaultColumnWidth: TableColumnWidth;
   readonly tableWidth: TableWidth;
+  readonly textDirection: TextDirection | null;
 
   constructor({
     children = [],
@@ -378,7 +386,8 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
     defaultVerticalAlignment = 'top',
     columnWidths = null,
     defaultColumnWidth = new IntrinsicColumnWidth(),
-    tableWidth = 'max'
+    tableWidth = 'max',
+    textDirection = null
   }: TableOptions = {}) {
     super();
     if (!['bottom', 'middle', 'top', 'full'].includes(defaultVerticalAlignment)) {
@@ -393,6 +402,12 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
     this.columnWidths = columnWidths;
     this.defaultColumnWidth = defaultColumnWidth;
     this.tableWidth = tableWidth;
+    this.textDirection = textDirection;
+  }
+
+  /** Whether the columns run right to left; upstream PR #1980 (CHANGELOG L81). */
+  private rtl(context: RenderContext): boolean {
+    return (this.textDirection ?? Directionality.of(context)) === 'rtl';
   }
 
   private resolveWidths(context: RenderContext, constraints: Constraints): number[] {
@@ -520,6 +535,9 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
     const rowHeights: number[] = [];
     let rowY = 0;
     const total = headers.length + this.children.length - start;
+    const width = columnWidths.reduce((sum, value) => sum + value, 0);
+    // `columnWidths` stays in logical order, so column i is still the i-th child.
+    const rtl = this.rtl(context);
 
     for (let position = 0; position < total; position++) {
       const row = position < headers.length
@@ -531,15 +549,15 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
 
       for (let column = 0; column < row.children.length; column++) {
         const child = row.children[column]!;
-        const width = columnWidths[column] ?? 0;
+        const columnWidth = columnWidths[column] ?? 0;
         const box = child.layout(context, new BoxConstraints({
-          minWidth: width,
-          maxWidth: width,
+          minWidth: columnWidth,
+          maxWidth: columnWidth,
           maxHeight: Infinity
         }));
-        measured.push({ box, column, x });
+        measured.push({ box, column, x: rtl ? width - x - columnWidth : x });
         rowHeight = Math.max(rowHeight, box.height);
-        x += width;
+        x += columnWidth;
       }
       if (rowY + rowHeight > maxHeight + 0.001) break;
 
@@ -566,7 +584,7 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
 
     return {
       widget: this,
-      width: columnWidths.reduce((sum, value) => sum + value, 0),
+      width,
       height: rowY,
       data: { columnWidths, rowHeights, rows }
     };
@@ -680,13 +698,14 @@ export class Table extends SpanningWidget<TableLayoutData, TableSpanState> {
       );
     }
 
+    // The inside rules are drawn from the left, so they take the columns as placed.
     this.border?.paint(
       context,
       box.x,
       box.y,
       box.width,
       box.height,
-      box.data.columnWidths,
+      this.rtl(context) ? [...box.data.columnWidths].reverse() : box.data.columnWidths,
       box.data.rowHeights
     );
   }

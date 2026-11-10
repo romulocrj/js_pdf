@@ -21,14 +21,17 @@
  */
 
 import {
-  Alignment,
   BoxConstraints,
   inscribe,
   insetsHorizontal,
   insetsVertical,
-  normalizeInsets
+  normalizeInsetsGeometry
 } from './geometry.ts';
-import type { Insets, InsetsInput } from './geometry.ts';
+import type { AlignmentGeometry, InsetsGeometry, InsetsInput } from './geometry.ts';
+import { namedAlignment } from './basic.ts';
+import type { BasicAlignmentName } from './basic.ts';
+import type { TextDirection } from './border_radius.ts';
+import { alignmentIn, insetsIn } from './directionality.ts';
 import { assertFiniteNumber } from '../base/assert.ts';
 import {
   IntrinsicColumnWidth,
@@ -58,18 +61,9 @@ import type {
   RenderContext
 } from './widget.ts';
 
-export type TableAlignmentName =
-  | 'topLeft'
-  | 'topCenter'
-  | 'topRight'
-  | 'centerLeft'
-  | 'center'
-  | 'centerRight'
-  | 'bottomLeft'
-  | 'bottomCenter'
-  | 'bottomRight';
+export type TableAlignmentName = BasicAlignmentName;
 
-export type TableAlignmentInput = Alignment | TableAlignmentName;
+export type TableAlignmentInput = AlignmentGeometry | TableAlignmentName;
 
 type IndexedValues<T> = Readonly<Record<number, T>> | ReadonlyMap<number, T>;
 
@@ -79,20 +73,28 @@ function indexed<T>(values: IndexedValues<T> | null, index: number): T | undefin
   return (values as Readonly<Record<number, T>>)[index];
 }
 
-function alignment(value: TableAlignmentInput): Alignment {
+function alignment(value: TableAlignmentInput): AlignmentGeometry {
   if (typeof value !== 'string') {
     return value;
   }
-  const resolved = Alignment[value];
+  const resolved = namedAlignment(value);
   if (resolved === undefined) {
     throw new TypeError(`Unknown table alignment: ${value}`);
   }
   return resolved;
 }
 
-function textAlign(value: Alignment): TextAlign {
-  if (value.x === 0) return 'center';
-  return value.x < 0 ? 'left' : 'right';
+/**
+ * A directional alignment becomes `start` or `end`, which the cell's text
+ * resolves against its own direction when it is laid out. Upstream resolves it
+ * here, with the `context` argument's direction or ltr without one, so a
+ * context-less helper table on an rtl page aligned `centerStart` cells left.
+ */
+function textAlign(value: AlignmentGeometry): TextAlign {
+  const directional = 'start' in value;
+  const x = directional ? value.start : value.x;
+  if (x === 0) return 'center';
+  return directional ? x < 0 ? 'start' : 'end' : x < 0 ? 'left' : 'right';
 }
 
 interface HelperCellLayoutData {
@@ -102,9 +104,9 @@ interface HelperCellLayoutData {
 /** Padding, minimum height, alignment and decoration for one helper cell. */
 class HelperCell extends Widget<HelperCellLayoutData> {
   readonly child: AnyWidget;
-  readonly padding: Insets;
+  readonly padding: InsetsGeometry;
   readonly minimumHeight: number;
-  readonly alignment: Alignment;
+  readonly alignment: AlignmentGeometry;
   readonly decoration: TableDecorationInput | null;
 
   constructor({
@@ -117,12 +119,12 @@ class HelperCell extends Widget<HelperCellLayoutData> {
     readonly child: AnyWidget;
     readonly padding: InsetsInput;
     readonly minimumHeight: number;
-    readonly alignment: Alignment;
+    readonly alignment: AlignmentGeometry;
     readonly decoration: TableDecorationInput | null;
   }) {
     super();
     this.child = child;
-    this.padding = normalizeInsets(padding);
+    this.padding = normalizeInsetsGeometry(padding);
     this.minimumHeight = Math.max(
       0,
       assertFiniteNumber(Number(minimumHeight), 'table cell height')
@@ -133,9 +135,10 @@ class HelperCell extends Widget<HelperCellLayoutData> {
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<HelperCellLayoutData> {
     const parent = BoxConstraints.from(constraints);
-    const horizontal = insetsHorizontal(this.padding);
-    const vertical = insetsVertical(this.padding);
-    const childBox = this.child.layout(context, parent.deflate(this.padding));
+    const padding = insetsIn(context, this.padding);
+    const horizontal = insetsHorizontal(padding);
+    const vertical = insetsVertical(padding);
+    const childBox = this.child.layout(context, parent.deflate(padding));
     const size = parent.constrain({
       width: childBox.width + horizontal,
       height: Math.max(this.minimumHeight, childBox.height + vertical)
@@ -152,8 +155,9 @@ class HelperCell extends Widget<HelperCellLayoutData> {
     paintTableDecorationBackground(context, this.decoration, box.x, box.y, box.width, box.height);
 
     const { childBox } = box.data;
-    const innerWidth = Math.max(0, box.width - insetsHorizontal(this.padding));
-    const innerHeight = Math.max(0, box.height - insetsVertical(this.padding));
+    const padding = insetsIn(context, this.padding);
+    const innerWidth = Math.max(0, box.width - insetsHorizontal(padding));
+    const innerHeight = Math.max(0, box.height - insetsVertical(padding));
     /*
      * Upstream wraps every cell in a `Container(alignment:)`, which places the
      * child's own box — a shrink-wrapped line of text included. Stretching the
@@ -161,7 +165,7 @@ class HelperCell extends Widget<HelperCellLayoutData> {
      * a text box that did not wrap is only as wide as its longest line.
      */
     const offset = inscribe(
-      this.alignment,
+      alignmentIn(context, this.alignment),
       childBox.width,
       childBox.height,
       innerWidth,
@@ -169,8 +173,8 @@ class HelperCell extends Widget<HelperCellLayoutData> {
     );
     childBox.widget.paint(context, {
       ...childBox,
-      x: box.x + this.padding.left + offset.dx,
-      y: box.y + this.padding.top + offset.dy
+      x: box.x + padding.left + offset.dx,
+      y: box.y + padding.top + offset.dy
     });
 
     paintTableDecorationBorder(context, this.decoration, box.x, box.y, box.width, box.height);
@@ -217,8 +221,10 @@ export interface TableTextArrayOptions {
   readonly headerCellDecoration?: TableDecorationInput | null;
   readonly rowDecoration?: TableDecorationInput | null;
   readonly oddRowDecoration?: TableDecorationInput | null;
-  readonly headerDirection?: unknown;
-  readonly tableDirection?: unknown;
+  /** The `textDirection` of the header cells' text. */
+  readonly headerDirection?: TextDirection | null;
+  /** The `textDirection` of the body cells' text. */
+  readonly tableDirection?: TextDirection | null;
   readonly cellBuilder?: OnCell | null;
   readonly textStyleBuilder?: OnCellTextStyle | null;
 }
@@ -254,6 +260,8 @@ export class TableHelper {
     headerCellDecoration = null,
     rowDecoration = null,
     oddRowDecoration = rowDecoration,
+    headerDirection = null,
+    tableDirection = null,
     cellBuilder = null,
     textStyleBuilder = null
   }: TableTextArrayOptions): Table {
@@ -326,7 +334,8 @@ export class TableHelper {
         // Upstream leaves the header row's own cells unaligned: the container
         // alignment already places a single line, and a wrapped one reads
         // better ragged-right.
-        ...isHeaderRow ? {} : { align: textAlign(resolvedAlignment) }
+        ...isHeaderRow ? {} : { align: textAlign(resolvedAlignment) },
+        textDirection: isHeader ? headerDirection : tableDirection
       });
       return new HelperCell({
         child: text,

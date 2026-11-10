@@ -106,7 +106,15 @@ import {
 import { Document } from './widgets/document.ts';
 import { Column, Expanded, Flex, Flexible, ListView, Row, Spacer } from './widgets/flex.ts';
 import { Font } from './widgets/font.ts';
-import { Alignment, BoxConstraints, EdgeInsets } from './widgets/geometry.ts';
+import {
+  Alignment,
+  AlignmentDirectional,
+  BoxConstraints,
+  EdgeInsets,
+  EdgeInsetsDirectional,
+  resolveAlignment,
+  resolveInsets
+} from './widgets/geometry.ts';
 import { MultiPage, NewPage } from './widgets/multi_page.ts';
 import { GridView } from './widgets/grid_view.ts';
 import { GridPaper } from './widgets/grid_paper.ts';
@@ -153,6 +161,7 @@ import type { DocumentOptions } from './widgets/document.ts';
 export {
   Align,
   Alignment,
+  AlignmentDirectional,
   Anchor,
   Annotation,
   AnnotationBuilder,
@@ -210,6 +219,7 @@ export {
   Directionality,
   Document,
   EdgeInsets,
+  EdgeInsetsDirectional,
   Expanded,
   FixedColumnWidth,
   FlexColumnWidth,
@@ -435,11 +445,16 @@ export type {
   PageOrientation,
   PageThemeOptions
 } from './widgets/page_theme.ts';
+export { resolveAlignment, resolveInsets };
 export type {
+  AlignmentDirectionalName,
+  AlignmentGeometry,
   BoxConstraintsInput,
   ConstraintSize,
   EdgeInsetsConstructor,
   Insets,
+  InsetsDirectional,
+  InsetsGeometry,
   InsetsInput,
   Offset
 } from './widgets/geometry.ts';
@@ -875,8 +890,12 @@ export interface PublicApi {
   readonly Directionality: typeof Directionality;
   readonly InheritedDirectionality: typeof InheritedDirectionality;
   readonly Alignment: typeof Alignment;
+  readonly AlignmentDirectional: typeof AlignmentDirectional;
   readonly BoxConstraints: typeof BoxConstraints;
   readonly EdgeInsets: typeof EdgeInsets;
+  readonly EdgeInsetsDirectional: typeof EdgeInsetsDirectional;
+  readonly resolveAlignment: typeof resolveAlignment;
+  readonly resolveInsets: typeof resolveInsets;
   readonly PdfColor: typeof PdfColor;
   readonly PdfColorGrey: typeof PdfColorGrey;
   readonly PdfColorCmyk: typeof PdfColorCmyk;
@@ -1057,8 +1076,12 @@ const publicApi: PublicApi = Object.freeze({
   Directionality,
   InheritedDirectionality,
   Alignment,
+  AlignmentDirectional,
   BoxConstraints,
   EdgeInsets,
+  EdgeInsetsDirectional,
+  resolveAlignment,
+  resolveInsets,
   PdfColor,
   PdfColorGrey,
   PdfColorCmyk,

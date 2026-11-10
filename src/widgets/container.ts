@@ -21,8 +21,9 @@ import { resolveBasicAlignment } from './basic.ts';
 import type { BasicAlignmentInput } from './basic.ts';
 import { BoxDecoration, normalizeBoxDecoration } from './decoration.ts';
 import type { BoxDecorationInput, DecorationPosition } from './decoration.ts';
-import { Alignment, BoxConstraints, inscribe, normalizeInsets } from './geometry.ts';
-import type { Insets, InsetsInput } from './geometry.ts';
+import { BoxConstraints, inscribe, normalizeInsetsGeometry } from './geometry.ts';
+import type { AlignmentGeometry, Insets, InsetsGeometry, InsetsInput } from './geometry.ts';
+import { alignmentIn, insetsIn } from './directionality.ts';
 import { SpanningWidget, Widget } from './widget.ts';
 import type {
   AnyLayoutBox,
@@ -111,14 +112,14 @@ export class Container extends SpanningWidget<ContainerLayoutData, ContainerStat
   readonly child: AnyWidget | null;
   readonly width: number | null;
   readonly height: number | null;
-  readonly padding: Insets;
-  readonly margin: Insets;
+  readonly padding: InsetsGeometry;
+  readonly margin: InsetsGeometry;
   readonly background: PaintColor | null;
   readonly borderColor: PaintColor | null;
   readonly borderWidth: number;
   readonly decoration: BoxDecoration | null;
   readonly foregroundDecoration: BoxDecoration | null;
-  readonly alignment: Alignment | null;
+  readonly alignment: AlignmentGeometry | null;
 
   override get canSpan(): boolean {
     return this.height === null
@@ -144,8 +145,8 @@ export class Container extends SpanningWidget<ContainerLayoutData, ContainerStat
     this.child = child;
     this.width = width == null ? null : Number(width);
     this.height = height == null ? null : Number(height);
-    this.padding = normalizeInsets(padding);
-    this.margin = normalizeInsets(margin);
+    this.padding = normalizeInsetsGeometry(padding);
+    this.margin = normalizeInsetsGeometry(margin);
     /*
      * `color` is upstream's name; the port only read `background`, so an
      * upstream `Container(color: ...)` silently lost its fill.
@@ -173,26 +174,33 @@ export class Container extends SpanningWidget<ContainerLayoutData, ContainerStat
     };
   }
 
+  /** Margin and padding in physical edges, for the ambient text direction. */
+  private edges(context: RenderContext): readonly [Insets, Insets] {
+    return [insetsIn(context, this.margin), insetsIn(context, this.padding)];
+  }
+
   private finishLayout(
+    context: RenderContext,
     parent: BoxConstraints,
     desired: BoxConstraints,
     childBox: AnyLayoutBox | null
   ): LayoutBox<ContainerLayoutData> {
+    const [margin, padding] = this.edges(context);
     const content = childBox ?? { width: 0, height: 0 };
     const decorated = desired.constrain({
-      width: content.width + this.padding.left + this.padding.right,
-      height: content.height + this.padding.top + this.padding.bottom
+      width: content.width + padding.left + padding.right,
+      height: content.height + padding.top + padding.bottom
     });
     const boxWidth = decorated.width;
     const boxHeight = decorated.height;
-    const contentWidth = Math.max(0, boxWidth - this.padding.left - this.padding.right);
-    const contentHeight = Math.max(0, boxHeight - this.padding.top - this.padding.bottom);
+    const contentWidth = Math.max(0, boxWidth - padding.left - padding.right);
+    const contentHeight = Math.max(0, boxHeight - padding.top - padding.bottom);
     const childOffset = childBox === null || this.alignment === null
       ? { dx: 0, dy: 0 }
-      : inscribe(this.alignment, childBox.width, childBox.height, contentWidth, contentHeight);
+      : inscribe(alignmentIn(context, this.alignment), childBox.width, childBox.height, contentWidth, contentHeight);
     const size = parent.constrain({
-      width: boxWidth + this.margin.left + this.margin.right,
-      height: boxHeight + this.margin.top + this.margin.bottom
+      width: boxWidth + margin.left + margin.right,
+      height: boxHeight + margin.top + margin.bottom
     });
 
     return {
@@ -211,7 +219,8 @@ export class Container extends SpanningWidget<ContainerLayoutData, ContainerStat
 
   override layout(context: RenderContext, constraints: Constraints): LayoutBox<ContainerLayoutData> {
     const parent = BoxConstraints.from(constraints);
-    const outer = parent.deflate(this.margin);
+    const [margin, padding] = this.edges(context);
+    const outer = parent.deflate(margin);
     /*
      * Upstream wraps the child in `Align` when an alignment is given, and in an
      * expanding `ConstrainedBox` when there is no child; both fill a bounded
@@ -223,9 +232,9 @@ export class Container extends SpanningWidget<ContainerLayoutData, ContainerStat
       width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
       height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
     });
-    const inner = desired.deflate(this.padding);
+    const inner = desired.deflate(padding);
     const childBox = this.child?.layout(context, this.alignment === null ? inner : inner.loosen()) ?? null;
-    return this.finishLayout(parent, desired, childBox);
+    return this.finishLayout(context, parent, desired, childBox);
   }
 
   override layoutSpan(
@@ -242,28 +251,30 @@ export class Container extends SpanningWidget<ContainerLayoutData, ContainerStat
     }
 
     const parent = BoxConstraints.from(constraints);
-    const outer = parent.deflate(this.margin);
+    const [margin, padding] = this.edges(context);
+    const outer = parent.deflate(margin);
     const fill = this.alignment !== null || this.child === null;
     const desired = outer.tighten({
       width: this.width ?? (fill && outer.hasBoundedWidth ? outer.maxWidth : null),
       height: this.height ?? (fill && outer.hasBoundedHeight ? outer.maxHeight : null)
     });
-    const inner = desired.deflate(this.padding);
+    const inner = desired.deflate(padding);
     const fragment = this.child.layoutSpan(
       context,
       this.alignment === null ? inner : inner.loosen(),
       state.childState
     );
     return {
-      box: this.finishLayout(parent, desired, fragment.box),
+      box: this.finishLayout(context, parent, desired, fragment.box),
       nextState: { childState: fragment.nextState },
       hasMore: fragment.hasMore
     };
   }
 
   override paint(context: RenderContext, box: PositionedBox<ContainerLayoutData>): void {
-    const x = box.x + this.margin.left;
-    const y = box.y + this.margin.top;
+    const [margin, padding] = this.edges(context);
+    const x = box.x + margin.left;
+    const y = box.y + margin.top;
     const { boxWidth, boxHeight, childBox, childX, childY } = box.data;
 
     if (this.decoration !== null) {
@@ -279,8 +290,8 @@ export class Container extends SpanningWidget<ContainerLayoutData, ContainerStat
     if (childBox) {
       childBox.widget.paint(context, {
         ...childBox,
-        x: x + this.padding.left + childX,
-        y: y + this.padding.top + childY
+        x: x + padding.left + childX,
+        y: y + padding.top + childY
       });
     }
 

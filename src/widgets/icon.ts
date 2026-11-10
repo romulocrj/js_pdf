@@ -22,6 +22,7 @@ import { assertFiniteNumber } from '../base/assert.ts';
 import { normalizePaintColor } from '../pdf/color.ts';
 import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import { Opacity, Transform } from './basic.ts';
+import { Directionality } from './directionality.ts';
 import type { Font } from './font.ts';
 import { RichText, TextSpan } from './text.ts';
 import type { TextDirection } from './text.ts';
@@ -139,7 +140,7 @@ export class Icon extends StatelessWidget {
       throw new Error('Icon requires Icon.font or ThemeData.withFont({ icons })');
     }
 
-    const direction = this.textDirection ?? 'ltr';
+    const direction = this.textDirection ?? Directionality.of(context);
     let widget: AnyWidget = new RichText({
       textDirection: direction,
       text: new TextSpan({
