@@ -726,6 +726,7 @@ import { generateColorsPhase67 } from './colors-phase-6.7.mjs';
 import { generateFontsPhase68, generateObjectsPhase610, generateApiPhase612 } from './fonts-objects-api-phases.mjs';
 import { generateSerializationPhase71 } from './serialization-phase-7.1.mjs';
 import { generateFontsPhase72 } from './fonts-phase-7.2.mjs';
+import { generateTextBidiPhase73 } from './text-bidi-phase-7.3.mjs';
 import { generateSvgPhase74 } from './svg-phase-7.4.mjs';
 import { generateGraphicsPhase75 } from './graphics-phase-7.5.mjs';
 import { generateLayoutPhase76 } from './layout-phase-7.6.mjs';
@@ -1123,6 +1124,11 @@ const groups = [
         id: 'fonts-phase-7.2', title: 'Font tables & coverage', file: 'fonts-phase-7.2.mjs', badge: 'PHASE 7.2',
         description: 'Supplementary-plane ToUnicode, WinAnsi punctuation in the standard fonts and preserved TrueType hinting.',
         generate: async () => generateFontsPhase72({ openSans: await bytesOf('OpenSans-Regular.ttf'), cjk: await bytesOf('JsPdfCjkExample.ttf'), icons: await materialIcons() })
+      },
+      {
+        id: 'text-bidi-phase-7.3', title: 'Bidi lines & break rules', file: 'text-bidi-phase-7.3.mjs', badge: 'PHASE 7.3',
+        description: 'Wrapped Arabic paragraphs in reading order, mixed directions, soft hyphens, zero-width spaces, no-break spaces and letter spacing.',
+        generate: async () => generateTextBidiPhase73(undefined, true, await bytesOf('JsPdfArabicExample.ttf'))
       },
       {
         id: 'svg-phase-7.4', title: 'SVG viewports & robustness', file: 'svg-phase-7.4.mjs', badge: 'PHASE 7.4',

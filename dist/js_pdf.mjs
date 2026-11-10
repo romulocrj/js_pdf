@@ -9038,16 +9038,10 @@ function isArabicDiacritic(codePoint) {
   return DIACRITICS.has(codePoint);
 }
 
-function previousLetter(codePoints, index) {
-  for (let cursor = index - 1; cursor >= 0; cursor--) {
-    if (!isArabicDiacritic(codePoints[cursor])) return codePoints[cursor];
-  }
-  return 0;
-}
-
-function nextLetter(codePoints, index) {
-  for (let cursor = index + 1; cursor < codePoints.length; cursor++) {
-    if (!isArabicDiacritic(codePoints[cursor])) return codePoints[cursor];
+function letterAt(text, index, step) {
+  for (let cursor = index + step; cursor >= 0 && cursor < text.length; cursor += step) {
+    const code = text.charCodeAt(cursor);
+    if (!isArabicDiacritic(code)) return code;
   }
   return 0;
 }
@@ -9070,50 +9064,17 @@ const LAM_ALEF = Object.freeze({
   1575: [ 65275, 65276 ]
 });
 
-function shapeArabic(input, visualOrder) {
-  const logical = Array.from(input, character => character.codePointAt(0));
-  const clusters = [];
-  for (let index = 0; index < logical.length; index++) {
-    const codePoint = logical[index];
-    if (isArabicDiacritic(codePoint) && clusters.length > 0) {
-      const last = clusters[clusters.length - 1];
-      clusters[clusters.length - 1] = {
-        base: last.base,
-        marks: [ ...last.marks, codePoint ]
-      };
-      continue;
-    }
-    const next = nextLetter(logical, index);
-    if (codePoint === 1604 && LAM_ALEF[next] !== undefined) {
-      const before = previousLetter(logical, index);
-      const joinsBefore = ARABIC_FORMS[before]?.length === 4;
-      const ligature = LAM_ALEF[next][joinsBefore ? 1 : 0];
-      const marks = [];
-      let cursor = index + 2;
-      while (cursor < logical.length && isArabicDiacritic(logical[cursor])) {
-        marks.push(logical[cursor++]);
-      }
-      index = cursor - 1;
-      clusters.push({
-        base: ligature,
-        marks
-      });
-      continue;
-    }
-    clusters.push({
-      base: formFor(codePoint, previousLetter(logical, index), next),
-      marks: []
-    });
+function shapeArabicRange(text, start = 0, end = text.length) {
+  let shaped = "";
+  for (let index = start; index < end; index++) {
+    const code = text.charCodeAt(index);
+    const before = letterAt(text, index, -1);
+    if (before === 1604 && LAM_ALEF[code] !== undefined) continue;
+    const after = letterAt(text, index, 1);
+    const ligature = code === 1604 ? LAM_ALEF[after] : undefined;
+    shaped += String.fromCharCode(ligature === undefined ? formFor(code, before, after) : ligature[ARABIC_FORMS[before]?.length === 4 ? 1 : 0]);
   }
-  const visual = [];
-  {
-    for (const cluster of clusters) visual.push(cluster.base, ...cluster.marks);
-  }
-  return String.fromCodePoint(...visual);
-}
-
-function shapeArabicLogical(input) {
-  return shapeArabic(input);
+  return shaped;
 }
 
 function cffFontMetadata(bytes, glyphCount) {
@@ -10008,17 +9969,13 @@ function bidiFactory() {
   return bidi;
 }
 
-function reorderUnicodeBidi(input, direction) {
-  const api = bidiFactory();
-  const levels = api.getEmbeddingLevels(input, direction);
-  return api.getReorderedString(input, levels);
+let shared = null;
+
+function unicodeBidi() {
+  return shared ?? (shared = bidiFactory());
 }
 
-const basicToIsolatedMappings = new Map([ [ 1575, 65165 ], [ 1576, 65167 ], [ 1578, 65173 ], [ 1579, 65177 ], [ 1580, 65181 ], [ 1581, 65185 ], [ 1582, 65189 ], [ 1583, 65193 ], [ 1584, 65195 ], [ 1585, 65197 ], [ 1586, 65199 ], [ 1587, 65201 ], [ 1588, 65205 ], [ 1589, 65209 ], [ 1590, 65213 ], [ 1591, 65217 ], [ 1592, 65221 ], [ 1593, 65225 ], [ 1594, 65229 ], [ 1601, 65233 ], [ 1602, 65237 ], [ 1603, 65241 ], [ 1604, 65245 ], [ 1605, 65249 ], [ 1606, 65253 ], [ 1607, 65257 ], [ 1608, 65261 ], [ 1610, 65263 ], [ 1569, 65152 ], [ 1570, 65153 ], [ 1571, 65155 ], [ 1572, 65157 ], [ 1573, 65159 ], [ 1574, 65161 ], [ 1577, 65171 ] ]);
-
-function logicalToVisual(input) {
-  return input.split("\n").map(line => reorderUnicodeBidi(shapeArabicLogical(line), "rtl")).join("\n");
-}
+const basicToIsolatedMappings = new Map([ [ 1575, 65165 ], [ 1576, 65167 ], [ 1578, 65173 ], [ 1579, 65177 ], [ 1580, 65181 ], [ 1581, 65185 ], [ 1582, 65189 ], [ 1583, 65193 ], [ 1584, 65195 ], [ 1585, 65197 ], [ 1586, 65199 ], [ 1587, 65201 ], [ 1588, 65205 ], [ 1589, 65209 ], [ 1590, 65213 ], [ 1591, 65217 ], [ 1592, 65221 ], [ 1593, 65225 ], [ 1594, 65229 ], [ 1601, 65233 ], [ 1602, 65237 ], [ 1603, 65241 ], [ 1604, 65245 ], [ 1605, 65249 ], [ 1606, 65253 ], [ 1607, 65257 ], [ 1608, 65261 ], [ 1609, 65263 ], [ 1610, 65265 ], [ 1569, 65152 ], [ 1570, 65153 ], [ 1571, 65155 ], [ 1572, 65157 ], [ 1573, 65159 ], [ 1574, 65161 ], [ 1577, 65171 ] ]);
 
 const TtfParserName = Object.freeze({
   copyright: 0,
@@ -16400,14 +16357,15 @@ class WidgetSpan extends InlineSpan {
   }
 }
 
-function countSpaces(value) {
-  let count = 0;
-  for (const character of value) if (/\s/u.test(character)) count++;
-  return count;
-}
-
 function textWidth(style, value) {
-  return style.font.stringMetrics(value, style.fontSize, style.letterSpacing).advanceWidth + countSpaces(value) * style.wordSpacing;
+  let glyphs = 0;
+  let spaces = 0;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code === 32) spaces++;
+    if (code < 56320 || code > 57343) glyphs++;
+  }
+  return style.font.stringMetrics(value, style.fontSize).advanceWidth + glyphs * style.letterSpacing + spaces * style.wordSpacing;
 }
 
 function supportsRune(font, codePoint) {
@@ -16461,7 +16419,7 @@ function splitLongWord(value, maxWidth, style) {
   let current = "";
   for (const character of value) {
     const candidate = current + character;
-    if (current !== "" && textWidth(style, candidate) > maxWidth) {
+    if (current !== "" && textWidth(style, candidate) - style.letterSpacing > maxWidth) {
       parts.push(current);
       current = character;
     } else {
@@ -16477,12 +16435,23 @@ function isSingleAsciiWord(value) {
   for (let index = 0; index < value.length; index++) {
     const code = value.charCodeAt(index);
     if (code < 33 || code > 126) return false;
+    if (code === 45 && !/\d/.test(value.charAt(index + 1))) return false;
   }
   return true;
 }
 
+const SPACES = "\\t\\v\\f\\r \\u1680\\u2000-\\u2006\\u2008-\\u200a\\u2028\\u2029\\u205f\\u3000";
+
+const GAP = new RegExp(`^[${SPACES}]+$`);
+
+const WORDS = new RegExp(`([${SPACES}]+)|(?<=\\u200b)(?!\\u2060)|(?<=[^${SPACES}][-\\u2010])(?![\\d\\u2060])`);
+
+const RTL = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc\u200f\u202b\u202e\u2067]/;
+
+const IGNORABLE = /[\xad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufff8\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0000}-\u{e0fff}]/u;
+
 function splitLine(line, splitter) {
-  if (splitter === null) return line.split(/([^\S\n]+|[^\s]+)/u).filter(part => part !== "");
+  if (splitter === null) return line.split(WORDS).filter(part => part);
   const parts = splitter(line);
   const result = [];
   let cursor = 0;
@@ -16508,7 +16477,88 @@ function trimTrailingGaps(line) {
   }
 }
 
-function positionLine(line, y, contentWidth, align, direction) {
+function sliceToken(token, start, end, suffix = "") {
+  const text = token.text.slice(start, end) + suffix;
+  let levels = token.levels;
+  if (levels) {
+    const sliced = new Uint8Array(text.length);
+    sliced.set(levels.subarray(start, end));
+    sliced.fill(levels[end - 1] ?? 0, end - start);
+    levels = sliced;
+  }
+  const shy = token.shy?.filter(offset => offset > start && offset < end).map(offset => offset - start);
+  return {
+    ...token,
+    text,
+    width: textWidth(token.style, text),
+    levels,
+    shy: shy?.length ? shy : undefined
+  };
+}
+
+function softSyllables(text, offsets) {
+  const syllables = [];
+  let start = 0;
+  for (const offset of offsets) {
+    if (offset <= start || offset >= text.length) continue;
+    syllables.push(text.slice(start, offset));
+    start = offset;
+  }
+  syllables.push(text.slice(start));
+  return syllables;
+}
+
+function visualOrder(tokens, base) {
+  const bidi = unicodeBidi();
+  const pieces = [];
+  const pieceLevels = [];
+  let skeleton = "";
+  for (const token of tokens) {
+    const levels = token.levels;
+    if (token.kind === "widget" || !levels) {
+      pieces.push(token);
+      pieceLevels.push(levels?.[0] ?? base);
+      skeleton += "￼";
+      continue;
+    }
+    let start = 0;
+    for (let index = 1; index <= token.text.length; index++) {
+      if (index < token.text.length && (levels[index] === levels[start] || (token.text.charCodeAt(index) & 64512) === 56320)) continue;
+      pieces.push(start === 0 && index === token.text.length ? token : sliceToken(token, start, index));
+      pieceLevels.push(levels[start] ?? base);
+      skeleton += token.kind === "gap" ? " " : "a";
+      start = index;
+    }
+  }
+  const order = pieces.map((_, index) => index);
+  const segments = bidi.getReorderSegments(skeleton, {
+    levels: Uint8Array.from(pieceLevels),
+    paragraphs: [ {
+      start: 0,
+      end: pieces.length - 1,
+      level: base
+    } ]
+  });
+  for (const [first = 0, last = 0] of segments) {
+    for (let low = first, high = last; low < high; low++, high--) {
+      const swap = order[low] ?? 0;
+      order[low] = order[high] ?? 0;
+      order[high] = swap;
+    }
+  }
+  return order.map(index => {
+    const piece = pieces[index];
+    if (piece.kind !== "text" || ((pieceLevels[index] ?? 0) & 1) === 0) return piece;
+    let text = "";
+    for (const character of piece.text) text = (bidi.getMirroredCharacter(character) ?? character) + text;
+    return {
+      ...piece,
+      text
+    };
+  });
+}
+
+function positionLine(line, y, contentWidth, align, direction, bidi) {
   let lineSpacing = line.emptyStyle.lineSpacing;
   let ascent = line.emptyStyle.fontSize + Math.max(0, line.emptyStyle.baseline);
   let descent = Math.max(0, line.emptyStyle.lineAdvance + lineSpacing - line.emptyStyle.fontSize - line.emptyStyle.baseline);
@@ -16525,14 +16575,16 @@ function positionLine(line, y, contentWidth, align, direction) {
     }
   }
   const height = Math.max(minimumHeight, ascent + descent);
-  const effectiveAlign = align === "start" ? direction === "rtl" ? "right" : "left" : align === "end" ? direction === "rtl" ? "left" : "right" : align;
+  const resolvedAlign = align === "start" ? direction === "rtl" ? "right" : "left" : align === "end" ? direction === "rtl" ? "left" : "right" : align;
+  const tokens = bidi ? visualOrder(line.tokens, direction === "rtl" ? 1 : 0) : line.tokens;
+  const gapCount = line.wrapped && resolvedAlign === "justify" ? tokens.filter(token => token.kind === "gap").length : 0;
+  const extraPerGap = gapCount === 0 ? 0 : Math.max(0, contentWidth - line.width) / gapCount;
+  const effectiveAlign = resolvedAlign === "justify" && extraPerGap === 0 && direction === "rtl" ? "right" : resolvedAlign;
   let offset = 0;
   if (effectiveAlign === "right") offset = contentWidth - line.width;
   if (effectiveAlign === "center") offset = (contentWidth - line.width) / 2;
-  const gapCount = line.wrapped && effectiveAlign === "justify" ? line.tokens.filter(token => token.kind === "gap").length : 0;
-  const extraPerGap = gapCount === 0 ? 0 : Math.max(0, contentWidth - line.width) / gapCount;
   const paintTokens = [];
-  for (const token of line.tokens) {
+  for (const token of tokens) {
     const previous = paintTokens[paintTokens.length - 1];
     if (extraPerGap === 0 && token.kind !== "widget" && previous !== undefined && previous.kind !== "widget" && previous.style === token.style && previous.annotation === token.annotation) {
       paintTokens[paintTokens.length - 1] = {
@@ -16550,8 +16602,7 @@ function positionLine(line, y, contentWidth, align, direction) {
   let accumulatedExtra = 0;
   const runs = [];
   for (const token of paintTokens) {
-    let runX = x + accumulatedExtra;
-    if (direction === "rtl") runX = contentWidth - runX - token.width;
+    const runX = x + accumulatedExtra;
     const tokenBaseline = y + ascent - token.style.baseline;
     const tokenY = token.kind === "widget" ? tokenBaseline - token.height : tokenBaseline - token.style.fontSize;
     runs.push({
@@ -16568,6 +16619,13 @@ function positionLine(line, y, contentWidth, align, direction) {
     });
     x += token.width;
     if (token.kind === "gap") accumulatedExtra += extraPerGap;
+  }
+  const last = runs[runs.length - 1];
+  if (last !== undefined && last.kind === "text" && last.style.letterSpacing !== 0) {
+    runs[runs.length - 1] = {
+      ...last,
+      width: last.width - last.style.letterSpacing
+    };
   }
   const usedWidth = extraPerGap === 0 ? line.width : contentWidth;
   return {
@@ -16614,30 +16672,72 @@ class RichText extends SpanningWidget {
     };
   }
   inputTokens(context, maxWidth) {
-    const result = [];
     const scale = this.textScaleFactor;
     const direction = this.textDirection ?? Directionality.of(context);
+    const items = [];
+    let source = "";
+    let bidi = direction === "rtl";
     this.text.visitChildren((span, textStyle, annotation) => {
-      const baseStyle = resolveStyle(context, textStyle, span.baseline, scale, this.directFont);
+      const style = resolveStyle(context, textStyle, span.baseline, scale, this.directFont);
       if (span instanceof WidgetSpan) {
         const childBox = span.child.layout(context, new BoxConstraints({
           maxWidth,
           maxHeight: Infinity
         }));
-        result.push({
+        items.push({
           kind: "widget",
-          width: childBox.width,
-          height: childBox.height,
-          style: baseStyle,
-          childBox,
-          annotation
+          start: source.length,
+          token: {
+            kind: "widget",
+            width: childBox.width,
+            height: childBox.height,
+            style,
+            childBox,
+            annotation
+          }
         });
-        return true;
+        source += "￼";
+      } else if (span instanceof TextSpan && span.text !== null) {
+        const text = span.text.replace(/\r\n?/g, "\n");
+        bidi || (bidi = RTL.test(text));
+        items.push({
+          kind: "span",
+          textStyle,
+          style,
+          annotation,
+          text,
+          start: source.length
+        });
+        source += text;
       }
-      if (!(span instanceof TextSpan) || span.text === null) return true;
+      return true;
+    }, context.theme.defaultTextStyle);
+    let levels = null;
+    if (bidi) {
+      const arabic = /[\u0621-\u06d3]/.test(source);
+      let shaped = "";
+      for (const item of items) {
+        const start = item.start;
+        item.start = shaped.length;
+        if (item.kind === "widget") shaped += "￼"; else shaped += item.text = arabic ? shapeArabicRange(source, start, start + item.text.length) : item.text;
+      }
+      levels = unicodeBidi().getEmbeddingLevels(shaped, direction).levels;
+    }
+    const result = [];
+    const groupLevels = levels === null ? null : new Uint8Array(levels.length);
+    for (const item of items) {
+      if (item.kind === "widget") {
+        result.push(levels === null ? item.token : {
+          ...item.token,
+          levels: levels.subarray(item.start, item.start + 1)
+        });
+        continue;
+      }
+      const {style: baseStyle, textStyle, annotation, text} = item;
       let group = "";
       let groupFont = baseStyle.font;
       let kind = "text";
+      let shy = [];
       const styles = new Map([ [ baseStyle.font, baseStyle ] ]);
       const flush = () => {
         if (group === "") return;
@@ -16654,27 +16754,40 @@ class RichText extends SpanningWidget {
           text: group,
           width: textWidth(style, group),
           style,
-          annotation
+          annotation,
+          levels: groupLevels?.slice(0, group.length) ?? null,
+          shy: shy.length === 0 ? undefined : shy
         });
         group = "";
+        shy = [];
       };
-      const visualText = direction === "rtl" ? logicalToVisual(span.text) : span.text;
-      const singleWord = this.lineSplitter === null && isSingleAsciiWord(visualText);
-      const lines = singleWord ? [ visualText ] : visualText.replace(/\r\n?/g, "\n").split("\n");
+      const singleWord = this.lineSplitter === null && isSingleAsciiWord(text);
+      const lines = singleWord ? [ text ] : text.split("\n");
+      let offset = item.start;
       for (let index = 0; index < lines.length; index++) {
-        if (index > 0) result.push({
-          kind: "break",
-          style: baseStyle
-        });
-        const parts = singleWord ? [ visualText ] : splitLine(lines[index] ?? "", this.lineSplitter);
+        if (index > 0) {
+          result.push({
+            kind: "break",
+            style: baseStyle
+          });
+          offset++;
+        }
+        const parts = singleWord ? [ text ] : splitLine(lines[index] ?? "", this.lineSplitter);
         for (const part of parts) {
-          kind = !singleWord && /^\s+$/u.test(part) ? "gap" : "text";
-          for (const character of part) {
-            const codePoint = character.codePointAt(0) ?? 0;
+          kind = !singleWord && GAP.test(part) ? "gap" : "text";
+          for (let at = 0; at < part.length; ) {
+            const codePoint = part.codePointAt(at) ?? 0;
+            let character = String.fromCodePoint(codePoint);
+            const unit = offset + at;
+            at += character.length;
+            if (codePoint >= 173 && IGNORABLE.test(character)) {
+              if (codePoint === 173 && group !== "" && part.charCodeAt(at) !== 8288) shy.push(group.length);
+              continue;
+            }
             let font = baseStyle.font;
             let bitmap = null;
-            if (!supportsRune(font, codePoint)) {
-              for (const fallback of textStyle.fontFallback) {
+            if (codePoint < 32 || !supportsRune(font, codePoint)) {
+              for (const fallback of codePoint < 32 ? [] : textStyle.fontFallback) {
                 const candidate = fallback.getFont(context);
                 if (supportsRune(candidate, codePoint)) {
                   font = candidate;
@@ -16682,6 +16795,7 @@ class RichText extends SpanningWidget {
                   break;
                 }
               }
+              if (font === baseStyle.font && (codePoint < 32 || /\s/.test(character))) character = " ";
             }
             if (bitmap !== null) {
               flush();
@@ -16701,27 +16815,35 @@ class RichText extends SpanningWidget {
                   baseline: baseStyle.baseline + metrics.ascent + metrics.descent - metrics.height
                 },
                 childBox,
-                annotation
+                annotation,
+                levels: levels?.subarray(unit, unit + 1) ?? null
               });
               groupFont = baseStyle.font;
               continue;
             }
             if (font !== groupFont && group !== "") flush();
             groupFont = font;
+            if (levels !== null) groupLevels?.set(levels.subarray(unit, unit + character.length), group.length);
             group += character;
           }
           flush();
+          offset += part.length;
         }
       }
-      return true;
-    }, context.theme.defaultTextStyle);
-    return result;
+    }
+    const first = items[0];
+    return {
+      tokens: result,
+      style: first === undefined ? null : first.kind === "widget" ? first.token.style : first.style,
+      bidi: levels !== null
+    };
   }
   allLines(context, contentWidth, minContentWidth = 0) {
-    const align = this.textAlign ?? context.theme.textAlign ?? "left";
+    const align = this.textAlign ?? context.theme.textAlign ?? "start";
     const softWrap = this.softWrap ?? context.theme.softWrap;
     const maxLines = this.maxLines ?? context.theme.maxLines;
-    const tokens = this.inputTokens(context, contentWidth);
+    const {tokens, style, bidi} = this.inputTokens(context, contentWidth);
+    if (style === null) return [];
     if (context.minContent === true) {
       let widest = 1;
       for (const token of tokens) {
@@ -16729,37 +16851,33 @@ class RichText extends SpanningWidget {
       }
       contentWidth = Math.min(contentWidth, widest);
     }
-    const fallbackStyle = resolveStyle(context, context.theme.defaultTextStyle, 0, this.textScaleFactor);
     const raw = [];
     let current = {
       tokens: [],
       width: 0,
+      blank: 0,
       wrapped: false,
-      emptyStyle: fallbackStyle
+      emptyStyle: style
     };
     const pushLine = wrapped => {
       trimTrailingGaps(current);
+      const last = current.tokens[current.tokens.length - 1];
+      if (last === undefined) current.width = current.blank; else if (last.kind === "text") current.width -= last.style.letterSpacing;
       current.wrapped = wrapped;
       raw.push(current);
       current = {
         tokens: [],
         width: 0,
+        blank: 0,
         wrapped: false,
         emptyStyle: current.emptyStyle
       };
     };
-    const appendToken = (token, spacing = 0) => {
-      const index = current.tokens.length - 1;
-      const previous = current.tokens[index];
-      if (previous !== undefined && spacing !== 0) {
-        current.tokens[index] = {
-          ...previous,
-          width: previous.width + spacing
-        };
-      }
+    const appendToken = token => {
       current.tokens.push(token);
-      current.width += token.width + spacing;
+      current.width += token.width;
     };
+    const overflows = (width, token) => current.width + width - (token.kind === "text" ? token.style.letterSpacing : 0) > contentWidth + 1e-5;
     for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
       const token = tokens[tokenIndex];
       if (token === undefined) continue;
@@ -16768,11 +16886,12 @@ class RichText extends SpanningWidget {
         pushLine(false);
         continue;
       }
-      if (token.kind === "gap" && current.tokens.length === 0) continue;
-      const previous = current.tokens[current.tokens.length - 1];
-      const joinSpacing = this.lineSplitter !== null && token.kind === "text" && previous?.kind === "text" && previous.style === token.style ? token.style.letterSpacing : 0;
-      if (softWrap && token.kind === "text" && this.hyphenation !== null && current.width + joinSpacing + token.width > contentWidth + 1e-5) {
-        const syllables = this.hyphenation(token.text);
+      if (token.kind === "gap" && current.tokens.length === 0) {
+        current.blank += token.width;
+        continue;
+      }
+      if (softWrap && token.kind === "text" && overflows(token.width, token)) {
+        const syllables = token.shy !== undefined ? softSyllables(token.text, token.shy) : this.hyphenation?.(token.text) ?? [];
         if (syllables.length > 1) {
           if (syllables.some(part => typeof part !== "string" || part === "") || syllables.join("") !== token.text) {
             throw new RangeError("hyphenation must return nonempty syllables which reconstruct the word");
@@ -16780,43 +16899,28 @@ class RichText extends SpanningWidget {
           let fits = "";
           for (let index = 0; index < syllables.length - 1; index++) {
             const candidate = fits + syllables[index];
-            if (current.width + joinSpacing + textWidth(token.style, candidate + "-") > contentWidth + 1e-5) break;
+            if (overflows(textWidth(token.style, candidate + "-"), token)) break;
             fits = candidate;
           }
           if (fits !== "") {
-            const head = fits + "-";
-            const width = textWidth(token.style, head);
-            appendToken({
-              ...token,
-              text: head,
-              width
-            }, joinSpacing);
+            appendToken(sliceToken(token, 0, fits.length, "-"));
             pushLine(true);
-            const tail = token.text.slice(fits.length);
-            tokens[tokenIndex] = {
-              ...token,
-              text: tail,
-              width: textWidth(token.style, tail)
-            };
+            tokens[tokenIndex] = sliceToken(token, fits.length, token.text.length);
             tokenIndex--;
             continue;
           }
         }
       }
-      if (softWrap && current.tokens.length > 0 && current.width + joinSpacing + token.width > contentWidth + 1e-5) {
+      if (softWrap && current.tokens.length > 0 && overflows(token.width, token)) {
         pushLine(true);
         if (token.kind !== "gap") tokenIndex--;
         continue;
       }
-      if (token.kind === "text" && softWrap && token.width > contentWidth + 1e-5) {
+      if (token.kind === "text" && softWrap && token.width - token.style.letterSpacing > contentWidth + 1e-5) {
         const pieces = splitLongWord(token.text, contentWidth, token.style);
+        let start = 0;
         for (let index = 0; index < pieces.length; index++) {
-          const piece = pieces[index] ?? "";
-          const part = {
-            ...token,
-            text: piece,
-            width: textWidth(token.style, piece)
-          };
+          const part = sliceToken(token, start, start += (pieces[index] ?? "").length);
           if (current.tokens.length > 0) pushLine(true);
           current.tokens.push(part);
           current.width = part.width;
@@ -16824,7 +16928,7 @@ class RichText extends SpanningWidget {
         }
         continue;
       }
-      appendToken(token, joinSpacing);
+      appendToken(token);
     }
     if (current.tokens.length > 0 || raw.length === 0 || tokens[tokens.length - 1]?.kind === "break") pushLine(false);
     const limited = maxLines === null ? raw : raw.slice(0, Math.max(1, maxLines));
@@ -16833,7 +16937,7 @@ class RichText extends SpanningWidget {
     const lines = [];
     const textDirection = this.textDirection ?? Directionality.of(context);
     for (const line of limited) {
-      const positioned = positionLine(line, y, targetWidth, align, textDirection);
+      const positioned = positionLine(line, y, targetWidth, align, textDirection, bidi);
       lines.push(positioned);
       y += positioned.height;
     }

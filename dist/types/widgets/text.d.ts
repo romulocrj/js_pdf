@@ -103,6 +103,10 @@ interface TextFlowToken {
     readonly width: number;
     readonly style: ResolvedTextStyle;
     readonly annotation: AnnotationBuilder | null;
+    /** UAX #9 level of each UTF-16 unit of `text`; absent outside bidi paragraphs. */
+    readonly levels?: Uint8Array | null;
+    /** Offsets in `text` where a soft hyphen was: hyphenation points. */
+    readonly shy?: readonly number[] | undefined;
 }
 interface WidgetFlowToken {
     readonly kind: 'widget';
@@ -111,6 +115,7 @@ interface WidgetFlowToken {
     readonly style: ResolvedTextStyle;
     readonly childBox: AnyLayoutBox;
     readonly annotation: AnnotationBuilder | null;
+    readonly levels?: Uint8Array | null;
 }
 type FlowToken = TextFlowToken | WidgetFlowToken;
 interface BreakToken {
@@ -118,6 +123,13 @@ interface BreakToken {
     readonly style: ResolvedTextStyle;
 }
 type InputToken = FlowToken | BreakToken;
+interface Paragraph {
+    readonly tokens: InputToken[];
+    /** The first span's style; null when no span holds text or a widget. */
+    readonly style: ResolvedTextStyle | null;
+    /** Whether the tokens carry embedding levels to reorder each line by. */
+    readonly bidi: boolean;
+}
 export interface RichTextRunLayout {
     readonly kind: 'text' | 'gap' | 'widget';
     readonly text: string;
@@ -166,7 +178,7 @@ export declare class RichText extends SpanningWidget<RichTextLayoutData, RichTex
     readonly margin: Insets;
     constructor({ lineSplitter, hyphenation, text, textAlign, textDirection, softWrap, tightBounds, textScaleFactor, maxLines, overflow, margin }: RichTextOptions);
     initialSpanState(): RichTextState;
-    protected inputTokens(context: RenderContext, maxWidth: number): InputToken[];
+    protected inputTokens(context: RenderContext, maxWidth: number): Paragraph;
     private allLines;
     private fragment;
     layout(context: RenderContext, constraints: Constraints): LayoutBox<RichTextLayoutData>;

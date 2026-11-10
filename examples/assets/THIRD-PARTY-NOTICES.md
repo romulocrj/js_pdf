@@ -70,6 +70,29 @@ the pinned source above and pass its path to the script; it verifies the source
 hash. The browser/Node examples use the committed subset and require neither
 Python nor fonttools. The existing font files listed above remain unmodified.
 
+## Arabic example font (phase 7.3)
+
+`JsPdfArabicExample.ttf` is a modified, static subset of
+[Noto Sans Arabic](https://github.com/google/fonts/tree/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notosansarabic),
+instanced at `wght` 400 and `wdth` 100. Original font:
+`NotoSansArabic[wdth,wght].ttf`, SHA-256
+`63111b5b2e074dd48cc67692e0a2726d86ee94c1c37fe8598257b7b4e87e869e`.
+
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic).
+Licensed under the [SIL Open Font License 1.1](licenses/NotoSansArabic-OFL.txt),
+retained in full with its original copyright notice. The subset is renamed
+`JsPdfArabicExample`; its internal copyright and license records are
+preserved. It holds ASCII, U+00A0, U+2010, U+202F, the Arabic letters, marks
+and digits used by phase 7.3, and the Arabic Presentation Forms-B except
+U+FEEF and U+FEF1, which are omitted so the font parser's isolated-form aliases
+can be tested. The OpenType layout tables (GSUB, GPOS, GDEF), which the port
+does not read, are dropped. It is not a general-purpose Arabic font.
+
+`generate-arabic-subset.py` records the recipe using fonttools 4.66.0. Download
+the pinned source above and pass its path to the script; it verifies the source
+hash. The browser/Node examples use the committed subset and require neither
+Python nor fonttools.
+
 ## Source Sans 3 CFF fixtures (phase 6.8)
 
 `JsPdfCffExample.otf` and `JsPdfCffCidExample.otf` are renamed, modified subsets

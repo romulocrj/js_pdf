@@ -20,8 +20,12 @@
  * page continuation is an immutable line index. That keeps repeated layout and
  * MultiPage pagination deterministic.
  *
- * RTL spans are converted to visual runs and Arabic presentation forms before
- * measurement, while immutable run placement still handles start/end layout.
+ * Bidirectional text follows UAX #9 as written: a paragraph that is RTL, or
+ * holds a strong RTL character, is shaped and given embedding levels once, in
+ * logical order and across span boundaries. Lines are broken on those logical
+ * tokens and only then reordered (rule L2), line by line. Upstream reorders
+ * whole spans before breaking and compensates with a 239-line skeleton pass;
+ * the port reuses the bundled UAX #9 levels and reorder segments instead.
  */
 
 import { assertFiniteNumber } from '../base/assert.ts';
@@ -29,7 +33,8 @@ import { normalizePaintColor } from '../pdf/color.ts';
 import type { ColorInput, PaintColor } from '../pdf/color.ts';
 import type { PdfFont } from '../pdf/font/font.ts';
 import type { PdfFontBitmap } from '../pdf/font/font.ts';
-import { logicalToVisual } from '../pdf/font/bidi_utils.ts';
+import { shapeArabicRange } from '../pdf/font/arabic.ts';
+import { unicodeBidi } from '../pdf/font/unicode_bidi.ts';
 import { defaultPdfFont } from '../pdf/font/type1_fonts.ts';
 import { BoxConstraints, normalizeInsets } from './geometry.ts';
 import type { Insets, InsetsInput } from './geometry.ts';
@@ -230,6 +235,10 @@ interface TextFlowToken {
   readonly width: number;
   readonly style: ResolvedTextStyle;
   readonly annotation: AnnotationBuilder | null;
+  /** UAX #9 level of each UTF-16 unit of `text`; absent outside bidi paragraphs. */
+  readonly levels?: Uint8Array | null;
+  /** Offsets in `text` where a soft hyphen was: hyphenation points. */
+  readonly shy?: readonly number[] | undefined;
 }
 
 interface WidgetFlowToken {
@@ -239,6 +248,7 @@ interface WidgetFlowToken {
   readonly style: ResolvedTextStyle;
   readonly childBox: AnyLayoutBox;
   readonly annotation: AnnotationBuilder | null;
+  readonly levels?: Uint8Array | null;
 }
 
 type FlowToken = TextFlowToken | WidgetFlowToken;
@@ -249,6 +259,29 @@ interface BreakToken {
 }
 
 type InputToken = FlowToken | BreakToken;
+
+interface TextItem {
+  readonly kind: 'span';
+  readonly textStyle: TextStyle;
+  readonly style: ResolvedTextStyle;
+  readonly annotation: AnnotationBuilder | null;
+  text: string;
+  start: number;
+}
+
+interface WidgetItem {
+  readonly kind: 'widget';
+  readonly token: WidgetFlowToken;
+  start: number;
+}
+
+interface Paragraph {
+  readonly tokens: InputToken[];
+  /** The first span's style; null when no span holds text or a widget. */
+  readonly style: ResolvedTextStyle | null;
+  /** Whether the tokens carry embedding levels to reorder each line by. */
+  readonly bidi: boolean;
+}
 
 export interface RichTextRunLayout {
   readonly kind: 'text' | 'gap' | 'widget';
@@ -286,15 +319,22 @@ export interface RichTextState {
 /** Legacy layout shape retained as an alias for callers that named it. */
 export type TextLayoutData = RichTextLayoutData;
 
-function countSpaces(value: string): number {
-  let count = 0;
-  for (const character of value) if (/\s/u.test(character)) count++;
-  return count;
-}
-
+/**
+ * The advance `value` draws with: `Tc` after every glyph and `Tw` after every
+ * U+0020, exactly as the PDF operators apply them. Charging letter spacing
+ * per glyph, the trailing one included, lets tokens and spans tile (L155):
+ * the line, not each run, drops the spacing after its last glyph.
+ */
 function textWidth(style: ResolvedTextStyle, value: string): number {
-  return style.font.stringMetrics(value, style.fontSize, style.letterSpacing).advanceWidth
-    + countSpaces(value) * style.wordSpacing;
+  let glyphs = 0;
+  let spaces = 0;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code === 32) spaces++;
+    if (code < 0xdc00 || code > 0xdfff) glyphs++;
+  }
+  return style.font.stringMetrics(value, style.fontSize).advanceWidth
+    + glyphs * style.letterSpacing + spaces * style.wordSpacing;
 }
 
 function supportsRune(font: PdfFont, codePoint: number): boolean {
@@ -356,7 +396,7 @@ function splitLongWord(value: string, maxWidth: number, style: ResolvedTextStyle
   let current = '';
   for (const character of value) {
     const candidate = current + character;
-    if (current !== '' && textWidth(style, candidate) > maxWidth) {
+    if (current !== '' && textWidth(style, candidate) - style.letterSpacing > maxWidth) {
       parts.push(current);
       current = character;
     } else {
@@ -367,19 +407,45 @@ function splitLongWord(value: string, maxWidth: number, style: ResolvedTextStyle
   return parts.length === 0 ? [''] : parts;
 }
 
-/** Only printable non-space ASCII is safe to bypass Unicode whitespace splitting. */
+/**
+ * Only printable non-space ASCII is safe to bypass the splitter, and a hyphen
+ * only before a digit: anywhere else it is a break opportunity (L143). Serial
+ * numbers such as `INV-2024-0001` keep the fast path.
+ */
 function isSingleAsciiWord(value: string): boolean {
   if (value.length === 0) return false;
   for (let index = 0; index < value.length; index++) {
     const code = value.charCodeAt(index);
     if (code < 0x21 || code > 0x7e) return false;
+    if (code === 0x2d && !/\d/.test(value.charAt(index + 1))) return false;
   }
   return true;
 }
 
+/**
+ * Whitespace a line may break at: JavaScript's `\s` without the no-break
+ * spaces U+00A0, U+2007 and U+202F, which authors use to hold two words
+ * together (L141), and without U+FEFF, a default ignorable.
+ */
+const SPACES = '\\t\\v\\f\\r \\u1680\\u2000-\\u2006\\u2008-\\u200a\\u2028\\u2029\\u205f\\u3000';
+const GAP = new RegExp(`^[${SPACES}]+$`);
+
+/**
+ * Whitespace runs, plus zero-width opportunities after U+200B (L145) and after
+ * a hyphen that is neither run-initial nor before a digit, so `Hello-|World`
+ * breaks while `3-4` and `-5` stay whole (L143). U+2060 cancels either one.
+ */
+const WORDS = new RegExp(`([${SPACES}]+)|(?<=\\u200b)(?!\\u2060)|(?<=[^${SPACES}][-\\u2010])(?![\\d\\u2060])`);
+
+/** Strong RTL text, or a control that opens an RTL level: bidi has work to do. */
+const RTL = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc\u200f\u202b\u202e\u2067]/;
+
+/** Unicode Default_Ignorable_Code_Point: never measured, never drawn (L139). */
+const IGNORABLE = /[\xad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufff8\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0000}-\u{e0fff}]/u;
+
 /** Adapt upstream's word-list callback to the port's explicit whitespace tokens. */
 function splitLine(line: string, splitter: LineSplitter | null): readonly string[] {
-  if (splitter === null) return line.split(/([^\S\n]+|[^\s]+)/u).filter(part => part !== '');
+  if (splitter === null) return line.split(WORDS).filter(part => part);
   const parts = splitter(line);
   const result: string[] = [];
   let cursor = 0;
@@ -450,6 +516,8 @@ export function wrapText(
 interface MutableLine {
   tokens: FlowToken[];
   width: number;
+  /** Whitespace dropped from the start of the line. */
+  blank: number;
   wrapped: boolean;
   emptyStyle: ResolvedTextStyle;
 }
@@ -460,12 +528,91 @@ function trimTrailingGaps(line: MutableLine): void {
   }
 }
 
+/** `token.text[start, end)` plus `suffix`, with its levels and soft hyphens rebased. */
+function sliceToken(token: TextFlowToken, start: number, end: number, suffix = ''): TextFlowToken {
+  const text = token.text.slice(start, end) + suffix;
+  let levels = token.levels;
+  if (levels) {
+    const sliced = new Uint8Array(text.length);
+    sliced.set(levels.subarray(start, end));
+    sliced.fill(levels[end - 1] ?? 0, end - start);
+    levels = sliced;
+  }
+  const shy = token.shy?.filter(offset => offset > start && offset < end).map(offset => offset - start);
+  return { ...token, text, width: textWidth(token.style, text), levels, shy: shy?.length ? shy : undefined };
+}
+
+/** The syllables the soft hyphens of a token mark out. */
+function softSyllables(text: string, offsets: readonly number[]): string[] {
+  const syllables: string[] = [];
+  let start = 0;
+  for (const offset of offsets) {
+    if (offset <= start || offset >= text.length) continue;
+    syllables.push(text.slice(start, offset));
+    start = offset;
+  }
+  syllables.push(text.slice(start));
+  return syllables;
+}
+
+/**
+ * UAX #9 L1-L2 for one finished line. Tokens are split where their level
+ * changes, the bundled implementation computes the reversals over one
+ * skeleton character per piece, and RTL pieces are reversed with mirrored
+ * glyphs. Breaking happened on logical order, so line one keeps the first
+ * words and the justify gaps, fallback runs and links stay with their text.
+ */
+function visualOrder(tokens: readonly FlowToken[], base: number): FlowToken[] {
+  const bidi = unicodeBidi();
+  const pieces: FlowToken[] = [];
+  const pieceLevels: number[] = [];
+  let skeleton = '';
+  for (const token of tokens) {
+    const levels = token.levels;
+    if (token.kind === 'widget' || !levels) {
+      pieces.push(token);
+      pieceLevels.push(levels?.[0] ?? base);
+      skeleton += '\ufffc';
+      continue;
+    }
+    let start = 0;
+    for (let index = 1; index <= token.text.length; index++) {
+      if (index < token.text.length && (levels[index] === levels[start]
+          || (token.text.charCodeAt(index) & 0xfc00) === 0xdc00)) continue;
+      pieces.push(start === 0 && index === token.text.length ? token : sliceToken(token, start, index));
+      pieceLevels.push(levels[start] ?? base);
+      skeleton += token.kind === 'gap' ? ' ' : 'a';
+      start = index;
+    }
+  }
+  const order = pieces.map((_, index) => index);
+  const segments = bidi.getReorderSegments(skeleton, {
+    levels: Uint8Array.from(pieceLevels),
+    paragraphs: [{ start: 0, end: pieces.length - 1, level: base }]
+  });
+  for (const [first = 0, last = 0] of segments) {
+    for (let low = first, high = last; low < high; low++, high--) {
+      const swap = order[low] ?? 0;
+      order[low] = order[high] ?? 0;
+      order[high] = swap;
+    }
+  }
+  return order.map(index => {
+    const piece = pieces[index]!;
+    if (piece.kind !== 'text' || ((pieceLevels[index] ?? 0) & 1) === 0) return piece;
+    let text = '';
+    for (const character of piece.text) text = (bidi.getMirroredCharacter(character) ?? character) + text;
+    return { ...piece, text };
+  });
+}
+
 function positionLine(
   line: MutableLine,
   y: number,
   contentWidth: number,
   align: TextAlign,
-  direction: TextDirection
+  direction: TextDirection,
+  bidi: boolean
 ): RichTextLineLayout {
   let lineSpacing = line.emptyStyle.lineSpacing;
   let ascent = line.emptyStyle.fontSize + Math.max(0, line.emptyStyle.baseline);
@@ -496,21 +643,27 @@ function positionLine(
     }
   }
   const height = Math.max(minimumHeight, ascent + descent);
-  const effectiveAlign = align === 'start'
+  const resolvedAlign = align === 'start'
     ? (direction === 'rtl' ? 'right' : 'left')
     : align === 'end'
       ? (direction === 'rtl' ? 'left' : 'right')
       : align;
+  const tokens = bidi ? visualOrder(line.tokens, direction === 'rtl' ? 1 : 0) : line.tokens;
+  const gapCount = line.wrapped && resolvedAlign === 'justify'
+    ? tokens.filter(token => token.kind === 'gap').length
+    : 0;
+  const extraPerGap = gapCount === 0 ? 0 : Math.max(0, contentWidth - line.width) / gapCount;
+  // A justified line that is not stretched, such as the last, sits at the
+  // start. The RTL mirroring this replaced used to provide that.
+  const effectiveAlign = resolvedAlign === 'justify' && extraPerGap === 0 && direction === 'rtl'
+    ? 'right'
+    : resolvedAlign;
   let offset = 0;
   if (effectiveAlign === 'right') offset = contentWidth - line.width;
   if (effectiveAlign === 'center') offset = (contentWidth - line.width) / 2;
 
-  const gapCount = line.wrapped && effectiveAlign === 'justify'
-    ? line.tokens.filter(token => token.kind === 'gap').length
-    : 0;
-  const extraPerGap = gapCount === 0 ? 0 : Math.max(0, contentWidth - line.width) / gapCount;
   const paintTokens: FlowToken[] = [];
-  for (const token of line.tokens) {
+  for (const token of tokens) {
     const previous = paintTokens[paintTokens.length - 1];
     if (
       extraPerGap === 0 && token.kind !== 'widget' && previous !== undefined &&
@@ -532,8 +685,8 @@ function positionLine(
   let accumulatedExtra = 0;
   const runs: RichTextRunLayout[] = [];
   for (const token of paintTokens) {
-    let runX = x + accumulatedExtra;
-    if (direction === 'rtl') runX = contentWidth - runX - token.width;
+    // Already in visual order: an RTL line is not mirrored a second time.
+    const runX = x + accumulatedExtra;
     const tokenBaseline = y + ascent - token.style.baseline;
     const tokenY = token.kind === 'widget'
       ? tokenBaseline - token.height
@@ -552,6 +705,11 @@ function positionLine(
     });
     x += token.width;
     if (token.kind === 'gap') accumulatedExtra += extraPerGap;
+  }
+  // The spacing after the last glyph is not ink; the line width left it out.
+  const last = runs[runs.length - 1];
+  if (last !== undefined && last.kind === 'text' && last.style.letterSpacing !== 0) {
+    runs[runs.length - 1] = { ...last, width: last.width - last.style.letterSpacing };
   }
   const usedWidth = extraPerGap === 0 ? line.width : contentWidth;
   return { runs, y, width: usedWidth, height, lineSpacing, wrapped: line.wrapped };
@@ -614,32 +772,68 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
     return { lineIndex: 0 };
   }
 
-  protected inputTokens(context: RenderContext, maxWidth: number): InputToken[] {
-    const result: InputToken[] = [];
+  protected inputTokens(context: RenderContext, maxWidth: number): Paragraph {
     const scale = this.textScaleFactor;
     const direction = this.textDirection ?? Directionality.of(context);
+    const items: (TextItem | WidgetItem)[] = [];
+    let source = '';
+    // UAX #9 picks the embedding level from the base direction; it runs for
+    // an RTL fragment in an LTR paragraph too (L150).
+    let bidi = direction === 'rtl';
     this.text.visitChildren((span, textStyle, annotation) => {
-      const baseStyle = resolveStyle(context, textStyle, span.baseline, scale, this.directFont);
+      const style = resolveStyle(context, textStyle, span.baseline, scale, this.directFont);
       if (span instanceof WidgetSpan) {
         const childBox = span.child.layout(context, new BoxConstraints({
           maxWidth,
           maxHeight: Infinity
         }));
-        result.push({
+        items.push({ kind: 'widget', start: source.length, token: {
           kind: 'widget',
           width: childBox.width,
           height: childBox.height,
-          style: baseStyle,
+          style,
           childBox,
           annotation
-        });
-        return true;
+        } });
+        source += '\ufffc';
+      } else if (span instanceof TextSpan && span.text !== null) {
+        // CRLF and CR end one line each, before bidi sees them (L140).
+        const text = span.text.replace(/\r\n?/g, '\n');
+        bidi ||= RTL.test(text);
+        items.push({ kind: 'span', textStyle, style, annotation, text, start: source.length });
+        source += text;
       }
-      if (!(span instanceof TextSpan) || span.text === null) return true;
+      return true;
+    }, context.theme.defaultTextStyle);
 
+    // Shape and resolve levels once, in logical order, over the whole
+    // paragraph: joining and bidi runs cross span boundaries, and the lines are
+    // reordered only after they are broken.
+    let levels: Uint8Array | null = null;
+    if (bidi) {
+      const arabic = /[\u0621-\u06d3]/.test(source);
+      let shaped = '';
+      for (const item of items) {
+        const start = item.start;
+        item.start = shaped.length;
+        if (item.kind === 'widget') shaped += '\ufffc';
+        else shaped += item.text = arabic ? shapeArabicRange(source, start, start + item.text.length) : item.text;
+      }
+      levels = unicodeBidi().getEmbeddingLevels(shaped, direction).levels;
+    }
+
+    const result: InputToken[] = [];
+    const groupLevels = levels === null ? null : new Uint8Array(levels.length);
+    for (const item of items) {
+      if (item.kind === 'widget') {
+        result.push(levels === null ? item.token : { ...item.token, levels: levels.subarray(item.start, item.start + 1) });
+        continue;
+      }
+      const { style: baseStyle, textStyle, annotation, text } = item;
       let group = '';
       let groupFont = baseStyle.font;
       let kind: 'text' | 'gap' = 'text';
+      let shy: number[] = [];
       const styles = new Map<PdfFont, ResolvedTextStyle>([[baseStyle.font, baseStyle]]);
       const flush = (): void => {
         if (group === '') return;
@@ -648,24 +842,44 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
           style = { ...baseStyle, font: groupFont };
           styles.set(groupFont, style);
         }
-        result.push({ kind, text: group, width: textWidth(style, group), style, annotation });
+        result.push({
+          kind,
+          text: group,
+          width: textWidth(style, group),
+          style,
+          annotation,
+          levels: groupLevels?.slice(0, group.length) ?? null,
+          shy: shy.length === 0 ? undefined : shy
+        });
         group = '';
+        shy = [];
       };
 
-      const visualText = direction === 'rtl' ? logicalToVisual(span.text) : span.text;
-      const singleWord = this.lineSplitter === null && isSingleAsciiWord(visualText);
-      const lines = singleWord ? [visualText] : visualText.replace(/\r\n?/g, '\n').split('\n');
+      const singleWord = this.lineSplitter === null && isSingleAsciiWord(text);
+      const lines = singleWord ? [text] : text.split('\n');
+      let offset = item.start;
       for (let index = 0; index < lines.length; index++) {
-        if (index > 0) result.push({ kind: 'break', style: baseStyle });
-        const parts = singleWord ? [visualText] : splitLine(lines[index] ?? '', this.lineSplitter);
+        if (index > 0) {
+          result.push({ kind: 'break', style: baseStyle });
+          offset++;
+        }
+        const parts = singleWord ? [text] : splitLine(lines[index] ?? '', this.lineSplitter);
         for (const part of parts) {
-          kind = !singleWord && /^\s+$/u.test(part) ? 'gap' : 'text';
-          for (const character of part) {
-            const codePoint = character.codePointAt(0) ?? 0;
+          kind = !singleWord && GAP.test(part) ? 'gap' : 'text';
+          for (let at = 0; at < part.length;) {
+            const codePoint = part.codePointAt(at) ?? 0;
+            let character = String.fromCodePoint(codePoint);
+            const unit = offset + at;
+            at += character.length;
+            if (codePoint >= 0xad && IGNORABLE.test(character)) {
+              // L144: a soft hyphen is a hyphenation point, drawn only if taken.
+              if (codePoint === 0xad && group !== '' && part.charCodeAt(at) !== 0x2060) shy.push(group.length);
+              continue;
+            }
             let font = baseStyle.font;
             let bitmap: PdfFontBitmap | null = null;
-            if (!supportsRune(font, codePoint)) {
-              for (const fallback of textStyle.fontFallback) {
+            if (codePoint < 0x20 || !supportsRune(font, codePoint)) {
+              for (const fallback of codePoint < 0x20 ? [] : textStyle.fontFallback) {
                 const candidate = fallback.getFont(context);
                 if (supportsRune(candidate, codePoint)) {
                   font = candidate;
@@ -673,6 +887,8 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
                   break;
                 }
               }
+              // L142: a separator no font can draw advances like a U+0020.
+              if (font === baseStyle.font && (codePoint < 0x20 || /\s/.test(character))) character = ' ';
             }
             if (bitmap !== null) {
               flush();
@@ -692,28 +908,39 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
                   baseline: baseStyle.baseline + metrics.ascent + metrics.descent - metrics.height
                 },
                 childBox,
-                annotation
+                annotation,
+                levels: levels?.subarray(unit, unit + 1) ?? null
               });
               groupFont = baseStyle.font;
               continue;
             }
             if (font !== groupFont && group !== '') flush();
             groupFont = font;
+            if (levels !== null) groupLevels?.set(levels.subarray(unit, unit + character.length), group.length);
             group += character;
           }
           flush();
+          offset += part.length;
         }
       }
-      return true;
-    }, context.theme.defaultTextStyle);
-    return result;
+    }
+    const first = items[0];
+    return {
+      tokens: result,
+      style: first === undefined ? null : first.kind === 'widget' ? first.token.style : first.style,
+      bidi: levels !== null
+    };
   }
 
   private allLines(context: RenderContext, contentWidth: number, minContentWidth = 0): RichTextLineLayout[] {
-    const align = this.textAlign ?? context.theme.textAlign ?? 'left';
+    // Upstream's default is TextAlign.start. The port defaulted to left and
+    // mirrored RTL lines, which turned an explicit left into right.
+    const align = this.textAlign ?? context.theme.textAlign ?? 'start';
     const softWrap = this.softWrap ?? context.theme.softWrap;
     const maxLines = this.maxLines ?? context.theme.maxLines;
-    const tokens = this.inputTokens(context, contentWidth);
+    const { tokens, style, bidi } = this.inputTokens(context, contentWidth);
+    // L157: a span tree with no text at all lays out empty, as upstream does.
+    if (style === null) return [];
     if (context.minContent === true) {
       // A table's min-content pass: break at every opportunity, so the widest
       // line is the widest piece that cannot be split.
@@ -723,26 +950,30 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
       }
       contentWidth = Math.min(contentWidth, widest);
     }
-    const fallbackStyle = resolveStyle(context, context.theme.defaultTextStyle, 0, this.textScaleFactor);
     const raw: MutableLine[] = [];
-    let current: MutableLine = { tokens: [], width: 0, wrapped: false, emptyStyle: fallbackStyle };
+    let current: MutableLine = { tokens: [], width: 0, blank: 0, wrapped: false, emptyStyle: style };
 
     const pushLine = (wrapped: boolean): void => {
       trimTrailingGaps(current);
+      const last = current.tokens[current.tokens.length - 1];
+      // L157: a line of nothing but whitespace keeps that whitespace's width.
+      if (last === undefined) current.width = current.blank;
+      // L155: the spacing after the last glyph is not ink, as upstream after #1980.
+      else if (last.kind === 'text') current.width -= last.style.letterSpacing;
       current.wrapped = wrapped;
       raw.push(current);
-      current = { tokens: [], width: 0, wrapped: false, emptyStyle: current.emptyStyle };
+      current = { tokens: [], width: 0, blank: 0, wrapped: false, emptyStyle: current.emptyStyle };
     };
 
-    const appendToken = (token: FlowToken, spacing = 0): void => {
-      const index = current.tokens.length - 1;
-      const previous = current.tokens[index];
-      if (previous !== undefined && spacing !== 0) {
-        current.tokens[index] = { ...previous, width: previous.width + spacing };
-      }
+    const appendToken = (token: FlowToken): void => {
       current.tokens.push(token);
-      current.width += token.width + spacing;
+      current.width += token.width;
     };
+
+    // Whether `width` more would cross the edge. A text token's own trailing
+    // letter spacing may hang past it, as it does at the end of a line.
+    const overflows = (width: number, token: FlowToken): boolean =>
+      current.width + width - (token.kind === 'text' ? token.style.letterSpacing : 0) > contentWidth + 0.00001;
 
     for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
       const token = tokens[tokenIndex];
@@ -752,15 +983,16 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
         pushLine(false);
         continue;
       }
-      if (token.kind === 'gap' && current.tokens.length === 0) continue;
-      const previous = current.tokens[current.tokens.length - 1];
-      const joinSpacing = this.lineSplitter !== null && token.kind === 'text'
-        && previous?.kind === 'text' && previous.style === token.style
-        ? token.style.letterSpacing : 0;
+      if (token.kind === 'gap' && current.tokens.length === 0) {
+        current.blank += token.width;
+        continue;
+      }
 
-      if (softWrap && token.kind === 'text' && this.hyphenation !== null
-          && current.width + joinSpacing + token.width > contentWidth + 0.00001) {
-        const syllables = this.hyphenation(token.text);
+      if (softWrap && token.kind === 'text' && overflows(token.width, token)) {
+        // Soft hyphens are the author's own hyphenation points (L144).
+        const syllables = token.shy !== undefined
+          ? softSyllables(token.text, token.shy)
+          : this.hyphenation?.(token.text) ?? [];
         if (syllables.length > 1) {
           if (syllables.some(part => typeof part !== 'string' || part === '')
               || syllables.join('') !== token.text) {
@@ -770,33 +1002,30 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
           // Keep a nonempty remainder: a trailing hyphen is only a line-break marker.
           for (let index = 0; index < syllables.length - 1; index++) {
             const candidate = fits + syllables[index];
-            if (current.width + joinSpacing + textWidth(token.style, candidate + '-') > contentWidth + 0.00001) break;
+            if (overflows(textWidth(token.style, candidate + '-'), token)) break;
             fits = candidate;
           }
           if (fits !== '') {
-            const head = fits + '-';
-            const width = textWidth(token.style, head);
-            appendToken({ ...token, text: head, width }, joinSpacing);
+            appendToken(sliceToken(token, 0, fits.length, '-'));
             pushLine(true);
-            const tail = token.text.slice(fits.length);
-            tokens[tokenIndex] = { ...token, text: tail, width: textWidth(token.style, tail) };
+            tokens[tokenIndex] = sliceToken(token, fits.length, token.text.length);
             tokenIndex--;
             continue;
           }
         }
       }
 
-      if (softWrap && current.tokens.length > 0 && current.width + joinSpacing + token.width > contentWidth + 0.00001) {
+      if (softWrap && current.tokens.length > 0 && overflows(token.width, token)) {
         pushLine(true);
         if (token.kind !== 'gap') tokenIndex--;
         continue;
       }
 
-      if (token.kind === 'text' && softWrap && token.width > contentWidth + 0.00001) {
+      if (token.kind === 'text' && softWrap && token.width - token.style.letterSpacing > contentWidth + 0.00001) {
         const pieces = splitLongWord(token.text, contentWidth, token.style);
+        let start = 0;
         for (let index = 0; index < pieces.length; index++) {
-          const piece = pieces[index] ?? '';
-          const part = { ...token, text: piece, width: textWidth(token.style, piece) };
+          const part = sliceToken(token, start, start += (pieces[index] ?? '').length);
           if (current.tokens.length > 0) pushLine(true);
           current.tokens.push(part);
           current.width = part.width;
@@ -805,7 +1034,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
         continue;
       }
 
-      appendToken(token, joinSpacing);
+      appendToken(token);
     }
     if (current.tokens.length > 0 || raw.length === 0 || tokens[tokens.length - 1]?.kind === 'break') pushLine(false);
 
@@ -823,7 +1052,7 @@ export class RichText extends SpanningWidget<RichTextLayoutData, RichTextState> 
     const lines: RichTextLineLayout[] = [];
     const textDirection = this.textDirection ?? Directionality.of(context);
     for (const line of limited) {
-      const positioned = positionLine(line, y, targetWidth, align, textDirection);
+      const positioned = positionLine(line, y, targetWidth, align, textDirection, bidi);
       lines.push(positioned);
       y += positioned.height;
     }

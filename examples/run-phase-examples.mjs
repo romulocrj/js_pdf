@@ -29,6 +29,7 @@ import { generateColorsPhase67 } from './colors-phase-6.7.mjs';
 import { generateFontsPhase68, generateObjectsPhase610, generateApiPhase612 } from './fonts-objects-api-phases.mjs';
 import { generateSerializationPhase71 } from './serialization-phase-7.1.mjs';
 import { generateFontsPhase72 } from './fonts-phase-7.2.mjs';
+import { generateTextBidiPhase73 } from './text-bidi-phase-7.3.mjs';
 import { generateSvgPhase74 } from './svg-phase-7.4.mjs';
 import { generateGraphicsPhase75 } from './graphics-phase-7.5.mjs';
 import { generateLayoutPhase76 } from './layout-phase-7.6.mjs';
@@ -54,6 +55,7 @@ const compatibilityFonts = Object.fromEntries(await Promise.all(
     .map(async ([key, name]) => [key, new Uint8Array(await readFile(new URL('./assets/' + name, import.meta.url)))])
 ));
 const cjkFont = new Uint8Array(await readFile(new URL('./assets/JsPdfCjkExample.ttf', import.meta.url)));
+const arabicFont = new Uint8Array(await readFile(new URL('./assets/JsPdfArabicExample.ttf', import.meta.url)));
 
 const examples = [
   ['svg-gradients-phase-2.8', generateSvgGradientsPhase28],
@@ -89,6 +91,7 @@ const examples = [
   ['api-phase-6.12', () => generateApiPhase612()],
   ['serialization-phase-7.1', () => generateSerializationPhase71()],
   ['fonts-phase-7.2', () => generateFontsPhase72({ openSans: compatibilityFonts.ttf, cjk: cjkFont, icons: materialIcons })],
+  ['text-bidi-phase-7.3', () => generateTextBidiPhase73(undefined, true, arabicFont)],
   ['svg-phase-7.4', () => generateSvgPhase74()],
   ['graphics-phase-7.5', () => generateGraphicsPhase75()],
   ['layout-phase-7.6', () => generateLayoutPhase76()]
