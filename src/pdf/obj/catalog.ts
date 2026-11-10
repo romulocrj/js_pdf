@@ -30,7 +30,6 @@ import type { PdfNames } from './names.ts';
 import type { PdfOutline } from './outline.ts';
 import type { PdfMetadata } from './metadata.ts';
 import type { PdfPageLabels } from './page_label.ts';
-import type { PdfAnnotation } from './annotation.ts';
 
 /** The document catalog: the `/Root` the trailer points at. */
 export class PdfCatalog extends PdfObject<PdfDict> {
@@ -39,7 +38,8 @@ export class PdfCatalog extends PdfObject<PdfDict> {
   outline: PdfOutline | null = null;
   metadata: PdfMetadata | null = null;
   pageLabels: PdfPageLabels | null = null;
-  readonly formFields: PdfAnnotation[] = [];
+  /** The root fields: a widget that is its own field, or a shared parent. */
+  readonly formFields: PdfObject<PdfDict>[] = [];
   readonly formFonts = new Map<string, PdfObject<PdfDict>>();
   showOutlines = false;
 

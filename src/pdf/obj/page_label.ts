@@ -154,7 +154,15 @@ export class PdfPageLabels extends PdfObject<PdfDict> {
 
   override prepare(): void {
     const nums = new PdfArray();
-    for (const key of [...this.labels.keys()].sort((a, b) => a - b)) {
+    const keys = [...this.labels.keys()].sort((a, b) => a - b);
+    // ISO 32000-1 12.4.2 requires an entry for page index 0. `pageLabel` already
+    // reports the leading range as plain arabic, so the file now says the same,
+    // as upstream #1980 writes it.
+    if (keys.length > 0 && keys[0] !== 0) {
+      nums.add(new PdfNum(0));
+      nums.add(PdfPageLabel.arabic().toDict());
+    }
+    for (const key of keys) {
       const label = this.labels.get(key);
       if (label === undefined) continue;
       nums.add(new PdfNum(key));

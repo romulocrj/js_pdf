@@ -41,6 +41,9 @@ import { Page } from './page.ts';
 import type { Section } from './page.ts';
 import { ThemeData } from './theme.ts';
 
+/** Bounds the `TableOfContent` replays; numbers settle after two in practice. */
+const MAX_OUTLINE_REPLAYS = 4;
+
 export interface DocumentOptions {
   readonly title?: string | null;
   readonly author?: string | null;
@@ -223,30 +226,20 @@ export class Document {
     readonly style?: PdfOutlineStyle;
   }): void {
     const page = pageNumber;
-    if (this.outlineReplay) {
-      const existing = this.outlineEntries[this.outlineCursor];
-      if (existing !== undefined) {
-        existing.page = page;
-        existing.y = y;
-      } else {
-        this.outlineEntries.push({
-          title,
-          level,
-          anchor: anchor ?? `outline-${this.outlineCursor + 1}`,
-          page,
-          y,
-          color,
-          style
-        });
-      }
-      this.outlineCursor++;
+    const index = this.outlineReplay ? this.outlineCursor++ : this.outlineEntries.length;
+    const existing = this.outlineEntries[index];
+    if (this.outlineReplay && existing !== undefined) {
+      existing.page = page;
+      existing.y = y;
       return;
     }
 
     this.outlineEntries.push({
       title,
       level,
-      anchor: anchor ?? `outline-${this.outlineEntries.length + 1}`,
+      // The reserved prefix upstream #1980 gives generated anchors: the old
+      // `outline-N` collided with a user `Anchor` of the same name.
+      anchor: anchor ?? `__dest${index}`,
       page,
       y,
       color,
@@ -274,6 +267,10 @@ export class Document {
       y,
       zoom
     });
+  }
+
+  private outlinePages(): string {
+    return this.outlineEntries.map(entry => entry.page).join();
   }
 
   private renderSections(replay: boolean, expectedPagesCount = 0): SerializedPage[] {
@@ -321,8 +318,16 @@ export class Document {
     this.outlineRerenderRequested = false;
     let pages = this.renderSections(false);
 
-    if (this.outlineRerenderRequested) {
+    // A TableOfContent that shares the flow with what it lists moves that
+    // content by its own height, so the numbers it printed from the previous
+    // pass go stale; one replay left most rows wrong. Replay until a pass
+    // finds every outline where the previous one did, which is when the
+    // printed numbers are the real ones. Usually that is the second replay.
+    for (let replay = 0; this.outlineRerenderRequested && replay < MAX_OUTLINE_REPLAYS; replay++) {
+      const before = this.outlinePages();
       pages = this.renderSections(true, pages.length);
+      this.outlineEntries.length = this.outlineCursor;
+      if (this.outlinePages() === before) break;
     }
 
     if (pages.length === 0) {
