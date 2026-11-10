@@ -74,5 +74,8 @@
     "@rollup/plugin-terser": "^1.0.0",
     "rollup": "^4.62.4",
     "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true
   }
 }
