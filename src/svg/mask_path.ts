@@ -14,70 +14,53 @@
  * Original Dart sources ported into this file:
  *   - pdf/lib/src/svg/mask_path.dart
  *   - pdf/lib/src/pdf/graphic_state.dart
+ *
+ * A `mask` reference, painted into a luminosity soft mask by
+ * `SvgOperation.paint` after the element's own transform, so the mask content
+ * shares the element's user space. The /BBox is the painter's page box mapped
+ * into that space (upstream PR #1980's `userSpaceBoundingBox`), so neither a
+ * transform nor a stroke beyond the geometry is cut. An unresolvable
+ * reference is ignored, as an unresolvable clip-path already was; it used to
+ * throw out of the document.
  */
 
 import { PdfCanvas } from '../pdf/graphics.ts';
-import type { PdfRect } from '../pdf/rect.ts';
 import { SvgGroup } from './group.ts';
-import { SvgOperation } from './operation.ts';
 import type { SvgPainter } from './painter.ts';
 import type { XmlElement } from './xml.ts';
 
-function referenceId(value: string): string | null {
-  const match = /^url\(\s*#([^\s)]+)\s*\)$/.exec(value);
-  return match?.[1] ?? null;
-}
+export class SvgMask {
+  readonly content: SvgGroup;
+  readonly painter: SvgPainter;
 
-export class SvgMaskedOperation extends SvgOperation {
-  readonly target: SvgOperation;
-  readonly mask: SvgGroup;
-
-  constructor(target: SvgOperation, mask: SvgGroup, painter: SvgPainter) {
-    super(target.brush, target.clip, target.transform, painter);
-    this.target = target;
-    this.mask = mask;
+  constructor(content: SvgGroup, painter: SvgPainter) {
+    this.content = content;
+    this.painter = painter;
   }
 
-  static fromXml(
-    element: XmlElement,
-    target: SvgOperation,
-    painter: SvgPainter
-  ): SvgMaskedOperation {
-    const attribute = element.getAttribute('mask');
-    const id = attribute === null ? null : referenceId(attribute);
-    const maskElement = id === null ? null : painter.parser.findById(id);
-    if (maskElement === null || maskElement.name.local !== 'mask') {
-      throw new RangeError(`Unable to resolve SVG mask ${attribute ?? ''}`.trim());
+  /** The mask `element` names, or null when it names none that resolves. */
+  static fromXml(element: XmlElement, painter: SvgPainter): SvgMask | null {
+    const id = /^url\(\s*(['"]?)#([^'")\s]+)\1\s*\)/.exec(element.getAttribute('mask') ?? '')?.[2];
+    const mask = id === undefined ? null : painter.parser.findById(id);
+    if (mask?.name.local !== 'mask') {
+      return null;
     }
-    const mask = SvgGroup.fromXml(maskElement, painter, target.brush);
-    return new SvgMaskedOperation(target, mask, painter);
+    // Mask content inherits from the <mask>'s own ancestors, not from the
+    // element it masks, as CSS inheritance follows the document tree.
+    return new SvgMask(SvgGroup.fromXml(mask, painter, painter.brushOf(mask.parent)), painter);
   }
 
-  override paint(canvas: PdfCanvas): void {
+  apply(canvas: PdfCanvas): void {
     const maskCanvas = new PdfCanvas(canvas.pageHeight);
-    this.mask.paint(maskCanvas);
-    canvas.saveContext();
+    this.content.paint(maskCanvas);
     canvas.setSoftMask({
       content: maskCanvas.takeOutputBytes(),
-      boundingBox: this.boundingBox(),
+      boundingBox: this.painter.userSpaceBox(canvas),
       fonts: maskCanvas.fonts,
       graphicStates: maskCanvas.graphicStates,
       patterns: maskCanvas.patterns,
       shadings: maskCanvas.shadings,
       images: maskCanvas.images
     });
-    this.target.paint(canvas);
-    canvas.restoreContext();
-  }
-
-  override draw(canvas: PdfCanvas): void {
-    this.target.draw(canvas);
-  }
-
-  protected paintShape(_canvas: PdfCanvas): void {}
-  protected drawShape(_canvas: PdfCanvas): void {}
-
-  boundingBox(): PdfRect {
-    return this.target.boundingBox();
   }
 }

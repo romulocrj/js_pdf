@@ -50,6 +50,21 @@ interface GradientStops {
   readonly opacities: readonly number[];
 }
 
+/**
+ * The `color` property in force at `element`, inherited through its document
+ * ancestors — the gradient's, not the referencing shape's, as CSS inheritance
+ * works. `stop-color: currentColor` used to resolve to black.
+ */
+function inheritedColor(element: XmlElement | null, parser: SvgParser): SvgColor {
+  for (let node = element; node !== null; node = node.parent) {
+    convertStyle(node);
+    // `inherit`, `currentColor` and an absent attribute are all empty here.
+    const color = SvgColor.fromXml(node.getAttribute('color') ?? 'inherit', parser, SvgColor.unknown);
+    if (color.isNotEmpty) return color;
+  }
+  return SvgColor.defaultColor;
+}
+
 function readStops(element: XmlElement, parser: SvgParser): GradientStops {
   const colors: Rgb[] = [];
   const stops: number[] = [];
@@ -61,7 +76,12 @@ function readStops(element: XmlElement, parser: SvgParser): GradientStops {
       continue;
     }
     convertStyle(child);
-    const color = SvgColor.fromXml(child.getAttribute('stop-color') ?? 'black', parser);
+    const value = child.getAttribute('stop-color') ?? 'black';
+    const color = SvgColor.fromXml(
+      value,
+      parser,
+      /^\s*currentcolor\s*$/i.test(value) ? inheritedColor(child, parser) : SvgColor.defaultColor
+    );
     const offset = Math.min(1, Math.max(
       previous,
       getNumeric(child, 'offset', null, { defaultValue: 0 })!.sizeValue
@@ -204,12 +224,17 @@ export abstract class SvgGradient extends SvgColor {
     }
   }
 
+  /**
+   * `url(#g)`, `url('#g')` or `url("#g")`, possibly followed by a fallback
+   * colour, which `SvgColor.fromXml` applies when this returns null. The old
+   * pattern was anchored on `)`, so a fallback or a quote left it unpainted.
+   */
   static fromReference(value: string, parser: SvgParser): SvgGradient | null {
-    const match = /^url\(\s*#([^)\s]+)\s*\)$/.exec(value.trim());
+    const match = /^url\(\s*(['"]?)#([^'")\s]+)\1\s*\)/.exec(value.trim());
     if (match === null) {
       return null;
     }
-    const element = parser.findById(match[1]!);
+    const element = parser.findById(match[2]!);
     if (element?.name.local === 'linearGradient') {
       return SvgLinearGradient.fromElement(element, parser);
     }
