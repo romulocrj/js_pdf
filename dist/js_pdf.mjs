@@ -11530,10 +11530,11 @@ function deflateZlib(data) {
 }
 
 class PdfDictStream extends PdfDict {
-  constructor(data = new Uint8Array(0), values, compress = false) {
+  constructor(data = new Uint8Array(0), values, compress = false, eol = false) {
     super(values);
     this.data = data;
     this.compress = compress;
+    this.eol = eol;
   }
   output(s) {
     const params = new PdfDict(this.values);
@@ -11549,7 +11550,7 @@ class PdfDictStream extends PdfDict {
     params.output(s);
     s.putString("\nstream\n");
     s.putBytes(data);
-    if (data.length === 0 || data[data.length - 1] !== 10) {
+    if (this.eol || data.length === 0 || data[data.length - 1] !== 10) {
       s.putByte(10);
     }
     s.putString("endstream");
@@ -11558,7 +11559,7 @@ class PdfDictStream extends PdfDict {
 
 class PdfObjectStream extends PdfObject {
   constructor(document, data, compress) {
-    super(document, new PdfDictStream(data, undefined, compress ?? document.settings.compress));
+    super(document, new PdfDictStream(data, undefined, compress ?? document.settings.compress, document.settings.pdfa !== undefined));
   }
 }
 
@@ -11722,8 +11723,15 @@ class PdfTtfFont {
       widths.add(new PdfNum(cid));
       widths.add(PdfArray.fromNum([ Math.trunc(this.glyphMetrics(rune).advanceWidth * 1e3) ]));
     }
-    const descendant = new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/CIDFontType0") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/FontDescriptor", descriptor.ref() ], [ "/W", widths ], [ "/CIDSystemInfo", new PdfDict([ [ "/Registry", new PdfString(registry) ], [ "/Ordering", new PdfString(ordering) ], [ "/Supplement", new PdfNum(supplement) ] ]) ] ]);
-    return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/Type0") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", new PdfObjectStream(document, encodeLatin1(encoding)).ref() ], [ "/DescendantFonts", new PdfArray([ descendant ]) ], [ "/ToUnicode", new PdfUnicodeCmap(document, this.cmap, this.protect).ref() ] ]);
+    const systemInfo = new PdfDict([ [ "/Registry", new PdfString(registry) ], [ "/Ordering", new PdfString(ordering) ], [ "/Supplement", new PdfNum(supplement) ] ]);
+    const descendant = new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/CIDFontType0") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/FontDescriptor", descriptor.ref() ], [ "/W", widths ], [ "/CIDSystemInfo", systemInfo ] ]);
+    const cmap = new PdfObjectStream(document, encodeLatin1(encoding));
+    if (document.settings.pdfa !== undefined) {
+      cmap.params.set("/Type", new PdfName("/CMap"));
+      cmap.params.set("/CMapName", new PdfName("/JsPdfEncoding"));
+      cmap.params.set("/CIDSystemInfo", systemInfo);
+    }
+    return new PdfDict([ [ "/Type", new PdfName("/Font") ], [ "/Subtype", new PdfName("/Type0") ], [ "/BaseFont", new PdfName(`/${this.fontName}`) ], [ "/Encoding", cmap.ref() ], [ "/DescendantFonts", new PdfArray([ descendant ]) ], [ "/ToUnicode", new PdfUnicodeCmap(document, this.cmap, this.protect).ref() ] ]);
   }
 }
 
@@ -16617,11 +16625,11 @@ function isSingleAsciiWord(value) {
   return true;
 }
 
-const SPACES = "\\t\\v\\f\\r \\u1680\\u2000-\\u2006\\u2008-\\u200a\\u2028\\u2029\\u205f\\u3000";
+const SPACES$1 = "\\t\\v\\f\\r \\u1680\\u2000-\\u2006\\u2008-\\u200a\\u2028\\u2029\\u205f\\u3000";
 
-const GAP = new RegExp(`^[${SPACES}]+$`);
+const GAP = new RegExp(`^[${SPACES$1}]+$`);
 
-const WORDS = new RegExp(`([${SPACES}]+)|(?<=\\u200b)(?!\\u2060)`);
+const WORDS = new RegExp(`([${SPACES$1}]+)|(?<=\\u200b)(?!\\u2060)`);
 
 const RTL = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc\u200f\u202b\u202e\u2067]/;
 
@@ -18534,6 +18542,8 @@ class PdfCatalog extends PdfObject {
     this.outline = null;
     this.metadata = null;
     this.pageLabels = null;
+    this.colorProfile = null;
+    this.attached = null;
     this.formFields = [];
     this.formFonts = new Map;
     this.showOutlines = false;
@@ -18555,22 +18565,30 @@ class PdfCatalog extends PdfObject {
       this.params.set("/AcroForm", form);
     }
     if (this.showOutlines) this.params.set("/PageMode", new PdfName("/UseOutlines"));
+    if (this.attached !== null && this.attached.isNotEmpty) this.params.set("/AF", this.attached.catalogAF());
+    if (this.colorProfile !== null) this.params.set("/OutputIntents", this.colorProfile.outputIntents());
   }
 }
 
 const LIBRARY_NAME = "https://github.com/romulocrj/js_pdf";
 
+function pdfProducer(producer) {
+  return producer == null ? LIBRARY_NAME : `${producer} (${LIBRARY_NAME})`;
+}
+
 class PdfInfo extends PdfObject {
-  constructor(document, metadata) {
+  constructor(document, metadata, modDate = false) {
     super(document, new PdfDict);
-    const producer = metadata.producer == null ? LIBRARY_NAME : `${metadata.producer} (${LIBRARY_NAME})`;
+    const producer = pdfProducer(metadata.producer);
     const entries = [ [ "/Title", metadata.title ], [ "/Author", metadata.author ], [ "/Subject", metadata.subject ], [ "/Keywords", metadata.keywords ], [ "/Creator", metadata.creator ], [ "/Producer", producer ] ];
     for (const [key, value] of entries) {
       if (value) {
         this.params.set(key, new PdfString(value));
       }
     }
-    this.params.set("/CreationDate", PdfString.fromDate(new Date));
+    const date = PdfString.fromDate(metadata.creationDate ?? new Date);
+    this.params.set("/CreationDate", date);
+    if (modDate) this.params.set("/ModDate", date);
   }
 }
 
@@ -18679,6 +18697,7 @@ class PdfNull extends PdfDataType {
 class PdfNames extends PdfObject {
   constructor(document) {
     super(document, new PdfDict);
+    this.embeddedFiles = null;
     this.destinations = new Map;
   }
   has(name) {
@@ -18708,7 +18727,8 @@ class PdfNames extends PdfObject {
       destinations.set("/Names", values);
       destinations.set("/Limits", new PdfArray([ new PdfString(sorted[0].name), new PdfString(sorted[sorted.length - 1].name) ]));
     }
-    this.params.set("/Dests", destinations);
+    if (sorted.length > 0 || this.embeddedFiles === null) this.params.set("/Dests", destinations);
+    if (this.embeddedFiles !== null) this.params.set("/EmbeddedFiles", this.embeddedFiles.ref());
   }
 }
 
@@ -18764,6 +18784,7 @@ class PdfAnnotation extends PdfObject {
     this.annotation = annotation;
     this.defaultAppearanceName = defaultAppearanceName;
     this.appearances = appearances;
+    this.pdfa = document.settings.pdfa !== undefined;
     page.annotations.push(this);
   }
   prepare() {
@@ -18827,6 +18848,7 @@ class PdfAnnotation extends PdfObject {
     if (annotation.inkList !== undefined) {
       this.params.set("/InkList", new PdfArray(annotation.inkList.map(points => PdfArray.fromNum(points.flatMap(point => [ point.x, point.y ])))));
     }
+    if (this.appearances?.normal !== undefined) this.params.set("/AP", new PdfDict([ [ "/N", this.appearances.normal.ref() ] ]));
   }
   prepareForm(field) {
     const fieldNames = {
@@ -18887,7 +18909,10 @@ class PdfAnnotation extends PdfObject {
     }
     if (this.appearances !== null) {
       const appearances = new PdfDict;
-      if (this.appearances.normal !== undefined) {
+      if (this.appearances.normal !== undefined && this.pdfa && field.fieldType === "button") {
+        appearances.set("/N", new PdfDict([ [ "/On", this.appearances.normal.ref() ] ]));
+        this.params.set("/AS", new PdfName("/On"));
+      } else if (this.appearances.normal !== undefined) {
         appearances.set("/N", this.appearances.normal.ref());
       } else if (this.appearances.normalStates !== undefined) {
         const states = new PdfDict;
@@ -18913,6 +18938,168 @@ class PdfMetadata extends PdfObjectStream {
   }
 }
 
+const pad = (value, width = 2) => String(value).padStart(width, "0");
+
+class PdfaDateFormat {
+  format({dt, asIso = false}) {
+    if (!(dt instanceof Date) || !Number.isFinite(dt.getTime())) throw new RangeError("PDF/A date must be a valid Date");
+    const date = `${pad(dt.getUTCFullYear(), 4)}${asIso ? "-" : ""}${pad(dt.getUTCMonth() + 1)}${asIso ? "-" : ""}${pad(dt.getUTCDate())}`;
+    const time = `${pad(dt.getUTCHours())}${asIso ? ":" : ""}${pad(dt.getUTCMinutes())}${asIso ? ":" : ""}${pad(dt.getUTCSeconds())}`;
+    return asIso ? `${date}T${time}` : date + time;
+  }
+}
+
+function pdfaClean(value) {
+  return value.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f￾￿]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, "");
+}
+
+function xmlText(value) {
+  return pdfaClean(value).replace(/[&<>\r]/g, c => c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&#xD;");
+}
+
+const iso = date => `${(new PdfaDateFormat).format({
+  dt: date,
+  asIso: true
+})}Z`;
+
+class PdfaRdf {
+  constructor({title = null, author = null, creator = null, subject = null, keywords = null, producer = null, creationDate = null, modificationDate = null, part = 3, conformance = "B", invoiceRdf = ""} = {}) {
+    this.title = title;
+    this.author = author;
+    this.creator = creator;
+    this.subject = subject;
+    this.keywords = keywords;
+    this.producer = producer;
+    this.creationDate = creationDate ?? new Date;
+    this.modificationDate = modificationDate;
+    this.part = part;
+    this.conformance = conformance;
+    this.invoiceRdf = invoiceRdf;
+  }
+  create() {
+    const property = (name, value, wrap = text => text) => value === null ? null : `<${name}>${wrap(xmlText(value))}</${name}>`;
+    const alt = text => `<rdf:Alt><rdf:li xml:lang="x-default">${text}</rdf:li></rdf:Alt>`;
+    const description = (prefix, uri, properties) => {
+      const present = properties.filter(entry => entry !== null);
+      return present.length === 0 ? "" : `  <rdf:Description rdf:about="" xmlns:${prefix}="${uri}">\n    ${present.join("\n    ")}\n  </rdf:Description>\n`;
+    };
+    return '<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>\n<x:xmpmeta xmlns:x="adobe:ns:meta/">\n' + '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\n' + description("pdf", "http://ns.adobe.com/pdf/1.3/", [ property("pdf:Producer", this.producer), property("pdf:Keywords", this.keywords) ]) + description("xmp", "http://ns.adobe.com/xap/1.0/", [ `<xmp:CreateDate>${iso(this.creationDate)}</xmp:CreateDate>`, this.modificationDate === null ? null : `<xmp:ModifyDate>${iso(this.modificationDate)}</xmp:ModifyDate>`, property("xmp:CreatorTool", this.creator) ]) + description("dc", "http://purl.org/dc/elements/1.1/", [ property("dc:creator", this.author, text => `<rdf:Seq><rdf:li>${text}</rdf:li></rdf:Seq>`), property("dc:title", this.title, alt), property("dc:description", this.subject, alt) ]) + description("pdfaid", "http://www.aiim.org/pdfa/ns/id/", [ property("pdfaid:part", String(this.part)), property("pdfaid:conformance", this.conformance) ]) + (this.invoiceRdf === "" ? "" : `${this.invoiceRdf}\n`) + '</rdf:RDF>\n</x:xmpmeta>\n<?xpacket end="r"?>';
+  }
+}
+
+const SPACES = {
+  "RGB ": [ "RGB", 3 ],
+  CMYK: [ "CMYK", 4 ],
+  GRAY: [ "GRAY", 1 ]
+};
+
+function iccProfileInfo(icc) {
+  if (!(icc instanceof Uint8Array) || icc.length < 132) {
+    throw new TypeError("PDF/A colorProfile must be ICC profile bytes");
+  }
+  const view = new DataView(icc.buffer, icc.byteOffset, icc.byteLength);
+  const signature = offset => String.fromCharCode(icc[offset], icc[offset + 1], icc[offset + 2], icc[offset + 3]);
+  const size = view.getUint32(0);
+  if (size !== icc.length) throw new RangeError(`ICC profile size ${size} is not its length ${icc.length}`);
+  if (signature(36) !== "acsp") throw new RangeError("ICC profile has no acsp signature");
+  if (icc[8] < 2 || icc[8] > 4) throw new RangeError(`ICC profile version ${icc[8]} is not 2 to 4`);
+  const deviceClass = signature(12);
+  if (deviceClass !== "mntr" && deviceClass !== "prtr") {
+    throw new RangeError(`PDF/A needs a mntr or prtr ICC profile class, not '${deviceClass}'`);
+  }
+  const space = SPACES[signature(16)];
+  if (space === undefined) throw new RangeError(`ICC colour space '${signature(16)}' is not RGB, CMYK or GRAY`);
+  if (signature(20) !== "XYZ " && signature(20) !== "Lab ") throw new RangeError("ICC connection space is not XYZ or Lab");
+  const count = view.getUint32(128);
+  if (132 + count * 12 > size) throw new RangeError("ICC tag table overruns the profile");
+  for (let index = 0; index < count; index++) {
+    const entry = 132 + index * 12;
+    if (view.getUint32(entry + 4) + view.getUint32(entry + 8) > size) {
+      throw new RangeError(`ICC tag '${signature(entry)}' overruns the profile`);
+    }
+  }
+  return {
+    colorSpace: space[0],
+    components: space[1]
+  };
+}
+
+class PdfaColorProfile extends PdfObjectStream {
+  constructor(document, icc, outputCondition = "Custom") {
+    const info = iccProfileInfo(icc);
+    super(document, icc);
+    this.icc = icc;
+    this.colorSpace = info.colorSpace;
+    this.outputCondition = outputCondition;
+    this.params.set("/N", new PdfNum(info.components));
+    document.catalog.colorProfile = this;
+  }
+  outputIntents() {
+    return new PdfArray([ new PdfDict([ [ "/Type", new PdfName("/OutputIntent") ], [ "/S", new PdfName("/GTS_PDFA1") ], [ "/OutputConditionIdentifier", new PdfString(this.outputCondition) ], [ "/Info", new PdfString(this.outputCondition) ], [ "/RegistryName", new PdfString("http://www.color.org") ], [ "/DestOutputProfile", this.ref() ] ]) ]);
+  }
+}
+
+const RELATIONSHIPS = [ "Data", "Source", "Alternative", "Supplement", "Unspecified" ];
+
+class PdfaAttachedFile {
+  constructor({name, data, mimeType = "text/xml", relationship = "Alternative", description = null, modificationDate = null}) {
+    const fail = message => {
+      throw new TypeError(`PDF/A attachment ${JSON.stringify(name)}: ${message}`);
+    };
+    if (typeof name !== "string" || name === "") fail("the name must be a non-empty string");
+    if (typeof data !== "string" && !(data instanceof Uint8Array)) fail("data must be a string or a Uint8Array");
+    if (typeof mimeType !== "string" || !/^[^\s/]+\/[^\s/]+$/.test(mimeType)) fail("mimeType must be type/subtype");
+    if (!RELATIONSHIPS.includes(relationship)) fail(`relationship must be ${RELATIONSHIPS.join(", ")}`);
+    if (description !== null && typeof description !== "string") fail("description must be a string");
+    if (modificationDate !== null && !(modificationDate instanceof Date && Number.isFinite(modificationDate.getTime()))) {
+      fail("modificationDate must be a valid Date");
+    }
+    this.name = name;
+    this.data = typeof data === "string" ? utf8Encode(data) : data;
+    this.mimeType = mimeType;
+    this.relationship = relationship;
+    this.description = description;
+    this.modificationDate = modificationDate;
+  }
+}
+
+class PdfaAttachedFiles {
+  constructor(document, files, date = new Date) {
+    this.specs = [];
+    this.files = files.map(file => file instanceof PdfaAttachedFile ? file : new PdfaAttachedFile(file));
+    const keyed = [];
+    for (const file of this.files) {
+      const stream = new PdfObjectStream(document, file.data);
+      stream.params.set("/Type", new PdfName("/EmbeddedFile"));
+      stream.params.set("/Subtype", new PdfName("/" + file.mimeType));
+      stream.params.set("/Params", new PdfDict([ [ "/Size", new PdfNum(file.data.length) ], [ "/ModDate", PdfString.fromDate(file.modificationDate ?? date) ] ]));
+      const spec = new PdfObject(document, new PdfDict([ [ "/Type", new PdfName("/Filespec") ], [ "/F", new PdfString(file.name) ], [ "/UF", new PdfString(file.name) ], [ "/EF", new PdfDict([ [ "/F", stream.ref() ] ]) ], [ "/AFRelationship", new PdfName("/" + file.relationship) ] ]));
+      if (file.description) spec.params.set("/Desc", new PdfString(file.description));
+      this.specs.push(spec);
+      keyed.push({
+        key: pdfTextBytes(file.name),
+        name: file.name,
+        spec
+      });
+    }
+    keyed.sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+    keyed.forEach((entry, index) => {
+      if (index > 0 && entry.key === keyed[index - 1].key) throw new RangeError(`PDF/A attachment name ${entry.name} is not unique`);
+    });
+    this.names = new PdfObject(document, new PdfDict([ [ "/Names", new PdfArray(keyed.flatMap(entry => [ new PdfString(entry.name), entry.spec.ref() ])) ] ]));
+    document.catalog.attached = this;
+  }
+  get isNotEmpty() {
+    return this.specs.length > 0;
+  }
+  catalogNames() {
+    return new PdfDict([ [ "/EmbeddedFiles", this.names.ref() ] ]);
+  }
+  catalogAF() {
+    return PdfArray.fromObjects(this.specs);
+  }
+}
+
 class PdfDocument {
   constructor(metadata, settings = DEFAULT_PDF_SETTINGS) {
     this.serial = 0;
@@ -18923,13 +19110,44 @@ class PdfDocument {
     this.softMaskObjects = new Map;
     this.formFontNames = new Map;
     this.formFieldKids = new Map;
+    this.emptyForm = null;
     this.settings = settings;
     const catalogSerial = this.genSerial();
     this.pageList = new PdfPageList(this);
     this.catalog = new PdfCatalog(this, this.pageList, catalogSerial);
-    this.info = new PdfInfo(this, metadata);
-    if (metadata.xmpMetadata) {
-      this.catalog.metadata = new PdfMetadata(this, metadata.xmpMetadata);
+    const pdfa = settings.pdfa;
+    if (pdfa === undefined) {
+      this.info = new PdfInfo(this, metadata);
+      if (metadata.xmpMetadata) {
+        this.catalog.metadata = new PdfMetadata(this, metadata.xmpMetadata);
+      }
+      return;
+    }
+    const date = metadata.creationDate ?? new Date;
+    const clean = value => value ? pdfaClean(value) || null : null;
+    const info = {
+      title: clean(metadata.title),
+      author: clean(metadata.author),
+      subject: clean(metadata.subject),
+      keywords: clean(metadata.keywords),
+      creator: clean(metadata.creator),
+      producer: metadata.producer == null ? null : pdfaClean(metadata.producer),
+      creationDate: date
+    };
+    this.info = new PdfInfo(this, info, true);
+    this.catalog.metadata = new PdfMetadata(this, new PdfaRdf({
+      ...info,
+      producer: pdfProducer(info.producer),
+      modificationDate: date,
+      part: pdfa.part,
+      conformance: pdfa.conformance,
+      invoiceRdf: pdfa.extensionRdf
+    }).create());
+    new PdfaColorProfile(this, pdfa.colorProfile, pdfa.outputCondition);
+    if (pdfa.attachments !== undefined && pdfa.attachments.length > 0) {
+      const names = new PdfNames(this);
+      names.embeddedFiles = new PdfaAttachedFiles(this, pdfa.attachments, date).names;
+      this.catalog.names = names;
     }
   }
   get objects() {
@@ -18946,7 +19164,15 @@ class PdfDocument {
     if (existing !== undefined) {
       return existing;
     }
-    const object = new PdfObject(this, font.resourceDict(this));
+    const dict = font.resourceDict(this);
+    const pdfa = this.settings.pdfa;
+    if (pdfa !== undefined && !dict.has("/FontDescriptor") && !dict.has("/DescendantFonts")) {
+      throw new TypeError(`PDF/A needs embedded fonts; ${font.fontName} is a standard Type1 font, never embedded. Make TrueType ` + "faces the theme: new Document({ theme: ThemeData.withFont({ base: Font.ttf(regular), bold: Font.ttf(bold) }), pdfa })");
+    }
+    if (pdfa?.conformance === "U" && font.protect === true) {
+      throw new TypeError(`PDF/A-${pdfa.part}U needs extractable text; ${font.fontName} has protect: true`);
+    }
+    const object = new PdfObject(this, dict);
     this.fontObjects.set(font, object);
     return object;
   }
@@ -19068,6 +19294,7 @@ class PdfDocument {
       page.addXObject(name, this.imageObject(image));
     }
     for (const [form, name] of forms) page.addXObject(name, this.formObject(form));
+    const pdfa = this.settings.pdfa !== undefined;
     for (const annotation of annotations) {
       let appearanceName = null;
       if (annotation.kind === "form") {
@@ -19081,12 +19308,33 @@ class PdfDocument {
           }
         }
       }
-      const appearances = annotation.kind === "form" ? this.resolveFormAppearances(annotation.appearances) : null;
+      const source = annotation.kind === "form" ? annotation.appearances : undefined;
+      let appearances = this.resolveFormAppearances(pdfa && source !== undefined ? {
+        normal: source.normal,
+        normalStates: source.normalStates
+      } : source);
+      if (pdfa && annotation.kind !== "url" && annotation.kind !== "destination" && appearances?.normal === undefined && appearances?.normalStates === undefined) {
+        appearances = {
+          normal: this.emptyAppearance()
+        };
+      }
       const object = new PdfAnnotation(this, page, annotation, appearanceName, appearances);
       if (annotation.kind === "form") this.addFormField(object, annotation.name);
     }
     page.contents.push(stream);
     return page;
+  }
+  emptyAppearance() {
+    return this.emptyForm ?? (this.emptyForm = this.formAppearanceObject({
+      width: 1,
+      height: 1,
+      content: "",
+      fonts: new Map,
+      graphicStates: new Map,
+      patterns: new Map,
+      shadings: new Map,
+      images: new Map
+    }));
   }
   addFormField(widget, name) {
     const kids = this.formFieldKids.get(name);
@@ -19107,7 +19355,7 @@ class PdfDocument {
     parent.params.set("/Kids", PdfArray.fromObjects(kids));
   }
   addNavigation(outlines, pageMode, destinations = []) {
-    const names = outlines.length > 0 || destinations.length > 0 ? new PdfNames(this) : null;
+    const names = outlines.length > 0 || destinations.length > 0 ? this.catalog.names ?? new PdfNames(this) : null;
     for (const entry of destinations) {
       const page = this.pageList.pages[entry.page - 1];
       if (page !== undefined) {
@@ -19161,8 +19409,139 @@ class PdfDocument {
     }
     this.xref.params.set("/Root", this.catalog.ref());
     this.xref.params.set("/Info", this.info.ref());
+    if (this.catalog.colorProfile !== null) {
+      this.checkPdfa(this.catalog.colorProfile.colorSpace);
+      const id = new PdfHexBytes(this.documentId());
+      this.xref.params.set("/ID", new PdfArray([ id, id ]));
+    }
     this.xref.output(stream);
   }
+  checkPdfa(space) {
+    for (const {pageFormat: {width, height}} of this.pageList.pages) {
+      if (!(width >= 3 && height >= 3 && width <= 14400 && height <= 14400)) {
+        throw new RangeError(`PDF/A pages are 3 to 14400 points a side, not ${width} x ${height}`);
+      }
+    }
+    const used = new Set;
+    const contents = new Set(this.pageList.pages.flatMap(page => page.contents));
+    for (const object of this.objects) {
+      const params = object.params;
+      deviceSpaces(params, used);
+      if (params instanceof PdfDictStream && (contents.has(object) || isName(params.get("/Subtype"), "/Form"))) {
+        const depth = scanContent(params.data, used);
+        if (depth > 28) throw new RangeError(`PDF/A limits q nesting to 28, not ${depth}`);
+      }
+      if (space !== "RGB" && params instanceof PdfDict && isName(params.get("/Type"), "/Annot") && (params.has("/C") || params.has("/IC"))) {
+        throw new RangeError(`PDF/A allows annotation colours only under an RGB output intent, not ${space}`);
+      }
+    }
+    for (const [device, painted] of [ [ "RGB", "an RGB colour, image, gradient or soft mask" ], [ "CMYK", "a PdfColorCmyk or CMYK JPEG" ] ]) {
+      if (used.has(device) && space !== device) {
+        throw new RangeError(`PDF/A: Device${device} (${painted}) is painted, but the output intent profile is ${space}`);
+      }
+    }
+  }
+  documentId() {
+    const hash = new Uint32Array([ 2166136261, 2654435769, 2246822507, 3266489909 ]);
+    const dicts = new PdfStream;
+    for (const {params} of this.objects) {
+      if (params instanceof PdfDictStream) {
+        new PdfDict(params.values).output(dicts);
+        mix(hash, params.data);
+      } else {
+        params.output(dicts);
+      }
+    }
+    mix(hash, dicts.view());
+    const id = new Uint8Array(16);
+    for (let lane = 0; lane < 4; lane++) {
+      let h = (hash[lane] ^ Math.imul(hash[(lane + 1) % 4], 2654435761)) >>> 0;
+      h = Math.imul(h ^ h >>> 16, 2246822507);
+      h = Math.imul(h ^ h >>> 13, 3266489909);
+      h ^= h >>> 16;
+      for (let byte = 0; byte < 4; byte++) id[lane * 4 + byte] = h >>> 24 - byte * 8 & 255;
+    }
+    return id;
+  }
+}
+
+class PdfHexBytes extends PdfDataType {
+  constructor(bytes) {
+    super();
+    this.bytes = bytes;
+  }
+  output(s) {
+    let hex = "";
+    for (const byte of this.bytes) hex += byte.toString(16).padStart(2, "0");
+    s.putString(`<${hex}>`);
+  }
+}
+
+function mix(hash, bytes) {
+  let a = hash[0];
+  let b = hash[1];
+  let c = hash[2];
+  let d = hash[3];
+  for (let index = 0; index < bytes.length; index++) {
+    const x = bytes[index];
+    a = Math.imul(a ^ x, 16777619);
+    b = Math.imul(b + x, 1540483477) ^ b >>> 15;
+    c = Math.imul(c ^ x, 2246822507) + a | 0;
+    d = Math.imul(d + x, 3266489909) ^ c >>> 13;
+  }
+  hash[0] = a;
+  hash[1] = b;
+  hash[2] = c;
+  hash[3] = d;
+}
+
+const isName = (value, name) => value instanceof PdfName && value.value === name;
+
+function deviceSpaces(value, used) {
+  if (value instanceof PdfName) {
+    if (value.value === "/DeviceRGB") used.add("RGB"); else if (value.value === "/DeviceCMYK") used.add("CMYK");
+  } else if (value instanceof PdfDict) {
+    for (const entry of value.values.values()) deviceSpaces(entry, used);
+  } else if (value instanceof PdfArray) {
+    for (const entry of value.values) deviceSpaces(entry, used);
+  }
+}
+
+const isRegular = c => c > 32 && c !== 40 && c !== 41 && c !== 60 && c !== 62 && c !== 91 && c !== 93 && c !== 123 && c !== 125 && c !== 47 && c !== 37;
+
+function scanContent(data, used) {
+  let depth = 0;
+  let deepest = 0;
+  for (let index = 0; index < data.length; ) {
+    const c = data[index];
+    if (c === 40) {
+      let open = 0;
+      do {
+        const d = data[index++];
+        if (d === 92) index++; else if (d === 40) open++; else if (d === 41) open--;
+      } while (open > 0 && index < data.length);
+    } else if (c === 60) {
+      if (data[index + 1] === 60) {
+        index += 2;
+      } else {
+        while (index < data.length && data[index] !== 62) index++;
+        index++;
+      }
+    } else if (c === 37) {
+      while (index < data.length && data[index] !== 10 && data[index] !== 13) index++;
+    } else if (isRegular(c) || c === 47) {
+      const start = index++;
+      while (index < data.length && isRegular(data[index])) index++;
+      const length = index - start;
+      const next = data[start + 1];
+      if (length === 1 && (c === 107 || c === 75)) used.add("CMYK"); else if (length === 2 && (c === 114 && next === 103 || c === 82 && next === 71)) used.add("RGB"); else if (length === 1 && c === 113) deepest = Math.max(deepest, ++depth); else if (length === 1 && c === 81) depth--; else if (c === 47 && (length === 10 || length === 11)) {
+        deviceSpaces(new PdfName(String.fromCharCode(...data.subarray(start, index))), used);
+      }
+    } else {
+      index++;
+    }
+  }
+  return deepest;
 }
 
 function writePdf(output, pages, metadata, outlines = [], pageMode = "none", destinations = [], pageLabels = [], settings = DEFAULT_PDF_SETTINGS) {
@@ -19915,8 +20294,40 @@ class DefaultTextStyle extends InheritedTheme {
 
 const MAX_OUTLINE_REPLAYS = 4;
 
+function pdfaSettings({part = 3, conformance = "B", colorProfile, outputCondition, attachments = [], extensionRdf}, xmpMetadata) {
+  if (part === 1) {
+    throw new RangeError("PDF/A-1 is unsupported: it forbids transparency, which js_pdf paints (alpha, soft masks); use part 2 or 3");
+  }
+  if (part !== 2 && part !== 3) throw new RangeError(`PDF/A part must be 2 or 3, not ${String(part)}`);
+  if (conformance === "A") {
+    throw new RangeError("PDF/A level A needs a structure tree, which js_pdf does not write; use 'B' or 'U'");
+  }
+  if (conformance !== "B" && conformance !== "U") throw new RangeError(`PDF/A conformance must be 'B' or 'U', not ${String(conformance)}`);
+  if (colorProfile === undefined) {
+    throw new TypeError("PDF/A needs pdfa.colorProfile, the ICC profile bytes, e.g. sRGB2014.icc");
+  }
+  if ([ outputCondition, extensionRdf ].some(value => value !== undefined && typeof value !== "string")) {
+    throw new TypeError("pdfa.outputCondition and pdfa.extensionRdf must be strings");
+  }
+  iccProfileInfo(colorProfile);
+  if (xmpMetadata) {
+    throw new TypeError("Pass xmpMetadata or pdfa, not both: PDF/A writes its own XMP; add RDF with pdfa.extensionRdf");
+  }
+  if (attachments.length > 0 && part !== 3) {
+    throw new RangeError("PDF/A-2 attachments must be PDF/A files, which js_pdf cannot verify; use part 3");
+  }
+  return {
+    part,
+    conformance,
+    colorProfile,
+    outputCondition,
+    extensionRdf,
+    attachments: attachments.map(file => file instanceof PdfaAttachedFile ? file : new PdfaAttachedFile(file))
+  };
+}
+
 class Document {
-  constructor({title = null, author = null, subject = null, creator = null, producer = null, keywords = null, xmpMetadata = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none", compress = true, simpleTrueTypeFonts = false, colorAlpha = true} = {}) {
+  constructor({title = null, author = null, subject = null, creator = null, producer = null, keywords = null, xmpMetadata = null, creationDate = null, pageLabels = [], theme = undefined, font = undefined, pageMode = "none", compress = true, simpleTrueTypeFonts = false, colorAlpha = true, pdfa = null} = {}) {
     this.sections = [];
     this.outlineEntries = [];
     this.destinationEntries = [];
@@ -19926,6 +20337,9 @@ class Document {
     this.outlineRerenderRequested = false;
     this.fonts = new Map;
     this.fallbackFont = Font.helvetica();
+    if (creationDate !== null && !(creationDate instanceof Date && Number.isFinite(creationDate.getTime()))) {
+      throw new TypeError("Document creationDate must be a valid Date");
+    }
     this.metadata = {
       title,
       author,
@@ -19933,12 +20347,18 @@ class Document {
       creator,
       producer,
       keywords,
-      xmpMetadata
+      xmpMetadata,
+      creationDate
     };
-    this.settings = {
+    this.settings = pdfa === null ? {
       compress,
       simpleTrueTypeFonts,
       colorAlpha
+    } : {
+      compress,
+      simpleTrueTypeFonts,
+      colorAlpha,
+      pdfa: pdfaSettings(pdfa, xmpMetadata)
     };
     for (const {pageIndex, label} of pageLabels) this.setPageLabel(pageIndex, label);
     this.theme = theme ?? (font === undefined ? ThemeData.base() : ThemeData.withFont({
@@ -22815,6 +23235,15 @@ class TableHelper {
   }
 }
 
+const property = (name, description) => `<rdf:li rdf:parseType="Resource">\n<pdfaProperty:name>${name}</pdfaProperty:name>\n<pdfaProperty:valueType>Text</pdfaProperty:valueType>\n<pdfaProperty:category>external</pdfaProperty:category>\n<pdfaProperty:description>${description}</pdfaProperty:description>\n</rdf:li>\n`;
+
+class PdfaFacturxRdf {
+  create({filename = "factur-x.xml", namespace = "urn:cen.eu:invoice:1p0:schema#", conformanceLevel = "BASIC", version = "1.0"} = {}) {
+    const uri = xmlText(namespace);
+    return `<rdf:Description xmlns:fx="${uri.replace(/"/g, "&quot;")}" rdf:about="">\n<fx:DocumentType>INVOICE</fx:DocumentType>\n<fx:DocumentFileName>${xmlText(filename)}</fx:DocumentFileName>\n<fx:Version>${xmlText(version)}</fx:Version>\n<fx:ConformanceLevel>${xmlText(conformanceLevel)}</fx:ConformanceLevel>\n</rdf:Description>\n<rdf:Description rdf:about="" xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#">\n<pdfaExtension:schemas><rdf:Bag><rdf:li rdf:parseType="Resource">\n<pdfaSchema:schema>Invoice PDFA Extension Schema</pdfaSchema:schema>\n<pdfaSchema:namespaceURI>${uri}</pdfaSchema:namespaceURI>\n<pdfaSchema:prefix>fx</pdfaSchema:prefix>\n<pdfaSchema:property><rdf:Seq>\n${property("DocumentFileName", "name of the embedded XML invoice file")}${property("DocumentType", "INVOICE")}${property("Version", "The actual version of the ZUGFeRD data")}${property("ConformanceLevel", "The conformance level of the ZUGFeRD data")}</rdf:Seq></pdfaSchema:property>\n</rdf:li></rdf:Bag></pdfaExtension:schemas>\n</rdf:Description>`;
+  }
+}
+
 const publicApi = Object.freeze({
   Barcode: BarcodeFactory,
   BarcodeWidget,
@@ -23019,4 +23448,4 @@ const js_pdf = Object.freeze({
   createPdf
 });
 
-export { Align, Alignment, AlignmentDirectional, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationText, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ChartValue, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, EdgeInsetsDirectional, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, PointChartValue as LineChartValue, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, PageUnit, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfBorder, PdfColor, PdfColorCmyk, PdfColorGrey, PdfColorHsl, PdfColorHsv, PdfColors, PdfFontMetrics, PdfFormXObject, PdfGraphicState, PdfImage, PdfLogo, PdfPageFormat, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfStream, PdfTtfFont, PdfType1Font, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextAnnotation, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, resolveAlignment$1 as resolveAlignment, resolveInsets, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };
+export { Align, Alignment, AlignmentDirectional, Anchor, Annotation, AnnotationBuilder, AnnotationCircle, AnnotationInk, AnnotationLink, AnnotationPolygon, AnnotationSquare, AnnotationText, AnnotationUrl, AspectRatio, BarDataSet, BarcodeFactory as Barcode, BarcodeCodabarStartStop, BarcodeCode128Fnc, BarcodeQRCorrectionLevel, BarcodeWidget, Border, BorderRadius, BorderRadiusDirectional, BorderRadiusGeometry, BorderSide, BorderStyle, BoxBorder, BoxConstraints, BoxDecoration, BoxShadow, Builder, Bullet, CartesianFrame, CartesianGrid, Center, Chart, ChartFrame, ChartGrid, ChartLegend, ChartValue, Checkbox, ChoiceField, Circle, CircleAnnotation, CircularProgressIndicator, ClipOval, ClipRRect, ClipRect, Column, ConstrainedBox, Container, CustomPaint, Dataset, DecoratedBox, DecorationGraphic, DecorationImage, DefaultTextStyle, DelayedWidget, Directionality, Divider, Document, EdgeInsets, EdgeInsetsDirectional, Expanded, FittedBox, FixedAxis, FixedColumnWidth, FlatButton, Flex, FlexColumnWidth, Flexible, FlutterLogo, Font, Footer, FractionColumnWidth, FullPage, Gradient, GridAxis, GridPaper, GridView, Header, Icon, IconData, IconThemeData, Image, ImageProvider, ImageProxy, Inherited, InheritedDirectionality, InheritedWidget, InkAnnotation, InkList, InlineSpan, Inseparable, IntrinsicColumnWidth, LayoutBuilder, LimitedBox, PointChartValue as LineChartValue, LineDataSet, LinearGradient, LinearProgressIndicator, Link, ListView, Lorem, LoremText, MemoryImage, MultiPage, NewPage, Opacity, Outline, OverflowBox, Padding, Page, PageFormat, PageTheme, PageUnit, Paragraph, Partition, Partitions, Pdf417SecurityLevel, PdfBaseFunction, PdfBorder, PdfColor, PdfColorCmyk, PdfColorGrey, PdfColorHsl, PdfColorHsv, PdfColors, PdfFontMetrics, PdfFormXObject, PdfGraphicState, PdfImage, PdfLogo, PdfPageFormat, PdfPageLabel, PdfPoint, PdfRect, PdfShading, PdfStream, PdfTtfFont, PdfType1Font, PdfaAttachedFile, PdfaAttachedFiles, PdfaColorProfile, PdfaFacturxRdf, PdfaRdf, PieDataSet, PieFrame, PieGrid, Placeholder, PointChartValue, PointDataSet, PolyLineAnnotation, Polygon, PolygonAnnotation, Positioned, PositionedDirectional, RadialFrame, RadialGradient, RadialGrid, Radius, RawImage, Rectangle, RichText, Row, Shape, SizedBox, Spacer, SpanningWidget, SquareAnnotation, Stack, StatelessWidget, SvgImage, Table, TableBorder, TableColumnWidth, TableHelper, TableOfContent, TableRow, Text, TextAnnotation, TextField, TextSpan, TextStyle, Theme, ThemeData, Transform, UrlLink, Vector, VerticalDivider, Watermark, Widget, WidgetSpan, Wrap, composeMatrices, createPdf, decodePng, deflateRaw, deflateZlib, flipMatrix, identityMatrix, inflateZlib, invertMatrix, js_pdf, multiplyMatrix, parseJpeg, pdfDiagnosticHandler, reportPdfDiagnostic, resolveAlignment$1 as resolveAlignment, resolveInsets, rotationMatrix, scaleMatrix, setPdfDiagnosticHandler, skewMatrix, transformPoint, translationMatrix };

@@ -9,8 +9,12 @@ export interface DocumentMetadata {
     readonly producer?: string | null;
     readonly keywords?: string | null;
     readonly xmpMetadata?: string | null;
+    /** `/CreationDate`; the time of `save()` when omitted. */
+    readonly creationDate?: Date | null;
 }
+/** The `/Producer` value written for `producer`. */
+export declare function pdfProducer(producer: string | null | undefined): string;
 /** The `/Info` dictionary the trailer points at. */
 export declare class PdfInfo extends PdfObject<PdfDict> {
-    constructor(document: PdfObjectRegistry, metadata: DocumentMetadata);
+    constructor(document: PdfObjectRegistry, metadata: DocumentMetadata, modDate?: boolean);
 }

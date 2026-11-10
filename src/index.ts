@@ -390,6 +390,14 @@ export type {
 
 export type { ColorInput, PaintColor, Rgb } from './pdf/color.ts';
 export { PdfGraphicState } from './pdf/graphic_state.ts';
+export { PdfaAttachedFile, PdfaAttachedFiles } from './pdf/obj/pdfa/pdfa_attached_files.ts';
+export type { PdfaAttachedFileOptions, PdfaRelationship } from './pdf/obj/pdfa/pdfa_attached_files.ts';
+export { PdfaColorProfile } from './pdf/obj/pdfa/pdfa_color_profile.ts';
+export type { PdfaColorSpace } from './pdf/obj/pdfa/pdfa_color_profile.ts';
+export { PdfaFacturxRdf } from './pdf/obj/pdfa/pdfa_facturx_rdf.ts';
+export { PdfaRdf } from './pdf/obj/pdfa/pdfa_rdf.ts';
+export type { PdfaRdfOptions } from './pdf/obj/pdfa/pdfa_rdf.ts';
+export type { PdfaSettings } from './pdf/format/object_base.ts';
 export type { PdfBlendMode, PdfGraphicStateOptions } from './pdf/graphic_state.ts';
 export { PdfBaseFunction } from './pdf/obj/function.ts';
 export { PdfShading } from './pdf/obj/shading.ts';
@@ -726,7 +734,8 @@ export type {
 export type {
   DocumentDestinationEntry,
   DocumentOptions,
-  DocumentOutlineEntry
+  DocumentOutlineEntry,
+  DocumentPdfaOptions
 } from './widgets/document.ts';
 export type {
   PdfPageMode,

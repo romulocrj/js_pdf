@@ -51,6 +51,16 @@ contain no third-party images or fonts. `generate-dpi-patterns.py` records the
 recipe; optional regeneration uses Pillow. Browser and Node examples load the
 committed bytes and do not need Pillow or Python.
 
+## Example ICC profile (phase 6.11)
+
+`JsPdfSrgbExample.icc` is an original sRGB-like ICC v2 display profile for
+js_pdf, Copyright (C) 2026, Romulo Campos, licensed under Apache-2.0. It is
+computed from the IEC 61966-2-1 primaries and transfer curve, with no bytes
+taken from another profile. `generate-srgb-icc.mjs` writes it from the recipe in
+`test/support/icc-profile.mjs`. It exists so the PDF/A example and tests need no
+download; production PDF/A should embed a standard profile, such as the ICC's
+sRGB2014, supplied by the caller. It is not part of dist.
+
 ## CJK line-breaking example font
 
 `JsPdfCjkExample.ttf` is a modified, static weight-400 subset of

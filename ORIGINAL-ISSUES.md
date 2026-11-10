@@ -270,6 +270,15 @@ here. "Upstream" below means master at `277b367`.
 | `svg/gradient.dart` † | a gradient `href` cycle recurses until the stack overflows, which #1980 keeps | the cycle is treated as unresolved (7.7) |
 | `svg/parser.dart` | a malformed number such as `opacity="abc"` throws out of `save()` | the attribute counts as absent (7.7) |
 | `widgets/progress.dart` | the default track is a `shade` of the value colour, which drops alpha, so a translucent bar gets an opaque track | the track keeps the value colour's alpha (7.7) |
+| `obj/pdfa/pdfa_attached_files.dart` | `/Params /Size` is the UTF-16 code-unit count of a UTF-8 payload, so an accented Factur-X file declares fewer bytes than it holds | the byte count of the encoded payload (6.11) |
+| `obj/pdfa/pdfa_attached_files.dart` | the `/EmbeddedFiles` name tree is in caller order, and its keys, `/F` and `/UF` are written unescaped and truncated to one byte per code unit | sorted by the bytes written; every key and name through the text-string writer (6.11) |
+| `obj/pdfa/pdfa_rdf.dart` | caller values are interpolated into the XMP template, so markup rewrites the packet, the `pdfaid` claim included | values escaped, characters XML forbids dropped (6.11) |
+| `obj/pdfa/pdfa_rdf.dart` | every unset field writes the literal `null` | unset elements, and empty descriptions, omitted (6.11) |
+| `obj/pdfa/pdfa_rdf.dart` † | `/Info /Producer` always carries the library URL and `pdf:Producer` never does, so the two disagree, which PDF/A forbids | both written from one `/Producer` string (6.11) |
+| `obj/pdfa/pdfa_rdf.dart` † | `xmp:CreateDate` and `/Info /CreationDate` come from two clock reads, so they can differ by a second, and always differ when `creationDate` is passed | one instant for both, plus `/ModDate` and `xmp:ModifyDate` (6.11) |
+| `obj/pdfa/pdfa_attached_files.dart` † | `/ModDate` is the local wall-clock time labelled `+00'00'`, so it is off by the zone offset | UTC (6.11) |
+| `obj/pdfa/pdfa_color_profile.dart` † | `/N` is always 3 and every profile is named `sRGB2014.icc`, so a CMYK profile is declared with three components | `/N` and the colour space read from the ICC header, which is validated; the caller's output condition (6.11) |
+| `obj/pdfa/pdfa_facturx_rdf.dart` † | the file name, version and level are interpolated unescaped | escaped (6.11) |
 
 Upstream behaviour was confirmed by source inspection at `277b367` and, where
 the pull request includes them, by its tests. No Dart runtime reproduction was

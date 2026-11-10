@@ -28,6 +28,7 @@ import { generateLayoutPerformancePhase66 } from './layout-performance-phase-6.6
 import { generateColorsPhase67 } from './colors-phase-6.7.mjs';
 import { generateFontsPhase68, generateObjectsPhase610, generateApiPhase612 } from './fonts-objects-api-phases.mjs';
 import { generateDirectionalLayoutPhase69 } from './directional-layout-phase-6.9.mjs';
+import { generatePdfaPhase611 } from './pdfa-phase-6.11.mjs';
 import { generateSerializationPhase71 } from './serialization-phase-7.1.mjs';
 import { generateFontsPhase72 } from './fonts-phase-7.2.mjs';
 import { generateTextBidiPhase73 } from './text-bidi-phase-7.3.mjs';
@@ -57,6 +58,11 @@ const compatibilityFonts = Object.fromEntries(await Promise.all(
 ));
 const cjkFont = new Uint8Array(await readFile(new URL('./assets/JsPdfCjkExample.ttf', import.meta.url)));
 const arabicFont = new Uint8Array(await readFile(new URL('./assets/JsPdfArabicExample.ttf', import.meta.url)));
+const pdfaAssets = {
+  regular: compatibilityFonts.ttf,
+  bold: new Uint8Array(await readFile(new URL('./assets/OpenSans-Bold.ttf', import.meta.url))),
+  colorProfile: new Uint8Array(await readFile(new URL('./assets/JsPdfSrgbExample.icc', import.meta.url)))
+};
 
 const examples = [
   ['svg-gradients-phase-2.8', generateSvgGradientsPhase28],
@@ -90,6 +96,7 @@ const examples = [
   ['fonts-phase-6.8', () => generateFontsPhase68(compatibilityFonts)],
   ['directional-layout-phase-6.9', () => generateDirectionalLayoutPhase69()],
   ['objects-phase-6.10', () => generateObjectsPhase610()],
+  ['pdfa-phase-6.11', () => generatePdfaPhase611(undefined, true, pdfaAssets)],
   ['api-phase-6.12', () => generateApiPhase612()],
   ['serialization-phase-7.1', () => generateSerializationPhase71()],
   ['fonts-phase-7.2', () => generateFontsPhase72({ openSans: compatibilityFonts.ttf, cjk: cjkFont, icons: materialIcons })],

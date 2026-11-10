@@ -211,9 +211,9 @@ asset is not part of the library runtime.
 
 --------------------------------------------------------------------------
 
-Phase 7 corrections incorporate approaches and code from pull requests opened
-against DavBfr/dart_pdf, contributed to that Apache-2.0 project by their
-authors. None was merged upstream when it was consulted (2026-11-10):
+Phase 7 and phase 6.11 corrections incorporate approaches and code from pull
+requests opened against DavBfr/dart_pdf, contributed to that Apache-2.0 project
+by their authors. None was merged upstream when it was consulted (2026-11-10):
 
   - #1980 "a 182-defect bug sweep across pdf, printing and pdf_widget_wrapper",
     by Baghdady92 — head 7375694

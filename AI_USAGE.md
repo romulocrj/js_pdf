@@ -11,9 +11,9 @@ below.
 
 This guide describes version 0.2.0, including phases 6.1–6.8, 6.10
 and 6.12, and the unreleased 1.0 series on branch `release/1.0` (phase 6.9
-and phases 7.0–7.7). Additions marked *1.0 series* are not in 0.2.0 or
-earlier; check the installed package version and declarations before using
-them. PDF/A integration (6.11) is not implemented.
+and phases 7.0–7.7) and PDF/A output (phase 6.11). Additions marked *1.0
+series* are not in 0.2.0 or earlier; check the installed package version and
+declarations before using them.
 
 ## Install and import specifier
 
@@ -737,9 +737,9 @@ SVG filters and outline metadata use RGB. Since phase 7.5 a color's alpha is
 painted: fills and strokes emit a constant-alpha `/ExtGState`, multiplied by any
 enclosing `Opacity`, and nested `Opacity` widgets multiply. Pass
 `colorAlpha: false` to `Document`/`createPdf` (or `PdfDocument`) to ignore color
-alpha, for example for PDF/A-1, where transparency is forbidden. Gradient
-stops paint their alpha too, through a luminosity soft mask.
-DeviceCMYK does not embed an ICC profile or establish PDF/A conformance.
+alpha. Gradient stops paint their alpha too, through a luminosity soft mask.
+DeviceCMYK paint embeds no ICC profile; under [PDF/A](#pdfa) it needs a CMYK
+output intent profile.
 Upstream's `isLight`/`isDark` threshold and harmony offsets are retained, with
 the swapped getters corrected (white is light). `shade` and `monochromatic`
 return opaque colors as upstream does.
@@ -775,7 +775,7 @@ features, while checking the TypeScript declarations for exact constructors:
   vector shadows.
 - Utility widgets: icons, progress indicators, placeholders, logos,
   `Watermark`, `Footer`, `GridPaper`, shapes and geometric annotations.
-- Metadata: title, author, subject, keywords, caller-supplied XMP and page labels.
+- Metadata: title, author, subject, keywords, `creationDate`, caller-supplied XMP and page labels.
 
 ### Stream compression
 
@@ -794,6 +794,62 @@ is JavaScript, so a document dominated by large images spends real milliseconds
 in it. Data that already carries its own filter, such as a JPEG, is never
 recompressed, and the XMP metadata packet is always left plain.
 
+## PDF/A
+
+*1.0 series.* Pass `pdfa` to `Document` (or to `createPdf`'s options) to write
+PDF/A-2 or PDF/A-3, level B or U:
+
+```js
+const doc = new pw.Document({
+  title: 'Invoice 2026-001', author: 'Acme', creationDate: new Date(),
+  // PDF/A forbids fonts that are not embedded: never leave the Helvetica default.
+  theme: pw.ThemeData.withFont({
+    base: pw.Font.ttf(regularBytes), bold: pw.Font.ttf(boldBytes),
+    italic: pw.Font.ttf(italicBytes), boldItalic: pw.Font.ttf(boldItalicBytes)
+  }),
+  pdfa: {
+    part: 3,                      // 2 or 3 (default 3)
+    conformance: 'B',             // 'B' (default) or 'U'
+    colorProfile: iccBytes,       // required: the caller's ICC profile, e.g. sRGB2014.icc
+    outputCondition: 'sRGB IEC61966-2.1',
+    attachments: [{               // PDF/A-3 only
+      name: 'factur-x.xml', data: invoiceXml, mimeType: 'text/xml',
+      relationship: 'Alternative', description: 'Factur-X invoice'
+    }],
+    extensionRdf: new pw.PdfaFacturxRdf().create({ conformanceLevel: 'EN 16931' })
+  }
+});
+```
+
+- The library writes the `/GTS_PDFA1` output intent (`/N` from the profile),
+  an XMP packet generated from the document metadata that agrees with `/Info`,
+  a trailer `/ID` derived from the content (so `save()` is repeatable for a
+  fixed `creationDate`), PDF/A-3 `/EmbeddedFiles` with `/AF`, and a normal
+  appearance on every annotation except links.
+- Supply a real ICC profile as bytes; the library ships none.
+  `examples/assets/JsPdfSrgbExample.icc` is a port-authored test profile, not
+  for production. RGB, CMYK and gray monitor or output profiles are accepted.
+- Do not pass `xmpMetadata` with `pdfa`; it throws. Add custom XMP properties
+  through `extensionRdf`, which must be valid RDF that declares any
+  non-standard schema with a PDF/A extension schema, as `PdfaFacturxRdf` does.
+- `new Document()` throws for `part: 1` (it forbids transparency), level `'A'`,
+  a malformed or unsuitable ICC profile, and attachments outside part 3.
+  `save()` throws for a standard Type1 font anywhere (theme defaults, a
+  `Font.helvetica()`, a `Font.zapfDingbats()`), `PdfColorCmyk` or CMYK JPEGs
+  under an RGB profile (and RGB paint, images, gradients or soft masks under a
+  CMYK or gray profile), annotation colours without an RGB profile, a font
+  with `protect: true` under level U, pages outside 3–14,400 points and `q`
+  nesting deeper than 28. Gray paint is always allowed.
+- Not checked: characters a font cannot draw (they reference `.notdef`; give
+  `fontFallback` fonts that cover the text), Arabic marks with zero advance,
+  simple-TrueType `cmap` requirements and the content of `extensionRdf`.
+- **Conformance has not been verified with veraPDF.** Validate production
+  output with a PDF/A validator.
+
+`PdfaRdf({ title, …, part, conformance }).create()` returns an XMP packet
+string and `PdfaFacturxRdf().create()` the Factur-X RDF; both escape their
+values. See the [PDF/A example](examples/pdfa-phase-6.11.mjs).
+
 ## Important differences and limits
 
 - Library code is synchronous and host-neutral.
@@ -807,8 +863,9 @@ recompressed, and the XMP metadata packet is always left plain.
 - Progress indicators on an unbounded axis need `fallbackWidth` (and
   `fallbackHeight` for the circular one) or they throw a `RangeError`
   (*1.0 series*).
-- PDF/A integration and output intents are not implemented. Supplying XMP or
-  using CMYK does not establish PDF/A conformance.
+- PDF/A output is limited to parts 2 and 3, levels B and U, and has not been
+  verified with veraPDF; supplying your own XMP or using CMYK without `pdfa`
+  does not establish conformance. See [PDF/A](#pdfa).
 - Reading or rasterizing existing PDFs is not supported.
 - Encryption, digital signatures and `Signature` are out of scope.
 - An indivisible widget or table row taller than a complete page cannot paginate.

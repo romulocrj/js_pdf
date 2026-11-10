@@ -28,6 +28,18 @@ plus several of the port's own. Upstream defects are listed in
   `Stack`, `GridView` and `Table` under the ambient direction; `textDirection`
   on `PageTheme`, `Page`, `MultiPage` and `Table`; directional page margins;
   `MultiPage.crossAxisAlignment`.
+- PDF/A-2 and PDF/A-3, levels B and U (phase 6.11):
+  `new Document({ pdfa: { part, conformance, colorProfile, outputCondition, attachments, extensionRdf } })`
+  writes the `/GTS_PDFA1` output intent from a caller-supplied ICC profile, an
+  XMP packet that agrees with `/Info`, a deterministic trailer `/ID` and, for
+  PDF/A-3, embedded files with `/AF`. It throws on what PDF/A forbids and the
+  port can detect cheaply: part 1, level A, a malformed profile, standard
+  Type1 fonts, device colour the profile does not describe. The upstream
+  parity classes `PdfaRdf`, `PdfaFacturxRdf`, `PdfaColorProfile`,
+  `PdfaAttachedFile` and `PdfaAttachedFiles` are exported, with #1980's
+  corrections. **Conformance has not been verified with veraPDF.** Documents
+  without `pdfa` are byte-identical.
+- `creationDate` option on `Document` for a fixed `/CreationDate`.
 
 ### Fixed
 

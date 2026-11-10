@@ -23,9 +23,17 @@
  * is explicitly outside this port's host-free runtime, verbose in-file
  * diagnostics are replaced by a caller-installed sink, and the writer emits
  * one fixed, broadly compatible PDF version rather than branching by version.
+ *
+ * PDF/A (phase 6.11) is a setting rather than objects a caller attaches,
+ * because the widget `Document` builds a fresh `PdfDocument` on every save.
+ * With `settings.pdfa` the document adds the XMP packet, the output intent and
+ * any attachments, checks what can be checked cheaply, and writes `/ID`.
+ * Upstream writes `/ID` for every file, from the clock and random bytes; the
+ * port writes it only under PDF/A, so other output is unchanged, and derives
+ * it from the content, since it has no random source.
  */
 
-import type { PdfDataType } from './format/base.ts';
+import { PdfDataType } from './format/base.ts';
 import type { PdfObjectBase, PdfSettings } from './format/object_base.ts';
 import { DEFAULT_PDF_SETTINGS } from './format/object_base.ts';
 import { PdfDict } from './format/dict.ts';
@@ -34,10 +42,11 @@ import { PdfNum } from './format/num.ts';
 import { PdfName } from './format/name.ts';
 import { PdfString } from './format/string.ts';
 import { PdfStream, encodeLatin1 } from './format/stream.ts';
+import { PdfDictStream } from './format/dict_stream.ts';
 import { PdfXrefTable } from './format/xref.ts';
 import type { PdfFont } from './font/font.ts';
 import { PdfCatalog } from './obj/catalog.ts';
-import { PdfInfo } from './obj/info.ts';
+import { PdfInfo, pdfProducer } from './obj/info.ts';
 import type { DocumentMetadata } from './obj/info.ts';
 import { PdfObject } from './obj/object.ts';
 import { PdfObjectStream } from './obj/object_stream.ts';
@@ -64,6 +73,10 @@ import type { PdfFormXObject } from './obj/formxobject.ts';
 import { PdfXObject } from './obj/xobject.ts';
 import { PdfSoftMaskReference } from './soft_mask.ts';
 import type { PdfSoftMask } from './soft_mask.ts';
+import { PdfaRdf, pdfaClean } from './obj/pdfa/pdfa_rdf.ts';
+import { PdfaColorProfile } from './obj/pdfa/pdfa_color_profile.ts';
+import type { PdfaColorSpace } from './obj/pdfa/pdfa_color_profile.ts';
+import { PdfaAttachedFiles } from './obj/pdfa/pdfa_attached_files.ts';
 
 export type { DocumentMetadata } from './obj/info.ts';
 
@@ -162,9 +175,36 @@ export class PdfDocument {
     const catalogSerial = this.genSerial();
     this.pageList = new PdfPageList(this);
     this.catalog = new PdfCatalog(this, this.pageList, catalogSerial);
-    this.info = new PdfInfo(this, metadata);
-    if (metadata.xmpMetadata) {
-      this.catalog.metadata = new PdfMetadata(this, metadata.xmpMetadata);
+    const pdfa = settings.pdfa;
+    if (pdfa === undefined) {
+      this.info = new PdfInfo(this, metadata);
+      if (metadata.xmpMetadata) {
+        this.catalog.metadata = new PdfMetadata(this, metadata.xmpMetadata);
+      }
+      return;
+    }
+
+    // `/Info` and the XMP packet must agree (ISO 19005-2 6.6.2.3.1), so both
+    // take one clock read, and every value loses the characters XML cannot
+    // hold before either is written. Upstream reads the clock twice and
+    // writes its library URL into `/Producer` but not into `pdf:Producer`.
+    const date = metadata.creationDate ?? new Date();
+    const clean = (value: string | null | undefined): string | null => (value ? pdfaClean(value) || null : null);
+    const info: DocumentMetadata = {
+      title: clean(metadata.title), author: clean(metadata.author), subject: clean(metadata.subject),
+      keywords: clean(metadata.keywords), creator: clean(metadata.creator),
+      producer: metadata.producer == null ? null : pdfaClean(metadata.producer), creationDate: date
+    };
+    this.info = new PdfInfo(this, info, true);
+    this.catalog.metadata = new PdfMetadata(this, new PdfaRdf({
+      ...info, producer: pdfProducer(info.producer), modificationDate: date,
+      part: pdfa.part, conformance: pdfa.conformance, invoiceRdf: pdfa.extensionRdf
+    }).create());
+    new PdfaColorProfile(this, pdfa.colorProfile, pdfa.outputCondition);
+    if (pdfa.attachments !== undefined && pdfa.attachments.length > 0) {
+      const names = new PdfNames(this);
+      names.embeddedFiles = new PdfaAttachedFiles(this, pdfa.attachments, date).names;
+      this.catalog.names = names;
     }
   }
 
@@ -193,7 +233,18 @@ export class PdfDocument {
       return existing;
     }
 
-    const object = new PdfObject(this, font.resourceDict(this));
+    const dict = font.resourceDict(this);
+    const pdfa = this.settings.pdfa;
+    // A standard Type1 font has neither a descriptor nor a descendant: it is
+    // never embedded, which PDF/A forbids (ISO 19005-2 6.2.11.4.1).
+    if (pdfa !== undefined && !dict.has('/FontDescriptor') && !dict.has('/DescendantFonts')) {
+      throw new TypeError(`PDF/A needs embedded fonts; ${font.fontName} is a standard Type1 font, never embedded. Make TrueType `
+        + 'faces the theme: new Document({ theme: ThemeData.withFont({ base: Font.ttf(regular), bold: Font.ttf(bold) }), pdfa })');
+    }
+    if (pdfa?.conformance === 'U' && (font as { readonly protect?: boolean }).protect === true) {
+      throw new TypeError(`PDF/A-${pdfa.part}U needs extractable text; ${font.fontName} has protect: true`);
+    }
+    const object = new PdfObject(this, dict);
     this.fontObjects.set(font, object);
     return object;
   }
@@ -378,6 +429,7 @@ export class PdfDocument {
 
     for (const [form, name] of forms) page.addXObject(name, this.formObject(form));
 
+    const pdfa = this.settings.pdfa !== undefined;
     for (const annotation of annotations) {
       let appearanceName: string | null = null;
       if (annotation.kind === 'form') {
@@ -391,15 +443,35 @@ export class PdfDocument {
           }
         }
       }
-      const appearances = annotation.kind === 'form'
-        ? this.resolveFormAppearances(annotation.appearances)
-        : null;
+      const source = annotation.kind === 'form' ? annotation.appearances : undefined;
+      // PDF/A allows only the normal appearance, and requires one on every
+      // annotation but a link (ISO 19005-2 6.3.3).
+      let appearances = this.resolveFormAppearances(pdfa && source !== undefined
+        ? { normal: source.normal, normalStates: source.normalStates }
+        : source);
+      if (pdfa && annotation.kind !== 'url' && annotation.kind !== 'destination'
+        && appearances?.normal === undefined && appearances?.normalStates === undefined) {
+        appearances = { normal: this.emptyAppearance() };
+      }
       const object = new PdfAnnotation(this, page, annotation, appearanceName, appearances);
       if (annotation.kind === 'form') this.addFormField(object, annotation.name);
     }
 
     page.contents.push(stream);
     return page;
+  }
+
+  private emptyForm: PdfXObject | null = null;
+
+  /**
+   * One shared, empty appearance stream. A viewer scales its box onto each
+   * annotation's `/Rect`, so a unit box serves every size.
+   */
+  private emptyAppearance(): PdfXObject {
+    return this.emptyForm ??= this.formAppearanceObject({
+      width: 1, height: 1, content: '', fonts: new Map(), graphicStates: new Map(),
+      patterns: new Map(), shadings: new Map(), images: new Map()
+    });
   }
 
   /**
@@ -436,7 +508,7 @@ export class PdfDocument {
     pageMode: PdfPageMode,
     destinations: readonly SerializedDestination[] = []
   ): void {
-    const names = outlines.length > 0 || destinations.length > 0 ? new PdfNames(this) : null;
+    const names = outlines.length > 0 || destinations.length > 0 ? this.catalog.names ?? new PdfNames(this) : null;
     for (const entry of destinations) {
       const page = this.pageList.pages[entry.page - 1];
       if (page !== undefined) {
@@ -499,9 +571,172 @@ export class PdfDocument {
 
     this.xref.params.set('/Root', this.catalog.ref());
     this.xref.params.set('/Info', this.info.ref());
+    if (this.catalog.colorProfile !== null) {
+      this.checkPdfa(this.catalog.colorProfile.colorSpace);
+      const id = new PdfHexBytes(this.documentId());
+      this.xref.params.set('/ID', new PdfArray([id, id]));
+    }
 
     this.xref.output(stream);
   }
+
+  /**
+   * The PDF/A rules that are cheap to check on finished objects: device colour
+   * against the output intent (ISO 19005-2 6.2.4.3) and annotation colours
+   * (6.3.3), page size and `q` nesting limits (6.1.13).
+   */
+  private checkPdfa(space: PdfaColorSpace): void {
+    for (const { pageFormat: { width, height } } of this.pageList.pages) {
+      if (!(width >= 3 && height >= 3 && width <= 14400 && height <= 14400)) {
+        throw new RangeError(`PDF/A pages are 3 to 14400 points a side, not ${width} x ${height}`);
+      }
+    }
+    const used = new Set<string>();
+    const contents = new Set(this.pageList.pages.flatMap(page => page.contents));
+    for (const object of this.objects) {
+      const params = object.params;
+      deviceSpaces(params, used);
+      if (params instanceof PdfDictStream && (contents.has(object) || isName(params.get('/Subtype'), '/Form'))) {
+        const depth = scanContent(params.data, used);
+        if (depth > 28) throw new RangeError(`PDF/A limits q nesting to 28, not ${depth}`);
+      }
+      if (space !== 'RGB' && params instanceof PdfDict && isName(params.get('/Type'), '/Annot')
+        && (params.has('/C') || params.has('/IC'))) {
+        throw new RangeError(`PDF/A allows annotation colours only under an RGB output intent, not ${space}`);
+      }
+    }
+    for (const [device, painted] of [['RGB', 'an RGB colour, image, gradient or soft mask'], ['CMYK', 'a PdfColorCmyk or CMYK JPEG']] as const) {
+      if (used.has(device) && space !== device) {
+        throw new RangeError(`PDF/A: Device${device} (${painted}) is painted, but the output intent profile is ${space}`);
+      }
+    }
+  }
+
+  /**
+   * The trailer `/ID`: 16 bytes hashed from every object's dictionary and
+   * uncompressed data. It need not be cryptographic, only deterministic, so
+   * that `save()` stays repeatable, and distinct for distinct documents.
+   */
+  private documentId(): Uint8Array {
+    const hash = new Uint32Array([0x811c9dc5, 0x9e3779b9, 0x85ebca6b, 0xc2b2ae35]);
+    const dicts = new PdfStream();
+    for (const { params } of this.objects) {
+      if (params instanceof PdfDictStream) {
+        new PdfDict(params.values).output(dicts);
+        mix(hash, params.data);
+      } else {
+        params.output(dicts);
+      }
+    }
+    mix(hash, dicts.view());
+    const id = new Uint8Array(16);
+    for (let lane = 0; lane < 4; lane++) {
+      let h = (hash[lane]! ^ Math.imul(hash[(lane + 1) % 4]!, 0x9e3779b1)) >>> 0;
+      h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+      h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+      h ^= h >>> 16;
+      for (let byte = 0; byte < 4; byte++) id[lane * 4 + byte] = (h >>> (24 - byte * 8)) & 0xff;
+    }
+    return id;
+  }
+}
+
+/** A byte string written in hex, for the trailer `/ID`. */
+class PdfHexBytes extends PdfDataType {
+  private readonly bytes: Uint8Array;
+
+  constructor(bytes: Uint8Array) {
+    super();
+    this.bytes = bytes;
+  }
+
+  override output(s: PdfStream): void {
+    let hex = '';
+    for (const byte of this.bytes) hex += byte.toString(16).padStart(2, '0');
+    s.putString(`<${hex}>`);
+  }
+}
+
+/** Four 32-bit lanes over `bytes`, folded into `hash`. */
+function mix(hash: Uint32Array, bytes: Uint8Array): void {
+  let a = hash[0]!;
+  let b = hash[1]!;
+  let c = hash[2]!;
+  let d = hash[3]!;
+  for (let index = 0; index < bytes.length; index++) {
+    const x = bytes[index]!;
+    a = Math.imul(a ^ x, 0x01000193);
+    b = Math.imul(b + x, 0x5bd1e995) ^ (b >>> 15);
+    c = (Math.imul(c ^ x, 0x85ebca6b) + a) | 0;
+    d = Math.imul(d + x, 0xc2b2ae35) ^ (c >>> 13);
+  }
+  hash[0] = a;
+  hash[1] = b;
+  hash[2] = c;
+  hash[3] = d;
+}
+
+const isName = (value: PdfDataType | undefined, name: string): boolean => value instanceof PdfName && value.value === name;
+
+/** Note `/DeviceRGB` and `/DeviceCMYK` anywhere in an object's dictionaries. */
+function deviceSpaces(value: PdfDataType, used: Set<string>): void {
+  if (value instanceof PdfName) {
+    if (value.value === '/DeviceRGB') used.add('RGB');
+    else if (value.value === '/DeviceCMYK') used.add('CMYK');
+  } else if (value instanceof PdfDict) {
+    for (const entry of value.values.values()) deviceSpaces(entry, used);
+  } else if (value instanceof PdfArray) {
+    for (const entry of value.values) deviceSpaces(entry, used);
+  }
+}
+
+/** Neither white space nor a delimiter (ISO 32000-1 7.2.2). */
+const isRegular = (c: number): boolean => c > 0x20 && c !== 0x28 && c !== 0x29 && c !== 0x3c && c !== 0x3e
+  && c !== 0x5b && c !== 0x5d && c !== 0x7b && c !== 0x7d && c !== 0x2f && c !== 0x25;
+
+/**
+ * Tokenize a content stream, skipping strings and comments: note the device
+ * colour operators and names it uses, and return its deepest `q` nesting.
+ */
+function scanContent(data: Uint8Array, used: Set<string>): number {
+  let depth = 0;
+  let deepest = 0;
+  for (let index = 0; index < data.length;) {
+    const c = data[index]!;
+    if (c === 0x28) {
+      let open = 0;
+      do {
+        const d = data[index++];
+        if (d === 0x5c) index++;
+        else if (d === 0x28) open++;
+        else if (d === 0x29) open--;
+      } while (open > 0 && index < data.length);
+    } else if (c === 0x3c) {
+      if (data[index + 1] === 0x3c) {
+        index += 2;
+      } else {
+        while (index < data.length && data[index] !== 0x3e) index++;
+        index++;
+      }
+    } else if (c === 0x25) {
+      while (index < data.length && data[index] !== 0x0a && data[index] !== 0x0d) index++;
+    } else if (isRegular(c) || c === 0x2f) {
+      const start = index++;
+      while (index < data.length && isRegular(data[index]!)) index++;
+      const length = index - start;
+      const next = data[start + 1];
+      if (length === 1 && (c === 0x6b || c === 0x4b)) used.add('CMYK');
+      else if (length === 2 && ((c === 0x72 && next === 0x67) || (c === 0x52 && next === 0x47))) used.add('RGB');
+      else if (length === 1 && c === 0x71) deepest = Math.max(deepest, ++depth);
+      else if (length === 1 && c === 0x51) depth--;
+      else if (c === 0x2f && (length === 10 || length === 11)) {
+        deviceSpaces(new PdfName(String.fromCharCode(...data.subarray(start, index))), used);
+      }
+    } else {
+      index++;
+    }
+  }
+  return deepest;
 }
 
 /** Build a document from already-rendered pages and collect its bytes. */

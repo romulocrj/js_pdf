@@ -111,6 +111,7 @@ export declare class PdfAnnotation extends PdfObject<PdfDict> {
      * ISO 32000-1 12.7.3.1 allows only for a single-widget field.
      */
     parent: PdfObject<PdfDict> | null;
+    private readonly pdfa;
     constructor(document: PdfObjectRegistry, page: PdfPage, annotation: PdfAnnotationSpec, defaultAppearanceName?: string | null, appearances?: PdfResolvedFormAppearances | null);
     prepare(): void;
     private prepareGeometric;

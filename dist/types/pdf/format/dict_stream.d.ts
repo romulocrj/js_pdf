@@ -10,6 +10,12 @@ export declare class PdfDictStream extends PdfDict {
      * would cost time and give nothing back.
      */
     readonly compress: boolean;
-    constructor(data?: Uint8Array, values?: Iterable<readonly [string, PdfDataType]>, compress?: boolean);
+    /**
+     * Always write a line feed before `endstream`, outside `/Length`. PDF/A
+     * requires that marker (ISO 19005-2 6.1.7.1); otherwise data that already
+     * ends in a line feed lets it stand in, which keeps the output unchanged.
+     */
+    readonly eol: boolean;
+    constructor(data?: Uint8Array, values?: Iterable<readonly [string, PdfDataType]>, compress?: boolean, eol?: boolean);
     output(s: PdfStream): void;
 }
